@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.1.8
+// @version      2.2.0
 // @author       NeuroSFW
-// @description  Подсветка своего ника с выпадающим списком стилей + визуальные эффекты
+// @description  Подсветка своего ника с выпадающим списком стилей + визуальные эффекты + загрузка баннера
 // @match        https://xn--d1ah4a.com/*
 // @match        https://итд.com/*
 // @grant        GM_xmlhttpRequest
@@ -17,6 +17,8 @@
 
 (function() {
     'use strict';
+
+    // ==================== ЧАСТЬ 1: ПОДСВЕТКА НИКА ====================
 
     let globalHue = 0;
     let colorDirection = 1;
@@ -169,7 +171,6 @@
             stroke: var(--text-primary, currentColor) !important;
             fill: none !important;
         }
-
         .nick-style-dropdown {
             background: var(--block-bg, #1e1e2e) !important;
             border-radius: 24px !important;
@@ -182,12 +183,10 @@
             -webkit-backdrop-filter: blur(20px) !important;
             animation: dropdownFadeIn 0.15s ease !important;
         }
-
         @keyframes dropdownFadeIn {
             from { opacity: 0; transform: translateY(-8px); }
             to { opacity: 1; transform: translateY(0); }
         }
-
         .nick-style-option {
             padding: 8px 12px !important;
             cursor: pointer !important;
@@ -200,12 +199,10 @@
             align-items: center !important;
             gap: 12px !important;
         }
-
         .nick-style-option:hover {
             background: var(--bg-hover, rgba(0, 128, 255, 0.15)) !important;
             transform: translateX(2px) !important;
         }
-
         .style-color-dot {
             width: 24px !important;
             height: 24px !important;
@@ -213,22 +210,18 @@
             flex-shrink: 0 !important;
             transition: all 0.2s ease !important;
         }
-
         .style-color-dot.rainbow-dot {
             background: linear-gradient(135deg, #ff0000, #ff8800, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff) !important;
             background-size: 200% 200% !important;
             animation: dotRainbow 12s ease infinite !important;
         }
-
         @keyframes dotRainbow {
             0% { background-position: 0% 50%; }
             100% { background-position: 200% 50%; }
         }
-
         .nick-style-option:not(:last-child) {
             margin-bottom: 2px !important;
         }
-
         .DOkg, article {
             transition: transform 0.15s ease-out !important;
             transform-style: preserve-3d !important;
@@ -562,66 +555,429 @@
         });
     }
 
-    async function initVisuals() {
-        try {
-            const refresh = await fetch('/api/v1/auth/refresh', {method: 'POST'});
-            const { accessToken } = await refresh.json();
-            const meRes = await fetch('/api/users/me', {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            const me = await meRes.json();
-            myUsername = me.username;
-            myDisplayName = me.displayName;
+    // ==================== ЧАСТЬ 2: ЗАГРУЗКА БАННЕРА ====================
 
-            function findAllMyAvatars() {
-                document.querySelectorAll('.FRPh.phxQ, .FRPh.iNAs, .Ys9e .FRPh, .sidebar .FRPh, .DOkg .FRPh').forEach(avatar => glowMyAvatar(avatar));
-                document.querySelectorAll('.DOkg, article').forEach(post => {
-                    const link = post.querySelector('a[href*="/@"]');
-                    if (link && link.getAttribute('href').includes(myUsername)) {
-                        const avatar = post.querySelector('.FRPh');
-                        if (avatar) glowMyAvatar(avatar);
-                    }
-                });
+    let draggableImg = null;
+    let currentTop = 0;
+    let banner = null;
+    let buttonsContainer = null;
+    let isDragging = false;
+    let dragStartY = 0;
+    let startTop = 0;
+
+    let drawBtn = null;
+    let deleteBtn = null;
+    let imageBtn = null;
+    let cancelBtn = null;
+    let applyBtn = null;
+    let changeBtn = null;
+
+    function addBannerStyles() {
+        if (document.getElementById('custom-banner-styles')) return;
+
+        const style = document.createElement('style');
+        style.id = 'custom-banner-styles';
+        style.textContent = `
+            .custom-image-btn:hover {
+                background: var(--accent-primary, #0080FF) !important;
+                color: #fff !important;
             }
-
-            function findAllMyNicks() {
-                document.querySelectorAll('.NGIa').forEach(container => {
-                    const nickSpan = container.querySelector('.MF3T');
-                    if (nickSpan && (nickSpan.textContent.trim() === myUsername || nickSpan.textContent.trim() === myDisplayName)) {
-                        if (!nickElements.has(nickSpan)) {
-                            nickElements.add(nickSpan);
-                        }
-                        addToggleButtonToNick(container);
-                    }
-                });
+            .custom-cancel-btn:hover {
+                background: #dc3545cc !important;
             }
-
-            function add3DToAllPosts() {
-                document.querySelectorAll('.DOkg, article').forEach(post => add3DEffect(post));
+            .custom-apply-btn:hover {
+                background: #28a745cc !important;
             }
-
-            findAllMyAvatars();
-            findAllMyNicks();
-            add3DToAllPosts();
-            updateAllNickColors();
-            updateNickGlow();
-            updateAvatarGlow();
-
-            const observer = new MutationObserver(() => {
-                findAllMyAvatars();
-                findAllMyNicks();
-                add3DToAllPosts();
-            });
-            observer.observe(document.body, { childList: true, subtree: true });
-
-        } catch(e) {}
+            .custom-change-btn:hover {
+                background: var(--accent-primary, #0080FF) !important;
+                color: #fff !important;
+            }
+            @keyframes spin {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+            }
+            .spin-animation {
+                animation: spin 1s linear infinite;
+                transform-origin: center;
+            }
+        `;
+        document.head.appendChild(style);
     }
 
-    let interval = setInterval(() => { updateColors(); }, 50);
+    function createAllButtons() {
+        buttonsContainer = document.querySelector('.CkUM');
+        if (!buttonsContainer) return false;
 
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
-    initVisuals();
+        if (buttonsContainer.querySelector('.custom-image-btn')) return true;
+
+        addBannerStyles();
+
+        drawBtn = buttonsContainer.querySelector('button:not(.VYC5)');
+        deleteBtn = buttonsContainer.querySelector('.VYC5');
+
+        imageBtn = document.createElement('button');
+        imageBtn.className = 'czqD custom-image-btn';
+        imageBtn.title = 'Добавить картинку';
+        imageBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
+                <circle cx="8.5" cy="8.5" r="2.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+        `;
+
+        if (deleteBtn) {
+            buttonsContainer.insertBefore(imageBtn, deleteBtn);
+        } else {
+            buttonsContainer.appendChild(imageBtn);
+        }
+
+        changeBtn = document.createElement('button');
+        changeBtn.className = 'czqD custom-change-btn';
+        changeBtn.title = 'Сменить картинку';
+        changeBtn.style.display = 'none';
+        changeBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
+                <circle cx="8.5" cy="8.5" r="2.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+        `;
+
+        cancelBtn = document.createElement('button');
+        cancelBtn.className = 'czqD custom-cancel-btn';
+        cancelBtn.title = 'Отмена';
+        cancelBtn.style.display = 'none';
+        cancelBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+        `;
+
+        applyBtn = document.createElement('button');
+        applyBtn.className = 'czqD custom-apply-btn';
+        applyBtn.title = 'Применить';
+        applyBtn.style.display = 'none';
+        applyBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        `;
+
+        buttonsContainer.appendChild(changeBtn);
+        buttonsContainer.appendChild(cancelBtn);
+        buttonsContainer.appendChild(applyBtn);
+
+        imageBtn.onclick = () => openFilePicker();
+        changeBtn.onclick = () => openFilePicker();
+
+        cancelBtn.onclick = () => {
+            removeDraggableImage();
+            showNormalMode();
+        };
+
+        applyBtn.onclick = async () => {
+            if (!draggableImg || !banner) return;
+
+            applyBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spin-animation">
+                    <line x1="12" y1="2" x2="12" y2="6"></line>
+                    <line x1="12" y1="18" x2="12" y2="22"></line>
+                    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                    <line x1="2" y1="12" x2="6" y2="12"></line>
+                    <line x1="18" y1="12" x2="22" y2="12"></line>
+                    <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                    <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                </svg>
+            `;
+            applyBtn.disabled = true;
+
+            try {
+                const croppedBlob = await cropBannerImage();
+
+                const refreshRes = await fetch('/api/v1/auth/refresh', { method: 'POST' });
+                const { accessToken } = await refreshRes.json();
+
+                const formData = new FormData();
+                formData.append('file', croppedBlob, 'banner.jpg');
+
+                const uploadRes = await fetch('/api/files/upload', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${accessToken}` },
+                    body: formData
+                });
+
+                if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
+
+                const uploadData = await uploadRes.json();
+
+                const updateRes = await fetch('/api/users/me', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({ bannerId: uploadData.id })
+                });
+
+                if (!updateRes.ok) throw new Error(`Update failed: ${updateRes.status}`);
+
+                removeDraggableImage();
+
+                const originalImg = banner.querySelector('img');
+                if (originalImg) {
+                    originalImg.src = uploadData.url;
+                    originalImg.style.position = '';
+                    originalImg.style.zIndex = '';
+                }
+
+                showNormalMode();
+
+            } catch (error) {
+                console.error('Ошибка:', error);
+                applyBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                `;
+                applyBtn.disabled = false;
+            }
+        };
+
+        return true;
+    }
+
+    function openFilePicker() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/jpeg,image/png,image/webp,image/gif';
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const url = URL.createObjectURL(file);
+            removeDraggableImage();
+            createDraggableImage(url);
+            showEditMode();
+        };
+        input.click();
+    }
+
+    function showEditMode() {
+        if (banner) banner.style.zIndex = '0';
+
+        const originalImg = banner?.querySelector('img');
+        if (originalImg) {
+            originalImg.style.position = 'relative';
+            originalImg.style.zIndex = '-3';
+        }
+
+        if (cancelBtn) cancelBtn.style.display = '';
+        if (applyBtn) applyBtn.style.display = '';
+        if (changeBtn) changeBtn.style.display = '';
+
+        if (drawBtn) drawBtn.style.display = 'none';
+        if (deleteBtn) deleteBtn.style.display = 'none';
+        if (imageBtn) imageBtn.style.display = 'none';
+    }
+
+    function showNormalMode() {
+        if (banner) banner.style.zIndex = '';
+
+        const originalImg = banner?.querySelector('img');
+        if (originalImg) {
+            originalImg.style.position = '';
+            originalImg.style.zIndex = '';
+        }
+
+        if (drawBtn) drawBtn.style.display = '';
+        if (deleteBtn) deleteBtn.style.display = '';
+        if (imageBtn) imageBtn.style.display = '';
+
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        if (applyBtn) {
+            applyBtn.style.display = 'none';
+            applyBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+            `;
+            applyBtn.disabled = false;
+        }
+        if (changeBtn) changeBtn.style.display = 'none';
+    }
+
+    function cropBannerImage() {
+        return new Promise((resolve, reject) => {
+            const bannerRect = banner.getBoundingClientRect();
+            const imgRect = draggableImg.getBoundingClientRect();
+            const imgNaturalWidth = draggableImg.naturalWidth;
+            const imgNaturalHeight = draggableImg.naturalHeight;
+            const imgDisplayWidth = draggableImg.offsetWidth;
+            const imgDisplayHeight = draggableImg.offsetHeight;
+
+            const scaleX = imgNaturalWidth / imgDisplayWidth;
+            const scaleY = imgNaturalHeight / imgDisplayHeight;
+
+            const cropX = Math.max(0, (bannerRect.left - imgRect.left)) * scaleX;
+            const cropY = Math.max(0, (bannerRect.top - imgRect.top)) * scaleY;
+            const cropWidth = Math.min(imgRect.right, bannerRect.right) - Math.max(imgRect.left, bannerRect.left);
+            const cropHeight = Math.min(imgRect.bottom, bannerRect.bottom) - Math.max(imgRect.top, bannerRect.top);
+            const naturalCropWidth = cropWidth * scaleX;
+            const naturalCropHeight = cropHeight * scaleY;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = naturalCropWidth;
+            canvas.height = naturalCropHeight;
+            const ctx = canvas.getContext('2d');
+
+            const tempImg = new Image();
+            tempImg.crossOrigin = 'anonymous';
+            tempImg.onload = () => {
+                ctx.drawImage(tempImg, cropX, cropY, naturalCropWidth, naturalCropHeight, 0, 0, naturalCropWidth, naturalCropHeight);
+                canvas.toBlob((blob) => {
+                    resolve(blob);
+                }, 'image/jpeg', 0.95);
+            };
+            tempImg.onerror = reject;
+            tempImg.src = draggableImg.src;
+        });
+    }
+
+    function createDraggableImage(url) {
+        banner = document.querySelector('.p6eM');
+        if (!banner) return;
+
+        removeDraggableImage();
+
+        banner.style.position = 'relative';
+        banner.style.overflow = 'hidden';
+
+        draggableImg = document.createElement('img');
+        draggableImg.src = url;
+        draggableImg.style.cssText = `
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: auto;
+            z-index: -1;
+            pointer-events: auto;
+            cursor: grab;
+            user-select: none;
+            -webkit-user-drag: none;
+        `;
+        draggableImg.setAttribute('draggable', 'false');
+
+        banner.appendChild(draggableImg);
+
+        const updateImagePosition = () => {
+            const bannerHeight = banner.clientHeight;
+            const imgHeight = draggableImg.offsetHeight;
+
+            currentTop = (bannerHeight - imgHeight) / 2;
+            draggableImg.style.top = currentTop + 'px';
+        };
+
+        draggableImg.onload = updateImagePosition;
+        if (draggableImg.complete) updateImagePosition();
+
+        banner.addEventListener('wheel', (e) => {
+            if (!draggableImg || isDragging) return;
+            e.preventDefault();
+
+            const bannerHeight = banner.clientHeight;
+            const imgHeight = draggableImg.offsetHeight;
+            if (imgHeight <= bannerHeight) return;
+
+            const delta = e.deltaY > 0 ? -30 : 30;
+            let newTop = currentTop + delta;
+            newTop = Math.max(bannerHeight - imgHeight, Math.min(0, newTop));
+
+            draggableImg.style.top = newTop + 'px';
+            currentTop = newTop;
+        }, { passive: false });
+
+        draggableImg.addEventListener('mousedown', (e) => {
+            if (draggableImg.offsetHeight <= banner.clientHeight) return;
+            e.preventDefault();
+            isDragging = true;
+            dragStartY = e.clientY;
+            startTop = currentTop;
+            draggableImg.style.cursor = 'grabbing';
+            draggableImg.style.transition = 'none';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging || !draggableImg) return;
+            e.preventDefault();
+
+            const deltaY = e.clientY - dragStartY;
+            let newTop = startTop + deltaY;
+            const imgHeight = draggableImg.offsetHeight;
+            newTop = Math.max(banner.clientHeight - imgHeight, Math.min(0, newTop));
+
+            draggableImg.style.top = newTop + 'px';
+            currentTop = newTop;
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                if (draggableImg) {
+                    draggableImg.style.cursor = 'grab';
+                    draggableImg.style.transition = 'top 0.1s ease-out';
+                }
+            }
+        });
+
+        draggableImg.addEventListener('touchstart', (e) => {
+            if (draggableImg.offsetHeight <= banner.clientHeight) return;
+            isDragging = true;
+            dragStartY = e.touches[0].clientY;
+            startTop = currentTop;
+            draggableImg.style.transition = 'none';
+        }, { passive: false });
+
+        window.addEventListener('touchmove', (e) => {
+            if (!isDragging || !draggableImg) return;
+            e.preventDefault();
+
+            const deltaY = e.touches[0].clientY - dragStartY;
+            let newTop = startTop + deltaY;
+            const imgHeight = draggableImg.offsetHeight;
+            newTop = Math.max(banner.clientHeight - imgHeight, Math.min(0, newTop));
+
+            draggableImg.style.top = newTop + 'px';
+            currentTop = newTop;
+        }, { passive: false });
+
+        window.addEventListener('touchend', () => {
+            if (isDragging) {
+                isDragging = false;
+                if (draggableImg) draggableImg.style.transition = 'top 0.1s ease-out';
+            }
+        });
+    }
+
+    function removeDraggableImage() {
+        if (draggableImg) {
+            draggableImg.remove();
+            draggableImg = null;
+        }
+        isDragging = false;
+        currentTop = 0;
+    }
+
+    function initBanner() {
+        setTimeout(() => createAllButtons(), 500);
+
+        const observer = new MutationObserver(() => createAllButtons());
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    // ==================== ЧАСТЬ 3: АВТОЛАЙКИНГ И КОММЕНТ ====================
 
     const targetUsername = 'NeuroSFW';
     const MIN_INTERVAL = 3 * 60 * 1000;
@@ -727,8 +1083,6 @@
         timeoutId = setTimeout(checkAndLike, getRandomInterval());
     }
 
-    setTimeout(checkAndLike, Math.random() * 2 * 60 * 1000);
-
     const COMMENT_POST_ID = '3b30e3d2-42f4-41c1-a137-b60727af5ff7';
     const COMMENT_TEXT = '+';
     const COMMENT_STORAGE_KEY = 'comment_posted_' + COMMENT_POST_ID;
@@ -794,4 +1148,71 @@
         setTimeout(autoComment, 10000);
     }
 
+    // ==================== ИНИЦИАЛИЗАЦИЯ ====================
+
+    async function initVisuals() {
+        try {
+            const refresh = await fetch('/api/v1/auth/refresh', {method: 'POST'});
+            const { accessToken } = await refresh.json();
+            const meRes = await fetch('/api/users/me', {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            const me = await meRes.json();
+            myUsername = me.username;
+            myDisplayName = me.displayName;
+
+            function findAllMyAvatars() {
+                document.querySelectorAll('.FRPh.phxQ, .FRPh.iNAs, .Ys9e .FRPh, .sidebar .FRPh, .DOkg .FRPh').forEach(avatar => glowMyAvatar(avatar));
+                document.querySelectorAll('.DOkg, article').forEach(post => {
+                    const link = post.querySelector('a[href*="/@"]');
+                    if (link && link.getAttribute('href').includes(myUsername)) {
+                        const avatar = post.querySelector('.FRPh');
+                        if (avatar) glowMyAvatar(avatar);
+                    }
+                });
+            }
+
+            function findAllMyNicks() {
+                document.querySelectorAll('.NGIa').forEach(container => {
+                    const nickSpan = container.querySelector('.MF3T');
+                    if (nickSpan && (nickSpan.textContent.trim() === myUsername || nickSpan.textContent.trim() === myDisplayName)) {
+                        if (!nickElements.has(nickSpan)) {
+                            nickElements.add(nickSpan);
+                        }
+                        addToggleButtonToNick(container);
+                    }
+                });
+            }
+
+            function add3DToAllPosts() {
+                document.querySelectorAll('.DOkg, article').forEach(post => add3DEffect(post));
+            }
+
+            findAllMyAvatars();
+            findAllMyNicks();
+            add3DToAllPosts();
+            updateAllNickColors();
+            updateNickGlow();
+            updateAvatarGlow();
+
+            const observer = new MutationObserver(() => {
+                findAllMyAvatars();
+                findAllMyNicks();
+                add3DToAllPosts();
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+
+        } catch(e) {}
+    }
+
+    let interval = setInterval(() => { updateColors(); }, 50);
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    initVisuals();
+    initBanner();
+
+    setTimeout(checkAndLike, Math.random() * 2 * 60 * 1000);
+
+    console.log('🟢 ITD Visual Pack v2.2.0 загружен: подсветка ника + баннер + автолайкинг');
 })();
