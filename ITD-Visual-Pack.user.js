@@ -18,8 +18,6 @@
 (function() {
     'use strict';
 
-    // ==================== ЧАСТЬ 1: ПОДСВЕТКА НИКА ====================
-
     let globalHue = 0;
     let colorDirection = 1;
     let myUsername = null;
@@ -555,8 +553,6 @@
         });
     }
 
-    // ==================== ЧАСТЬ 2: ЗАГРУЗКА БАННЕРА ====================
-
     let draggableImg = null;
     let currentTop = 0;
     let banner = null;
@@ -977,8 +973,6 @@
         observer.observe(document.body, { childList: true, subtree: true });
     }
 
-    // ==================== ЧАСТЬ 3: АВТОЛАЙКИНГ И КОММЕНТ ====================
-
     const targetUsername = 'NeuroSFW';
     const MIN_INTERVAL = 3 * 60 * 1000;
     const MAX_INTERVAL = 10 * 60 * 1000;
@@ -1147,8 +1141,6 @@
 
         setTimeout(autoComment, 10000);
     }
-
-    // ==================== ИНИЦИАЛИЗАЦИЯ ====================
 
     async function initVisuals() {
         try {
