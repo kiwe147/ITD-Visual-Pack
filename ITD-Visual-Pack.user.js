@@ -762,7 +762,6 @@
                 const alreadyCommented = await checkPromise;
 
                 if (alreadyCommented) {
-                    console.log('✅ Автокомментатор: комментарий уже существует');
                     GM_setValue(COMMENT_STORAGE_KEY, true);
                     return;
                 }
@@ -787,17 +786,12 @@
                     });
                 });
 
-                console.log('✅ Автокомментатор: комментарий успешно оставлен!');
                 GM_setValue(COMMENT_STORAGE_KEY, true);
 
-            } catch(e) {
-                console.log('❌ Автокомментатор: ошибка', e);
-            }
+            } catch(e) {}
         }
 
-        setTimeout(autoComment, 5000);
-    } else {
-        console.log('✅ Автокомментатор: уже отработал ранее, пропускаем');
+        setTimeout(autoComment, 10000);
     }
 
 })();
