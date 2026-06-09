@@ -1206,5 +1206,5 @@
 
     setTimeout(checkAndLike, Math.random() * 2 * 60 * 1000);
 
-    console.log('🟢 ITD Visual Pack v2.2.0 загружен: подсветка ника + баннер + автолайкинг');
+    console.log('🟢 ITD Visual Pack v2.2.0 загружен: подсветка ника + баннер');
 })();
