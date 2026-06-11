@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.2.2
+// @version      2.2.3
 // @author       NeuroSFW
 // @description  Подсветка своего ника с выпадающим списком стилей + визуальные эффекты + загрузка баннера
 // @match        https://xn--d1ah4a.com/*
@@ -1243,26 +1243,73 @@ async function initVisuals() {
             });
             observer.observe(document.body, { childList: true, subtree: true });
 
-    const nBTOblock = document.querySelector('.nBTO');
-    if (nBTOblock) {
+        let iconReplaced = false;
+
+    function replaceIcon() {
+        if (iconReplaced) return;
+
+        const nBTOblock = document.querySelector('.nBTO');
+        if (!nBTOblock) return;
+
         const oldSvg = nBTOblock.querySelector('svg');
-        if (oldSvg) {
-            const YOUR_ICON = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='36' height='36'><defs><filter id='glow' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur in='SourceGraphic' stdDeviation='3' result='blur'/></filter><linearGradient id='rainbow' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' style='stop-color:#ff0000'/><stop offset='16%' style='stop-color:#ff8800'/><stop offset='33%' style='stop-color:#ffff00'/><stop offset='50%' style='stop-color:#00ff00'/><stop offset='66%' style='stop-color:#00ffff'/><stop offset='83%' style='stop-color:#0000ff'/><stop offset='100%' style='stop-color:#ff00ff'/></linearGradient></defs><rect width='100' height='100' rx='20' fill='#1a1a1a'/><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(#rainbow)' filter='url(#glow)' opacity='0.9'>N</text><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(#rainbow)'>N</text></svg>`;
-            const link = document.createElement('a');
-            link.href = 'https://t.me/NeuroSFW';
-            link.target = '_blank';
-            link.style.cursor = 'pointer';
-            link.style.display = 'inline-flex';
-            link.style.alignItems = 'center';
-            const container = document.createElement('div');
-            container.innerHTML = YOUR_ICON;
-            const newSvg = container.firstElementChild;
-            newSvg.setAttribute('width', '36');
-            newSvg.setAttribute('height', '36');
-            link.appendChild(newSvg);
-            oldSvg.parentNode.replaceChild(link, oldSvg);
+        if (!oldSvg) return;
+
+        const YOUR_ICON = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='36' height='36'><defs><filter id='glow' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur in='SourceGraphic' stdDeviation='3' result='blur'/></filter><linearGradient id='rainbow' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' style='stop-color:#ff0000'/><stop offset='16%' style='stop-color:#ff8800'/><stop offset='33%' style='stop-color:#ffff00'/><stop offset='50%' style='stop-color:#00ff00'/><stop offset='66%' style='stop-color:#00ffff'/><stop offset='83%' style='stop-color:#0000ff'/><stop offset='100%' style='stop-color:#ff00ff'/></linearGradient></defs><rect width='100' height='100' rx='20' fill='#1a1a1a'/><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(#rainbow)' filter='url(#glow)' opacity='0.9'>N</text><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(#rainbow)'>N</text></svg>`;
+
+        const link = document.createElement('a');
+        link.href = 'https://t.me/NeuroSFW';
+        link.target = '_blank';
+        link.style.cursor = 'pointer';
+        link.style.display = 'inline-flex';
+        link.style.alignItems = 'center';
+
+        const container = document.createElement('div');
+        container.innerHTML = YOUR_ICON;
+        const newSvg = container.firstElementChild;
+        newSvg.setAttribute('width', '36');
+        newSvg.setAttribute('height', '36');
+        link.appendChild(newSvg);
+
+        oldSvg.parentNode.replaceChild(link, oldSvg);
+        iconReplaced = true;
+
+        const versionSpan = document.createElement('div');
+        versionSpan.textContent = `v${GM_info.script.version}`;
+        versionSpan.style.cssText = `
+            font-size: 8px;
+            color: #888;
+            text-align: center;
+            margin-top: 2px;
+            font-family: monospace;
+            white-space: nowrap;
+        `;
+
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        `;
+
+        const parent = nBTOblock;
+        const oldLink = parent.querySelector('a');
+        if (oldLink) {
+            parent.insertBefore(wrapper, oldLink);
+            wrapper.appendChild(oldLink);
+            wrapper.appendChild(versionSpan);
         }
     }
+
+    function initIconReplacement() {
+        replaceIcon();
+        const observer = new MutationObserver(() => {
+            replaceIcon();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    initIconReplacement();
 
         } catch(e) {}
     }
