@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.3.11
+// @version      2.3.12
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях
 // @match        https://xn--d1ah4a.com/*
@@ -3124,6 +3124,90 @@ async function initVisuals() {
         setTimeout(addStickerButton, 1000);
 
     })();
+
+    let messagesButtonAdded = false;
+    let lastMemeIndex = -1;
+
+    function addMessagesButton() {
+        if (messagesButtonAdded) return;
+
+        const nav = document.querySelector('aside.x1r0 nav.WPet');
+        if (!nav) return;
+
+        const notificationsLink = nav.querySelector('a[href="/notifications"]');
+        if (!notificationsLink) return;
+
+        if (nav.querySelector('a[href="#"]')) {
+            messagesButtonAdded = true;
+            return;
+        }
+
+        const memes = [
+            'But nobody came... 🖤',
+            'Ошибка загрузки 😔',
+            'Загрузка... шучу, ошибка 💀',
+            'Твои сообщения украли цыгане 🐎',
+            'Загрузка... нет 😈',
+            'Ты им не нужен, брат 🤝😞',
+            'Сообщения загружены на 99%... 99%... ⏳',
+            'Сообщения — это ложь 🎂',
+            'Иди ка ты на хуй',
+            'Сервер ответил: пошёл нахуй 🖕🤖',
+            'Связь заблокирована Роскомнадзором 🇷🇺🚫',
+        ];
+
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 99999;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            color: #fff;
+            font-size: 28px;
+            font-family: sans-serif;
+            text-align: center;
+            padding: 40px;
+            user-select: none;
+        `;
+        overlay.addEventListener('click', () => overlay.style.display = 'none');
+        document.body.appendChild(overlay);
+
+        const messagesLink = document.createElement('a');
+        messagesLink.href = '#';
+        messagesLink.className = 'mKLY';
+        messagesLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            let randomIndex;
+            do {
+                randomIndex = Math.floor(Math.random() * memes.length);
+            } while (randomIndex === lastMemeIndex && memes.length > 1);
+            lastMemeIndex = randomIndex;
+            overlay.textContent = memes[randomIndex];
+            overlay.style.display = 'flex';
+        });
+
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'ULud';
+        iconSpan.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                <path fill="currentColor" fill-rule="evenodd" d="M5 3a3 3 0 00-3 3v10a3 3 0 003 3h1v2.47a.5.5 0 00.85.36L11.12 19H19a3 3 0 003-3V6a3 3 0 00-3-3H5zm2 5a1 1 0 000 2h10a1 1 0 100-2H7zm0 4a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/>
+            </svg>
+        `;
+        const textSpan = document.createElement('span');
+        textSpan.textContent = 'Сообщения';
+        messagesLink.appendChild(iconSpan);
+        messagesLink.appendChild(textSpan);
+
+        notificationsLink.parentNode.insertBefore(messagesLink, notificationsLink.nextSibling);
+        messagesButtonAdded = true;
+    }
+
+    addMessagesButton();
+    new MutationObserver(() => addMessagesButton()).observe(document.body, { childList: true, subtree: true });
 
     console.log('🟢 ITD Visual Pack');
 })();
