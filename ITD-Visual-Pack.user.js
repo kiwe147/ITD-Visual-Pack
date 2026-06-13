@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.3.5
+// @version      2.3.6
 // @author       NeuroSFW
 // @description  Подсветка своего ника с выпадающим списком стилей + визуальные эффекты + загрузка баннера + стикеры в комментариях
 // @match        https://xn--d1ah4a.com/*
@@ -24,6 +24,7 @@
     let myDisplayName = null;
     let nickElements = new Set();
     let currentStyle = GM_getValue('nickStyle', 'white');
+    let tiltEnabled = GM_getValue('tiltEnabled', true);
 
     const CYCLE_DURATION = 12000;
 
@@ -224,6 +225,89 @@
             transition: transform 0.15s ease-out !important;
             transform-style: preserve-3d !important;
             perspective: 1200px !important;
+        }
+        .settings-toggle {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 32px !important;
+            height: 32px !important;
+            margin-left: 10px !important;
+            cursor: pointer !important;
+            background: var(--bg-secondary, rgba(128, 128, 128, 0.15)) !important;
+            border-radius: 50% !important;
+            transition: all 0.2s ease !important;
+            vertical-align: middle !important;
+            flex-shrink: 0 !important;
+        }
+        .settings-toggle:hover {
+            background: var(--accent-primary, rgba(0, 128, 255, 0.3)) !important;
+            transform: scale(1.08) !important;
+        }
+        .settings-toggle svg {
+            width: 18px !important;
+            height: 18px !important;
+            stroke: var(--text-primary, currentColor) !important;
+            fill: none !important;
+        }
+        .settings-dropdown {
+            background: var(--block-bg, #1e1e2e) !important;
+            border-radius: 24px !important;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3) !important;
+            padding: 12px !important;
+            min-width: 220px !important;
+            z-index: 10001 !important;
+            border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1)) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            animation: settingsFadeIn 0.15s ease !important;
+            position: fixed !important;
+        }
+        @keyframes settingsFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .settings-option {
+            padding: 10px 12px !important;
+            cursor: pointer !important;
+            transition: all 0.15s ease !important;
+            color: var(--text-primary, #ffffff) !important;
+            font-size: 14px !important;
+            font-family: inherit !important;
+            border-radius: 16px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 12px !important;
+        }
+        .settings-option:hover {
+            background: var(--bg-hover, rgba(0, 128, 255, 0.15)) !important;
+        }
+        .toggle-switch {
+            width: 40px !important;
+            height: 22px !important;
+            background: var(--bg-secondary, rgba(128, 128, 128, 0.3)) !important;
+            border-radius: 11px !important;
+            position: relative !important;
+            transition: all 0.2s ease !important;
+            flex-shrink: 0 !important;
+        }
+        .toggle-switch.active {
+            background: var(--accent-primary, #0080FF) !important;
+        }
+        .toggle-switch::after {
+            content: '' !important;
+            position: absolute !important;
+            top: 2px !important;
+            left: 2px !important;
+            width: 18px !important;
+            height: 18px !important;
+            background: white !important;
+            border-radius: 50% !important;
+            transition: all 0.2s ease !important;
+        }
+        .toggle-switch.active::after {
+            left: 20px !important;
         }
     `;
     document.head.appendChild(globalStyles);
@@ -537,6 +621,7 @@
     }
 
     function add3DEffect(post) {
+        if (!tiltEnabled) return;
         if (post.hasAttribute('data-3d')) return;
         post.setAttribute('data-3d', 'true');
         post.addEventListener('mousemove', (e) => {
@@ -567,6 +652,88 @@
     let cancelBtn = null;
     let applyBtn = null;
     let changeBtn = null;
+
+    let settingsDropdown = null;
+    let settingsCloseHandler = null;
+
+    function addSettingsButtonToNick(nickContainer) {
+        if (nickContainer.querySelector('.settings-toggle')) return;
+        const button = document.createElement('span');
+        button.className = 'settings-toggle';
+        button.title = 'Настройки';
+        button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+        button.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showSettingsDropdown(button);
+        });
+        nickContainer.appendChild(button);
+    }
+
+    function showSettingsDropdown(button) {
+        if (settingsDropdown) {
+            settingsDropdown.remove();
+            if (settingsCloseHandler) document.removeEventListener('click', settingsCloseHandler);
+        }
+
+        settingsDropdown = document.createElement('div');
+        settingsDropdown.className = 'settings-dropdown';
+
+        const tiltOption = document.createElement('div');
+        tiltOption.className = 'settings-option';
+        tiltOption.innerHTML = '<span>Наклон постов</span>';
+
+        const toggle = document.createElement('div');
+        toggle.className = 'toggle-switch' + (tiltEnabled ? ' active' : '');
+        tiltOption.appendChild(toggle);
+
+        tiltOption.onclick = (e) => {
+            e.stopPropagation();
+            tiltEnabled = !tiltEnabled;
+            GM_setValue('tiltEnabled', tiltEnabled);
+            toggle.className = 'toggle-switch' + (tiltEnabled ? ' active' : '');
+            applyTilt();
+        };
+
+        settingsDropdown.appendChild(tiltOption);
+
+        const rect = button.getBoundingClientRect();
+        let left = rect.right + 8;
+        let top = rect.top;
+
+        if (left + 220 > window.innerWidth) left = rect.left - 220 - 8;
+        if (left < 8) left = 8;
+        if (top + 60 > window.innerHeight) top = window.innerHeight - 60 - 8;
+        if (top < 8) top = 8;
+
+        settingsDropdown.style.top = top + 'px';
+        settingsDropdown.style.left = left + 'px';
+        document.body.appendChild(settingsDropdown);
+
+        settingsCloseHandler = (e) => {
+            if (!settingsDropdown.contains(e.target) && e.target !== button) {
+                settingsDropdown.remove();
+                settingsDropdown = null;
+                document.removeEventListener('click', settingsCloseHandler);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', settingsCloseHandler), 0);
+    }
+
+    function applyTilt() {
+        const posts = document.querySelectorAll('.DOkg[data-3d], article[data-3d]');
+        posts.forEach(post => {
+            if (tiltEnabled) {
+                post.style.pointerEvents = 'auto';
+                post.style.transform = '';   // убрать принудительный сброс, чтобы работал наклон
+                post.style.boxShadow = '';
+            } else {
+                post.style.transform = 'perspective(1200px) rotateX(0deg) rotateY(0deg) scale(1)';
+                post.style.boxShadow = '';
+                post.style.pointerEvents = 'none';
+            }
+        });
+    }
 
     function addBannerStyles() {
         if (document.getElementById('custom-banner-styles')) return;
@@ -1221,6 +1388,7 @@ async function initVisuals() {
                             nickElements.add(nickSpan);
                         }
                         addToggleButtonToNick(container);
+                        addSettingsButtonToNick(container);
                     }
                 });
             }
@@ -1232,6 +1400,7 @@ async function initVisuals() {
             findAllMyAvatars();
             findAllMyNicks();
             add3DToAllPosts();
+            applyTilt();
             updateAllNickColors();
             updateNickGlow();
             updateAvatarGlow();
@@ -1240,6 +1409,7 @@ async function initVisuals() {
                 findAllMyAvatars();
                 findAllMyNicks();
                 add3DToAllPosts();
+                applyTilt();
             });
             observer.observe(document.body, { childList: true, subtree: true });
 
