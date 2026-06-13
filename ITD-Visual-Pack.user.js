@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      2.3.10
 // @author       NeuroSFW
-// @description  Подсветка своего ника с выпадающим списком стилей + визуальные эффекты + загрузка баннера + стикеры в комментариях
+// @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях
 // @match        https://xn--d1ah4a.com/*
 // @match        https://итд.com/*
 // @grant        GM_xmlhttpRequest
