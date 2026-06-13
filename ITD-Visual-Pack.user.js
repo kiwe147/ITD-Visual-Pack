@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.3.6
+// @version      2.3.7
 // @author       NeuroSFW
 // @description  Подсветка своего ника с выпадающим списком стилей + визуальные эффекты + загрузка баннера + стикеры в комментариях
 // @match        https://xn--d1ah4a.com/*
@@ -232,7 +232,7 @@
             justify-content: center !important;
             width: 32px !important;
             height: 32px !important;
-            margin-left: 10px !important;
+            margin-left: 0 !important;
             cursor: pointer !important;
             background: var(--bg-secondary, rgba(128, 128, 128, 0.15)) !important;
             border-radius: 50% !important;
@@ -509,6 +509,14 @@
     }
 
     function createDropdown(button) {
+        if (settingsDropdown) {
+            settingsDropdown.remove();
+            settingsDropdown = null;
+            if (settingsCloseHandler) document.removeEventListener('click', settingsCloseHandler);
+            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
+            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
+        }
+
         if (dropdown) {
             dropdown.remove();
             if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
@@ -671,9 +679,20 @@
     }
 
     function showSettingsDropdown(button) {
+        if (dropdown) {
+            dropdown.remove();
+            dropdown = null;
+            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
+            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
+            if (closeHandler) document.removeEventListener('click', closeHandler);
+            currentButton = null;
+        }
+
         if (settingsDropdown) {
             settingsDropdown.remove();
             if (settingsCloseHandler) document.removeEventListener('click', settingsCloseHandler);
+            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
+            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
         }
 
         settingsDropdown = document.createElement('div');
@@ -697,17 +716,8 @@
 
         settingsDropdown.appendChild(tiltOption);
 
-        const rect = button.getBoundingClientRect();
-        let left = rect.right + 8;
-        let top = rect.top;
+        updateSettingsDropdownPosition(button);
 
-        if (left + 220 > window.innerWidth) left = rect.left - 220 - 8;
-        if (left < 8) left = 8;
-        if (top + 60 > window.innerHeight) top = window.innerHeight - 60 - 8;
-        if (top < 8) top = 8;
-
-        settingsDropdown.style.top = top + 'px';
-        settingsDropdown.style.left = left + 'px';
         document.body.appendChild(settingsDropdown);
 
         settingsCloseHandler = (e) => {
@@ -715,9 +725,56 @@
                 settingsDropdown.remove();
                 settingsDropdown = null;
                 document.removeEventListener('click', settingsCloseHandler);
+                window.removeEventListener('scroll', scrollHandler);
+                window.removeEventListener('resize', resizeHandler);
             }
         };
         setTimeout(() => document.addEventListener('click', settingsCloseHandler), 0);
+
+        scrollHandler = () => updateSettingsDropdownPosition(button);
+        resizeHandler = () => updateSettingsDropdownPosition(button);
+
+        window.addEventListener('scroll', scrollHandler);
+        window.addEventListener('resize', resizeHandler);
+    }
+
+    function updateSettingsDropdownPosition(button) {
+        if (!settingsDropdown || !button || !button.isConnected) return;
+        const rect = button.getBoundingClientRect();
+
+        const isButtonVisible = rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
+
+        if (!isButtonVisible) {
+            settingsDropdown.remove();
+            settingsDropdown = null;
+            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
+            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
+            if (settingsCloseHandler) document.removeEventListener('click', settingsCloseHandler);
+            return;
+        }
+
+        let left = rect.right + 8;
+        let top = rect.top;
+
+        const dropdownWidth = 220;
+        if (left + dropdownWidth > window.innerWidth) {
+            left = rect.left - dropdownWidth - 8;
+        }
+
+        if (left < 8) {
+            left = 8;
+        }
+
+        const dropdownHeight = 60;
+        if (top + dropdownHeight > window.innerHeight) {
+            top = window.innerHeight - dropdownHeight - 8;
+        }
+        if (top < 8) {
+            top = 8;
+        }
+
+        settingsDropdown.style.top = top + 'px';
+        settingsDropdown.style.left = left + 'px';
     }
 
     function applyTilt() {
@@ -725,7 +782,7 @@
         posts.forEach(post => {
             if (tiltEnabled) {
                 post.style.pointerEvents = 'auto';
-                post.style.transform = '';   // убрать принудительный сброс, чтобы работал наклон
+                post.style.transform = '';
                 post.style.boxShadow = '';
             } else {
                 post.style.transform = 'perspective(1200px) rotateX(0deg) rotateY(0deg) scale(1)';
@@ -1387,8 +1444,10 @@ async function initVisuals() {
                         if (!nickElements.has(nickSpan)) {
                             nickElements.add(nickSpan);
                         }
-                        addToggleButtonToNick(container);
-                        addSettingsButtonToNick(container);
+                        if (container.classList.contains('Y1Rg') && container.classList.contains('UwaG')) {
+                            addToggleButtonToNick(container);
+                            addSettingsButtonToNick(container);
+                        }
                     }
                 });
             }
