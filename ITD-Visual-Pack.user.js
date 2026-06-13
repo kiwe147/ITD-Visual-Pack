@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.3.7
+// @version      2.3.8
 // @author       NeuroSFW
 // @description  Подсветка своего ника с выпадающим списком стилей + визуальные эффекты + загрузка баннера + стикеры в комментариях
 // @match        https://xn--d1ah4a.com/*
@@ -162,7 +162,6 @@
         }
         .nick-style-toggle:hover {
             background: var(--accent-primary, rgba(0, 128, 255, 0.3)) !important;
-            transform: scale(1.08) !important;
         }
         .nick-style-toggle svg {
             width: 18px !important;
@@ -242,7 +241,6 @@
         }
         .settings-toggle:hover {
             background: var(--accent-primary, rgba(0, 128, 255, 0.3)) !important;
-            transform: scale(1.08) !important;
         }
         .settings-toggle svg {
             width: 18px !important;
