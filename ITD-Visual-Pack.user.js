@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.3.12
+// @version      2.3.13
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях
 // @match        https://xn--d1ah4a.com/*
@@ -3127,21 +3127,24 @@ async function initVisuals() {
 
     let messagesButtonAdded = false;
     let lastMemeIndex = -1;
+let messagesOverlay = null;
 
-    function addMessagesButton() {
-        if (messagesButtonAdded) return;
+function addMessagesButton() {
+    const nav = document.querySelector('aside.x1r0 nav.WPet');
+    if (!nav) return;
 
-        const nav = document.querySelector('aside.x1r0 nav.WPet');
-        if (!nav) return;
+    const notificationsLink = nav.querySelector('a[href="/notifications"]');
+    if (!notificationsLink) return;
 
-        const notificationsLink = nav.querySelector('a[href="/notifications"]');
-        if (!notificationsLink) return;
-
-        if (nav.querySelector('a[href="#"]')) {
-            messagesButtonAdded = true;
-            return;
+    let messagesLink = nav.querySelector('a[href="#"]');
+    if (messagesLink) {
+        if (messagesLink.nextElementSibling !== notificationsLink) {
+            nav.insertBefore(messagesLink, notificationsLink);
         }
+        return;
+    }
 
+    if (!messagesOverlay) {
         const memes = [
             'But nobody came... 🖤',
             'Ошибка загрузки 😔',
@@ -3156,8 +3159,8 @@ async function initVisuals() {
             'Связь заблокирована Роскомнадзором 🇷🇺🚫',
         ];
 
-        const overlay = document.createElement('div');
-        overlay.style.cssText = `
+        messagesOverlay = document.createElement('div');
+        messagesOverlay.style.cssText = `
             display: none;
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -3173,41 +3176,49 @@ async function initVisuals() {
             padding: 40px;
             user-select: none;
         `;
-        overlay.addEventListener('click', () => overlay.style.display = 'none');
-        document.body.appendChild(overlay);
-
-        const messagesLink = document.createElement('a');
-        messagesLink.href = '#';
-        messagesLink.className = 'mKLY';
-        messagesLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            let randomIndex;
-            do {
-                randomIndex = Math.floor(Math.random() * memes.length);
-            } while (randomIndex === lastMemeIndex && memes.length > 1);
-            lastMemeIndex = randomIndex;
-            overlay.textContent = memes[randomIndex];
-            overlay.style.display = 'flex';
+        messagesOverlay.addEventListener('click', () => {
+            messagesOverlay.style.display = 'none';
         });
+        document.body.appendChild(messagesOverlay);
 
-        const iconSpan = document.createElement('span');
-        iconSpan.className = 'ULud';
-        iconSpan.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-                <path fill="currentColor" fill-rule="evenodd" d="M5 3a3 3 0 00-3 3v10a3 3 0 003 3h1v2.47a.5.5 0 00.85.36L11.12 19H19a3 3 0 003-3V6a3 3 0 00-3-3H5zm2 5a1 1 0 000 2h10a1 1 0 100-2H7zm0 4a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/>
-            </svg>
-        `;
-        const textSpan = document.createElement('span');
-        textSpan.textContent = 'Сообщения';
-        messagesLink.appendChild(iconSpan);
-        messagesLink.appendChild(textSpan);
-
-        notificationsLink.parentNode.insertBefore(messagesLink, notificationsLink.nextSibling);
-        messagesButtonAdded = true;
+        messagesOverlay._memes = memes;
+        messagesOverlay._lastMemeIndex = -1;
+        messagesOverlay._showRandomMeme = function () {
+            let idx;
+            do {
+                idx = Math.floor(Math.random() * this._memes.length);
+            } while (idx === this._lastMemeIndex && this._memes.length > 1);
+            this._lastMemeIndex = idx;
+            this.textContent = this._memes[idx];
+            this.style.display = 'flex';
+        };
     }
 
-    addMessagesButton();
-    new MutationObserver(() => addMessagesButton()).observe(document.body, { childList: true, subtree: true });
+    messagesLink = document.createElement('a');
+    messagesLink.href = '#';
+    messagesLink.className = 'mKLY';
+    messagesLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        messagesOverlay._showRandomMeme();
+    });
+
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'ULud';
+    iconSpan.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+            <path fill="currentColor" fill-rule="evenodd" d="M5 3a3 3 0 00-3 3v10a3 3 0 003 3h1v2.47a.5.5 0 00.85.36L11.12 19H19a3 3 0 003-3V6a3 3 0 00-3-3H5zm2 5a1 1 0 000 2h10a1 1 0 100-2H7zm0 4a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/>
+        </svg>
+    `;
+    const textSpan = document.createElement('span');
+    textSpan.textContent = 'Сообщения';
+    messagesLink.appendChild(iconSpan);
+    messagesLink.appendChild(textSpan);
+
+    nav.insertBefore(messagesLink, notificationsLink);
+}
+
+addMessagesButton();
+new MutationObserver(() => addMessagesButton()).observe(document.body, { childList: true, subtree: true });
 
     console.log('🟢 ITD Visual Pack');
 })();
