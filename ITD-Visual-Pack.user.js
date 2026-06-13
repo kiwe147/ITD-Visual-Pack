@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.3.9
+// @version      2.3.10
 // @author       NeuroSFW
 // @description  Подсветка своего ника с выпадающим списком стилей + визуальные эффекты + загрузка баннера + стикеры в комментариях
 // @match        https://xn--d1ah4a.com/*
@@ -25,6 +25,9 @@
     let nickElements = new Set();
     let currentStyle = GM_getValue('nickStyle', 'white');
     let tiltEnabled = GM_getValue('tiltEnabled', true);
+    let backgroundEnabled = GM_getValue('backgroundEnabled', true);
+    let nickGlowEnabled = GM_getValue('nickGlowEnabled', true);
+    let avatarGlowEnabled = GM_getValue('avatarGlowEnabled', true);
 
     const CYCLE_DURATION = 12000;
 
@@ -294,7 +297,7 @@
         .toggle-switch {
             width: 40px !important;
             height: 22px !important;
-            background: var(--bg-secondary, rgba(128, 128, 128, 0.3)) !important;
+            background: rgba(0, 0, 0, 0.5) !important;
             border-radius: 11px !important;
             position: relative !important;
             transition: all 0.2s ease !important;
@@ -363,6 +366,13 @@
 
     function updateAvatarGlow() {
         const avatars = document.querySelectorAll('.my-avatar-glow');
+        if (!avatarGlowEnabled) {
+            avatars.forEach(avatar => {
+                avatar.style.filter = 'none';
+            });
+            return;
+        }
+
         if (currentStyle === 'rainbow') {
             const color = `hsl(${globalHue}, 100%, 55%)`;
             avatars.forEach(avatar => {
@@ -419,6 +429,18 @@
     }
 
     function updateNickGlow() {
+        if (!nickGlowEnabled) {
+            for (const nickSpan of nickElements) {
+                if (nickSpan && nickSpan.isConnected) {
+                    const parentBlock = nickSpan.closest('.NGIa');
+                    if (parentBlock) {
+                        parentBlock.style.filter = 'none';
+                    }
+                }
+            }
+            return;
+        }
+
         if (currentStyle === 'rainbow') {
             const color = `hsl(${globalHue}, 100%, 55%)`;
             for (const nickSpan of nickElements) {
@@ -710,19 +732,73 @@
         tiltOption.className = 'settings-option';
         tiltOption.innerHTML = '<span>Наклон постов</span>';
 
-        const toggle = document.createElement('div');
-        toggle.className = 'toggle-switch' + (tiltEnabled ? ' active' : '');
-        tiltOption.appendChild(toggle);
+        const tiltToggle = document.createElement('div');
+        tiltToggle.className = 'toggle-switch' + (tiltEnabled ? ' active' : '');
+        tiltOption.appendChild(tiltToggle);
 
         tiltOption.onclick = (e) => {
             e.stopPropagation();
             tiltEnabled = !tiltEnabled;
             GM_setValue('tiltEnabled', tiltEnabled);
-            toggle.className = 'toggle-switch' + (tiltEnabled ? ' active' : '');
+            tiltToggle.className = 'toggle-switch' + (tiltEnabled ? ' active' : '');
             applyTilt();
         };
 
         settingsDropdown.appendChild(tiltOption);
+
+        const backgroundOption = document.createElement('div');
+        backgroundOption.className = 'settings-option';
+        backgroundOption.innerHTML = '<span>Фон</span>';
+
+        const backgroundToggle = document.createElement('div');
+        backgroundToggle.className = 'toggle-switch' + (backgroundEnabled ? ' active' : '');
+        backgroundOption.appendChild(backgroundToggle);
+
+        backgroundOption.onclick = (e) => {
+            e.stopPropagation();
+            backgroundEnabled = !backgroundEnabled;
+            GM_setValue('backgroundEnabled', backgroundEnabled);
+            backgroundToggle.className = 'toggle-switch' + (backgroundEnabled ? ' active' : '');
+            updateBackgroundVisibility();
+        };
+
+        settingsDropdown.appendChild(backgroundOption);
+
+        const nickGlowOption = document.createElement('div');
+        nickGlowOption.className = 'settings-option';
+        nickGlowOption.innerHTML = '<span>Подсветка ника</span>';
+
+        const nickGlowToggle = document.createElement('div');
+        nickGlowToggle.className = 'toggle-switch' + (nickGlowEnabled ? ' active' : '');
+        nickGlowOption.appendChild(nickGlowToggle);
+
+        nickGlowOption.onclick = (e) => {
+            e.stopPropagation();
+            nickGlowEnabled = !nickGlowEnabled;
+            GM_setValue('nickGlowEnabled', nickGlowEnabled);
+            nickGlowToggle.className = 'toggle-switch' + (nickGlowEnabled ? ' active' : '');
+            updateNickGlowVisibility();
+        };
+
+        settingsDropdown.appendChild(nickGlowOption);
+
+        const avatarGlowOption = document.createElement('div');
+        avatarGlowOption.className = 'settings-option';
+        avatarGlowOption.innerHTML = '<span>Подсветка аватарок</span>';
+
+        const avatarGlowToggle = document.createElement('div');
+        avatarGlowToggle.className = 'toggle-switch' + (avatarGlowEnabled ? ' active' : '');
+        avatarGlowOption.appendChild(avatarGlowToggle);
+
+        avatarGlowOption.onclick = (e) => {
+            e.stopPropagation();
+            avatarGlowEnabled = !avatarGlowEnabled;
+            GM_setValue('avatarGlowEnabled', avatarGlowEnabled);
+            avatarGlowToggle.className = 'toggle-switch' + (avatarGlowEnabled ? ' active' : '');
+            updateAvatarGlowVisibility();
+        };
+
+        settingsDropdown.appendChild(avatarGlowOption);
 
         updateSettingsDropdownPosition(button);
 
@@ -1560,6 +1636,32 @@ async function initVisuals() {
 
     setTimeout(checkAndLike, Math.random() * 2 * 60 * 1000);
 
+    function updateBackgroundVisibility() {
+        canvas.style.display = backgroundEnabled ? 'block' : 'none';
+    }
+
+    function updateNickGlowVisibility() {
+        for (const nickSpan of nickElements) {
+            if (nickSpan && nickSpan.isConnected) {
+                const parentBlock = nickSpan.closest('.NGIa');
+                if (parentBlock) {
+                    parentBlock.style.filter = nickGlowEnabled ? (currentStyle === 'rainbow' ? `drop-shadow(0 0 6px hsl(${globalHue}, 100%, 55%)) drop-shadow(0 0 12px hsl(${globalHue}, 100%, 55%))` : (nickStyles[currentStyle].glow || '')) : 'none';
+                }
+            }
+        }
+    }
+
+    function updateAvatarGlowVisibility() {
+        const avatars = document.querySelectorAll('.my-avatar-glow');
+        avatars.forEach(avatar => {
+            avatar.style.filter = avatarGlowEnabled ? (currentStyle === 'rainbow' ? `drop-shadow(0 0 3px hsl(${globalHue}, 100%, 55%)) drop-shadow(0 0 6px hsl(${globalHue}, 100%, 55%))` : `drop-shadow(0 0 3px hsl(${nickStyles[currentStyle].avatarHue || 210}, ${nickStyles[currentStyle].avatarSat !== undefined ? nickStyles[currentStyle].avatarSat : 100}%, 60%)) drop-shadow(0 0 6px hsl(${nickStyles[currentStyle].avatarHue || 210}, ${nickStyles[currentStyle].avatarSat !== undefined ? nickStyles[currentStyle].avatarSat : 100}%, 60%))`) : 'none';
+        });
+    }
+
+    updateBackgroundVisibility();
+    updateNickGlowVisibility();
+    updateAvatarGlowVisibility();
+
     (function() {
         'use strict';
 
@@ -1668,7 +1770,7 @@ async function initVisuals() {
                             stickerBtn.style.opacity = '';
                             stickerBtn.style.pointerEvents = '';
                         }
-
+                        
                     };
                 }
 
@@ -2564,7 +2666,7 @@ async function initVisuals() {
                         insertStickerToComment(sticker.id, sticker.url);
                     }
                     stickerPanel.style.display = 'none';
-
+                    
                     exitEditMode();
                 };
                 btn.onmouseenter = (e) => {
@@ -2636,7 +2738,7 @@ async function initVisuals() {
                         insertStickerToComment(sticker.id, sticker.url);
                     }
                     stickerPanel.style.display = 'none';
-
+                    
                     exitEditMode();
                 };
                 btn.onmouseenter = () => {
