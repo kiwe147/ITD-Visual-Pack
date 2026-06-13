@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.3.8
+// @version      2.3.9
 // @author       NeuroSFW
 // @description  Подсветка своего ника с выпадающим списком стилей + визуальные эффекты + загрузка баннера + стикеры в комментариях
 // @match        https://xn--d1ah4a.com/*
@@ -164,8 +164,13 @@
             background: var(--accent-primary, rgba(0, 128, 255, 0.3)) !important;
         }
         .nick-style-toggle svg {
-            width: 18px !important;
-            height: 18px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 20px !important;
+            height: 20px !important;
+        }
+        .nick-style-toggle svg path, .nick-style-toggle svg circle {
             stroke: var(--text-primary, currentColor) !important;
             fill: none !important;
         }
@@ -243,8 +248,13 @@
             background: var(--accent-primary, rgba(0, 128, 255, 0.3)) !important;
         }
         .settings-toggle svg {
-            width: 18px !important;
-            height: 18px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 20px !important;
+            height: 20px !important;
+        }
+        .settings-toggle svg path, .settings-toggle svg circle {
             stroke: var(--text-primary, currentColor) !important;
             fill: none !important;
         }
@@ -1658,7 +1668,7 @@ async function initVisuals() {
                             stickerBtn.style.opacity = '';
                             stickerBtn.style.pointerEvents = '';
                         }
-                        
+
                     };
                 }
 
@@ -2554,7 +2564,7 @@ async function initVisuals() {
                         insertStickerToComment(sticker.id, sticker.url);
                     }
                     stickerPanel.style.display = 'none';
-                    
+
                     exitEditMode();
                 };
                 btn.onmouseenter = (e) => {
@@ -2626,7 +2636,7 @@ async function initVisuals() {
                         insertStickerToComment(sticker.id, sticker.url);
                     }
                     stickerPanel.style.display = 'none';
-                    
+
                     exitEditMode();
                 };
                 btn.onmouseenter = () => {
