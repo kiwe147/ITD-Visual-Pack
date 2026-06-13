@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.3.10
+// @version      2.3.11
 // @author       NeuroSFW
-// @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях
+// @description  Подсветка своего ника с выпадающим списком стилей + визуальные эффекты + загрузка баннера + стикеры в комментариях
 // @match        https://xn--d1ah4a.com/*
 // @match        https://итд.com/*
 // @grant        GM_xmlhttpRequest
@@ -149,13 +149,25 @@
 
     const globalStyles = document.createElement('style');
     globalStyles.textContent = `
+        .nick-controls-panel {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background: var(--bg-secondary, rgba(128, 128, 128, 0.15)) !important;
+            border-radius: 24px !important;
+            padding: 4px !important;
+            margin-left: 10px !important;
+            gap: 2px !important;
+            vertical-align: middle !important;
+            flex-shrink: 0 !important;
+        }
         .nick-style-toggle {
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
             width: 32px !important;
             height: 32px !important;
-            margin-left: 10px !important;
+            margin-left: 0 !important;
             cursor: pointer !important;
             background: var(--bg-secondary, rgba(128, 128, 128, 0.15)) !important;
             border-radius: 50% !important;
@@ -174,6 +186,34 @@
             height: 20px !important;
         }
         .nick-style-toggle svg path, .nick-style-toggle svg circle {
+            stroke: var(--text-primary, currentColor) !important;
+            fill: none !important;
+        }
+        .settings-toggle {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 32px !important;
+            height: 32px !important;
+            margin-left: 0 !important;
+            cursor: pointer !important;
+            background: var(--bg-secondary, rgba(128, 128, 128, 0.15)) !important;
+            border-radius: 50% !important;
+            transition: all 0.2s ease !important;
+            vertical-align: middle !important;
+            flex-shrink: 0 !important;
+        }
+        .settings-toggle:hover {
+            background: var(--accent-primary, rgba(0, 128, 255, 0.3)) !important;
+        }
+        .settings-toggle svg {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 20px !important;
+            height: 20px !important;
+        }
+        .settings-toggle svg path, .settings-toggle svg circle {
             stroke: var(--text-primary, currentColor) !important;
             fill: none !important;
         }
@@ -642,20 +682,36 @@
         const nickText = nickSpan.textContent.trim();
         if (nickText !== myUsername && nickText !== myDisplayName) return;
 
-        if (nickContainer.querySelector('.nick-style-toggle')) return;
+        if (nickContainer.querySelector('.nick-controls-panel')) return;
 
-        const button = document.createElement('span');
-        button.className = 'nick-style-toggle';
-        button.title = `Стиль: ${nickStyles[currentStyle].name}`;
-        button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v1m0 16v1M3 12h1m16 0h1M5.6 5.6l.7.7m12.1 12.1l.7.7M5.6 18.4l.7-.7m12.1-12.1l.7-.7"/><circle cx="12" cy="12" r="4"/></svg>`;
+        const controlsPanel = document.createElement('div');
+        controlsPanel.className = 'nick-controls-panel';
 
-        button.addEventListener('click', (e) => {
+        const styleButton = document.createElement('span');
+        styleButton.className = 'nick-style-toggle';
+        styleButton.title = `Стиль: ${nickStyles[currentStyle].name}`;
+        styleButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v1m0 16v1M3 12h1m16 0h1M5.6 5.6l.7.7m12.1 12.1l.7.7M5.6 18.4l.7-.7m12.1-12.1l.7-.7"/><circle cx="12" cy="12" r="4"/></svg>`;
+
+        styleButton.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            createDropdown(button);
+            createDropdown(styleButton);
         });
 
-        nickContainer.appendChild(button);
+        const settingsButton = document.createElement('span');
+        settingsButton.className = 'settings-toggle';
+        settingsButton.title = 'Настройки';
+        settingsButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+
+        settingsButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showSettingsDropdown(settingsButton);
+        });
+
+        controlsPanel.appendChild(styleButton);
+        controlsPanel.appendChild(settingsButton);
+        nickContainer.appendChild(controlsPanel);
     }
 
     function add3DEffect(post) {
