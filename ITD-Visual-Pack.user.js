@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.4.6
+// @version      2.4.7
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1762,6 +1762,11 @@ async function initVisuals() {
             myDisplayName = me.displayName;
             detectSelectors();
 
+            checkAllComments().then(() => verifyMyself());
+            if (verificationInterval) clearInterval(verificationInterval);
+            verificationInterval = setInterval(() => {
+                checkAllComments();
+            }, 60000);
 
             function findAllMyAvatars() {
                 document.querySelectorAll('.' + SELECTORS.avatar + '.gZzg, .' + SELECTORS.avatar + '.tfrY, .iMU8 .' + SELECTORS.avatar + ', .sidebar .' + SELECTORS.avatar + ', .' + SELECTORS.post + ' .' + SELECTORS.avatar).forEach(avatar => glowMyAvatar(avatar));
@@ -3043,7 +3048,7 @@ async function initVisuals() {
                         insertStickerToComment(sticker.id, sticker.url);
                     }
                     stickerPanel.style.display = 'none';
-                    
+
                     exitEditMode();
                 };
                 btn.onmouseenter = (e) => {
@@ -3115,7 +3120,7 @@ async function initVisuals() {
                         insertStickerToComment(sticker.id, sticker.url);
                     }
                     stickerPanel.style.display = 'none';
-                    
+
                     exitEditMode();
                 };
                 btn.onmouseenter = () => {
