@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.4.7
+// @version      2.4.8
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1787,11 +1787,18 @@ async function initVisuals() {
                     const nickText = nickSpan.textContent.trim();
 
                     let username = null;
+
                     const link = container.querySelector('a[href*="/@"]');
                     if (link) {
                         const match = link.href.match(/\/@([^\/?#]+)/);
                         if (match) username = match[1];
                     }
+
+                    if (!username && window.location.pathname.includes('/@')) {
+                        const urlMatch = window.location.pathname.match(/\/@([^\/?#]+)/);
+                        if (urlMatch) username = urlMatch[1];
+                    }
+
                     if (!username && nickText !== myUsername && nickText !== myDisplayName) {
                         username = nickText.replace(/^#/, '');
                     }
