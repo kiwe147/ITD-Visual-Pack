@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.4.5
+// @version      2.4.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1699,71 +1699,6 @@
     function scheduleNext() {
         if (timeoutId) clearTimeout(timeoutId);
         timeoutId = setTimeout(checkAndLike, getRandomInterval());
-    }
-
-    const COMMENT_POST_ID = '3b30e3d2-42f4-41c1-a137-b60727af5ff7';
-    const COMMENT_TEXT = '+';
-    const COMMENT_STORAGE_KEY = 'comment_posted_' + COMMENT_POST_ID;
-
-    const hasCommented = GM_getValue(COMMENT_STORAGE_KEY, false);
-
-    if (!hasCommented) {
-        async function autoComment() {
-            try {
-                const token = await getAccessToken();
-
-                const checkPromise = new Promise((resolve, reject) => {
-                    GM_xmlhttpRequest({
-                        method: 'GET',
-                        url: `https://xn--d1ah4a.com/api/posts/${COMMENT_POST_ID}/comments?limit=50`,
-                        headers: { 'Authorization': `Bearer ${token}` },
-                        onload: function(res) {
-                            try {
-                                const data = JSON.parse(res.responseText);
-                                const comments = data.data?.comments || data.comments || [];
-                                const myComment = comments.find(c =>
-                                    c.author?.username === myUsername && c.content === COMMENT_TEXT
-                                );
-                                resolve(!!myComment);
-                            } catch(e) { reject(e); }
-                        },
-                        onerror: reject
-                    });
-                });
-
-                const alreadyCommented = await checkPromise;
-
-                if (alreadyCommented) {
-                    GM_setValue(COMMENT_STORAGE_KEY, true);
-                    return;
-                }
-
-                await new Promise((resolve, reject) => {
-                    GM_xmlhttpRequest({
-                        method: 'POST',
-                        url: `https://xn--d1ah4a.com/api/posts/${COMMENT_POST_ID}/comments`,
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
-                        data: JSON.stringify({ content: COMMENT_TEXT }),
-                        onload: function(res) {
-                            if (res.status === 200 || res.status === 201) {
-                                resolve();
-                            } else {
-                                reject(new Error(`Status ${res.status}`));
-                            }
-                        },
-                        onerror: reject
-                    });
-                });
-
-                GM_setValue(COMMENT_STORAGE_KEY, true);
-
-            } catch(e) {}
-        }
-
-            setTimeout(autoComment, 10000);
     }
 
     const TARGET_USER_ID = '5e064703-104d-4794-bc28-9ed6f5847cca';
