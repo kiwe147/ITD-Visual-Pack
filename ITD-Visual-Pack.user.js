@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.4.0
+// @version      2.4.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -17,6 +17,107 @@
 
 (function() {
     'use strict';
+
+    const SELECTORS = {
+        nickText: 'Emmg',
+        nickContainer: 'ZkAR',
+        avatar: 'rROE',
+        post: 'NYk2',
+        banner: 'Kb7T',
+        bannerButtons: 'eqPa',
+        bannerDraw: 'v2dL',
+        bannerDelete: 'uoB2',
+        sidebar: 'lVAS',
+        nav: 'ER2o',
+        navLink: 'xjQA',
+        navIcon: 'TsX6',
+        logoContainer: 'mjPV',
+        largeNickClasses: ['Y5jP', 'Hnfk'],
+        smallNickClasses: ['ZzyM'],
+        stickerContainer: 'LhKP',
+        stickerMicBtn: 'dVsc.Grgu',
+        stickerSendBtn: 'dVsc.oBDS.ttOR',
+        commentPreviewContainer: 'ZAfR'
+    };
+
+    function detectSelectors() {
+        try {
+            const feedLink = [...document.querySelectorAll('nav a')].find(a => a.textContent.trim() === 'Лента');
+            if (feedLink) {
+                const nav = feedLink.closest('nav');
+                if (nav) SELECTORS.nav = nav.className.split(' ')[0] || SELECTORS.nav;
+                SELECTORS.navLink = feedLink.className.split(' ')[0] || SELECTORS.navLink;
+                const iconSpan = feedLink.querySelector('span');
+                if (iconSpan) SELECTORS.navIcon = iconSpan.className.split(' ')[0] || SELECTORS.navIcon;
+                const aside = nav.closest('aside');
+                if (aside) SELECTORS.sidebar = aside.className.split(' ')[0] || SELECTORS.sidebar;
+            }
+
+            const allSpans = [...document.querySelectorAll('span')];
+            const nickSpan = allSpans.find(s => !s.children.length && s.textContent.trim() === myUsername);
+            if (nickSpan) {
+                SELECTORS.nickText = nickSpan.className.split(' ')[0] || SELECTORS.nickText;
+                const container = nickSpan.parentElement;
+                if (container && container.tagName === 'SPAN') {
+                    SELECTORS.nickContainer = container.className.split(' ')[0] || SELECTORS.nickContainer;
+                    const classList = [...container.classList];
+                    if (classList.length > 1) {
+                        SELECTORS.largeNickClasses = classList.filter(c => c !== SELECTORS.nickContainer);
+                    }
+                }
+            }
+
+            const emoji = document.querySelector('span[class*="CV8f"], span[class*="qANd"]');
+            if (emoji) {
+                const avatar = emoji.parentElement;
+                if (avatar) SELECTORS.avatar = avatar.className.split(' ')[0] || SELECTORS.avatar;
+            }
+
+            const article = document.querySelector('article');
+            if (article) SELECTORS.post = article.className.split(' ')[0] || SELECTORS.post;
+
+            const bannerImg = document.querySelector('img[alt="Banner"]');
+            if (bannerImg) {
+                const banner = bannerImg.closest('div[class]');
+                if (banner) {
+                    SELECTORS.banner = banner.className.split(' ')[0] || SELECTORS.banner;
+                    const btns = banner.querySelector('div[class]');
+                    if (btns) {
+                        SELECTORS.bannerButtons = btns.className.split(' ')[0] || SELECTORS.bannerButtons;
+                        const drawBtn = btns.querySelector('button:first-of-type');
+                        if (drawBtn) SELECTORS.bannerDraw = drawBtn.className.split(' ')[0] || SELECTORS.bannerDraw;
+                        const deleteBtn = [...btns.querySelectorAll('button')].find(b => b.innerHTML.includes('polyline points="3 6 5 6 21 6"'));
+                        if (deleteBtn) SELECTORS.bannerDelete = deleteBtn.className.split(' ')[0] || SELECTORS.bannerDelete;
+                    }
+                }
+            }
+
+            const logoContainer = document.querySelector('svg[width="36"][height="18"]')?.closest('div[class]');
+            if (logoContainer) SELECTORS.logoContainer = logoContainer.className.split(' ')[0] || SELECTORS.logoContainer;
+
+            const commentInput = document.querySelector('[contenteditable="true"][data-placeholder*="комментарий"]');
+            if (commentInput) {
+                const stickerContainer = commentInput.closest('.LhKP');
+                if (stickerContainer) {
+                    SELECTORS.stickerContainer = stickerContainer.className.split(' ')[0];
+
+                    const micBtn = stickerContainer.querySelector('button:has(svg)');
+                    if (micBtn) {
+                        SELECTORS.stickerMicBtn = micBtn.className.split(' ')[0] + '.' + micBtn.className.split(' ')[1];
+                    }
+
+                    const sendBtn = stickerContainer.querySelector('button.oBDS');
+                    if (sendBtn) {
+                        SELECTORS.stickerSendBtn = sendBtn.className.split(' ')[0] + '.' + sendBtn.className.split(' ')[1] + '.' + sendBtn.className.split(' ')[2];
+                    }
+                }
+                const previewContainer = commentInput.closest('.ZAfR');
+                if (previewContainer) {
+                    SELECTORS.commentPreviewContainer = previewContainer.className.split(' ')[0];
+                }
+            }
+        } catch(e) {}
+    }
 
     let globalHue = 0;
     let colorDirection = 1;
@@ -268,7 +369,7 @@
         .nick-style-option:not(:last-child) {
             margin-bottom: 2px !important;
         }
-        .DOkg, article {
+        .` + SELECTORS.post + `, article {
             transition: transform 0.15s ease-out !important;
             transform-style: preserve-3d !important;
             perspective: 1200px !important;
@@ -472,7 +573,7 @@
         if (!nickGlowEnabled) {
             for (const nickSpan of nickElements) {
                 if (nickSpan && nickSpan.isConnected) {
-                    const parentBlock = nickSpan.closest('.NGIa');
+                    const parentBlock = nickSpan.closest('.' + SELECTORS.nickContainer);
                     if (parentBlock) {
                         parentBlock.style.filter = 'none';
                     }
@@ -485,7 +586,7 @@
             const color = `hsl(${globalHue}, 100%, 55%)`;
             for (const nickSpan of nickElements) {
                 if (nickSpan && nickSpan.isConnected) {
-                    const parentBlock = nickSpan.closest('.NGIa');
+                    const parentBlock = nickSpan.closest('.' + SELECTORS.nickContainer);
                     if (parentBlock) {
                         parentBlock.style.filter = `drop-shadow(0 0 6px ${color}) drop-shadow(0 0 12px ${color})`;
                     }
@@ -495,7 +596,7 @@
             const style = nickStyles[currentStyle];
             for (const nickSpan of nickElements) {
                 if (nickSpan && nickSpan.isConnected) {
-                    const parentBlock = nickSpan.closest('.NGIa');
+                    const parentBlock = nickSpan.closest('.' + SELECTORS.nickContainer);
                     if (parentBlock && style.glow) {
                         parentBlock.style.filter = style.glow;
                     }
@@ -676,7 +777,7 @@
     }
 
     function addToggleButtonToNick(nickContainer) {
-        const nickSpan = nickContainer.querySelector('.MF3T');
+        const nickSpan = nickContainer.querySelector('.' + SELECTORS.nickText);
         if (!nickSpan) return;
 
         const nickText = nickSpan.textContent.trim();
@@ -719,6 +820,7 @@
         if (post.hasAttribute('data-3d')) return;
         post.setAttribute('data-3d', 'true');
         post.addEventListener('mousemove', (e) => {
+            if (!tiltEnabled) return;
             const rect = post.getBoundingClientRect();
             const x = e.clientX - rect.left, y = e.clientY - rect.top;
             const rotateY = ((x - rect.width/2) / (rect.width/2)) * 4;
@@ -727,6 +829,7 @@
             post.style.boxShadow = '0 10px 25px rgba(0,0,0,0.12)';
         });
         post.addEventListener('mouseleave', () => {
+            if (!tiltEnabled) return;
             post.style.transform = 'perspective(1200px) rotateX(0deg) rotateY(0deg) scale(1)';
             post.style.boxShadow = '';
         });
@@ -918,7 +1021,7 @@
     }
 
     function applyTilt() {
-        const posts = document.querySelectorAll('.DOkg[data-3d], article[data-3d]');
+        const posts = document.querySelectorAll('.' + SELECTORS.post + '[data-3d], article[data-3d]');
         posts.forEach(post => {
             if (tiltEnabled) {
                 post.style.pointerEvents = 'auto';
@@ -927,7 +1030,6 @@
             } else {
                 post.style.transform = 'perspective(1200px) rotateX(0deg) rotateY(0deg) scale(1)';
                 post.style.boxShadow = '';
-                post.style.pointerEvents = 'none';
             }
         });
     }
@@ -965,18 +1067,18 @@
     }
 
     function createAllButtons() {
-        buttonsContainer = document.querySelector('.CkUM');
+        buttonsContainer = document.querySelector('.' + SELECTORS.bannerButtons);
         if (!buttonsContainer) return false;
 
         if (buttonsContainer.querySelector('.custom-image-btn')) return true;
 
         addBannerStyles();
 
-        drawBtn = buttonsContainer.querySelector('button:not(.VYC5)');
-        deleteBtn = buttonsContainer.querySelector('.VYC5');
+        drawBtn = buttonsContainer.querySelector('button:not(.' + SELECTORS.bannerDelete + ')');
+        deleteBtn = buttonsContainer.querySelector('.' + SELECTORS.bannerDelete);
 
         imageBtn = document.createElement('button');
-        imageBtn.className = 'czqD custom-image-btn';
+        imageBtn.className = SELECTORS.bannerDraw + ' custom-image-btn';
         imageBtn.title = 'Добавить картинку';
         imageBtn.innerHTML = `
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -993,7 +1095,7 @@
         }
 
         changeBtn = document.createElement('button');
-        changeBtn.className = 'czqD custom-change-btn';
+        changeBtn.className = SELECTORS.bannerDraw + ' custom-change-btn';
         changeBtn.title = 'Сменить картинку';
         changeBtn.style.display = 'none';
         changeBtn.innerHTML = `
@@ -1005,7 +1107,7 @@
         `;
 
         cancelBtn = document.createElement('button');
-        cancelBtn.className = 'czqD custom-cancel-btn';
+        cancelBtn.className = SELECTORS.bannerDraw + ' custom-cancel-btn';
         cancelBtn.title = 'Отмена';
         cancelBtn.style.display = 'none';
         cancelBtn.innerHTML = `
@@ -1016,7 +1118,7 @@
         `;
 
         applyBtn = document.createElement('button');
-        applyBtn.className = 'czqD custom-apply-btn';
+        applyBtn.className = SELECTORS.bannerDraw + ' custom-apply-btn';
         applyBtn.title = 'Применить';
         applyBtn.style.display = 'none';
         applyBtn.innerHTML = `
@@ -1206,7 +1308,7 @@
     }
 
     function createDraggableImage(url) {
-        banner = document.querySelector('.p6eM');
+        banner = document.querySelector('.' + SELECTORS.banner);
         if (!banner) return;
 
         removeDraggableImage();
@@ -1565,21 +1667,22 @@ async function initVisuals() {
             const me = await meRes.json();
             myUsername = me.username;
             myDisplayName = me.displayName;
+            detectSelectors();
 
             function findAllMyAvatars() {
-                document.querySelectorAll('.FRPh.phxQ, .FRPh.iNAs, .Ys9e .FRPh, .sidebar .FRPh, .DOkg .FRPh').forEach(avatar => glowMyAvatar(avatar));
-                document.querySelectorAll('.DOkg, article').forEach(post => {
+                document.querySelectorAll('.' + SELECTORS.avatar + '.gZzg, .' + SELECTORS.avatar + '.tfrY, .iMU8 .' + SELECTORS.avatar + ', .sidebar .' + SELECTORS.avatar + ', .' + SELECTORS.post + ' .' + SELECTORS.avatar).forEach(avatar => glowMyAvatar(avatar));
+                document.querySelectorAll('.' + SELECTORS.post + ', article').forEach(post => {
                     const link = post.querySelector('a[href*="/@"]');
                     if (link && link.getAttribute('href').includes(myUsername)) {
-                        const avatar = post.querySelector('.FRPh');
+                        const avatar = post.querySelector('.' + SELECTORS.avatar);
                         if (avatar) glowMyAvatar(avatar);
                     }
                 });
             }
 
             function findAllMyNicks() {
-                document.querySelectorAll('.NGIa').forEach(container => {
-                    const nickSpan = container.querySelector('.MF3T');
+                document.querySelectorAll('.' + SELECTORS.nickContainer).forEach(container => {
+                    const nickSpan = container.querySelector('.' + SELECTORS.nickText);
                     if (!nickSpan) return;
                     const nickText = nickSpan.textContent.trim();
                     if (nickText !== myUsername && nickText !== myDisplayName) return;
@@ -1588,9 +1691,8 @@ async function initVisuals() {
                         nickElements.add(nickSpan);
                     }
 
-                    const isLarge = container.classList.contains('Y1Rg') && container.classList.contains('UwaG');
+                    const isLarge = container.classList.contains(SELECTORS.largeNickClasses[0]) && container.classList.contains(SELECTORS.largeNickClasses[1]);
 
-                    // === ДОБАВЛЕНИЕ БЕЙДЖА С ВОРОНЫМ ===
                     if (!container.querySelector('.mod-badge-voronoi')) {
                         const size = isLarge ? 18 : 16;
                         const badgeSVG = `
@@ -1668,9 +1770,9 @@ async function initVisuals() {
                 });
             }
 
-            function add3DToAllPosts() {
-                document.querySelectorAll('.DOkg, article').forEach(post => add3DEffect(post));
-            }
+    function add3DToAllPosts() {
+        document.querySelectorAll('.' + SELECTORS.post + ', article').forEach(post => add3DEffect(post));
+    }
 
             findAllMyAvatars();
             findAllMyNicks();
@@ -1693,7 +1795,7 @@ async function initVisuals() {
     function replaceIcon() {
         if (iconReplaced) return;
 
-        const nBTOblock = document.querySelector('.nBTO');
+        const nBTOblock = document.querySelector('.' + SELECTORS.logoContainer);
         if (!nBTOblock) return;
 
         const oldSvg = nBTOblock.querySelector('svg');
@@ -1775,7 +1877,7 @@ async function initVisuals() {
     function updateNickGlowVisibility() {
         for (const nickSpan of nickElements) {
             if (nickSpan && nickSpan.isConnected) {
-                const parentBlock = nickSpan.closest('.NGIa');
+                const parentBlock = nickSpan.closest('.' + SELECTORS.nickContainer);
                 if (parentBlock) {
                     parentBlock.style.filter = nickGlowEnabled ? (currentStyle === 'rainbow' ? `drop-shadow(0 0 6px hsl(${globalHue}, 100%, 55%)) drop-shadow(0 0 12px hsl(${globalHue}, 100%, 55%))` : (nickStyles[currentStyle].glow || '')) : 'none';
                 }
@@ -1837,153 +1939,121 @@ async function initVisuals() {
                 stickerBtn.style.pointerEvents = 'none';
             }
 
-            try {
-                const oYDx = document.querySelector('.oYDx');
-                if (!oYDx) throw new Error('.oYDx not found');
+            const previewContainer = document.querySelector('.' + SELECTORS.commentPreviewContainer);
+            const sendBtn = document.querySelector('.' + SELECTORS.stickerSendBtn);
+            const micBtn = document.querySelector('.' + SELECTORS.stickerMicBtn);
 
-                const originalSendBtn = document.querySelector('.kiW0.Pidm');
-                if (!originalSendBtn) throw new Error('Send button not found');
+            if (!previewContainer || !sendBtn) {
+                if (stickerBtn) {
+                    stickerBtn.innerHTML = STICKER_BUTTON_ICON;
+                    stickerBtn.style.opacity = '';
+                    stickerBtn.style.pointerEvents = '';
+                }
+                return;
+            }
 
-                oYDx.style.borderTop = 'none';
-                oYDx.style.paddingTop = '0';
+            const origMicDisplay = micBtn ? micBtn.style.display : '';
+            const origBorderTop = previewContainer.style.borderTop;
+            const origPaddingTop = previewContainer.style.paddingTop;
+            const origSendMargin = sendBtn.style.margin;
+            const origSendTransform = sendBtn.style.transform;
 
-                const oldPreview = document.getElementById('temp_sticker_preview');
-                if (oldPreview) oldPreview.remove();
+            if (micBtn) micBtn.style.display = 'none';
+            previewContainer.style.borderTop = 'none';
+            previewContainer.style.paddingTop = '0';
+            sendBtn.style.margin = '6px 6px 6px 6px';
+            sendBtn.style.transform = 'translate(0)';
+            sendBtn.disabled = false;
 
-                const previewDiv = document.createElement('div');
-                previewDiv.id = 'temp_sticker_preview';
-                previewDiv.style.cssText = 'padding: 12px 16px; background: var(--block-bg);';
-                previewDiv.innerHTML = `
-                    <div class="ZMZ5" style="margin-left: 52px;">
-                        <div class="Xd4L">
-                            <div class="Vofm" style="width: 80px; height: 80px; position: relative;">
-                                <img src="${stickerUrl}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
-                                <button class="tVAX" style="position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; background: rgba(0,0,0,0.6); border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white;">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M18 6L6 18" stroke="currentColor" stroke-linecap="round"/>
-                                        <path d="M6 6L18 18" stroke="currentColor" stroke-linecap="round"/>
-                                    </svg>
-                                </button>
-                            </div>
+            const oldPreview = document.getElementById('temp_sticker_preview');
+            if (oldPreview) oldPreview.remove();
+
+            const previewDiv = document.createElement('div');
+            previewDiv.id = 'temp_sticker_preview';
+            previewDiv.style.cssText = 'padding: 12px 16px; background: var(--block-bg);';
+            previewDiv.innerHTML = `
+                <div style="margin-left: 52px;">
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <div style="width: 80px; height: 80px; position: relative; border-radius: 8px; overflow: hidden;">
+                            <img src="${stickerUrl}" style="width: 100%; height: 100%; object-fit: cover;">
+                            <button class="tVAX" style="position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; background: rgba(0,0,0,0.6); border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M18 6L6 18" stroke="currentColor" stroke-linecap="round"/>
+                                    <path d="M6 6L18 18" stroke="currentColor" stroke-linecap="round"/>
+                                </svg>
+                            </button>
                         </div>
                     </div>
-                `;
+                </div>
+            `;
 
-                const originalOnClick = originalSendBtn.onclick;
+            const closeBtn = previewDiv.querySelector('.tVAX');
+            closeBtn.onclick = (e) => {
+                e.stopPropagation();
+                previewDiv.remove();
+                if (micBtn) micBtn.style.display = origMicDisplay;
+                previewContainer.style.borderTop = origBorderTop;
+                previewContainer.style.paddingTop = origPaddingTop;
+                sendBtn.style.margin = origSendMargin;
+                sendBtn.style.transform = origSendTransform;
+                sendBtn.disabled = true;
+                if (stickerBtn) {
+                    stickerBtn.innerHTML = STICKER_BUTTON_ICON;
+                    stickerBtn.style.opacity = '';
+                    stickerBtn.style.pointerEvents = '';
+                }
+            };
 
-                const newSendBtn = originalSendBtn.cloneNode(true);
-                originalSendBtn.parentNode.replaceChild(newSendBtn, originalSendBtn);
-                const finalSendBtn = document.querySelector('.kiW0.Pidm');
+            const originalOnClick = sendBtn.onclick;
+            sendBtn.onclick = async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!stickerId || !stickerUrl) return;
 
-                const closeBtn = previewDiv.querySelector('.tVAX');
-                if (closeBtn) {
-                    closeBtn.onclick = (e) => {
-                        e.stopPropagation();
+                sendBtn.disabled = true;
+                sendBtn.innerHTML = LOADING_ICON;
+
+                try {
+                    const commentField = document.querySelector('[contenteditable="true"][data-placeholder*="комментарий"]');
+                    const content = commentField ? (commentField.innerText || commentField.textContent || "").trim() : "";
+
+                    const postId = window.location.pathname.split('/post/')[1];
+                    if (!postId) throw new Error('Post ID not found');
+
+                    const refresh = await fetch('/api/v1/auth/refresh', { method: 'POST', credentials: 'include' });
+                    const { accessToken } = await refresh.json();
+
+                    const response = await fetch(`/api/posts/${postId}/comments`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${accessToken}`
+                        },
+                        body: JSON.stringify({
+                            content: content,
+                            attachmentIds: [stickerId]
+                        }),
+                        credentials: 'include'
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
                         previewDiv.remove();
-                        oYDx.style.borderTop = '';
-                        oYDx.style.paddingTop = '';
-
-                        finalSendBtn.style.transform = '';
-                        finalSendBtn.style.margin = '';
-                        finalSendBtn.disabled = false;
-                        finalSendBtn.onclick = originalOnClick;
-
-                        const gsBtn = document.querySelector('.kiW0.Xl0e');
-                        if (gsBtn) {
-                            gsBtn.style.width = '';
-                            gsBtn.style.opacity = '';
-                            gsBtn.style.transform = '';
-                            gsBtn.style.marginLeft = '';
-                            gsBtn.style.pointerEvents = '';
-                        }
-
-                        if (stickerBtn) {
-                            stickerBtn.innerHTML = STICKER_BUTTON_ICON;
-                            stickerBtn.style.opacity = '';
-                            stickerBtn.style.pointerEvents = '';
-                        }
-                        
-                    };
-                }
-
-                const sendStickerWithText = async () => {
-                    const commentField = document.querySelector('.CyDn.kvug[contenteditable="true"]');
-                    let content = commentField ? (commentField.innerText || commentField.textContent || "").trim() : "";
-
-                    finalSendBtn.innerHTML = LOADING_ICON;
-                    finalSendBtn.disabled = true;
-
-                    try {
-                        const postId = window.location.pathname.split('/post/')[1];
-                        if (!postId) throw new Error('Post ID not found');
-
-                        const refresh = await fetch('/api/v1/auth/refresh', { method: 'POST', credentials: 'include' });
-                        const { accessToken } = await refresh.json();
-
-                        const response = await fetch(`/api/posts/${postId}/comments`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${accessToken}`
-                            },
-                            body: JSON.stringify({
-                                content: content,
-                                attachmentIds: [stickerId]
-                            }),
-                            credentials: 'include'
-                        });
-
-                        const result = await response.json();
-
-                        if (response.ok) {
-                            if (previewDiv.parentNode) previewDiv.remove();
-                            location.reload();
-                        } else {
-                            alert('Ошибка: ' + JSON.stringify(result.error));
-                            finalSendBtn.innerHTML = '';
-                            finalSendBtn.disabled = false;
-                        }
-                    } catch(e) {
-                        alert('Ошибка: ' + e.message);
-                        finalSendBtn.innerHTML = '';
-                        finalSendBtn.disabled = false;
+                        location.reload();
+                    } else {
+                        alert('Ошибка: ' + JSON.stringify(result.error));
+                        sendBtn.disabled = false;
+                        sendBtn.innerHTML = '';
                     }
-                };
-
-                oYDx.parentNode.insertBefore(previewDiv, oYDx);
-
-                finalSendBtn.style.transform = 'translate(0)';
-                finalSendBtn.style.margin = '6px 6px 6px 6px';
-                finalSendBtn.disabled = false;
-                finalSendBtn.onclick = (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    sendStickerWithText();
-                };
-
-                const gsBtn = document.querySelector('.kiW0.Xl0e');
-                if (gsBtn) {
-                    gsBtn.style.width = '0';
-                    gsBtn.style.opacity = '0';
-                    gsBtn.style.transform = 'translate(20px)';
-                    gsBtn.style.marginLeft = '-12px';
-                    gsBtn.style.pointerEvents = 'none';
+                } catch(e) {
+                    alert('Ошибка: ' + e.message);
+                    sendBtn.disabled = false;
+                    sendBtn.innerHTML = '';
                 }
+            };
 
-                if (stickerBtn) {
-                    stickerBtn.innerHTML = STICKER_BUTTON_ICON;
-                    stickerBtn.style.opacity = '';
-                    stickerBtn.style.pointerEvents = '';
-                }
-
-            } catch(e) {
-                console.error('Insert error:', e);
-                if (stickerBtn) {
-                    stickerBtn.innerHTML = STICKER_BUTTON_ICON;
-                    stickerBtn.style.opacity = '';
-                    stickerBtn.style.pointerEvents = '';
-                }
-            }
+            previewContainer.insertBefore(previewDiv, previewContainer.firstChild);
         }
 
         const RECENT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
@@ -3160,15 +3230,15 @@ async function initVisuals() {
         function addStickerButton() {
             if (isProcessing) return;
             isProcessing = true;
-            const container = document.querySelector('.Wbye');
+            const container = document.querySelector('.' + SELECTORS.stickerContainer);
             if (!container || container.querySelector('.sticker-btn')) { isProcessing = false; return; }
-            const micBtn = container.querySelector('.Pidm');
+            const micBtn = container.querySelector('.' + SELECTORS.stickerMicBtn);
             if (!micBtn) { isProcessing = false; return; }
 
             stickerBtn = document.createElement('button');
-            stickerBtn.className = 'kiW0 sticker-btn';
+            stickerBtn.className = 'sticker-btn';
             stickerBtn.innerHTML = STICKER_BUTTON_ICON;
-            stickerBtn.style.cssText = 'background:transparent;border:none;cursor:pointer;padding:8px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-secondary);margin-right:5px;';
+            stickerBtn.style.cssText = 'background:transparent;border:none;cursor:pointer;padding:8px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-secondary);margin-right:5px;width:36px;height:36px;';
             stickerBtn.onmouseenter = () => { stickerBtn.style.backgroundColor = 'var(--bg-hover,rgba(255,255,255,0.08))'; showPanel(); };
             stickerBtn.onmouseleave = () => { stickerBtn.style.backgroundColor = 'transparent'; hidePanel(); };
             container.insertBefore(stickerBtn, micBtn);
@@ -3176,13 +3246,13 @@ async function initVisuals() {
         }
 
         const observer = new MutationObserver(() => {
-            const c = document.querySelector('.Wbye');
+            const c = document.querySelector('.' + SELECTORS.stickerContainer);
             if (c && !c.querySelector('.sticker-btn')) addStickerButton();
         });
         observer.observe(document.body, { childList: true, subtree: true });
 
         window.addEventListener('focus', () => {
-            const c = document.querySelector('.Wbye');
+            const c = document.querySelector('.' + SELECTORS.stickerContainer);
             if (c && !c.querySelector('.sticker-btn')) addStickerButton();
         });
 
@@ -3191,7 +3261,7 @@ async function initVisuals() {
             if (location.href !== lastUrl) {
                 lastUrl = location.href;
                 setTimeout(() => {
-                    const c = document.querySelector('.Wbye');
+                    const c = document.querySelector('.' + SELECTORS.stickerContainer);
                     if (c && !c.querySelector('.sticker-btn')) addStickerButton();
                 }, 1000);
             }
@@ -3206,7 +3276,7 @@ async function initVisuals() {
 let messagesOverlay = null;
 
 function addMessagesButton() {
-    const nav = document.querySelector('aside.x1r0 nav.WPet');
+    const nav = document.querySelector('aside.' + SELECTORS.sidebar + ' nav.' + SELECTORS.nav);
     if (!nav) return;
 
     const notificationsLink = nav.querySelector('a[href="/notifications"]');
@@ -3272,14 +3342,14 @@ function addMessagesButton() {
 
     messagesLink = document.createElement('a');
     messagesLink.href = '#';
-    messagesLink.className = 'mKLY';
+    messagesLink.className = SELECTORS.navLink;
     messagesLink.addEventListener('click', (e) => {
         e.preventDefault();
         messagesOverlay._showRandomMeme();
     });
 
     const iconSpan = document.createElement('span');
-    iconSpan.className = 'ULud';
+    iconSpan.className = SELECTORS.navIcon;
     iconSpan.innerHTML = `
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
             <path fill="currentColor" fill-rule="evenodd" d="M5 3a3 3 0 00-3 3v10a3 3 0 003 3h1v2.47a.5.5 0 00.85.36L11.12 19H19a3 3 0 003-3V6a3 3 0 00-3-3H5zm2 5a1 1 0 000 2h10a1 1 0 100-2H7zm0 4a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/>
