@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.4.10
+// @version      2.4.11
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -45,6 +45,30 @@
     const VERIFICATION_STORAGE_KEY = 'itd_verified_users';
     let verificationInterval = null;
     let isVerifying = false;
+
+    function fixOverflowForGlowingNicks() {
+        const nickContainers = document.querySelectorAll('.ZkAR.ZzyM');
+        nickContainers.forEach(nickContainer => {
+            let parent = nickContainer.parentElement;
+            let fixed = false;
+            while (parent && parent !== document.body) {
+                const overflow = getComputedStyle(parent).overflow;
+                if (overflow === 'hidden' || overflow === 'auto') {
+                    parent.style.setProperty('overflow', 'visible', 'important');
+                    fixed = true;
+                }
+                parent = parent.parentElement;
+            }
+            if (fixed) {
+                const nickSpan = nickContainer.querySelector('.Emmg');
+                if (nickSpan && nickSpan.style.filter) {
+                    const currentFilter = nickSpan.style.filter;
+                    nickSpan.style.filter = 'none';
+                    setTimeout(() => { nickSpan.style.filter = currentFilter; }, 10);
+                }
+            }
+        });
+    }
 
     function detectSelectors() {
         try {
@@ -2083,12 +2107,14 @@ async function initVisuals() {
             updateAllNickColors();
             updateNickGlow();
             updateAvatarGlow();
+            fixOverflowForGlowingNicks();
 
             const observer = new MutationObserver(() => {
                 findAllMyAvatars();
                 findAllMyNicks();
                 add3DToAllPosts();
                 applyTilt();
+                fixOverflowForGlowingNicks();
             });
             observer.observe(document.body, { childList: true, subtree: true });
 
