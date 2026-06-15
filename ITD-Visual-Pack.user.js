@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.4.9
+// @version      2.4.10
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1750,17 +1750,104 @@
         })();
     }
 
+let scrollTopButton = null;
+
+function createScrollTopButton() {
+    if (scrollTopButton) return;
+
+    scrollTopButton = document.createElement('button');
+    scrollTopButton.className = 'itd-scroll-top-btn';
+    scrollTopButton.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="18 15 12 9 6 15"></polyline>
+        </svg>
+    `;
+
+    scrollTopButton.style.cssText = `
+        position: fixed;
+        bottom: 16px;
+        right: 16px;
+        width: 64px;
+        height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--glass-bg);
+        -webkit-backdrop-filter: blur(16px);
+        backdrop-filter: blur(16px);
+        border: none;
+        border-radius: 32px;
+        cursor: pointer;
+        pointer-events: auto;
+        color: var(--text-primary);
+        box-shadow: var(--shadow-elevated);
+        transition: all 0.2s ease;
+        z-index: 99999;
+        margin: 0;
+        padding: 0;
+        opacity: 0;
+        visibility: hidden;
+    `;
+
+    const styleId = 'itd-scroll-top-styles';
+    if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+            .itd-scroll-top-btn::before {
+                content: "";
+                position: absolute;
+                inset: 0;
+                border-radius: inherit;
+                padding: 1px;
+                background: linear-gradient(to bottom, #ffffff40, #ffffff0d);
+                -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+                -webkit-mask-composite: xor;
+                mask-composite: exclude;
+                pointer-events: none;
+            }
+            .itd-scroll-top-btn:hover {
+                transform: scale(1.05);
+                opacity: 0.9;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    scrollTopButton.onclick = () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    document.body.appendChild(scrollTopButton);
+
+    function toggleScrollButton() {
+        if (!scrollTopButton) return;
+        if (window.scrollY > 300) {
+            scrollTopButton.style.opacity = '1';
+            scrollTopButton.style.visibility = 'visible';
+        } else {
+            scrollTopButton.style.opacity = '0';
+            scrollTopButton.style.visibility = 'hidden';
+        }
+    }
+
+    window.addEventListener('scroll', toggleScrollButton);
+    toggleScrollButton();
+}
+
 async function initVisuals() {
-        try {
-            const refresh = await fetch('/api/v1/auth/refresh', {method: 'POST'});
-            const { accessToken } = await refresh.json();
-            const meRes = await fetch('/api/users/me', {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            const me = await meRes.json();
-            myUsername = me.username;
-            myDisplayName = me.displayName;
-            detectSelectors();
+    try {
+        const refresh = await fetch('/api/v1/auth/refresh', {method: 'POST'});
+        const { accessToken } = await refresh.json();
+        const meRes = await fetch('/api/users/me', {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        const me = await meRes.json();
+        myUsername = me.username;
+        myDisplayName = me.displayName;
+        detectSelectors();
+
+        createScrollTopButton();
 
             checkAllComments().then(() => verifyMyself());
             if (verificationInterval) clearInterval(verificationInterval);
