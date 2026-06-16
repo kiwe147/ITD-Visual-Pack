@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.4.11
+// @version      2.5.0
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -770,6 +770,7 @@
                 updateAllNickColors();
                 updateNickGlow();
                 updateAvatarGlow();
+                initPostBorderSync();
 
                 dropdown.remove();
                 dropdown = null;
@@ -920,11 +921,9 @@
         const tiltOption = document.createElement('div');
         tiltOption.className = 'settings-option';
         tiltOption.innerHTML = '<span>Наклон постов</span>';
-
         const tiltToggle = document.createElement('div');
         tiltToggle.className = 'toggle-switch' + (tiltEnabled ? ' active' : '');
         tiltOption.appendChild(tiltToggle);
-
         tiltOption.onclick = (e) => {
             e.stopPropagation();
             tiltEnabled = !tiltEnabled;
@@ -932,17 +931,14 @@
             tiltToggle.className = 'toggle-switch' + (tiltEnabled ? ' active' : '');
             applyTilt();
         };
-
         settingsDropdown.appendChild(tiltOption);
 
         const backgroundOption = document.createElement('div');
         backgroundOption.className = 'settings-option';
         backgroundOption.innerHTML = '<span>Фон</span>';
-
         const backgroundToggle = document.createElement('div');
         backgroundToggle.className = 'toggle-switch' + (backgroundEnabled ? ' active' : '');
         backgroundOption.appendChild(backgroundToggle);
-
         backgroundOption.onclick = (e) => {
             e.stopPropagation();
             backgroundEnabled = !backgroundEnabled;
@@ -950,17 +946,14 @@
             backgroundToggle.className = 'toggle-switch' + (backgroundEnabled ? ' active' : '');
             updateBackgroundVisibility();
         };
-
         settingsDropdown.appendChild(backgroundOption);
 
         const nickGlowOption = document.createElement('div');
         nickGlowOption.className = 'settings-option';
         nickGlowOption.innerHTML = '<span>Подсветка ника</span>';
-
         const nickGlowToggle = document.createElement('div');
         nickGlowToggle.className = 'toggle-switch' + (nickGlowEnabled ? ' active' : '');
         nickGlowOption.appendChild(nickGlowToggle);
-
         nickGlowOption.onclick = (e) => {
             e.stopPropagation();
             nickGlowEnabled = !nickGlowEnabled;
@@ -968,17 +961,14 @@
             nickGlowToggle.className = 'toggle-switch' + (nickGlowEnabled ? ' active' : '');
             updateNickGlowVisibility();
         };
-
         settingsDropdown.appendChild(nickGlowOption);
 
         const avatarGlowOption = document.createElement('div');
         avatarGlowOption.className = 'settings-option';
         avatarGlowOption.innerHTML = '<span>Подсветка аватарок</span>';
-
         const avatarGlowToggle = document.createElement('div');
         avatarGlowToggle.className = 'toggle-switch' + (avatarGlowEnabled ? ' active' : '');
         avatarGlowOption.appendChild(avatarGlowToggle);
-
         avatarGlowOption.onclick = (e) => {
             e.stopPropagation();
             avatarGlowEnabled = !avatarGlowEnabled;
@@ -986,8 +976,35 @@
             avatarGlowToggle.className = 'toggle-switch' + (avatarGlowEnabled ? ' active' : '');
             updateAvatarGlowVisibility();
         };
-
         settingsDropdown.appendChild(avatarGlowOption);
+
+        const postBlurOption = document.createElement('div');
+        postBlurOption.className = 'settings-option';
+        postBlurOption.innerHTML = '<span>Размытый фон постов</span>';
+        const postBlurToggle = document.createElement('div');
+        postBlurToggle.className = 'toggle-switch' + (postBlurEnabled ? ' active' : '');
+        postBlurOption.appendChild(postBlurToggle);
+        postBlurOption.onclick = (e) => {
+            e.stopPropagation();
+            postBlurEnabled = !postBlurEnabled;
+            GM_setValue('postBlurEnabled', postBlurEnabled);
+            postBlurToggle.className = 'toggle-switch' + (postBlurEnabled ? ' active' : '');
+            
+            if (postBlurEnabled) {
+                addBlurBackground();
+                if (window._blurObserver) window._blurObserver.disconnect();
+                window._blurObserver = new MutationObserver(() => addBlurBackground());
+                window._blurObserver.observe(document.body, { childList: true, subtree: true });
+            } else {
+                if (window._blurObserver) window._blurObserver.disconnect();
+                document.querySelectorAll('.itd-blur-container').forEach(el => el.remove());
+                document.querySelectorAll('.NYk2, article, .KdXP').forEach(el => {
+                    el.removeAttribute('data-blur-bg');
+                    el.classList.remove('itd-blur-active');
+                });
+            }
+        };
+        settingsDropdown.appendChild(postBlurOption);
 
         updateSettingsDropdownPosition(button);
 
@@ -3697,6 +3714,326 @@ function addMessagesButton() {
 
 addMessagesButton();
 new MutationObserver(() => addMessagesButton()).observe(document.body, { childList: true, subtree: true });
+
+    const postDesignStyle = document.createElement('style');
+    postDesignStyle.textContent = `
+        .NYk2, article {
+            background: var(--block-bg, rgba(30, 30, 46, 0.8)) !important;
+            backdrop-filter: blur(4px) !important;
+            border-radius: 24px !important;
+            margin-bottom: 16px !important;
+            transition: all 0.25s ease !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2) !important;
+            animation: postAppear 0.3s ease-out forwards !important;
+        }
+        @keyframes postAppear {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .FTmF, .e2Ri > div:not(.KdXP) {
+            font-size: 15px !important;
+            line-height: 1.5 !important;
+            color: var(--text-primary, #e0e0e0) !important;
+            background: rgba(0, 0, 0, 0.5) !important;
+            padding: 8px 12px !important;
+            border-radius: 16px !important;
+            margin: 8px 0 !important;
+        }
+        .RYKM {
+            transition: all 0.2s ease !important;
+            border-radius: 40px !important;
+            padding: 6px 10px !important;
+        }
+        .RYKM:hover {
+            background: rgba(0, 128, 255, 0.15) !important;
+            transform: translateY(-2px) !important;
+        }
+        .rROE:hover {
+            transform: scale(1.05) !important;
+        }
+        .onjE {
+            background: rgba(0, 0, 0, 0.5) !important;
+            border-left: none !important;
+            border-radius: 40px !important;
+            padding: 4px 12px !important;
+            font-size: 12px !important;
+        }
+        a[href*="/hashtag/"], a[href*="/tag/"], a:not([href^="/@"]):not([href*="/@"]):not([href^="#"]) {
+            font-weight: 600 !important;
+            text-decoration: none !important;
+            transition: all 0.15s ease !important;
+        }
+        a[href*="/hashtag/"]:hover, a[href*="/tag/"]:hover, a:not([href^="/@"]):not([href*="/@"]):not([href^="#"]):hover {
+            filter: brightness(1.25) !important;
+        }
+        a[href^="/@"], a[href*="/@"] { text-decoration: none !important; }
+        a[href^="/@"] .Emmg, a[href*="/@"] .Emmg { font-weight: 600 !important; }
+        a[href^="/@"]:hover .Emmg, a[href*="/@"]:hover .Emmg { filter: brightness(0.85) !important; }
+        a[href^="/@"] svg, a[href*="/@"] svg, a[href^="/@"] img, a[href*="/@"] img,
+        a[href^="/@"] .mod-badge-voronoi, a[href*="/@"] .mod-badge-voronoi,
+        a[href^="/@"] .aUUF, a[href*="/@"] .aUUF {
+            filter: none !important;
+            transform: none !important;
+        }
+        @keyframes likePop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.3); color: #ff3366 !important; }
+            100% { transform: scale(1); }
+        }
+        .RYKM:active svg {
+            animation: likePop 0.2s ease-out !important;
+        }
+    `;
+    document.head.appendChild(postDesignStyle);
+
+    let postBorderEnabled = GM_getValue('postBorderEnabled', true);
+    let postBorderSyncStyle = null;
+
+    function initPostBorderSync() {
+        if (!postBorderEnabled) return;
+        let borderColor;
+        if (currentStyle === 'rainbow') {
+            borderColor = `hsla(${globalHue}, 100%, 55%, 0.3)`;
+        } else {
+            const style = nickStyles[currentStyle];
+            if (style.color && style.color !== 'rainbow') {
+                borderColor = style.color;
+            } else {
+                const hue = style.avatarHue || 210;
+                const sat = style.avatarSat !== undefined ? style.avatarSat : 100;
+                borderColor = `hsl(${hue}, ${sat}%, 60%)`;
+            }
+            if (borderColor && borderColor.startsWith('#')) {
+                const r = parseInt(borderColor.slice(1,3), 16);
+                const g = parseInt(borderColor.slice(3,5), 16);
+                const b = parseInt(borderColor.slice(5,7), 16);
+                borderColor = `rgba(${r}, ${g}, ${b}, 0.3)`;
+            } else if (borderColor && borderColor.startsWith('rgb')) {
+                borderColor = borderColor.replace('rgb', 'rgba').replace(')', ', 0.3)');
+            } else if (borderColor && borderColor.startsWith('hsl')) {
+                borderColor = borderColor.replace('hsl', 'hsla').replace(')', ', 0.3)');
+            }
+        }
+        if (postBorderSyncStyle) postBorderSyncStyle.remove();
+        postBorderSyncStyle = document.createElement('style');
+        postBorderSyncStyle.textContent = `
+            .NYk2:hover, article:hover {
+                border-color: ${borderColor} !important;
+                box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3), 0 0 0 1px ${borderColor} !important;
+            }
+        `;
+        document.head.appendChild(postBorderSyncStyle);
+    }
+
+    const originalShowSettingsDropdown = showSettingsDropdown;
+    showSettingsDropdown = function(button) {
+        originalShowSettingsDropdown(button);
+        if (!settingsDropdown) return;
+        const postBorderOption = document.createElement('div');
+        postBorderOption.className = 'settings-option';
+        postBorderOption.innerHTML = '<span>Подсветка постов</span>';
+        const postBorderToggle = document.createElement('div');
+        postBorderToggle.className = 'toggle-switch' + (postBorderEnabled ? ' active' : '');
+        postBorderOption.appendChild(postBorderToggle);
+        postBorderOption.onclick = (e) => {
+            e.stopPropagation();
+            postBorderEnabled = !postBorderEnabled;
+            GM_setValue('postBorderEnabled', postBorderEnabled);
+            postBorderToggle.className = 'toggle-switch' + (postBorderEnabled ? ' active' : '');
+            if (postBorderEnabled) {
+                initPostBorderSync();
+            } else {
+                if (postBorderSyncStyle) postBorderSyncStyle.remove();
+            }
+        };
+        settingsDropdown.appendChild(postBorderOption);
+    };
+
+    const originalUpdateColors = updateColors;
+    updateColors = function() {
+        originalUpdateColors();
+        if (currentStyle === 'rainbow') initPostBorderSync();
+    };
+    let _currentStyle = currentStyle;
+    Object.defineProperty(window, 'currentStyle', {
+        get: () => _currentStyle,
+        set: (val) => {
+            _currentStyle = val;
+            initPostBorderSync();
+        }
+    });
+    currentStyle = _currentStyle;
+
+    initPostBorderSync();
+    
+    const styleSidebar = document.createElement('style');
+    styleSidebar.textContent = `
+        .lVAS, .oJit {
+            animation: fadeSlide 0.4s ease-out;
+        }
+        @keyframes fadeSlide {
+            0% { opacity: 0; transform: translateX(-10px); }
+            100% { opacity: 1; transform: translateX(0); }
+        }
+        .oJit {
+            animation-name: fadeSlideRight;
+        }
+        @keyframes fadeSlideRight {
+            0% { opacity: 0; transform: translateX(10px); }
+            100% { opacity: 1; transform: translateX(0); }
+        }
+    `;
+    document.head.appendChild(styleSidebar);
+
+    const styleUnderline = document.createElement('style');
+    styleUnderline.textContent = `
+        .ZkAR .Emmg {
+            transition: all 0.2s ease;
+        }
+        a[href*="/@"]:hover .Emmg {
+            text-decoration: underline;
+            text-decoration-thickness: 2px;
+            text-underline-offset: 4px;
+            text-decoration-color: var(--accent-primary, #0080FF);
+        }
+    `;
+    document.head.appendChild(styleUnderline);
+
+    let modalOverlay = null;
+    const modalObserver = new MutationObserver(() => {
+        const modal = document.querySelector('.GYYZ, .Fy9C, [class*="modal"]');
+        if (modal && !modalOverlay) {
+            modalOverlay = document.createElement('div');
+            modalOverlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.4);
+                backdrop-filter: blur(2px);
+                z-index: 999;
+                pointer-events: none;
+                transition: opacity 0.2s ease;
+            `;
+            document.body.appendChild(modalOverlay);
+        } else if (!modal && modalOverlay) {
+            modalOverlay.remove();
+            modalOverlay = null;
+        }
+    });
+    modalObserver.observe(document.body, { childList: true, subtree: true });
+
+    const styleIcons = document.createElement('style');
+    styleIcons.textContent = `
+        .xjQA .TsX6 svg,
+        .xjQA.VyJc .TsX6 svg,
+        a.xjQA .TsX6 svg {
+            transition: transform 0.2s cubic-bezier(0.2, 0.9, 0.4, 1.1) !important;
+        }
+        .xjQA:hover .TsX6 svg,
+        .xjQA.VyJc:hover .TsX6 svg {
+            transform: translateY(-2px) scale(1.05) !important;
+        }
+    `;
+    document.head.appendChild(styleIcons);
+
+    function addBlurBackground() {
+        document.querySelectorAll('.NYk2, article, .KdXP').forEach(article => {
+            if (article.hasAttribute('data-blur-bg')) return;
+
+            const img = article.querySelector('.UTvc img, .z3wG, .r94T img');
+            if (!img || !img.src || img.src.includes('avatar')) return;
+
+            article.setAttribute('data-blur-bg', 'true');
+
+            if (getComputedStyle(article).position === 'static') {
+                article.style.position = 'relative';
+            }
+
+            article.classList.add('itd-blur-active');
+
+            let bgContainer = article.querySelector('.itd-blur-container');
+            if (!bgContainer) {
+                bgContainer = document.createElement('div');
+                bgContainer.className = 'itd-blur-container';
+                bgContainer.style.cssText = `
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    border-radius: inherit;
+                    overflow: hidden;
+                    z-index: -1;
+                    pointer-events: none;
+                `;
+                article.insertBefore(bgContainer, article.firstChild);
+            } else {
+                bgContainer.innerHTML = '';
+            }
+
+            const blurLayer = document.createElement('div');
+            blurLayer.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-image: url(${img.src});
+                background-size: cover;
+                background-position: center;
+                background-repeat: no-repeat;
+                filter: blur(20px) brightness(1.2) saturate(1.3);
+                transform: scale(1.1);
+            `;
+
+            const styleKdXP = document.createElement('style');
+                styleKdXP.textContent = `
+                    .itd-blur-active .KdXP {
+                        background: rgba(0, 0, 0, 0.3) !important;
+                    }
+                `;
+                document.head.appendChild(styleKdXP);
+
+            const darkOverlay = document.createElement('div');
+            darkOverlay.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.45);
+            `;
+
+            bgContainer.appendChild(blurLayer);
+            bgContainer.appendChild(darkOverlay);
+        });
+    }
+
+    const styleBlurPosts = document.createElement('style');
+    styleBlurPosts.textContent = `
+        .NYk2.itd-blur-active, article.itd-blur-active, .KdXP.itd-blur-active {
+            background: transparent !important;
+            backdrop-filter: none !important;
+        }
+        .NYk2 .blur-bg-layer, .NYk2 .blur-overlay,
+        article .blur-bg-layer, article .blur-overlay,
+        .KdXP .blur-bg-layer, .KdXP .blur-overlay {
+            display: none !important;
+        }
+    `;
+    document.head.appendChild(styleBlurPosts);
+
+    let postBlurEnabled = GM_getValue('postBlurEnabled', true);
+
+    if (postBlurEnabled) {
+        setTimeout(addBlurBackground, 500);
+        addBlurBackground();
+        window._blurObserver = new MutationObserver(() => addBlurBackground());
+        window._blurObserver.observe(document.body, { childList: true, subtree: true });
+    }
 
     console.log('🟢 ITD Visual Pack');
 })();
