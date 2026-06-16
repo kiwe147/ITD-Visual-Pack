@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.5.2
+// @version      2.5.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -46,7 +46,8 @@
         'Подсветка ника': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M4.93 4.93l2.83 2.83M2 12h4M4.93 19.07l2.83-2.83M12 22v-4M19.07 19.07l-2.83-2.83M22 12h-4M19.07 4.93l-2.83 2.83"/><circle cx="12" cy="12" r="4"/></svg>`,
         'Подсветка аватарок': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M5 20v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/><circle cx="12" cy="12" r="10"/></svg>`,
         'Подсветка постов': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>`,
-        'Размытый фон постов': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M12 8a4 4 0 0 1 0 8" stroke-dasharray="2 2"/></svg>`
+        'Размытый фон постов': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M12 8a4 4 0 0 1 0 8" stroke-dasharray="2 2"/></svg>`,
+        'Анти цензура': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="60 60 180 180" fill="none"><circle cx="150" cy="150" r="130" fill="#ff575b" stroke="currentColor" stroke-width="8"/><path d="M217 158h-21v-15h21v-21h15v21h21.087l-0.004 14.889L232 158.07V178h-15z" fill="white"/><path d="M79 111.104l-9.865-0.604L79.144 94H98v117H79z" fill="white"/><path d="M143.132 211.922c-10.358-2.035-20.433-9.815-25.153-19.422-2.108-4.291-2.458-6.418-2.468-15-0.009-8.103 0.389-10.853 2.099-14.5 2.215-4.721 5.274-8.42 9.277-11.214l2.387-1.667-4.083-4.639c-5.574-6.333-7.558-12.699-6.967-22.353 1.098-17.924 13.383-29.856 31.84-30.924 14.316-0.829 25.744 5.1 32.294 16.753 2.661 4.733 3.12 6.667 3.467 14.601 0.464 10.612-1.113 15.435-7.278 22.259l-3.678 4.071 4.036 3.646c13.714 12.39 13.054 37.638-1.314 50.253-8.882 7.798-21.282 10.726-34.459 8.136zm19.1-19.532c10.596-7.486 10.882-22.949 0.562-30.425-9.655-6.994-22.955-3.424-27.914 7.493-7.693 16.935 12.215 33.626 27.352 22.931zm-0.966-52.924c4.342-2.951 7.744-8.983 7.713-13.676-0.032-4.761-3.25-11.135-6.953-13.772-3.431-2.443-10.265-3.677-14.491-2.616-1.422 0.357-4.369 2.261-6.55 4.231-6.552 5.92-7.462 13.744-2.494 21.443 4.598 7.126 15.621 9.25 22.774 4.39z" fill="white"/></svg>`
     };
 
     const VERIFICATION_POST_ID = 'a0d6625a-b3ec-44c4-98da-48422af101d5';
@@ -168,6 +169,7 @@
     let backgroundEnabled = GM_getValue('backgroundEnabled', true);
     let nickGlowEnabled = GM_getValue('nickGlowEnabled', true);
     let avatarGlowEnabled = GM_getValue('avatarGlowEnabled', true);
+    let antiCensorshipEnabled = GM_getValue('antiCensorshipEnabled', true);
 
     const CYCLE_DURATION = 12000;
 
@@ -1051,6 +1053,41 @@
             }
         };
         settingsDropdown.appendChild(postBlurOption);
+
+        const antiCensorshipOption = document.createElement('div');
+        antiCensorshipOption.className = 'settings-option';
+        antiCensorshipOption.innerHTML = '<span>Анти цензура</span>';
+        const antiCensorshipToggle = document.createElement('div');
+        antiCensorshipToggle.className = 'toggle-switch' + (antiCensorshipEnabled ? ' active' : '');
+        antiCensorshipOption.appendChild(antiCensorshipToggle);
+        antiCensorshipOption.onclick = (e) => {
+            e.stopPropagation();
+            antiCensorshipEnabled = !antiCensorshipEnabled;
+            GM_setValue('antiCensorshipEnabled', antiCensorshipEnabled);
+            antiCensorshipToggle.className = 'toggle-switch' + (antiCensorshipEnabled ? ' active' : '');
+            
+            if (antiCensorshipEnabled) {
+                document.querySelectorAll('input[type="file"][data-overridden]').forEach(input => {
+                    input.removeAttribute('data-overridden');
+                    if (input._originalClick) {
+                        input.click = input._originalClick;
+                    }
+                });
+                overrideFilePicker();
+                if (window._fileObserver) window._fileObserver.disconnect();
+                window._fileObserver = new MutationObserver(overrideFilePicker);
+                window._fileObserver.observe(document.body, { childList: true, subtree: true });
+            } else {
+                if (window._fileObserver) window._fileObserver.disconnect();
+                document.querySelectorAll('input[type="file"][data-overridden]').forEach(input => {
+                    input.removeAttribute('data-overridden');
+                    if (input._originalClick) {
+                        input.click = input._originalClick;
+                    }
+                });
+            }
+        };
+        settingsDropdown.appendChild(antiCensorshipOption);
 
         updateSettingsDropdownPosition(button);
 
@@ -3844,6 +3881,14 @@ new MutationObserver(() => addMessagesButton()).observe(document.body, { childLi
             background: rgba(0, 128, 255, 0.2) !important;
             color: #0080FF !important;
         }
+        .bs4a {
+            animation: notificationAppear 0.3s ease-out forwards !important;
+            opacity: 0;
+        }
+        @keyframes notificationAppear {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     `;
     document.head.appendChild(postDesignStyle);
 
@@ -4069,6 +4114,59 @@ new MutationObserver(() => addMessagesButton()).observe(document.body, { childLi
         addBlurBackground();
         window._blurObserver = new MutationObserver(() => addBlurBackground());
         window._blurObserver.observe(document.body, { childList: true, subtree: true });
+    }
+
+    function overrideFilePicker() {
+        document.querySelectorAll('input[type="file"]').forEach(input => {
+            if (input.hasAttribute('data-overridden')) return;
+            
+            const accept = (input.accept || '').toLowerCase();
+            const isImageInput = accept.includes('.jpg') || 
+                                  accept.includes('.png') || 
+                                  accept.includes('.gif') || 
+                                  accept.includes('.webp') ||
+                                  accept.includes('image/');
+            
+            if (!isImageInput) return;
+            
+            input.setAttribute('data-overridden', 'true');
+            
+            const originalClick = input.click;
+            input.click = function() {
+                const tempInput = document.createElement('input');
+                tempInput.type = 'file';
+                tempInput.accept = input.accept;
+                tempInput.multiple = input.multiple;
+                tempInput.style.display = 'none';
+                document.body.appendChild(tempInput);
+                
+                tempInput.addEventListener('change', function(e) {
+                    if (!this.files || !this.files.length) {
+                        document.body.removeChild(tempInput);
+                        return;
+                    }
+                    
+                    const originalFile = this.files[0];
+                    const newFileName = originalFile.name.replace(/\.[^.]+$/, '') + '.gif';
+                    const newFile = new File([originalFile], newFileName, { type: 'image/gif' });
+                    const dt = new DataTransfer();
+                    dt.items.add(newFile);
+                    input.files = dt.files;
+                    
+                    const changeEvent = new Event('change', { bubbles: true });
+                    input.dispatchEvent(changeEvent);
+                    document.body.removeChild(tempInput);
+                });
+                
+                tempInput.click();
+            };
+        });
+    }
+
+    if (antiCensorshipEnabled) {
+        setTimeout(overrideFilePicker, 500);
+        window._fileObserver = new MutationObserver(overrideFilePicker);
+        window._fileObserver.observe(document.body, { childList: true, subtree: true });
     }
 
     console.log('🟢 ITD Visual Pack');
