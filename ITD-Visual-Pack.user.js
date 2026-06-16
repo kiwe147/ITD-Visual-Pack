@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.5.1
+// @version      2.5.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3831,6 +3831,18 @@ new MutationObserver(() => addMessagesButton()).observe(document.body, { childLi
         }
         .RYKM:active svg {
             animation: likePop 0.2s ease-out !important;
+        }
+        .RYKM[aria-label="Нравится"]:hover {
+            background: rgba(249, 24, 128, 0.2) !important;
+            color: #f91880 !important;
+        }
+        .RYKM[aria-label="Комментировать"]:hover {
+            background: rgba(0, 186, 124, 0.2) !important;
+            color: #00ba7c !important;
+        }
+        .RYKM[aria-label="Репост"]:hover {
+            background: rgba(0, 128, 255, 0.2) !important;
+            color: #0080FF !important;
         }
     `;
     document.head.appendChild(postDesignStyle);
