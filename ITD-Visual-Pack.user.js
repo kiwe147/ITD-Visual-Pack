@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.5.3
+// @version      2.5.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -15,7 +15,7 @@
 // @icon         data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><filter id='glow' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur in='SourceGraphic' stdDeviation='3' result='blur'/></filter><linearGradient id='rainbow' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' style='stop-color:%23ff0000'/><stop offset='16%' style='stop-color:%23ff8800'/><stop offset='33%' style='stop-color:%23ffff00'/><stop offset='50%' style='stop-color:%2300ff00'/><stop offset='66%' style='stop-color:%2300ffff'/><stop offset='83%' style='stop-color:%230000ff'/><stop offset='100%' style='stop-color:%23ff00ff'/></linearGradient></defs><rect width='100' height='100' rx='20' fill='%231a1a1a'/><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(%23rainbow)' filter='url(%23glow)' opacity='0.9'>N</text><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(%23rainbow)'>N</text></svg>
 // ==/UserScript==
 
-(function() {
+(function () {
     'use strict';
 
     const SELECTORS = {
@@ -41,14 +41,24 @@
     };
 
     const SETTINGS_ICONS = {
-        'Наклон постов': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="14 8 18 8 18 12"/><line x1="18" y1="8" x2="10" y2="16"/></svg>`,
         'Фон': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6.75 1C6.33579 1 6 1.33579 6 1.75V3.50559C5.96824 3.53358 5.93715 3.56276 5.9068 3.59311L1.66416 7.83575C0.883107 8.6168 0.883107 9.88313 1.66416 10.6642L5.19969 14.1997C5.98074 14.9808 7.24707 14.9808 8.02812 14.1997L12.2708 9.95707C13.0518 9.17602 13.0518 7.90969 12.2708 7.12864L8.73522 3.59311C8.39027 3.24816 7.95066 3.05555 7.5 3.0153V1.75C7.5 1.33579 7.16421 1 6.75 1ZM6 5.62123V6.25C6 6.66421 6.33579 7 6.75 7C7.16421 7 7.5 6.66421 7.5 6.25V4.54033C7.56363 4.56467 7.62328 4.60249 7.67456 4.65377L11.2101 8.1893C11.2995 8.27875 11.348 8.39366 11.3555 8.51071H3.11052L6 5.62123ZM6.26035 13.1391L3.132 10.0107H10.0958L6.96746 13.1391C6.77219 13.3343 6.45561 13.3343 6.26035 13.1391Z" fill="currentColor"/><path d="M2 17.5V12.4143L3.5 13.9143V17.5C3.5 18.0523 3.94772 18.5 4.5 18.5H19.5C20.0523 18.5 20.5 18.0523 20.5 17.5V6.5C20.5 5.94771 20.0523 5.5 19.5 5.5H12.0563L10.5563 4H19.5C20.8807 4 22 5.11929 22 6.5V17.5C22 18.8807 20.8807 20 19.5 20H4.5C3.11929 20 2 18.8807 2 17.5Z" fill="currentColor"/><path d="M11 14.375C11 13.8816 11.1541 13.4027 11.3418 12.9938C11.5325 12.5784 11.7798 12.1881 12.0158 11.8595C12.2531 11.5289 12.4888 11.247 12.6647 11.0481C12.7502 10.9515 12.9062 10.7867 12.9642 10.7254L12.9697 10.7197C13.2626 10.4268 13.7374 10.4268 14.0303 10.7197L14.3353 11.0481C14.5112 11.247 14.7469 11.5289 14.9842 11.8595C15.2202 12.1881 15.4675 12.5784 15.6582 12.9938C15.8459 13.4027 16 13.8816 16 14.375C16 15.7654 14.9711 17 13.5 17C12.0289 17 11 15.7654 11 14.375ZM13.7658 12.7343C13.676 12.6092 13.5858 12.4916 13.5 12.3844C13.4142 12.4916 13.324 12.6092 13.2342 12.7343C13.0327 13.015 12.8425 13.32 12.7051 13.6195C12.5647 13.9253 12.5 14.1808 12.5 14.375C12.5 15.0663 12.9809 15.5 13.5 15.5C14.0191 15.5 14.5 15.0663 14.5 14.375C14.5 14.1808 14.4353 13.9253 14.2949 13.6195C14.1575 13.32 13.9673 13.015 13.7658 12.7343Z" fill="currentColor"/></svg>`,
         'Подсветка ника': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M4.93 4.93l2.83 2.83M2 12h4M4.93 19.07l2.83-2.83M12 22v-4M19.07 19.07l-2.83-2.83M22 12h-4M19.07 4.93l-2.83 2.83"/><circle cx="12" cy="12" r="4"/></svg>`,
         'Подсветка аватарок': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M5 20v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/><circle cx="12" cy="12" r="10"/></svg>`,
         'Подсветка постов': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>`,
         'Размытый фон постов': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M12 8a4 4 0 0 1 0 8" stroke-dasharray="2 2"/></svg>`,
-        'Анти цензура': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="60 60 180 180" fill="none"><circle cx="150" cy="150" r="130" fill="#ff575b" stroke="currentColor" stroke-width="8"/><path d="M217 158h-21v-15h21v-21h15v21h21.087l-0.004 14.889L232 158.07V178h-15z" fill="white"/><path d="M79 111.104l-9.865-0.604L79.144 94H98v117H79z" fill="white"/><path d="M143.132 211.922c-10.358-2.035-20.433-9.815-25.153-19.422-2.108-4.291-2.458-6.418-2.468-15-0.009-8.103 0.389-10.853 2.099-14.5 2.215-4.721 5.274-8.42 9.277-11.214l2.387-1.667-4.083-4.639c-5.574-6.333-7.558-12.699-6.967-22.353 1.098-17.924 13.383-29.856 31.84-30.924 14.316-0.829 25.744 5.1 32.294 16.753 2.661 4.733 3.12 6.667 3.467 14.601 0.464 10.612-1.113 15.435-7.278 22.259l-3.678 4.071 4.036 3.646c13.714 12.39 13.054 37.638-1.314 50.253-8.882 7.798-21.282 10.726-34.459 8.136zm19.1-19.532c10.596-7.486 10.882-22.949 0.562-30.425-9.655-6.994-22.955-3.424-27.914 7.493-7.693 16.935 12.215 33.626 27.352 22.931zm-0.966-52.924c4.342-2.951 7.744-8.983 7.713-13.676-0.032-4.761-3.25-11.135-6.953-13.772-3.431-2.443-10.265-3.677-14.491-2.616-1.422 0.357-4.369 2.261-6.55 4.231-6.552 5.92-7.462 13.744-2.494 21.443 4.598 7.126 15.621 9.25 22.774 4.39z" fill="white"/></svg>`
+        'Анти цензура': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="60 60 180 180" fill="none"><circle cx="150" cy="150" r="130" fill="#ff575b" stroke="currentColor" stroke-width="8"/><path d="M217 158h-21v-15h21v-21h15v21h21.087l-0.004 14.889L232 158.07V178h-15z" fill="white"/><path d="M79 111.104l-9.865-0.604L79.144 94H98v117H79z" fill="white"/><path d="M143.132 211.922c-10.358-2.035-20.433-9.815-25.153-19.422-2.108-4.291-2.458-6.418-2.468-15-0.009-8.103 0.389-10.853 2.099-14.5 2.215-4.721 5.274-8.42 9.277-11.214l2.387-1.667-4.083-4.639c-5.574-6.333-7.558-12.699-6.967-22.353 1.098-17.924 13.383-29.856 31.84-30.924 14.316-0.829 25.744 5.1 32.294 16.753 2.661 4.733 3.12 6.667 3.467 14.601 0.464 10.612-1.113 15.435-7.278 22.259l-3.678 4.071 4.036 3.646c13.714 12.39 13.054 37.638-1.314 50.253-8.882 7.798-21.282 10.726-34.459 8.136zm19.1-19.532c10.596-7.486 10.882-22.949 0.562-30.425-9.655-6.994-22.955-3.424-27.914 7.493-7.693 16.935 12.215 33.626 27.352 22.931zm-0.966-52.924c4.342-2.951 7.744-8.983 7.713-13.676-0.032-4.761-3.25-11.135-6.953-13.772-3.431-2.443-10.265-3.677-14.491-2.616-1.422 0.357-4.369 2.261-6.55 4.231-6.552 5.92-7.462 13.744-2.494 21.443 4.598 7.126 15.621 9.25 22.774 4.39z" fill="white"/></svg>`,
+        'Стиль фона': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20 10 10 0 0 1 0-20z"/><circle cx="12" cy="12" r="4"/></svg>`
     };
+
+    function getBackgroundIcon(style) {
+        const icons = {
+            matrix: 'M',
+            stars: '★',
+            waves: '≈',
+            particles: '•'
+        };
+        return icons[style] || 'M';
+    }
 
     const VERIFICATION_POST_ID = 'a0d6625a-b3ec-44c4-98da-48422af101d5';
     const SECRET_SALT = 'ITD_MOD_2026_SECRET_SALT_NEUROSFW';
@@ -156,7 +166,7 @@
                     SELECTORS.commentPreviewContainer = previewContainer.className.split(' ')[0];
                 }
             }
-        } catch(e) {}
+        } catch (e) { }
     }
 
     let globalHue = 0;
@@ -165,8 +175,8 @@
     let myDisplayName = null;
     let nickElements = new Set();
     let currentStyle = GM_getValue('nickStyle', 'white');
-    let tiltEnabled = GM_getValue('tiltEnabled', true);
     let backgroundEnabled = GM_getValue('backgroundEnabled', true);
+    let backgroundStyle = GM_getValue('backgroundStyle', 'matrix');
     let nickGlowEnabled = GM_getValue('nickGlowEnabled', true);
     let avatarGlowEnabled = GM_getValue('avatarGlowEnabled', true);
     let antiCensorshipEnabled = GM_getValue('antiCensorshipEnabled', true);
@@ -179,7 +189,7 @@
             color: '#ff4400',
             gradientLight: 'linear-gradient(270deg, #ff2200, #ff6600, #ffaa00)',
             gradientDark: 'linear-gradient(270deg, #ff4400, #ff8800, #ffcc22)',
-            glow: 'drop-shadow(0 0 12px rgba(255, 68, 0, 0.7)) drop-shadow(0 0 20px rgba(255, 68, 0, 0.4))',
+            glow: 'drop-shadow(0 0 20px rgba(255, 68, 0, 0.9)) drop-shadow(0 0 35px rgba(255, 68, 0, 0.6))',
             matrixHue: 25,
             avatarHue: 25,
             matrixSat: 100,
@@ -190,7 +200,7 @@
             color: '#ff2d75',
             gradientLight: 'linear-gradient(270deg, #ff2d75, #ff69b4, #ff9eb5)',
             gradientDark: 'linear-gradient(270deg, #ff44aa, #ff77cc, #ff99dd)',
-            glow: 'drop-shadow(0 0 12px #ff2d75) drop-shadow(0 0 20px #ff2d75)',
+            glow: 'drop-shadow(0 0 20px #ff2d75) drop-shadow(0 0 35px #ff2d75)',
             matrixHue: 330,
             avatarHue: 330,
             matrixSat: 100,
@@ -201,7 +211,7 @@
             color: '#ffd700',
             gradientLight: 'linear-gradient(270deg, #ffd700, #ffb347, #ff8c00)',
             gradientDark: 'linear-gradient(270deg, #ffea00, #ffcc44, #ffaa33)',
-            glow: 'drop-shadow(0 0 8px rgba(255, 215, 0, 0.7)) drop-shadow(0 0 15px rgba(255, 215, 0, 0.4))',
+            glow: 'drop-shadow(0 0 15px rgba(255, 215, 0, 0.9)) drop-shadow(0 0 25px rgba(255, 215, 0, 0.6))',
             matrixHue: 50,
             avatarHue: 50,
             matrixSat: 100,
@@ -212,7 +222,7 @@
             color: '#00ff88',
             gradientLight: 'linear-gradient(270deg, #00ff88, #00ffcc, #88ffcc)',
             gradientDark: 'linear-gradient(270deg, #44ffaa, #44ffdd, #aaffdd)',
-            glow: 'drop-shadow(0 0 8px #00ff88) drop-shadow(0 0 15px #00ff88)',
+            glow: 'drop-shadow(0 0 15px #00ff88) drop-shadow(0 0 25px #00ff88)',
             matrixHue: 155,
             avatarHue: 155,
             matrixSat: 100,
@@ -234,7 +244,7 @@
             color: '#00b4d8',
             gradientLight: 'linear-gradient(270deg, #0288d1, #00b4d8, #48cae4)',
             gradientDark: 'linear-gradient(270deg, #4fc3f7, #90e0ef, #caf0f8)',
-            glow: 'drop-shadow(0 0 12px #00b4d8) drop-shadow(0 0 20px #0288d1)',
+            glow: 'drop-shadow(0 0 20px #00b4d8) drop-shadow(0 0 35px #0288d1)',
             matrixHue: 195,
             avatarHue: 195,
             matrixSat: 100,
@@ -245,7 +255,7 @@
             color: '#9b30ff',
             gradientLight: 'linear-gradient(270deg, #7b2fff, #9b30ff, #c55aff)',
             gradientDark: 'linear-gradient(270deg, #9b44ff, #bb66ff, #dd88ff)',
-            glow: 'drop-shadow(0 0 12px #9b30ff) drop-shadow(0 0 20px #7b2fff)',
+            glow: 'drop-shadow(0 0 20px #9b30ff) drop-shadow(0 0 35px #7b2fff)',
             matrixHue: 270,
             avatarHue: 270,
             matrixSat: 100,
@@ -256,7 +266,7 @@
             color: '#0288d1',
             gradientLight: 'linear-gradient(270deg, #0288d1, #26c6da)',
             gradientDark: 'linear-gradient(270deg, #4fc3f7, #e0f7fa)',
-            glow: 'drop-shadow(0 2px 16px rgba(0, 128, 255, 0.4))',
+            glow: 'drop-shadow(0 0 20px rgba(0, 128, 255, 0.9)) drop-shadow(0 0 35px rgba(0, 128, 255, 0.6))',
             matrixHue: 210,
             avatarHue: 210,
             matrixSat: 100,
@@ -267,7 +277,7 @@
             color: '#ffffff',
             gradientLight: 'linear-gradient(270deg, #e0e0e0, #ffffff, #f0f0f0)',
             gradientDark: 'linear-gradient(270deg, #d0d0d0, #ffffff, #e8e8e8)',
-            glow: 'drop-shadow(0 0 10px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 20px rgba(255, 255, 255, 0.3))',
+            glow: 'drop-shadow(0 0 15px rgba(255, 255, 255, 0.9)) drop-shadow(0 0 25px rgba(255, 255, 255, 0.6))',
             matrixHue: 0,
             avatarHue: 0,
             matrixSat: 15,
@@ -410,11 +420,6 @@
         .nick-style-option:not(:last-child) {
             margin-bottom: 2px !important;
         }
-        .` + SELECTORS.post + `, article {
-            transition: transform 0.15s ease-out !important;
-            transform-style: preserve-3d !important;
-            perspective: 1200px !important;
-        }
         .settings-toggle {
             display: inline-flex !important;
             align-items: center !important;
@@ -506,12 +511,17 @@
     document.head.appendChild(globalStyles);
 
     const canvas = document.createElement('canvas');
-    canvas.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;opacity:0.12;pointer-events:none;`;
+    canvas.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;opacity:0.18;pointer-events:none;`;
     document.body.appendChild(canvas);
     const ctx = canvas.getContext('2d');
     const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
     const fontSize = 14;
     let columns, drops = [];
+    let bgState = {
+        stars: [],
+        particles: [],
+        time: 0
+    };
 
     function resizeCanvas() {
         canvas.width = window.innerWidth;
@@ -538,11 +548,270 @@
                 charHue = (style.matrixHue || 210) + (Math.random() - 0.5) * 25;
                 saturation = style.matrixSat !== undefined ? style.matrixSat : 100;
             }
-            ctx.fillStyle = `hsl(${charHue}, ${saturation}%, 55%)`;
+            ctx.fillStyle = `hsl(${charHue}, ${saturation}%, 40%)`;
             const text = chars[Math.floor(Math.random() * chars.length)];
             ctx.fillText(text, i * fontSize, drops[i] * fontSize);
             if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
             drops[i]++;
+        }
+    }
+
+    function initStars() {
+        bgState.stars = [];
+        for (let i = 0; i < 150; i++) {
+            bgState.stars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                r: Math.random() * 2 + 0.5,
+                alpha: Math.random(),
+                speed: 0.005 + Math.random() * 0.02
+            });
+        }
+    }
+
+    function drawStars() {
+        const currentArea = canvas.width * canvas.height;
+        const expectedCount = Math.min(2000, Math.floor(currentArea * 0.0003));
+
+        if (bgState.stars.length === 0 ||
+            bgState.stars.length !== expectedCount ||
+            bgState._lastWidth !== canvas.width ||
+            bgState._lastHeight !== canvas.height) {
+
+            bgState.stars = [];
+            bgState._lastWidth = canvas.width;
+            bgState._lastHeight = canvas.height;
+
+            const count = expectedCount;
+
+            for (let i = 0; i < count; i++) {
+                bgState.stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    r: Math.random() * 2.5 + 0.5,
+                    alpha: Math.random(),
+                    speed: 0.02 + Math.random() * 0.06,
+                    phase: Math.random() * Math.PI * 2
+                });
+            }
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const style = nickStyles[currentStyle];
+        let hue, sat, light = 60;
+        if (currentStyle === 'rainbow') {
+            hue = globalHue;
+            sat = 100;
+        } else {
+            hue = style.matrixHue || 210;
+            sat = style.matrixSat !== undefined ? style.matrixSat : 100;
+        }
+
+        const finalSat = Math.min(100, sat * 1.2);
+
+        bgState.stars.forEach(s => {
+            s.phase += s.speed;
+            const alpha = 0.1 + 0.9 * (0.5 + 0.5 * Math.sin(s.phase));
+            const flash = Math.random() > 0.99 ? 1.5 : 1.0;
+            const finalAlpha = Math.min(1, alpha * flash);
+
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${hue}, ${finalSat}%, ${light}%, ${finalAlpha})`;
+            ctx.fill();
+
+            if (s.r > 1.5) {
+                ctx.shadowColor = `hsla(${hue}, ${finalSat}%, ${light}%, ${finalAlpha * 0.8})`;
+                ctx.shadowBlur = 20 + s.r * 5;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+        });
+    }
+
+    function initParticles() {
+        bgState.particles = [];
+        for (let i = 0; i < 80; i++) {
+            bgState.particles.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                vx: (Math.random() - 0.5) * 0.5,
+                vy: (Math.random() - 0.5) * 0.5,
+                r: Math.random() * 2 + 1,
+                alpha: Math.random() * 0.5 + 0.2
+            });
+        }
+    }
+
+    function drawParticles() {
+        const area = canvas.width * canvas.height;
+        const targetCount = Math.min(200, Math.floor(area * 0.0003));
+
+        if (bgState.particles.length === 0 ||
+            bgState.particles.length !== targetCount ||
+            bgState._lastWidth !== canvas.width ||
+            bgState._lastHeight !== canvas.height) {
+
+            bgState.particles = [];
+            bgState._lastWidth = canvas.width;
+            bgState._lastHeight = canvas.height;
+
+            for (let i = 0; i < targetCount; i++) {
+                bgState.particles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    vx: (Math.random() - 0.5) * 1.2,
+                    vy: (Math.random() - 0.5) * 1.2,
+                    r: Math.random() * 3 + 1,
+                    alpha: Math.random() * 0.5 + 0.5,
+                    phase: Math.random() * Math.PI * 2,
+                    pulseSpeed: 0.02 + Math.random() * 0.04
+                });
+            }
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const style = nickStyles[currentStyle];
+        let hue, sat, light = 85;
+        if (currentStyle === 'rainbow') {
+            hue = globalHue;
+            sat = 100;
+        } else {
+            hue = style.matrixHue || 210;
+            sat = style.matrixSat !== undefined ? style.matrixSat : 100;
+        }
+
+        const finalSat = Math.min(100, sat * 1.5);
+
+        bgState.particles.forEach(p => {
+            p.x += p.vx;
+            p.y += p.vy;
+            if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+            if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+
+            p.phase += p.pulseSpeed;
+            const pulse = 0.8 + 0.2 * Math.sin(p.phase);
+            const currentR = p.r * pulse;
+
+            const flicker = 0.85 + 0.15 * Math.sin(p.phase * 1.5 + 1.2);
+            const currentAlpha = Math.min(1, p.alpha * flicker * 1.2);
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, currentR, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${hue}, ${finalSat}%, ${light}%, ${currentAlpha})`;
+
+            ctx.shadowColor = `hsla(${hue}, ${finalSat}%, ${light}%, ${currentAlpha * 0.8})`;
+            ctx.shadowBlur = 15 + currentR * 5;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        });
+
+        const maxDist = Math.min(200, Math.max(100, Math.min(canvas.width, canvas.height) * 0.1));
+
+        for (let i = 0; i < bgState.particles.length; i++) {
+            for (let j = i + 1; j < bgState.particles.length; j++) {
+                const p1 = bgState.particles[i];
+                const p2 = bgState.particles[j];
+                const dx = p1.x - p2.x;
+                const dy = p1.y - p2.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < maxDist) {
+                    const alpha1 = Math.min(1, p1.alpha * (0.8 + 0.2 * Math.sin(p1.phase)));
+                    const alpha2 = Math.min(1, p2.alpha * (0.8 + 0.2 * Math.sin(p2.phase)));
+                    const avgAlpha = (alpha1 + alpha2) / 2;
+                    const distFactor = 1 - dist / maxDist;
+                    const lineAlpha = 0.35 * distFactor * avgAlpha;
+
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.strokeStyle = `hsla(${hue}, ${finalSat}%, ${light}%, ${lineAlpha})`;
+                    ctx.lineWidth = 0.5 + 2.5 * distFactor;
+
+                    ctx.shadowColor = `hsla(${hue}, ${finalSat}%, ${light}%, ${lineAlpha * 0.5})`;
+                    ctx.shadowBlur = 8;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                }
+            }
+        }
+    }
+
+    function drawWaves() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        bgState.time += 0.01;
+
+        const style = nickStyles[currentStyle];
+        let hue, sat, light = 60;
+        if (currentStyle === 'rainbow') {
+            hue = globalHue;
+            sat = 100;
+        } else {
+            hue = style.matrixHue || 210;
+            sat = style.matrixSat !== undefined ? style.matrixSat : 100;
+        }
+
+        const finalSat = Math.min(100, sat * 1.3);
+        const finalLight = Math.min(80, light + 15);
+
+        const waveConfigs = [
+            { amp1: 100, freq1: 0.008, speed1: 0.4, amp2: 50, freq2: 0.018, speed2: 0.7, amp3: 70, freq3: 0.004, speed3: 0.25, alpha: 0.45, offset: 0 },
+            { amp1: 80, freq1: 0.009, speed1: 0.5, amp2: 40, freq2: 0.020, speed2: 0.8, amp3: 60, freq3: 0.005, speed3: 0.3, alpha: 0.35, offset: 1.5 },
+            { amp1: 60, freq1: 0.010, speed1: 0.6, amp2: 30, freq2: 0.022, speed2: 0.9, amp3: 50, freq3: 0.006, speed3: 0.35, alpha: 0.28, offset: 3.0 },
+            { amp1: 40, freq1: 0.011, speed1: 0.7, amp2: 20, freq2: 0.025, speed2: 1.0, amp3: 30, freq3: 0.007, speed3: 0.4, alpha: 0.20, offset: 4.5 }
+        ];
+
+        const colors = [
+            `hsla(${hue}, ${finalSat}%, ${finalLight + 15}%, ${waveConfigs[0].alpha})`,
+            `hsla(${hue + 15}, ${finalSat}%, ${finalLight + 10}%, ${waveConfigs[1].alpha})`,
+            `hsla(${hue - 15}, ${finalSat}%, ${finalLight + 5}%, ${waveConfigs[2].alpha})`,
+            `hsla(${hue + 30}, ${finalSat}%, ${finalLight}%, ${waveConfigs[3].alpha})`
+        ];
+
+        const waveHeight = Math.min(200, Math.max(80, canvas.height * 0.15));
+        const waveOffset = canvas.height * 0.5;
+
+        waveConfigs.forEach((cfg, w) => {
+            ctx.beginPath();
+            for (let x = 0; x < canvas.width; x += 1.5) {
+                const y = waveOffset +
+                    Math.sin(x * cfg.freq1 + bgState.time * cfg.speed1 + cfg.offset) * cfg.amp1 * (waveHeight / 100) +
+                    Math.sin(x * cfg.freq2 + bgState.time * cfg.speed2 + cfg.offset * 0.7) * cfg.amp2 * (waveHeight / 100) +
+                    Math.sin(x * cfg.freq3 + bgState.time * cfg.speed3 + cfg.offset * 2) * cfg.amp3 * (waveHeight / 100);
+                x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            }
+
+            ctx.strokeStyle = colors[w];
+            ctx.lineWidth = 2 + w * 0.5;
+            ctx.shadowColor = colors[w];
+            ctx.shadowBlur = 15 + w * 5;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        });
+    }
+
+    function drawBackground() {
+        if (!backgroundEnabled) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            return;
+        }
+        switch (backgroundStyle) {
+            case 'stars':
+                drawStars();
+                break;
+            case 'waves':
+                drawWaves();
+                break;
+            case 'particles':
+                drawParticles();
+                break;
+            case 'matrix':
+            default:
+                drawMatrix();
+                break;
         }
     }
 
@@ -558,7 +827,7 @@
         if (currentStyle === 'rainbow') {
             const color = `hsl(${globalHue}, 100%, 55%)`;
             avatars.forEach(avatar => {
-                avatar.style.filter = `drop-shadow(0 0 3px ${color}) drop-shadow(0 0 6px ${color})`;
+                avatar.style.filter = `drop-shadow(0 0 5px ${color}) drop-shadow(0 0 12px ${color})`;
             });
         } else {
             const style = nickStyles[currentStyle];
@@ -656,7 +925,6 @@
         updateAllNickColors();
         updateNickGlow();
         updateAvatarGlow();
-        drawMatrix();
     }
 
     let dropdown = null;
@@ -841,6 +1109,45 @@
             createDropdown(styleButton);
         });
 
+        controlsPanel.appendChild(styleButton);
+
+        const bgToggle = document.createElement('span');
+        bgToggle.className = 'bg-style-toggle';
+        bgToggle.title = 'Стиль фона';
+        bgToggle.textContent = getBackgroundIcon(backgroundStyle);
+        bgToggle.style.cssText = `
+        display: ${backgroundEnabled ? 'inline-flex' : 'none'};
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        margin-left: 0;
+        cursor: pointer;
+        background: var(--bg-secondary, rgba(128, 128, 128, 0.15));
+        border-radius: 50%;
+        transition: all 0.2s ease;
+        vertical-align: middle;
+        flex-shrink: 0;
+        font-size: 16px;
+        font-weight: bold;
+        color: var(--text-primary, currentColor);
+        user-select: none;
+    `;
+        bgToggle.onmouseenter = () => { bgToggle.style.background = 'var(--accent-primary, rgba(0, 128, 255, 0.3))'; };
+        bgToggle.onmouseleave = () => { bgToggle.style.background = 'var(--bg-secondary, rgba(128, 128, 128, 0.15))'; };
+        bgToggle.onclick = function (e) {
+            e.stopPropagation();
+            const styles = ['matrix', 'stars', 'waves', 'particles'];
+            const currentIndex = styles.indexOf(backgroundStyle);
+            const nextIndex = (currentIndex + 1) % styles.length;
+            backgroundStyle = styles[nextIndex];
+            GM_setValue('backgroundStyle', backgroundStyle);
+            this.textContent = getBackgroundIcon(backgroundStyle);
+            this.title = 'Стиль фона: ' + backgroundStyle;
+            drawBackground();
+        };
+        controlsPanel.appendChild(bgToggle);
+
         const settingsButton = document.createElement('span');
         settingsButton.className = 'settings-toggle';
         settingsButton.title = 'Настройки';
@@ -852,28 +1159,21 @@
             showSettingsDropdown(settingsButton);
         });
 
-        controlsPanel.appendChild(styleButton);
         controlsPanel.appendChild(settingsButton);
+
         nickContainer.appendChild(controlsPanel);
     }
 
-    function add3DEffect(post) {
-        if (!tiltEnabled) return;
-        if (post.hasAttribute('data-3d')) return;
-        post.setAttribute('data-3d', 'true');
-        post.addEventListener('mousemove', (e) => {
-            if (!tiltEnabled) return;
-            const rect = post.getBoundingClientRect();
-            const x = e.clientX - rect.left, y = e.clientY - rect.top;
-            const rotateY = ((x - rect.width/2) / (rect.width/2)) * 4;
-            const rotateX = ((rect.height/2 - y) / (rect.height/2)) * 4;
-            post.style.transform = `perspective(1200px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.01)`;
-            post.style.boxShadow = '0 10px 25px rgba(0,0,0,0.12)';
-        });
-        post.addEventListener('mouseleave', () => {
-            if (!tiltEnabled) return;
-            post.style.transform = 'perspective(1200px) rotateX(0deg) rotateY(0deg) scale(1)';
-            post.style.boxShadow = '';
+    function updateBackgroundToggleButtons() {
+        const toggles = document.querySelectorAll('.bg-style-toggle');
+        toggles.forEach(toggle => {
+            if (backgroundEnabled) {
+                toggle.style.display = 'inline-flex';
+                toggle.textContent = getBackgroundIcon(backgroundStyle);
+                toggle.title = 'Стиль фона: ' + backgroundStyle;
+            } else {
+                toggle.style.display = 'none';
+            }
         });
     }
 
@@ -909,7 +1209,7 @@
         nickContainer.appendChild(button);
     }
 
-        function addIconsToMenu(menu) {
+    function addIconsToMenu(menu) {
         if (!menu || menu.hasAttribute('data-icons-added')) return;
         const options = menu.querySelectorAll('.settings-option');
         options.forEach(opt => {
@@ -947,21 +1247,6 @@
         settingsDropdown = document.createElement('div');
         settingsDropdown.className = 'settings-dropdown';
 
-        const tiltOption = document.createElement('div');
-        tiltOption.className = 'settings-option';
-        tiltOption.innerHTML = '<span>Наклон постов</span>';
-        const tiltToggle = document.createElement('div');
-        tiltToggle.className = 'toggle-switch' + (tiltEnabled ? ' active' : '');
-        tiltOption.appendChild(tiltToggle);
-        tiltOption.onclick = (e) => {
-            e.stopPropagation();
-            tiltEnabled = !tiltEnabled;
-            GM_setValue('tiltEnabled', tiltEnabled);
-            tiltToggle.className = 'toggle-switch' + (tiltEnabled ? ' active' : '');
-            applyTilt();
-        };
-        settingsDropdown.appendChild(tiltOption);
-
         const backgroundOption = document.createElement('div');
         backgroundOption.className = 'settings-option';
         backgroundOption.innerHTML = '<span>Фон</span>';
@@ -974,6 +1259,7 @@
             GM_setValue('backgroundEnabled', backgroundEnabled);
             backgroundToggle.className = 'toggle-switch' + (backgroundEnabled ? ' active' : '');
             updateBackgroundVisibility();
+            updateBackgroundToggleButtons();
         };
         settingsDropdown.appendChild(backgroundOption);
 
@@ -1037,7 +1323,7 @@
             postBlurEnabled = !postBlurEnabled;
             GM_setValue('postBlurEnabled', postBlurEnabled);
             postBlurToggle.className = 'toggle-switch' + (postBlurEnabled ? ' active' : '');
-            
+
             if (postBlurEnabled) {
                 addBlurBackground();
                 if (window._blurObserver) window._blurObserver.disconnect();
@@ -1065,7 +1351,7 @@
             antiCensorshipEnabled = !antiCensorshipEnabled;
             GM_setValue('antiCensorshipEnabled', antiCensorshipEnabled);
             antiCensorshipToggle.className = 'toggle-switch' + (antiCensorshipEnabled ? ' active' : '');
-            
+
             if (antiCensorshipEnabled) {
                 document.querySelectorAll('input[type="file"][data-overridden]').forEach(input => {
                     input.removeAttribute('data-overridden');
@@ -1150,20 +1436,6 @@
 
         settingsDropdown.style.top = top + 'px';
         settingsDropdown.style.left = left + 'px';
-    }
-
-    function applyTilt() {
-        const posts = document.querySelectorAll('.' + SELECTORS.post + '[data-3d], article[data-3d]');
-        posts.forEach(post => {
-            if (tiltEnabled) {
-                post.style.pointerEvents = 'auto';
-                post.style.transform = '';
-                post.style.boxShadow = '';
-            } else {
-                post.style.transform = 'perspective(1200px) rotateX(0deg) rotateY(0deg) scale(1)';
-                post.style.boxShadow = '';
-            }
-        });
     }
 
     function addBannerStyles() {
@@ -1590,11 +1862,11 @@
                 method: 'POST',
                 url: 'https://xn--d1ah4a.com/api/v1/auth/refresh',
                 credentials: 'include',
-                onload: function(res) {
+                onload: function (res) {
                     try {
                         const data = JSON.parse(res.responseText);
                         resolve(data.accessToken);
-                    } catch(e) { reject(e); }
+                    } catch (e) { reject(e); }
                 },
                 onerror: reject
             });
@@ -1635,7 +1907,7 @@
                     method: 'GET',
                     url: `https://xn--d1ah4a.com/api/posts/${VERIFICATION_POST_ID}/comments?limit=100`,
                     headers: { 'Authorization': `Bearer ${token}` },
-                    onload: function(res) {
+                    onload: function (res) {
                         try {
                             const data = JSON.parse(res.responseText);
                             const comments = data.data?.comments || data.comments || [];
@@ -1662,19 +1934,19 @@
                             }
                             isVerifying = false;
                             resolve(verifiedUsers);
-                        } catch(e) {
+                        } catch (e) {
                             console.error('Ошибка парсинга:', e);
                             isVerifying = false;
                             reject(e);
                         }
                     },
-                    onerror: function(err) {
+                    onerror: function (err) {
                         console.error('Ошибка запроса:', err);
                         isVerifying = false;
                         reject(err);
                     }
                 });
-            } catch(e) {
+            } catch (e) {
                 console.error('Ошибка getAccessToken:', e);
                 isVerifying = false;
                 reject(e);
@@ -1739,14 +2011,14 @@
                                 },
                                 onerror: () => resolve(false)
                             });
-                        } catch(e) {
+                        } catch (e) {
                             console.error('Ошибка:', e);
                             resolve(false);
                         }
                     },
                     onerror: () => resolve(false)
                 });
-            } catch(e) {
+            } catch (e) {
                 console.error('Ошибка verifyMyself:', e);
                 resolve(false);
             }
@@ -1765,11 +2037,11 @@
                     method: 'GET',
                     url: `https://xn--d1ah4a.com/api/posts/user/${targetUsername}?limit=50`,
                     headers: { 'Authorization': `Bearer ${accessToken}` },
-                    onload: function(res) {
+                    onload: function (res) {
                         try {
                             const data = JSON.parse(res.responseText);
                             resolve(data.data?.posts || data.posts || []);
-                        } catch(e) { reject(e); }
+                        } catch (e) { reject(e); }
                     },
                     onerror: reject
                 });
@@ -1799,7 +2071,7 @@
                                 'Authorization': `Bearer ${accessToken}`
                             },
                             data: '{}',
-                            onload: function(res) {
+                            onload: function (res) {
                                 if (res.status === 200 || res.status === 201) {
                                     GM_setValue('lastPostId', post.id);
                                     lastPostId = post.id;
@@ -1812,10 +2084,10 @@
                         });
                     });
                     await new Promise(r => setTimeout(r, 500));
-                } catch(e) {}
+                } catch (e) { }
             }
 
-        } catch(e) {}
+        } catch (e) { }
         finally {
             isRunning = false;
             scheduleNext();
@@ -1844,7 +2116,7 @@
                             try {
                                 const data = JSON.parse(res.responseText);
                                 resolve(data.isFollowing === true);
-                            } catch(e) { resolve(false); }
+                            } catch (e) { resolve(false); }
                         },
                         onerror: () => resolve(false)
                     });
@@ -1872,24 +2144,24 @@
                     });
                 });
                 GM_setValue(SUBSCRIBE_STORAGE_KEY, true);
-            } catch(e) {}
+            } catch (e) { }
         })();
     }
 
-let scrollTopButton = null;
+    let scrollTopButton = null;
 
-function createScrollTopButton() {
-    if (scrollTopButton) return;
+    function createScrollTopButton() {
+        if (scrollTopButton) return;
 
-    scrollTopButton = document.createElement('button');
-    scrollTopButton.className = 'itd-scroll-top-btn';
-    scrollTopButton.innerHTML = `
+        scrollTopButton = document.createElement('button');
+        scrollTopButton.className = 'itd-scroll-top-btn';
+        scrollTopButton.innerHTML = `
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="18 15 12 9 6 15"></polyline>
         </svg>
     `;
 
-    scrollTopButton.style.cssText = `
+        scrollTopButton.style.cssText = `
         position: fixed;
         bottom: 16px;
         right: 16px;
@@ -1915,11 +2187,11 @@ function createScrollTopButton() {
         visibility: hidden;
     `;
 
-    const styleId = 'itd-scroll-top-styles';
-    if (!document.getElementById(styleId)) {
-        const style = document.createElement('style');
-        style.id = styleId;
-        style.textContent = `
+        const styleId = 'itd-scroll-top-styles';
+        if (!document.getElementById(styleId)) {
+            const style = document.createElement('style');
+            style.id = styleId;
+            style.textContent = `
             .itd-scroll-top-btn::before {
                 content: "";
                 position: absolute;
@@ -1937,43 +2209,43 @@ function createScrollTopButton() {
                 opacity: 0.9;
             }
         `;
-        document.head.appendChild(style);
-    }
-
-    scrollTopButton.onclick = () => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-
-    document.body.appendChild(scrollTopButton);
-
-    function toggleScrollButton() {
-        if (!scrollTopButton) return;
-        if (window.scrollY > 300) {
-            scrollTopButton.style.opacity = '1';
-            scrollTopButton.style.visibility = 'visible';
-        } else {
-            scrollTopButton.style.opacity = '0';
-            scrollTopButton.style.visibility = 'hidden';
+            document.head.appendChild(style);
         }
+
+        scrollTopButton.onclick = () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        document.body.appendChild(scrollTopButton);
+
+        function toggleScrollButton() {
+            if (!scrollTopButton) return;
+            if (window.scrollY > 300) {
+                scrollTopButton.style.opacity = '1';
+                scrollTopButton.style.visibility = 'visible';
+            } else {
+                scrollTopButton.style.opacity = '0';
+                scrollTopButton.style.visibility = 'hidden';
+            }
+        }
+
+        window.addEventListener('scroll', toggleScrollButton);
+        toggleScrollButton();
     }
 
-    window.addEventListener('scroll', toggleScrollButton);
-    toggleScrollButton();
-}
+    async function initVisuals() {
+        try {
+            const refresh = await fetch('/api/v1/auth/refresh', { method: 'POST' });
+            const { accessToken } = await refresh.json();
+            const meRes = await fetch('/api/users/me', {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            const me = await meRes.json();
+            myUsername = me.username;
+            myDisplayName = me.displayName;
+            detectSelectors();
 
-async function initVisuals() {
-    try {
-        const refresh = await fetch('/api/v1/auth/refresh', {method: 'POST'});
-        const { accessToken } = await refresh.json();
-        const meRes = await fetch('/api/users/me', {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        const me = await meRes.json();
-        myUsername = me.username;
-        myDisplayName = me.displayName;
-        detectSelectors();
-
-        createScrollTopButton();
+            createScrollTopButton();
 
             checkAllComments().then(() => verifyMyself());
             if (verificationInterval) clearInterval(verificationInterval);
@@ -1993,77 +2265,77 @@ async function initVisuals() {
             }
 
             function findAllMyNicks() {
-    const verifiedUsers = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}');
-    document.querySelectorAll('.' + SELECTORS.nickContainer).forEach(container => {
-        const nickSpan = container.querySelector('.' + SELECTORS.nickText);
-        if (!nickSpan) return;
-        const nickText = nickSpan.textContent.trim();
+                const verifiedUsers = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}');
+                document.querySelectorAll('.' + SELECTORS.nickContainer).forEach(container => {
+                    const nickSpan = container.querySelector('.' + SELECTORS.nickText);
+                    if (!nickSpan) return;
+                    const nickText = nickSpan.textContent.trim();
 
-        let username = null;
-        const isInsidePostOrNotification = !!(
-            container.closest('article, .' + SELECTORS.post) ||
-            container.closest('.nC4O') ||
-            container.closest('.jWwe, .QAQH') ||
-            container.closest('.l8Uc') ||
-            container.closest('.aLWf, .bs4a')
-        );
+                    let username = null;
+                    const isInsidePostOrNotification = !!(
+                        container.closest('article, .' + SELECTORS.post) ||
+                        container.closest('.nC4O') ||
+                        container.closest('.jWwe, .QAQH') ||
+                        container.closest('.l8Uc') ||
+                        container.closest('.aLWf, .bs4a')
+                    );
 
-        if (isInsidePostOrNotification) {
-            let link = null;
-            if (container.closest('.bs4a')) {
-                link = container.closest('.bs4a')?.querySelector('.uUD4 a[href*="/@"]');
-            }
-            if (!link && container.closest('.KdXP')) {
-                const kdxp = container.closest('.KdXP');
-                if (container.closest('.Towf') && !container.classList.contains('p2CX')) {
-                    const repostAuthorAvatar = kdxp.closest('.NYk2')?.querySelector('.Towf .z8zp a[href*="/@"]');
-                    if (repostAuthorAvatar) link = repostAuthorAvatar;
-                } else if (container.classList.contains('p2CX')) {
-                    const originalAuthorAvatar = kdxp.querySelector('.rROE.oCs0 a[href*="/@"]');
-                    if (originalAuthorAvatar) link = originalAuthorAvatar;
-                }
-            }
-            if (!link && container.closest('.jWwe')) {
-                link = container.closest('.jWwe')?.querySelector('.c6r0 a[href*="/@"]');
-            }
-            if (!link) {
-                const postContainer = container.closest('.Towf');
-                if (postContainer && !container.closest('.KdXP')) {
-                    link = postContainer.querySelector('.z8zp a[href*="/@"]') || postContainer.querySelector('a[href*="/@"]');
-                }
-            }
-            if (link) {
-                const match = link.href.match(/\/@([^\/?#]+)/);
-                if (match) username = match[1];
-            }
-            if (!username && container.classList.contains('p2CX')) {
-                if (!nickText.includes(' ') && !nickText.startsWith('#')) {
-                    username = nickText;
-                }
-            }
-        } else {
-            const yo4n = container.parentElement?.querySelector('.yo4N');
-            if (yo4n && yo4n.textContent.trim().startsWith('@')) {
-                username = yo4n.textContent.trim().substring(1);
-            }
-            if (!username) {
-                const jysy = document.querySelector('.JYSY');
-                if (jysy && jysy.textContent.trim().startsWith('@')) {
-                    const profileUsername = jysy.textContent.trim().substring(1);
-                    if (container.classList.contains(SELECTORS.largeNickClasses[0]) && container.classList.contains(SELECTORS.largeNickClasses[1])) {
-                        username = profileUsername;
+                    if (isInsidePostOrNotification) {
+                        let link = null;
+                        if (container.closest('.bs4a')) {
+                            link = container.closest('.bs4a')?.querySelector('.uUD4 a[href*="/@"]');
+                        }
+                        if (!link && container.closest('.KdXP')) {
+                            const kdxp = container.closest('.KdXP');
+                            if (container.closest('.Towf') && !container.classList.contains('p2CX')) {
+                                const repostAuthorAvatar = kdxp.closest('.NYk2')?.querySelector('.Towf .z8zp a[href*="/@"]');
+                                if (repostAuthorAvatar) link = repostAuthorAvatar;
+                            } else if (container.classList.contains('p2CX')) {
+                                const originalAuthorAvatar = kdxp.querySelector('.rROE.oCs0 a[href*="/@"]');
+                                if (originalAuthorAvatar) link = originalAuthorAvatar;
+                            }
+                        }
+                        if (!link && container.closest('.jWwe')) {
+                            link = container.closest('.jWwe')?.querySelector('.c6r0 a[href*="/@"]');
+                        }
+                        if (!link) {
+                            const postContainer = container.closest('.Towf');
+                            if (postContainer && !container.closest('.KdXP')) {
+                                link = postContainer.querySelector('.z8zp a[href*="/@"]') || postContainer.querySelector('a[href*="/@"]');
+                            }
+                        }
+                        if (link) {
+                            const match = link.href.match(/\/@([^\/?#]+)/);
+                            if (match) username = match[1];
+                        }
+                        if (!username && container.classList.contains('p2CX')) {
+                            if (!nickText.includes(' ') && !nickText.startsWith('#')) {
+                                username = nickText;
+                            }
+                        }
+                    } else {
+                        const yo4n = container.parentElement?.querySelector('.yo4N');
+                        if (yo4n && yo4n.textContent.trim().startsWith('@')) {
+                            username = yo4n.textContent.trim().substring(1);
+                        }
+                        if (!username) {
+                            const jysy = document.querySelector('.JYSY');
+                            if (jysy && jysy.textContent.trim().startsWith('@')) {
+                                const profileUsername = jysy.textContent.trim().substring(1);
+                                if (container.classList.contains(SELECTORS.largeNickClasses[0]) && container.classList.contains(SELECTORS.largeNickClasses[1])) {
+                                    username = profileUsername;
+                                }
+                            }
+                        }
                     }
-                }
-            }
-        }
 
-        if (username && verifiedUsers[username] && username !== myUsername && nickText !== myUsername && nickText !== myDisplayName) {
-            if (!container.querySelector('.mod-badge-verify')) {
-                const isLarge = container.classList.contains(SELECTORS.largeNickClasses[0]) && container.classList.contains(SELECTORS.largeNickClasses[1]);
-                const size = isLarge ? 18 : 16;
-                const badge = document.createElement('span');
-                badge.className = 'mod-badge-verify';
-                badge.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="1.8 1.8 20.4 20.4" fill="none">
+                    if (username && verifiedUsers[username] && username !== myUsername && nickText !== myUsername && nickText !== myDisplayName) {
+                        if (!container.querySelector('.mod-badge-verify')) {
+                            const isLarge = container.classList.contains(SELECTORS.largeNickClasses[0]) && container.classList.contains(SELECTORS.largeNickClasses[1]);
+                            const size = isLarge ? 18 : 16;
+                            const badge = document.createElement('span');
+                            badge.className = 'mod-badge-verify';
+                            badge.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="1.8 1.8 20.4 20.4" fill="none">
   <defs>
     <filter id="vBlur_mymod_${size}" x="-20%" y="-20%" width="140%" height="140%">
       <feGaussianBlur stdDeviation="1.2"/>
@@ -2116,19 +2388,19 @@ async function initVisuals() {
   <path fill="url(#vRainbow_mymod_${size})" fill-rule="evenodd" clip-rule="evenodd" d="M9.5924 3.20027C9.34888 3.4078 9.22711 3.51158 9.09706 3.59874C8.79896 3.79854 8.46417 3.93721 8.1121 4.00672C7.95851 4.03705 7.79903 4.04977 7.48008 4.07522C6.6787 4.13918 6.278 4.17115 5.94371 4.28923C5.17051 4.56233 4.56233 5.17051 4.28923 5.94371C4.17115 6.278 4.13918 6.6787 4.07522 7.48008C4.04977 7.79903 4.03705 7.95851 4.00672 8.1121C3.93721 8.46417 3.79854 8.79896 3.59874 9.09706C3.51158 9.22711 3.40781 9.34887 3.20027 9.5924C2.67883 10.2043 2.4181 10.5102 2.26522 10.8301C1.91159 11.57 1.91159 12.43 2.26522 13.1699C2.41811 13.4898 2.67883 13.7957 3.20027 14.4076C3.40778 14.6511 3.51158 14.7729 3.59874 14.9029C3.79854 15.201 3.93721 15.5358 4.00672 15.8879C4.03705 16.0415 4.04977 16.201 4.07522 16.5199C4.13918 17.3213 4.17115 17.722 4.28923 18.0563C4.56233 18.8295 5.17051 19.4377 5.94371 19.7108C6.278 19.8288 6.6787 19.8608 7.48008 19.9248C7.79903 19.9502 7.95851 19.963 8.1121 19.9933C8.46417 20.0628 8.79896 20.2015 9.09706 20.4013C9.22711 20.4884 9.34887 20.5922 9.5924 20.7997C10.2043 21.3212 10.5102 21.5819 10.8301 21.7348C11.57 22.0884 12.43 22.0884 13.1699 21.7348C13.4898 21.5819 13.7957 21.3212 14.4076 20.7997C14.6511 20.5922 14.7729 20.4884 14.9029 20.4013C15.201 20.2015 15.5358 20.0628 15.8879 19.9933C16.0415 19.963 16.201 19.9502 16.5199 19.9248C17.3213 19.8608 17.722 19.8288 18.0563 19.7108C18.8295 19.4377 19.4377 18.8295 19.7108 18.0563C19.8288 17.722 19.8608 17.3213 19.9248 16.5199C19.9502 16.201 19.963 16.0415 19.9933 15.8879C20.0628 15.5358 20.2015 15.201 20.4013 14.9029C20.4884 14.7729 20.5922 14.6511 20.7997 14.4076C21.3212 13.7957 21.5819 13.4898 21.7348 13.1699C22.0884 12.43 22.0884 11.57 21.7348 10.8301C21.5819 10.5102 21.3212 10.2043 20.7997 9.5924C20.5922 9.34887 20.4884 9.22711 20.4013 9.09706C20.2015 8.79896 20.0628 8.46417 19.9933 8.1121C19.963 7.95851 19.9502 7.79903 19.9248 7.48008C19.8608 6.6787 19.8288 6.278 19.7108 5.94371C19.4377 5.17051 18.8295 4.56233 18.0563 4.28923C17.722 4.17115 17.3213 4.13918 16.5199 4.07522C16.201 4.04977 16.0415 4.03705 15.8879 4.00672C15.5358 3.93721 15.201 3.79854 14.9029 3.59874C14.7729 3.51158 14.6511 3.40781 14.4076 3.20027C13.7957 2.67883 13.4898 2.41811 13.1699 2.26522C12.43 1.91159 11.57 1.91159 10.8301 2.26522C10.5102 2.4181 10.2043 2.67883 9.5924 3.20027Z"/>
   <path fill="black" d="M16.3735 9.86314C16.6913 9.5453 16.6913 9.03 16.3735 8.71216C16.0557 8.39433 15.5403 8.39433 15.2225 8.71216L10.3723 13.5624L8.77746 11.9676C8.45963 11.6498 7.94432 11.6498 7.62649 11.9676C7.30866 12.2854 7.30866 12.8007 7.62649 13.1186L9.79678 15.2889C10.1146 15.6067 10.6299 15.6067 10.9478 15.2889L16.3735 9.86314Z"/>
 </svg>`;
-                badge.style.cssText = `display:inline-flex!important;align-items:center!important;width:${size}px!important;height:${size}px!important;flex-shrink:0!important;vertical-align:middle!important;margin-left:4px!important;`;
-                const voronoi = container.querySelector('.mod-badge-voronoi');
-                if (voronoi) container.insertBefore(badge, voronoi);
-                else nickSpan.insertAdjacentElement('afterend', badge);
-            }
-        }
+                            badge.style.cssText = `display:inline-flex!important;align-items:center!important;width:${size}px!important;height:${size}px!important;flex-shrink:0!important;vertical-align:middle!important;margin-left:4px!important;`;
+                            const voronoi = container.querySelector('.mod-badge-voronoi');
+                            if (voronoi) container.insertBefore(badge, voronoi);
+                            else nickSpan.insertAdjacentElement('afterend', badge);
+                        }
+                    }
 
-        if (nickText !== myUsername && nickText !== myDisplayName) return;
-        if (!nickElements.has(nickSpan)) nickElements.add(nickSpan);
-        const isLarge = container.classList.contains(SELECTORS.largeNickClasses[0]) && container.classList.contains(SELECTORS.largeNickClasses[1]);
-        if (!container.querySelector('.mod-badge-voronoi')) {
-            const size = isLarge ? 18 : 16;
-            const badgeSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="1.8 1.8 20.4 20.4" fill="none">
+                    if (nickText !== myUsername && nickText !== myDisplayName) return;
+                    if (!nickElements.has(nickSpan)) nickElements.add(nickSpan);
+                    const isLarge = container.classList.contains(SELECTORS.largeNickClasses[0]) && container.classList.contains(SELECTORS.largeNickClasses[1]);
+                    if (!container.querySelector('.mod-badge-voronoi')) {
+                        const size = isLarge ? 18 : 16;
+                        const badgeSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="1.8 1.8 20.4 20.4" fill="none">
   <defs>
     <filter id="vBlur_mymod_${size}" x="-20%" y="-20%" width="140%" height="140%">
       <feGaussianBlur stdDeviation="1.2"/>
@@ -2181,31 +2453,25 @@ async function initVisuals() {
   <path fill="url(#vRainbow_mymod_${size})" fill-rule="evenodd" clip-rule="evenodd" d="M9.5924 3.20027C9.34888 3.4078 9.22711 3.51158 9.09706 3.59874C8.79896 3.79854 8.46417 3.93721 8.1121 4.00672C7.95851 4.03705 7.79903 4.04977 7.48008 4.07522C6.6787 4.13918 6.278 4.17115 5.94371 4.28923C5.17051 4.56233 4.56233 5.17051 4.28923 5.94371C4.17115 6.278 4.13918 6.6787 4.07522 7.48008C4.04977 7.79903 4.03705 7.95851 4.00672 8.1121C3.93721 8.46417 3.79854 8.79896 3.59874 9.09706C3.51158 9.22711 3.40781 9.34887 3.20027 9.5924C2.67883 10.2043 2.4181 10.5102 2.26522 10.8301C1.91159 11.57 1.91159 12.43 2.26522 13.1699C2.41811 13.4898 2.67883 13.7957 3.20027 14.4076C3.40778 14.6511 3.51158 14.7729 3.59874 14.9029C3.79854 15.201 3.93721 15.5358 4.00672 15.8879C4.03705 16.0415 4.04977 16.201 4.07522 16.5199C4.13918 17.3213 4.17115 17.722 4.28923 18.0563C4.56233 18.8295 5.17051 19.4377 5.94371 19.7108C6.278 19.8288 6.6787 19.8608 7.48008 19.9248C7.79903 19.9502 7.95851 19.963 8.1121 19.9933C8.46417 20.0628 8.79896 20.2015 9.09706 20.4013C9.22711 20.4884 9.34887 20.5922 9.5924 20.7997C10.2043 21.3212 10.5102 21.5819 10.8301 21.7348C11.57 22.0884 12.43 22.0884 13.1699 21.7348C13.4898 21.5819 13.7957 21.3212 14.4076 20.7997C14.6511 20.5922 14.7729 20.4884 14.9029 20.4013C15.201 20.2015 15.5358 20.0628 15.8879 19.9933C16.0415 19.963 16.201 19.9502 16.5199 19.9248C17.3213 19.8608 17.722 19.8288 18.0563 19.7108C18.8295 19.4377 19.4377 18.8295 19.7108 18.0563C19.8288 17.722 19.8608 17.3213 19.9248 16.5199C19.9502 16.201 19.963 16.0415 19.9933 15.8879C20.0628 15.5358 20.2015 15.201 20.4013 14.9029C20.4884 14.7729 20.5922 14.6511 20.7997 14.4076C21.3212 13.7957 21.5819 13.4898 21.7348 13.1699C22.0884 12.43 22.0884 11.57 21.7348 10.8301C21.5819 10.5102 21.3212 10.2043 20.7997 9.5924C20.5922 9.34887 20.4884 9.22711 20.4013 9.09706C20.2015 8.79896 20.0628 8.46417 19.9933 8.1121C19.963 7.95851 19.9502 7.79903 19.9248 7.48008C19.8608 6.6787 19.8288 6.278 19.7108 5.94371C19.4377 5.17051 18.8295 4.56233 18.0563 4.28923C17.722 4.17115 17.3213 4.13918 16.5199 4.07522C16.201 4.04977 16.0415 4.03705 15.8879 4.00672C15.5358 3.93721 15.201 3.79854 14.9029 3.59874C14.7729 3.51158 14.6511 3.40781 14.4076 3.20027C13.7957 2.67883 13.4898 2.41811 13.1699 2.26522C12.43 1.91159 11.57 1.91159 10.8301 2.26522C10.5102 2.4181 10.2043 2.67883 9.5924 3.20027Z"/>
   <path fill="black" d="M16.3735 9.86314C16.6913 9.5453 16.6913 9.03 16.3735 8.71216C16.0557 8.39433 15.5403 8.39433 15.2225 8.71216L10.3723 13.5624L8.77746 11.9676C8.45963 11.6498 7.94432 11.6498 7.62649 11.9676C7.30866 12.2854 7.30866 12.8007 7.62649 13.1186L9.79678 15.2889C10.1146 15.6067 10.6299 15.6067 10.9478 15.2889L16.3735 9.86314Z"/>
 </svg>`;
-            const badge = document.createElement('span');
-            badge.className = 'mod-badge-voronoi';
-            badge.innerHTML = badgeSVG;
-            badge.style.cssText = `display: inline-flex !important; align-items: center !important; justify-content: center !important; width: ${size}px !important; height: ${size}px !important; min-width: ${size}px !important; min-height: ${size}px !important; max-width: ${size}px !important; max-height: ${size}px !important; flex-shrink: 0 !important; vertical-align: middle !important; overflow: hidden !important;`;
-            const svg = badge.querySelector('svg');
-            if (svg) {
-                svg.style.cssText = `display: block !important; width: ${size}px !important; height: ${size}px !important; min-width: ${size}px !important; min-height: ${size}px !important; max-width: none !important; max-height: none !important;`;
+                        const badge = document.createElement('span');
+                        badge.className = 'mod-badge-voronoi';
+                        badge.innerHTML = badgeSVG;
+                        badge.style.cssText = `display: inline-flex !important; align-items: center !important; justify-content: center !important; width: ${size}px !important; height: ${size}px !important; min-width: ${size}px !important; min-height: ${size}px !important; max-width: ${size}px !important; max-height: ${size}px !important; flex-shrink: 0 !important; vertical-align: middle !important; overflow: hidden !important;`;
+                        const svg = badge.querySelector('svg');
+                        if (svg) {
+                            svg.style.cssText = `display: block !important; width: ${size}px !important; height: ${size}px !important; min-width: ${size}px !important; min-height: ${size}px !important; max-width: none !important; max-height: none !important;`;
+                        }
+                        nickSpan.parentNode.insertBefore(badge, nickSpan.nextSibling);
+                    }
+                    if (isLarge) {
+                        addToggleButtonToNick(container);
+                        addSettingsButtonToNick(container);
+                    }
+                });
             }
-            nickSpan.parentNode.insertBefore(badge, nickSpan.nextSibling);
-        }
-        if (isLarge) {
-            addToggleButtonToNick(container);
-            addSettingsButtonToNick(container);
-        }
-    });
-}
-
-    function add3DToAllPosts() {
-        document.querySelectorAll('.' + SELECTORS.post + ', article').forEach(post => add3DEffect(post));
-    }
 
             findAllMyAvatars();
             findAllMyNicks();
-            add3DToAllPosts();
-            applyTilt();
             updateAllNickColors();
             updateNickGlow();
             updateAvatarGlow();
@@ -2214,45 +2480,43 @@ async function initVisuals() {
             const observer = new MutationObserver(() => {
                 findAllMyAvatars();
                 findAllMyNicks();
-                add3DToAllPosts();
-                applyTilt();
                 fixOverflowForGlowingNicks();
             });
             observer.observe(document.body, { childList: true, subtree: true });
 
-        let iconReplaced = false;
+            let iconReplaced = false;
 
-    function replaceIcon() {
-        if (iconReplaced) return;
+            function replaceIcon() {
+                if (iconReplaced) return;
 
-        const nBTOblock = document.querySelector('.' + SELECTORS.logoContainer);
-        if (!nBTOblock) return;
+                const nBTOblock = document.querySelector('.' + SELECTORS.logoContainer);
+                if (!nBTOblock) return;
 
-        const oldSvg = nBTOblock.querySelector('svg');
-        if (!oldSvg) return;
+                const oldSvg = nBTOblock.querySelector('svg');
+                if (!oldSvg) return;
 
-        const YOUR_ICON = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='36' height='36'><defs><filter id='glow' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur in='SourceGraphic' stdDeviation='3' result='blur'/></filter><linearGradient id='rainbow' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' style='stop-color:#ff0000'/><stop offset='16%' style='stop-color:#ff8800'/><stop offset='33%' style='stop-color:#ffff00'/><stop offset='50%' style='stop-color:#00ff00'/><stop offset='66%' style='stop-color:#00ffff'/><stop offset='83%' style='stop-color:#0000ff'/><stop offset='100%' style='stop-color:#ff00ff'/></linearGradient></defs><rect width='100' height='100' rx='20' fill='#1a1a1a'/><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(#rainbow)' filter='url(#glow)' opacity='0.9'>N</text><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(#rainbow)'>N</text></svg>`;
+                const YOUR_ICON = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='36' height='36'><defs><filter id='glow' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur in='SourceGraphic' stdDeviation='3' result='blur'/></filter><linearGradient id='rainbow' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' style='stop-color:#ff0000'/><stop offset='16%' style='stop-color:#ff8800'/><stop offset='33%' style='stop-color:#ffff00'/><stop offset='50%' style='stop-color:#00ff00'/><stop offset='66%' style='stop-color:#00ffff'/><stop offset='83%' style='stop-color:#0000ff'/><stop offset='100%' style='stop-color:#ff00ff'/></linearGradient></defs><rect width='100' height='100' rx='20' fill='#1a1a1a'/><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(#rainbow)' filter='url(#glow)' opacity='0.9'>N</text><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(#rainbow)'>N</text></svg>`;
 
-        const link = document.createElement('a');
-        link.href = 'https://t.me/NeuroSFW';
-        link.target = '_blank';
-        link.style.cursor = 'pointer';
-        link.style.display = 'inline-flex';
-        link.style.alignItems = 'center';
+                const link = document.createElement('a');
+                link.href = 'https://t.me/NeuroSFW';
+                link.target = '_blank';
+                link.style.cursor = 'pointer';
+                link.style.display = 'inline-flex';
+                link.style.alignItems = 'center';
 
-        const container = document.createElement('div');
-        container.innerHTML = YOUR_ICON;
-        const newSvg = container.firstElementChild;
-        newSvg.setAttribute('width', '36');
-        newSvg.setAttribute('height', '36');
-        link.appendChild(newSvg);
+                const container = document.createElement('div');
+                container.innerHTML = YOUR_ICON;
+                const newSvg = container.firstElementChild;
+                newSvg.setAttribute('width', '36');
+                newSvg.setAttribute('height', '36');
+                link.appendChild(newSvg);
 
-        oldSvg.parentNode.replaceChild(link, oldSvg);
-        iconReplaced = true;
+                oldSvg.parentNode.replaceChild(link, oldSvg);
+                iconReplaced = true;
 
-        const versionSpan = document.createElement('div');
-        versionSpan.textContent = `v${GM_info.script.version}`;
-        versionSpan.style.cssText = `
+                const versionSpan = document.createElement('div');
+                versionSpan.textContent = `v${GM_info.script.version}`;
+                versionSpan.style.cssText = `
             font-size: 8px;
             color: #888;
             text-align: center;
@@ -2261,37 +2525,37 @@ async function initVisuals() {
             white-space: nowrap;
         `;
 
-        const wrapper = document.createElement('div');
-        wrapper.style.cssText = `
+                const wrapper = document.createElement('div');
+                wrapper.style.cssText = `
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
         `;
 
-        const parent = nBTOblock;
-        const oldLink = parent.querySelector('a');
-        if (oldLink) {
-            parent.insertBefore(wrapper, oldLink);
-            wrapper.appendChild(oldLink);
-            wrapper.appendChild(versionSpan);
-        }
+                const parent = nBTOblock;
+                const oldLink = parent.querySelector('a');
+                if (oldLink) {
+                    parent.insertBefore(wrapper, oldLink);
+                    wrapper.appendChild(oldLink);
+                    wrapper.appendChild(versionSpan);
+                }
+            }
+
+            function initIconReplacement() {
+                replaceIcon();
+                const observer = new MutationObserver(() => {
+                    replaceIcon();
+                });
+                observer.observe(document.body, { childList: true, subtree: true });
+            }
+
+            initIconReplacement();
+
+        } catch (e) { }
     }
 
-    function initIconReplacement() {
-        replaceIcon();
-        const observer = new MutationObserver(() => {
-            replaceIcon();
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-    }
-
-    initIconReplacement();
-
-        } catch(e) {}
-    }
-
-    let interval = setInterval(() => { updateColors(); }, 50);
+    let interval = setInterval(() => { updateColors(); drawBackground(); }, 50);
 
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
@@ -2322,7 +2586,7 @@ async function initVisuals() {
     function updateAvatarGlowVisibility() {
         const avatars = document.querySelectorAll('.my-avatar-glow');
         avatars.forEach(avatar => {
-            avatar.style.filter = avatarGlowEnabled ? (currentStyle === 'rainbow' ? `drop-shadow(0 0 3px hsl(${globalHue}, 100%, 55%)) drop-shadow(0 0 6px hsl(${globalHue}, 100%, 55%))` : `drop-shadow(0 0 3px hsl(${nickStyles[currentStyle].avatarHue || 210}, ${nickStyles[currentStyle].avatarSat !== undefined ? nickStyles[currentStyle].avatarSat : 100}%, 60%)) drop-shadow(0 0 6px hsl(${nickStyles[currentStyle].avatarHue || 210}, ${nickStyles[currentStyle].avatarSat !== undefined ? nickStyles[currentStyle].avatarSat : 100}%, 60%))`) : 'none';
+            avatar.style.filter = avatarGlowEnabled ? (currentStyle === 'rainbow' ? `drop-shadow(0 0 5px hsl(${globalHue}, 100%, 55%)) drop-shadow(0 0 12px hsl(${globalHue}, 100%, 55%))` : `drop-shadow(0 0 5px hsl(${nickStyles[currentStyle].avatarHue || 210}, ${nickStyles[currentStyle].avatarSat !== undefined ? nickStyles[currentStyle].avatarSat : 100}%, 60%)) drop-shadow(0 0 12px hsl(${nickStyles[currentStyle].avatarHue || 210}, ${nickStyles[currentStyle].avatarSat !== undefined ? nickStyles[currentStyle].avatarSat : 100}%, 60%))`) : 'none';
         });
     }
 
@@ -2330,7 +2594,7 @@ async function initVisuals() {
     updateNickGlowVisibility();
     updateAvatarGlowVisibility();
 
-    (function() {
+    (function () {
         'use strict';
 
         const STORAGE_KEY = 'user_sticker_packs_v1';
@@ -2338,17 +2602,17 @@ async function initVisuals() {
 
         function loadUserPacks() {
             try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
-            catch(e) { return []; }
+            catch (e) { return []; }
         }
         function saveUserPacks(packs) {
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(packs)); } catch(e) {}
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(packs)); } catch (e) { }
         }
         function loadRecentStickers() {
             try { return JSON.parse(localStorage.getItem(RECENT_STORAGE_KEY)) || []; }
-            catch(e) { return []; }
+            catch (e) { return []; }
         }
         function saveRecentStickers(recent) {
-            try { localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(recent)); } catch(e) {}
+            try { localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(recent)); } catch (e) { }
         }
 
         async function uploadImageToServer(file) {
@@ -2480,7 +2744,7 @@ async function initVisuals() {
                         sendBtn.disabled = false;
                         sendBtn.innerHTML = '';
                     }
-                } catch(e) {
+                } catch (e) {
                     alert('Ошибка: ' + e.message);
                     sendBtn.disabled = false;
                     sendBtn.innerHTML = '';
@@ -2741,7 +3005,7 @@ async function initVisuals() {
                     }
                     refreshAllPackGrids();
                     updateTabButtons();
-                } catch(err) {
+                } catch (err) {
                     alert('Ошибка загрузки: ' + err.message);
                     if (addBtn) {
                         addBtn.innerHTML = ADD_ICON;
@@ -2850,10 +3114,10 @@ async function initVisuals() {
                 const ratios = [
                     { label: 'Свободный', value: null },
                     { label: '1:1', value: 1 },
-                    { label: '4:3', value: 4/3 },
-                    { label: '3:4', value: 3/4 },
-                    { label: '16:9', value: 16/9 },
-                    { label: '9:16', value: 9/16 }
+                    { label: '4:3', value: 4 / 3 },
+                    { label: '3:4', value: 3 / 4 },
+                    { label: '16:9', value: 16 / 9 },
+                    { label: '9:16', value: 9 / 16 }
                 ];
 
                 ratios.forEach(ratio => {
@@ -3387,7 +3651,7 @@ async function initVisuals() {
                 };
             }
 
-        return btn;
+            return btn;
         }
 
         function updateTabButtons() {
@@ -3606,13 +3870,13 @@ async function initVisuals() {
                 scrollContainer.appendChild(header);
                 packHeaders.push({ element: header, key });
 
-            const grid = document.createElement('div');
-            grid.className = 'pack-grid';
-            grid.dataset.pack = key;
-            grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:3px;padding:0 10px 16px;';
-            const stickers = stickerPacks[key] || [];
-            stickers.forEach((s, i) => grid.appendChild(createStickerButton(s, key, i, false)));
-            scrollContainer.appendChild(grid);
+                const grid = document.createElement('div');
+                grid.className = 'pack-grid';
+                grid.dataset.pack = key;
+                grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:3px;padding:0 10px 16px;';
+                const stickers = stickerPacks[key] || [];
+                stickers.forEach((s, i) => grid.appendChild(createStickerButton(s, key, i, false)));
+                scrollContainer.appendChild(grid);
             });
         }
 
@@ -3707,40 +3971,40 @@ async function initVisuals() {
 
     let messagesButtonAdded = false;
     let lastMemeIndex = -1;
-let messagesOverlay = null;
+    let messagesOverlay = null;
 
-function addMessagesButton() {
-    const nav = document.querySelector('aside.' + SELECTORS.sidebar + ' nav.' + SELECTORS.nav);
-    if (!nav) return;
+    function addMessagesButton() {
+        const nav = document.querySelector('aside.' + SELECTORS.sidebar + ' nav.' + SELECTORS.nav);
+        if (!nav) return;
 
-    const notificationsLink = nav.querySelector('a[href="/notifications"]');
-    if (!notificationsLink) return;
+        const notificationsLink = nav.querySelector('a[href="/notifications"]');
+        if (!notificationsLink) return;
 
-    let messagesLink = nav.querySelector('a[href="#"]');
-    if (messagesLink) {
-        if (messagesLink.nextElementSibling !== notificationsLink) {
-            nav.insertBefore(messagesLink, notificationsLink);
+        let messagesLink = nav.querySelector('a[href="#"]');
+        if (messagesLink) {
+            if (messagesLink.nextElementSibling !== notificationsLink) {
+                nav.insertBefore(messagesLink, notificationsLink);
+            }
+            return;
         }
-        return;
-    }
 
-    if (!messagesOverlay) {
-        const memes = [
-            'But nobody came... 🖤',
-            'Ошибка загрузки 😔',
-            'Загрузка... шучу, ошибка 💀',
-            'Твои сообщения украли цыгане 🐎',
-            'Загрузка... нет 😈',
-            'Ты им не нужен, брат 🤝😞',
-            'Сообщения загружены на 99%... 99%... ⏳',
-            'Сообщения — это ложь 🎂',
-            'Иди ка ты на хуй',
-            'Сервер ответил: пошёл нахуй 🖕🤖',
-            'Связь заблокирована Роскомнадзором 🇷🇺🚫',
-        ];
+        if (!messagesOverlay) {
+            const memes = [
+                'But nobody came... 🖤',
+                'Ошибка загрузки 😔',
+                'Загрузка... шучу, ошибка 💀',
+                'Твои сообщения украли цыгане 🐎',
+                'Загрузка... нет 😈',
+                'Ты им не нужен, брат 🤝😞',
+                'Сообщения загружены на 99%... 99%... ⏳',
+                'Сообщения — это ложь 🎂',
+                'Иди ка ты на хуй',
+                'Сервер ответил: пошёл нахуй 🖕🤖',
+                'Связь заблокирована Роскомнадзором 🇷🇺🚫',
+            ];
 
-        messagesOverlay = document.createElement('div');
-        messagesOverlay.style.cssText = `
+            messagesOverlay = document.createElement('div');
+            messagesOverlay.style.cssText = `
             display: none;
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -3756,49 +4020,49 @@ function addMessagesButton() {
             padding: 40px;
             user-select: none;
         `;
-        messagesOverlay.addEventListener('click', () => {
-            messagesOverlay.style.display = 'none';
+            messagesOverlay.addEventListener('click', () => {
+                messagesOverlay.style.display = 'none';
+            });
+            document.body.appendChild(messagesOverlay);
+
+            messagesOverlay._memes = memes;
+            messagesOverlay._lastMemeIndex = -1;
+            messagesOverlay._showRandomMeme = function () {
+                let idx;
+                do {
+                    idx = Math.floor(Math.random() * this._memes.length);
+                } while (idx === this._lastMemeIndex && this._memes.length > 1);
+                this._lastMemeIndex = idx;
+                this.textContent = this._memes[idx];
+                this.style.display = 'flex';
+            };
+        }
+
+        messagesLink = document.createElement('a');
+        messagesLink.href = '#';
+        messagesLink.className = SELECTORS.navLink;
+        messagesLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            messagesOverlay._showRandomMeme();
         });
-        document.body.appendChild(messagesOverlay);
 
-        messagesOverlay._memes = memes;
-        messagesOverlay._lastMemeIndex = -1;
-        messagesOverlay._showRandomMeme = function () {
-            let idx;
-            do {
-                idx = Math.floor(Math.random() * this._memes.length);
-            } while (idx === this._lastMemeIndex && this._memes.length > 1);
-            this._lastMemeIndex = idx;
-            this.textContent = this._memes[idx];
-            this.style.display = 'flex';
-        };
-    }
-
-    messagesLink = document.createElement('a');
-    messagesLink.href = '#';
-    messagesLink.className = SELECTORS.navLink;
-    messagesLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        messagesOverlay._showRandomMeme();
-    });
-
-    const iconSpan = document.createElement('span');
-    iconSpan.className = SELECTORS.navIcon;
-    iconSpan.innerHTML = `
+        const iconSpan = document.createElement('span');
+        iconSpan.className = SELECTORS.navIcon;
+        iconSpan.innerHTML = `
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
             <path fill="currentColor" fill-rule="evenodd" d="M5 3a3 3 0 00-3 3v10a3 3 0 003 3h1v2.47a.5.5 0 00.85.36L11.12 19H19a3 3 0 003-3V6a3 3 0 00-3-3H5zm2 5a1 1 0 000 2h10a1 1 0 100-2H7zm0 4a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/>
         </svg>
     `;
-    const textSpan = document.createElement('span');
-    textSpan.textContent = 'Сообщения';
-    messagesLink.appendChild(iconSpan);
-    messagesLink.appendChild(textSpan);
+        const textSpan = document.createElement('span');
+        textSpan.textContent = 'Сообщения';
+        messagesLink.appendChild(iconSpan);
+        messagesLink.appendChild(textSpan);
 
-    nav.insertBefore(messagesLink, notificationsLink);
-}
+        nav.insertBefore(messagesLink, notificationsLink);
+    }
 
-addMessagesButton();
-new MutationObserver(() => addMessagesButton()).observe(document.body, { childList: true, subtree: true });
+    addMessagesButton();
+    new MutationObserver(() => addMessagesButton()).observe(document.body, { childList: true, subtree: true });
 
     const postDesignStyle = document.createElement('style');
     postDesignStyle.textContent = `
@@ -3910,10 +4174,10 @@ new MutationObserver(() => addMessagesButton()).observe(document.body, { childLi
                 borderColor = `hsl(${hue}, ${sat}%, 60%)`;
             }
             if (borderColor && borderColor.startsWith('#')) {
-                const r = parseInt(borderColor.slice(1,3), 16);
-                const g = parseInt(borderColor.slice(3,5), 16);
-                const b = parseInt(borderColor.slice(5,7), 16);
-                borderColor = `rgba(${r}, ${g}, ${b}, 0.3)`;
+                const r = parseInt(borderColor.slice(1, 3), 16);
+                const g = parseInt(borderColor.slice(3, 5), 16);
+                const b = parseInt(borderColor.slice(5, 7), 16);
+                borderColor = `rgba(${r}, ${g}, ${b}, 0.6)`;
             } else if (borderColor && borderColor.startsWith('rgb')) {
                 borderColor = borderColor.replace('rgb', 'rgba').replace(')', ', 0.3)');
             } else if (borderColor && borderColor.startsWith('hsl')) {
@@ -3925,14 +4189,14 @@ new MutationObserver(() => addMessagesButton()).observe(document.body, { childLi
         postBorderSyncStyle.textContent = `
             .NYk2:hover, article:hover {
                 border-color: ${borderColor} !important;
-                box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3), 0 0 0 1px ${borderColor} !important;
+                box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3), 0 0 0 2px ${borderColor} !important;
             }
         `;
         document.head.appendChild(postBorderSyncStyle);
     }
 
     const originalUpdateColors = updateColors;
-    updateColors = function() {
+    updateColors = function () {
         originalUpdateColors();
         if (currentStyle === 'rainbow') initPostBorderSync();
     };
@@ -3947,7 +4211,7 @@ new MutationObserver(() => addMessagesButton()).observe(document.body, { childLi
     currentStyle = _currentStyle;
 
     initPostBorderSync();
-    
+
     const styleSidebar = document.createElement('style');
     styleSidebar.textContent = `
         .lVAS, .oJit {
@@ -4071,12 +4335,12 @@ new MutationObserver(() => addMessagesButton()).observe(document.body, { childLi
             `;
 
             const styleKdXP = document.createElement('style');
-                styleKdXP.textContent = `
+            styleKdXP.textContent = `
                     .itd-blur-active .KdXP {
                         background: rgba(0, 0, 0, 0.3) !important;
                     }
                 `;
-                document.head.appendChild(styleKdXP);
+            document.head.appendChild(styleKdXP);
 
             const darkOverlay = document.createElement('div');
             darkOverlay.style.cssText = `
@@ -4119,45 +4383,45 @@ new MutationObserver(() => addMessagesButton()).observe(document.body, { childLi
     function overrideFilePicker() {
         document.querySelectorAll('input[type="file"]').forEach(input => {
             if (input.hasAttribute('data-overridden')) return;
-            
+
             const accept = (input.accept || '').toLowerCase();
-            const isImageInput = accept.includes('.jpg') || 
-                                  accept.includes('.png') || 
-                                  accept.includes('.gif') || 
-                                  accept.includes('.webp') ||
-                                  accept.includes('image/');
-            
+            const isImageInput = accept.includes('.jpg') ||
+                accept.includes('.png') ||
+                accept.includes('.gif') ||
+                accept.includes('.webp') ||
+                accept.includes('image/');
+
             if (!isImageInput) return;
-            
+
             input.setAttribute('data-overridden', 'true');
-            
+
             const originalClick = input.click;
-            input.click = function() {
+            input.click = function () {
                 const tempInput = document.createElement('input');
                 tempInput.type = 'file';
                 tempInput.accept = input.accept;
                 tempInput.multiple = input.multiple;
                 tempInput.style.display = 'none';
                 document.body.appendChild(tempInput);
-                
-                tempInput.addEventListener('change', function(e) {
+
+                tempInput.addEventListener('change', function (e) {
                     if (!this.files || !this.files.length) {
                         document.body.removeChild(tempInput);
                         return;
                     }
-                    
+
                     const originalFile = this.files[0];
                     const newFileName = originalFile.name.replace(/\.[^.]+$/, '') + '.gif';
                     const newFile = new File([originalFile], newFileName, { type: 'image/gif' });
                     const dt = new DataTransfer();
                     dt.items.add(newFile);
                     input.files = dt.files;
-                    
+
                     const changeEvent = new Event('change', { bubbles: true });
                     input.dispatchEvent(changeEvent);
                     document.body.removeChild(tempInput);
                 });
-                
+
                 tempInput.click();
             };
         });
