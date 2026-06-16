@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.5.0
+// @version      2.5.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -38,6 +38,15 @@
         stickerMicBtn: 'dVsc.Grgu',
         stickerSendBtn: 'dVsc.oBDS.ttOR',
         commentPreviewContainer: 'ZAfR'
+    };
+
+    const SETTINGS_ICONS = {
+        'Наклон постов': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="14 8 18 8 18 12"/><line x1="18" y1="8" x2="10" y2="16"/></svg>`,
+        'Фон': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6.75 1C6.33579 1 6 1.33579 6 1.75V3.50559C5.96824 3.53358 5.93715 3.56276 5.9068 3.59311L1.66416 7.83575C0.883107 8.6168 0.883107 9.88313 1.66416 10.6642L5.19969 14.1997C5.98074 14.9808 7.24707 14.9808 8.02812 14.1997L12.2708 9.95707C13.0518 9.17602 13.0518 7.90969 12.2708 7.12864L8.73522 3.59311C8.39027 3.24816 7.95066 3.05555 7.5 3.0153V1.75C7.5 1.33579 7.16421 1 6.75 1ZM6 5.62123V6.25C6 6.66421 6.33579 7 6.75 7C7.16421 7 7.5 6.66421 7.5 6.25V4.54033C7.56363 4.56467 7.62328 4.60249 7.67456 4.65377L11.2101 8.1893C11.2995 8.27875 11.348 8.39366 11.3555 8.51071H3.11052L6 5.62123ZM6.26035 13.1391L3.132 10.0107H10.0958L6.96746 13.1391C6.77219 13.3343 6.45561 13.3343 6.26035 13.1391Z" fill="currentColor"/><path d="M2 17.5V12.4143L3.5 13.9143V17.5C3.5 18.0523 3.94772 18.5 4.5 18.5H19.5C20.0523 18.5 20.5 18.0523 20.5 17.5V6.5C20.5 5.94771 20.0523 5.5 19.5 5.5H12.0563L10.5563 4H19.5C20.8807 4 22 5.11929 22 6.5V17.5C22 18.8807 20.8807 20 19.5 20H4.5C3.11929 20 2 18.8807 2 17.5Z" fill="currentColor"/><path d="M11 14.375C11 13.8816 11.1541 13.4027 11.3418 12.9938C11.5325 12.5784 11.7798 12.1881 12.0158 11.8595C12.2531 11.5289 12.4888 11.247 12.6647 11.0481C12.7502 10.9515 12.9062 10.7867 12.9642 10.7254L12.9697 10.7197C13.2626 10.4268 13.7374 10.4268 14.0303 10.7197L14.3353 11.0481C14.5112 11.247 14.7469 11.5289 14.9842 11.8595C15.2202 12.1881 15.4675 12.5784 15.6582 12.9938C15.8459 13.4027 16 13.8816 16 14.375C16 15.7654 14.9711 17 13.5 17C12.0289 17 11 15.7654 11 14.375ZM13.7658 12.7343C13.676 12.6092 13.5858 12.4916 13.5 12.3844C13.4142 12.4916 13.324 12.6092 13.2342 12.7343C13.0327 13.015 12.8425 13.32 12.7051 13.6195C12.5647 13.9253 12.5 14.1808 12.5 14.375C12.5 15.0663 12.9809 15.5 13.5 15.5C14.0191 15.5 14.5 15.0663 14.5 14.375C14.5 14.1808 14.4353 13.9253 14.2949 13.6195C14.1575 13.32 13.9673 13.015 13.7658 12.7343Z" fill="currentColor"/></svg>`,
+        'Подсветка ника': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M4.93 4.93l2.83 2.83M2 12h4M4.93 19.07l2.83-2.83M12 22v-4M19.07 19.07l-2.83-2.83M22 12h-4M19.07 4.93l-2.83 2.83"/><circle cx="12" cy="12" r="4"/></svg>`,
+        'Подсветка аватарок': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M5 20v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/><circle cx="12" cy="12" r="10"/></svg>`,
+        'Подсветка постов': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>`,
+        'Размытый фон постов': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M12 8a4 4 0 0 1 0 8" stroke-dasharray="2 2"/></svg>`
     };
 
     const VERIFICATION_POST_ID = 'a0d6625a-b3ec-44c4-98da-48422af101d5';
@@ -898,6 +907,24 @@
         nickContainer.appendChild(button);
     }
 
+        function addIconsToMenu(menu) {
+        if (!menu || menu.hasAttribute('data-icons-added')) return;
+        const options = menu.querySelectorAll('.settings-option');
+        options.forEach(opt => {
+            const span = opt.querySelector('span:first-child');
+            if (!span) return;
+            const text = span.innerText.trim();
+            if (SETTINGS_ICONS[text]) {
+                if (span.querySelector('svg')) return;
+                span.innerHTML = `${SETTINGS_ICONS[text]} <span style="margin-left: 8px;">${text}</span>`;
+                span.style.display = 'flex';
+                span.style.alignItems = 'center';
+                span.style.gap = '8px';
+            }
+        });
+        menu.setAttribute('data-icons-added', 'true');
+    }
+
     function showSettingsDropdown(button) {
         if (dropdown) {
             dropdown.remove();
@@ -978,6 +1005,25 @@
         };
         settingsDropdown.appendChild(avatarGlowOption);
 
+        const postBorderOption = document.createElement('div');
+        postBorderOption.className = 'settings-option';
+        postBorderOption.innerHTML = '<span>Подсветка постов</span>';
+        const postBorderToggle = document.createElement('div');
+        postBorderToggle.className = 'toggle-switch' + (postBorderEnabled ? ' active' : '');
+        postBorderOption.appendChild(postBorderToggle);
+        postBorderOption.onclick = (e) => {
+            e.stopPropagation();
+            postBorderEnabled = !postBorderEnabled;
+            GM_setValue('postBorderEnabled', postBorderEnabled);
+            postBorderToggle.className = 'toggle-switch' + (postBorderEnabled ? ' active' : '');
+            if (postBorderEnabled) {
+                initPostBorderSync();
+            } else {
+                if (postBorderSyncStyle) postBorderSyncStyle.remove();
+            }
+        };
+        settingsDropdown.appendChild(postBorderOption);
+
         const postBlurOption = document.createElement('div');
         postBlurOption.className = 'settings-option';
         postBlurOption.innerHTML = '<span>Размытый фон постов</span>';
@@ -1007,6 +1053,8 @@
         settingsDropdown.appendChild(postBlurOption);
 
         updateSettingsDropdownPosition(button);
+
+        addIconsToMenu(settingsDropdown);
 
         document.body.appendChild(settingsDropdown);
 
@@ -3825,30 +3873,6 @@ new MutationObserver(() => addMessagesButton()).observe(document.body, { childLi
         `;
         document.head.appendChild(postBorderSyncStyle);
     }
-
-    const originalShowSettingsDropdown = showSettingsDropdown;
-    showSettingsDropdown = function(button) {
-        originalShowSettingsDropdown(button);
-        if (!settingsDropdown) return;
-        const postBorderOption = document.createElement('div');
-        postBorderOption.className = 'settings-option';
-        postBorderOption.innerHTML = '<span>Подсветка постов</span>';
-        const postBorderToggle = document.createElement('div');
-        postBorderToggle.className = 'toggle-switch' + (postBorderEnabled ? ' active' : '');
-        postBorderOption.appendChild(postBorderToggle);
-        postBorderOption.onclick = (e) => {
-            e.stopPropagation();
-            postBorderEnabled = !postBorderEnabled;
-            GM_setValue('postBorderEnabled', postBorderEnabled);
-            postBorderToggle.className = 'toggle-switch' + (postBorderEnabled ? ' active' : '');
-            if (postBorderEnabled) {
-                initPostBorderSync();
-            } else {
-                if (postBorderSyncStyle) postBorderSyncStyle.remove();
-            }
-        };
-        settingsDropdown.appendChild(postBorderOption);
-    };
 
     const originalUpdateColors = updateColors;
     updateColors = function() {
