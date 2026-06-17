@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.5.6
+// @version      2.5.7
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -746,6 +746,8 @@
         }
 
         const finalSat = Math.min(100, sat * 1.5);
+        const finalLight = Math.min(80, light + 15);
+        const maxDist = Math.min(200, Math.max(100, Math.min(canvas.width, canvas.height) * 0.1));
 
         bgState.particles.forEach(p => {
             p.x += p.vx;
@@ -762,41 +764,131 @@
 
             ctx.beginPath();
             ctx.arc(p.x, p.y, currentR, 0, Math.PI * 2);
-            ctx.fillStyle = `hsla(${hue}, ${finalSat}%, ${light}%, ${currentAlpha})`;
+            ctx.fillStyle = `hsla(${hue}, ${finalSat}%, ${finalLight}%, ${currentAlpha})`;
+            ctx.fill();
 
-            ctx.shadowColor = `hsla(${hue}, ${finalSat}%, ${light}%, ${currentAlpha * 0.8})`;
+            ctx.shadowColor = `hsla(${hue}, ${finalSat}%, ${finalLight}%, ${currentAlpha * 0.8})`;
             ctx.shadowBlur = 15 + currentR * 5;
             ctx.fill();
             ctx.shadowBlur = 0;
         });
 
-        const maxDist = Math.min(200, Math.max(100, Math.min(canvas.width, canvas.height) * 0.1));
-
         for (let i = 0; i < bgState.particles.length; i++) {
+            const p1 = bgState.particles[i];
             for (let j = i + 1; j < bgState.particles.length; j++) {
-                const p1 = bgState.particles[i];
                 const p2 = bgState.particles[j];
                 const dx = p1.x - p2.x;
                 const dy = p1.y - p2.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
+                const distSq = dx * dx + dy * dy;
 
-                if (dist < maxDist) {
+                if (distSq < maxDist * maxDist) {
+                    const dist = Math.sqrt(distSq);
                     const alpha1 = Math.min(1, p1.alpha * (0.8 + 0.2 * Math.sin(p1.phase)));
                     const alpha2 = Math.min(1, p2.alpha * (0.8 + 0.2 * Math.sin(p2.phase)));
-                    const avgAlpha = (alpha1 + alpha2) / 2;
+                    const avgAlpha = (alpha1 + alpha2) * 0.5;
                     const distFactor = 1 - dist / maxDist;
                     const lineAlpha = 0.35 * distFactor * avgAlpha;
 
                     ctx.beginPath();
                     ctx.moveTo(p1.x, p1.y);
                     ctx.lineTo(p2.x, p2.y);
-                    ctx.strokeStyle = `hsla(${hue}, ${finalSat}%, ${light}%, ${lineAlpha})`;
+                    ctx.strokeStyle = `hsla(${hue}, ${finalSat}%, ${finalLight}%, ${lineAlpha})`;
                     ctx.lineWidth = 0.5 + 2.5 * distFactor;
-
-                    ctx.shadowColor = `hsla(${hue}, ${finalSat}%, ${light}%, ${lineAlpha * 0.5})`;
-                    ctx.shadowBlur = 8;
                     ctx.stroke();
-                    ctx.shadowBlur = 0;
+                }
+            }
+        }
+    }
+    function drawParticles() {
+        const area = canvas.width * canvas.height;
+        const targetCount = Math.min(200, Math.floor(area * 0.0003));
+
+        if (bgState.particles.length === 0 ||
+            bgState.particles.length !== targetCount ||
+            bgState._lastWidth !== canvas.width ||
+            bgState._lastHeight !== canvas.height) {
+
+            bgState.particles = [];
+            bgState._lastWidth = canvas.width;
+            bgState._lastHeight = canvas.height;
+
+            for (let i = 0; i < targetCount; i++) {
+                bgState.particles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    vx: (Math.random() - 0.5) * 1.2,
+                    vy: (Math.random() - 0.5) * 1.2,
+                    r: Math.random() * 3 + 1,
+                    alpha: Math.random() * 0.5 + 0.5,
+                    phase: Math.random() * Math.PI * 2,
+                    pulseSpeed: 0.02 + Math.random() * 0.04
+                });
+            }
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const style = nickStyles[currentStyle];
+        let hue, sat, light = 85;
+        if (currentStyle === 'rainbow') {
+            hue = globalHue;
+            sat = 100;
+        } else {
+            hue = style.matrixHue || 210;
+            sat = style.matrixSat !== undefined ? style.matrixSat : 100;
+        }
+
+        const finalSat = Math.min(100, sat * 1.5);
+        const finalLight = Math.min(80, light + 15);
+        const maxDist = Math.min(200, Math.max(100, Math.min(canvas.width, canvas.height) * 0.1));
+        const maxDistSq = maxDist * maxDist;
+
+        bgState.particles.forEach(p => {
+            p.x += p.vx;
+            p.y += p.vy;
+            if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+            if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+
+            p.phase += p.pulseSpeed;
+            const pulse = 0.8 + 0.2 * Math.sin(p.phase);
+            const currentR = p.r * pulse;
+
+            const flicker = 0.85 + 0.15 * Math.sin(p.phase * 1.5 + 1.2);
+            const currentAlpha = Math.min(1, p.alpha * flicker * 1.2);
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, currentR, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${hue}, ${finalSat}%, ${finalLight}%, ${currentAlpha})`;
+            ctx.fill();
+
+            ctx.shadowColor = `hsla(${hue}, ${finalSat}%, ${finalLight}%, ${currentAlpha * 0.8})`;
+            ctx.shadowBlur = 15 + currentR * 5;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        });
+
+        for (let i = 0; i < bgState.particles.length; i++) {
+            const p1 = bgState.particles[i];
+            for (let j = i + 1; j < bgState.particles.length; j++) {
+                const p2 = bgState.particles[j];
+                const dx = p1.x - p2.x;
+                const dy = p1.y - p2.y;
+                const distSq = dx * dx + dy * dy;
+
+                if (distSq < maxDistSq) {
+                    const dist = Math.sqrt(distSq);
+                    const alpha1 = Math.min(1, p1.alpha * (0.8 + 0.2 * Math.sin(p1.phase)));
+                    const alpha2 = Math.min(1, p2.alpha * (0.8 + 0.2 * Math.sin(p2.phase)));
+                    const avgAlpha = (alpha1 + alpha2) * 0.5;
+                    const distFactor = 1 - dist / maxDist;
+                    const lineAlpha = 0.35 * distFactor * avgAlpha;
+
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.strokeStyle = `hsla(${hue}, ${finalSat}%, ${finalLight}%, ${lineAlpha})`;
+                    ctx.lineWidth = 0.5 + 2.5 * distFactor;
+                    ctx.stroke();
                 }
             }
         }
@@ -1314,7 +1406,7 @@
     `;
 
         const container = document.createElement('div');
-        container.style.cssText = 'overflow-y:auto;flex:1;padding:4px 0;display:flex;flex-direction:column;gap:2px;';
+        container.style.cssText = 'overflow-y:auto;flex:1;padding:4px 0;display:flex;flex-direction:column;gap:2px;max-height:350px;';
         autoLikeDropdown.appendChild(container);
 
         const footer = document.createElement('div');
@@ -1361,12 +1453,9 @@
                 row.appendChild(left);
 
                 const toggle = document.createElement('div');
-                toggle.className = 'auto-like-toggle-fixed' + (isActive ? ' active' : '');
-                toggle.style.cssText = 'width:40px;height:22px;background:rgba(0,0,0,0.5);border-radius:11px;position:relative;transition:background 0.2s;flex-shrink:0;cursor:pointer;';
+                toggle.className = 'toggle-switch' + (isActive ? ' active' : '');
+                toggle.style.cssText = 'width:40px;height:22px;background:rgba(0,0,0,0.5);border-radius:11px;position:relative;transition:all 0.2s ease;flex-shrink:0;cursor:pointer;';
                 toggle.style.background = isActive ? 'var(--accent-primary, #0080FF)' : 'rgba(0,0,0,0.5)';
-                const dot = document.createElement('div');
-                dot.style.cssText = 'position:absolute;top:2px;left:' + (isActive ? '20px' : '2px') + ';width:18px;height:18px;background:white;border-radius:50%;transition:left 0.2s;box-shadow:0 2px 4px rgba(0,0,0,0.2);';
-                toggle.appendChild(dot);
                 row.appendChild(toggle);
 
                 row.addEventListener('click', () => {
