@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.5.4
+// @version      2.5.5
 // @author       NeuroSFW
-// @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
+// @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж + автолайки
 // @match        https://xn--d1ah4a.com/*
 // @match        https://итд.com/*
 // @grant        GM_xmlhttpRequest
@@ -180,6 +180,10 @@
     let nickGlowEnabled = GM_getValue('nickGlowEnabled', true);
     let avatarGlowEnabled = GM_getValue('avatarGlowEnabled', true);
     let antiCensorshipEnabled = GM_getValue('antiCensorshipEnabled', true);
+    let autoLikeUsers = JSON.parse(GM_getValue('itd_auto_like_users', '{}'));
+    let autoLikeEnabled = GM_getValue('autoLikeEnabled', true);
+    const AUTO_LIKE_CACHE_KEY = 'itd_auto_like_full_cache';
+    const CACHE_TTL = 10 * 60 * 1000;
 
     const CYCLE_DURATION = 12000;
 
@@ -988,13 +992,389 @@
         dropdown.style.left = `${left}px`;
     }
 
-    function createDropdown(button) {
+    let bgDropdown = null;
+    let bgScrollHandler = null;
+    let bgResizeHandler = null;
+    let bgCloseHandler = null;
+    let currentBgButton = null;
+
+    function getBgIconDot(styleKey) {
+        const icons = {
+            matrix: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><text x="12" y="16" font-size="14" text-anchor="middle" fill="currentColor" stroke="none">01</text></svg>`,
+            stars: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+            waves: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12c2.5-3 5-3 7.5 0s5 3 7.5 0"/><path d="M3 18c2.5-3 5-3 7.5 0s5 3 7.5 0"/><path d="M3 6c2.5-3 5-3 7.5 0s5 3 7.5 0"/></svg>`,
+            particles: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><circle cx="12" cy="12" r="2"/><line x1="6" y1="6" x2="18" y2="6"/><line x1="6" y1="6" x2="6" y2="18"/><line x1="18" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="18"/><line x1="6" y1="6" x2="12" y2="12"/><line x1="18" y1="6" x2="12" y2="12"/></svg>`
+        };
+        const dot = document.createElement('div');
+        dot.style.cssText = `
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        color: var(--text-primary, currentColor);
+    `;
+        dot.innerHTML = icons[styleKey] || icons.matrix;
+        return dot;
+    }
+
+    function updateBgDropdownPosition() {
+        if (!bgDropdown || !currentBgButton || !currentBgButton.isConnected) return;
+        const rect = currentBgButton.getBoundingClientRect();
+
+        const isButtonVisible = rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
+
+        if (!isButtonVisible) {
+            bgDropdown.remove();
+            bgDropdown = null;
+            if (bgScrollHandler) window.removeEventListener('scroll', bgScrollHandler);
+            if (bgResizeHandler) window.removeEventListener('resize', bgResizeHandler);
+            if (bgCloseHandler) document.removeEventListener('click', bgCloseHandler);
+            currentBgButton = null;
+            return;
+        }
+
+        let left = rect.right + 8;
+        let top = rect.top;
+
+        const dropdownWidth = 210;
+        if (left + dropdownWidth > window.innerWidth) {
+            left = rect.left - dropdownWidth - 8;
+        }
+
+        if (left < 8) {
+            left = 8;
+        }
+
+        const dropdownHeight = 4 * 42;
+        if (top + dropdownHeight > window.innerHeight) {
+            top = window.innerHeight - dropdownHeight - 8;
+        }
+        if (top < 8) {
+            top = 8;
+        }
+
+        bgDropdown.style.position = 'fixed';
+        bgDropdown.style.top = `${top}px`;
+        bgDropdown.style.left = `${left}px`;
+    }
+
+    function createBgDropdown(button) {
+        if (autoLikeDropdown) {
+            autoLikeDropdown.remove();
+            autoLikeDropdown = null;
+            cleanupAutoLikeHandlers();
+            currentAutoLikeButton = null;
+        }
+
+        if (dropdown) {
+            dropdown.remove();
+            dropdown = null;
+            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
+            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
+            if (closeHandler) document.removeEventListener('click', closeHandler);
+            currentButton = null;
+        }
+
         if (settingsDropdown) {
             settingsDropdown.remove();
             settingsDropdown = null;
             if (settingsCloseHandler) document.removeEventListener('click', settingsCloseHandler);
             if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
             if (resizeHandler) window.removeEventListener('resize', resizeHandler);
+        }
+
+        if (bgDropdown) {
+            bgDropdown.remove();
+            if (bgScrollHandler) window.removeEventListener('scroll', bgScrollHandler);
+            if (bgResizeHandler) window.removeEventListener('resize', bgResizeHandler);
+            if (bgCloseHandler) document.removeEventListener('click', bgCloseHandler);
+        }
+
+        currentBgButton = button;
+        bgDropdown = document.createElement('div');
+        bgDropdown.className = 'nick-style-dropdown';
+        bgDropdown.style.minWidth = '210px';
+
+        const bgStyles = ['matrix', 'stars', 'waves', 'particles'];
+        const styleNames = {
+            matrix: 'Матрица',
+            stars: 'Звёзды',
+            waves: 'Волны',
+            particles: 'Частицы'
+        };
+
+        bgStyles.forEach(key => {
+            const option = document.createElement('div');
+            option.className = 'nick-style-option';
+
+            const iconDot = getBgIconDot(key);
+            const textSpan = document.createElement('span');
+            textSpan.textContent = styleNames[key];
+
+            option.appendChild(iconDot);
+            option.appendChild(textSpan);
+
+            option.onclick = (e) => {
+                e.stopPropagation();
+                backgroundStyle = key;
+                GM_setValue('backgroundStyle', backgroundStyle);
+
+                if (currentBgButton) {
+                    currentBgButton.title = 'Стиль фона: ' + styleNames[backgroundStyle];
+                }
+
+                updateBackgroundToggleButtons();
+
+                drawBackground();
+
+                bgDropdown.remove();
+                bgDropdown = null;
+                if (bgScrollHandler) window.removeEventListener('scroll', bgScrollHandler);
+                if (bgResizeHandler) window.removeEventListener('resize', bgResizeHandler);
+                if (bgCloseHandler) document.removeEventListener('click', bgCloseHandler);
+                currentBgButton = null;
+            };
+            bgDropdown.appendChild(option);
+        });
+
+        updateBgDropdownPosition();
+        document.body.appendChild(bgDropdown);
+
+        bgScrollHandler = () => updateBgDropdownPosition();
+        bgResizeHandler = () => updateBgDropdownPosition();
+
+        window.addEventListener('scroll', bgScrollHandler);
+        window.addEventListener('resize', bgResizeHandler);
+
+        bgCloseHandler = (e) => {
+            if (bgDropdown && !bgDropdown.contains(e.target) && e.target !== currentBgButton) {
+                bgDropdown.remove();
+                bgDropdown = null;
+                window.removeEventListener('scroll', bgScrollHandler);
+                window.removeEventListener('resize', bgResizeHandler);
+                document.removeEventListener('click', bgCloseHandler);
+                currentBgButton = null;
+            }
+        };
+        setTimeout(() => document.addEventListener('click', bgCloseHandler), 0);
+    }
+
+    let autoLikeDropdown = null;
+    let autoLikeScrollHandler = null;
+    let autoLikeResizeHandler = null;
+    let autoLikeCloseHandler = null;
+    let currentAutoLikeButton = null;
+
+    function updateAutoLikeDropdownPosition() {
+        if (!autoLikeDropdown || !currentAutoLikeButton || !currentAutoLikeButton.isConnected) return;
+        const rect = currentAutoLikeButton.getBoundingClientRect();
+
+        let left = rect.right + 8;
+        let top = rect.top;
+
+        const dropdownWidth = 240;
+        if (left + dropdownWidth > window.innerWidth) {
+            left = rect.left - dropdownWidth - 8;
+        }
+        if (left < 8) left = 8;
+
+        const dropdownHeight = 400;
+        if (top + dropdownHeight > window.innerHeight) {
+            top = window.innerHeight - dropdownHeight - 8;
+        }
+        if (top < 8) top = 8;
+
+        autoLikeDropdown.style.top = top + 'px';
+        autoLikeDropdown.style.left = left + 'px';
+    }
+
+    function cleanupAutoLikeHandlers() {
+        if (autoLikeScrollHandler) window.removeEventListener('scroll', autoLikeScrollHandler);
+        if (autoLikeResizeHandler) window.removeEventListener('resize', autoLikeResizeHandler);
+        if (autoLikeCloseHandler) document.removeEventListener('click', autoLikeCloseHandler);
+        autoLikeScrollHandler = autoLikeResizeHandler = autoLikeCloseHandler = null;
+    }
+
+    function createAutoLikeDropdown(button) {
+        if (dropdown) {
+            dropdown.remove();
+            dropdown = null;
+            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
+            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
+            if (closeHandler) document.removeEventListener('click', closeHandler);
+            scrollHandler = resizeHandler = closeHandler = null;
+            currentButton = null;
+        }
+        if (bgDropdown) {
+            bgDropdown.remove();
+            bgDropdown = null;
+            if (bgScrollHandler) window.removeEventListener('scroll', bgScrollHandler);
+            if (bgResizeHandler) window.removeEventListener('resize', bgResizeHandler);
+            if (bgCloseHandler) document.removeEventListener('click', bgCloseHandler);
+            bgScrollHandler = bgResizeHandler = bgCloseHandler = null;
+            currentBgButton = null;
+        }
+        if (settingsDropdown) {
+            settingsDropdown.remove();
+            settingsDropdown = null;
+            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
+            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
+            if (settingsCloseHandler) document.removeEventListener('click', settingsCloseHandler);
+            scrollHandler = resizeHandler = settingsCloseHandler = null;
+        }
+        if (autoLikeDropdown) { autoLikeDropdown.remove(); cleanupAutoLikeHandlers(); }
+
+        currentAutoLikeButton = button;
+        autoLikeDropdown = document.createElement('div');
+        autoLikeDropdown.className = 'nick-style-dropdown';
+        autoLikeDropdown.style.cssText = `
+        min-width: 240px;
+        max-height: 400px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        background: var(--block-bg, #1e1e2e);
+        border-radius: 24px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        border: 1px solid var(--border-color, rgba(255,255,255,0.1));
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        z-index: 10002;
+        animation: dropdownFadeIn 0.15s ease;
+    `;
+
+        const container = document.createElement('div');
+        container.style.cssText = 'overflow-y:auto;flex:1;padding:4px 0;display:flex;flex-direction:column;gap:2px;';
+        autoLikeDropdown.appendChild(container);
+
+        const footer = document.createElement('div');
+        footer.style.cssText = 'padding:8px 12px;text-align:center;font-size:12px;color:var(--text-secondary);border-top:1px solid var(--border-color);flex-shrink:0;';
+        autoLikeDropdown.appendChild(footer);
+
+        const usersData = getAutoLikeCache() || {};
+        const users = Object.keys(usersData).sort((a, b) => a === 'NeuroSFW' ? -1 : b === 'NeuroSFW' ? 1 : a.localeCompare(b));
+
+        if (!users.length) {
+            container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);">Нет пользователей</div>';
+            footer.textContent = 'Активно: 0';
+        } else {
+            for (const username of users) {
+                const data = usersData[username];
+                if (!data) continue;
+                const displayName = (data.displayName || username).slice(0, 20);
+                const avatar = data.avatar || '👤';
+                const isActive = autoLikeUsers[username] || false;
+
+                const row = document.createElement('div');
+                row.className = 'auto-like-option-fixed';
+                row.style.cssText = 'padding:8px 12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;border-radius:16px;transition:all 0.15s;';
+                row.onmouseenter = () => row.style.background = 'var(--bg-hover, rgba(0,128,255,0.15))';
+                row.onmouseleave = () => row.style.background = 'transparent';
+
+                const left = document.createElement('div');
+                left.style.cssText = 'display:flex;align-items:center;gap:10px;flex:1;min-width:0;';
+                const av = document.createElement('div');
+                av.textContent = avatar;
+                av.style.cssText = 'width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;background:rgba(0,0,0,0.2);flex-shrink:0;';
+                left.appendChild(av);
+                const names = document.createElement('div');
+                names.style.cssText = 'display:flex;flex-direction:column;min-width:0;';
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = displayName;
+                nameSpan.style.cssText = 'font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+                names.appendChild(nameSpan);
+                const unameSpan = document.createElement('span');
+                unameSpan.textContent = `@${username}`;
+                unameSpan.style.cssText = 'font-size:11px;color:var(--text-secondary);';
+                names.appendChild(unameSpan);
+                left.appendChild(names);
+                row.appendChild(left);
+
+                const toggle = document.createElement('div');
+                toggle.className = 'auto-like-toggle-fixed' + (isActive ? ' active' : '');
+                toggle.style.cssText = 'width:40px;height:22px;background:rgba(0,0,0,0.5);border-radius:11px;position:relative;transition:background 0.2s;flex-shrink:0;cursor:pointer;';
+                toggle.style.background = isActive ? 'var(--accent-primary, #0080FF)' : 'rgba(0,0,0,0.5)';
+                const dot = document.createElement('div');
+                dot.style.cssText = 'position:absolute;top:2px;left:' + (isActive ? '20px' : '2px') + ';width:18px;height:18px;background:white;border-radius:50%;transition:left 0.2s;box-shadow:0 2px 4px rgba(0,0,0,0.2);';
+                toggle.appendChild(dot);
+                row.appendChild(toggle);
+
+                row.addEventListener('click', () => {
+                    const nowActive = toggle.classList.toggle('active');
+                    if (nowActive) {
+                        autoLikeUsers[username] = true;
+                        toggle.style.background = 'var(--accent-primary, #0080FF)';
+                        dot.style.left = '20px';
+                    } else {
+                        delete autoLikeUsers[username];
+                        toggle.style.background = 'rgba(0,0,0,0.5)';
+                        dot.style.left = '2px';
+                    }
+                    saveAutoLikeUsers();
+                    const count = Object.keys(autoLikeUsers).length;
+                    footer.textContent = count > 0 ? `Активно: ${count}` : 'Активно: 0';
+
+                    if (currentAutoLikeButton) {
+                        currentAutoLikeButton.style.color = count > 0 ? 'var(--accent-primary, #0080FF)' : 'var(--text-primary, currentColor)';
+                    }
+                });
+
+                container.appendChild(row);
+            }
+            const activeCount = Object.keys(autoLikeUsers).length;
+            footer.textContent = activeCount > 0 ? `Активно: ${activeCount}` : 'Активно: 0';
+        }
+
+        document.body.appendChild(autoLikeDropdown);
+        updateAutoLikeDropdownPosition();
+
+        autoLikeScrollHandler = () => updateAutoLikeDropdownPosition();
+        autoLikeResizeHandler = () => updateAutoLikeDropdownPosition();
+        window.addEventListener('scroll', autoLikeScrollHandler);
+        window.addEventListener('resize', autoLikeResizeHandler);
+
+        autoLikeCloseHandler = (e) => {
+            if (autoLikeDropdown && !autoLikeDropdown.contains(e.target) && e.target !== currentAutoLikeButton) {
+                autoLikeDropdown.remove();
+                autoLikeDropdown = null;
+                cleanupAutoLikeHandlers();
+                currentAutoLikeButton = null;
+            }
+        };
+        setTimeout(() => document.addEventListener('click', autoLikeCloseHandler), 0);
+
+        fetchAutoLikeUsers().then(newData => {
+            if (Object.keys(newData).length) {
+                setAutoLikeCache(newData);
+            }
+        }).catch(() => {});
+    }
+
+    function createDropdown(button) {
+        if (autoLikeDropdown) {
+            autoLikeDropdown.remove();
+            autoLikeDropdown = null;
+            cleanupAutoLikeHandlers();
+            currentAutoLikeButton = null;
+        }
+
+        if (settingsDropdown) {
+            settingsDropdown.remove();
+            settingsDropdown = null;
+            if (settingsCloseHandler) document.removeEventListener('click', settingsCloseHandler);
+            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
+            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
+        }
+
+        if (bgDropdown) {
+            bgDropdown.remove();
+            bgDropdown = null;
+            if (bgScrollHandler) window.removeEventListener('scroll', bgScrollHandler);
+            if (bgResizeHandler) window.removeEventListener('resize', bgResizeHandler);
+            if (bgCloseHandler) document.removeEventListener('click', bgCloseHandler);
         }
 
         if (dropdown) {
@@ -1111,10 +1491,55 @@
 
         controlsPanel.appendChild(styleButton);
 
+        const likeBtn = document.createElement('span');
+        likeBtn.className = 'auto-like-toggle';
+        likeBtn.title = 'Автолайки';
+        const hasActive = Object.keys(autoLikeUsers).length > 0;
+        likeBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>`;
+        likeBtn.style.cssText = `
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 32px !important;
+    height: 32px !important;
+    cursor: pointer !important;
+    background: var(--bg-secondary, rgba(128, 128, 128, 0.15)) !important;
+    border-radius: 50% !important;
+    transition: all 0.2s ease !important;
+    color: ${hasActive ? 'var(--accent-primary, #0080FF)' : 'var(--text-primary, currentColor)'} !important;
+    user-select: none !important;
+    flex-shrink: 0 !important;
+`;
+        likeBtn.onmouseenter = () => {
+            likeBtn.style.background = 'var(--accent-primary, rgba(0, 128, 255, 0.3))';
+            if (likeBtn.style.color === 'var(--accent-primary, #0080FF)') {
+                likeBtn.style.color = 'white';
+            }
+        };
+        likeBtn.onmouseleave = () => {
+            likeBtn.style.background = 'var(--bg-secondary, rgba(128, 128, 128, 0.15))';
+            const hasActive = Object.keys(autoLikeUsers).length > 0;
+            likeBtn.style.color = hasActive ? 'var(--accent-primary, #0080FF)' : 'var(--text-primary, currentColor)';
+        };
+        likeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            if (autoLikeDropdown) {
+                autoLikeDropdown.remove();
+                autoLikeDropdown = null;
+                cleanupAutoLikeHandlers();
+                currentAutoLikeButton = null;
+                return;
+            }
+            createAutoLikeDropdown(likeBtn);
+        });
+        controlsPanel.appendChild(likeBtn);
+
         const bgToggle = document.createElement('span');
         bgToggle.className = 'bg-style-toggle';
         bgToggle.title = 'Стиль фона';
-        bgToggle.textContent = getBackgroundIcon(backgroundStyle);
+
+        bgToggle.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6.75 1C6.33579 1 6 1.33579 6 1.75V3.50559C5.96824 3.53358 5.93715 3.56276 5.9068 3.59311L1.66416 7.83575C0.883107 8.6168 0.883107 9.88313 1.66416 10.6642L5.19969 14.1997C5.98074 14.9808 7.24707 14.9808 8.02812 14.1997L12.2708 9.95707C13.0518 9.17602 13.0518 7.90969 12.2708 7.12864L8.73522 3.59311C8.39027 3.24816 7.95066 3.05555 7.5 3.0153V1.75C7.5 1.33579 7.16421 1 6.75 1ZM6 5.62123V6.25C6 6.66421 6.33579 7 6.75 7C7.16421 7 7.5 6.66421 7.5 6.25V4.54033C7.56363 4.56467 7.62328 4.60249 7.67456 4.65377L11.2101 8.1893C11.2995 8.27875 11.348 8.39366 11.3555 8.51071H3.11052L6 5.62123ZM6.26035 13.1391L3.132 10.0107H10.0958L6.96746 13.1391C6.77219 13.3343 6.45561 13.3343 6.26035 13.1391Z" fill="currentColor"/><path d="M2 17.5V12.4143L3.5 13.9143V17.5C3.5 18.0523 3.94772 18.5 4.5 18.5H19.5C20.0523 18.5 20.5 18.0523 20.5 17.5V6.5C20.5 5.94771 20.0523 5.5 19.5 5.5H12.0563L10.5563 4H19.5C20.8807 4 22 5.11929 22 6.5V17.5C22 18.8807 20.8807 20 19.5 20H4.5C3.11929 20 2 18.8807 2 17.5Z" fill="currentColor"/><path d="M11 14.375C11 13.8816 11.1541 13.4027 11.3418 12.9938C11.5325 12.5784 11.7798 12.1881 12.0158 11.8595C12.2531 11.5289 12.4888 11.247 12.6647 11.0481C12.7502 10.9515 12.9062 10.7867 12.9642 10.7254L12.9697 10.7197C13.2626 10.4268 13.7374 10.4268 14.0303 10.7197L14.3353 11.0481C14.5112 11.247 14.7469 11.5289 14.9842 11.8595C15.2202 12.1881 15.4675 12.5784 15.6582 12.9938C15.8459 13.4027 16 13.8816 16 14.375C16 15.7654 14.9711 17 13.5 17C12.0289 17 11 15.7654 11 14.375ZM13.7658 12.7343C13.676 12.6092 13.5858 12.4916 13.5 12.3844C13.4142 12.4916 13.324 12.6092 13.2342 12.7343C13.0327 13.015 12.8425 13.32 12.7051 13.6195C12.5647 13.9253 12.5 14.1808 12.5 14.375C12.5 15.0663 12.9809 15.5 13.5 15.5C14.0191 15.5 14.5 15.0663 14.5 14.375C14.5 14.1808 14.4353 13.9253 14.2949 13.6195C14.1575 13.32 13.9673 13.015 13.7658 12.7343Z" fill="currentColor"/></svg>`;
         bgToggle.style.cssText = `
         display: ${backgroundEnabled ? 'inline-flex' : 'none'};
         align-items: center;
@@ -1128,23 +1553,15 @@
         transition: all 0.2s ease;
         vertical-align: middle;
         flex-shrink: 0;
-        font-size: 16px;
-        font-weight: bold;
         color: var(--text-primary, currentColor);
         user-select: none;
-    `;
+        `;
         bgToggle.onmouseenter = () => { bgToggle.style.background = 'var(--accent-primary, rgba(0, 128, 255, 0.3))'; };
         bgToggle.onmouseleave = () => { bgToggle.style.background = 'var(--bg-secondary, rgba(128, 128, 128, 0.15))'; };
         bgToggle.onclick = function (e) {
             e.stopPropagation();
-            const styles = ['matrix', 'stars', 'waves', 'particles'];
-            const currentIndex = styles.indexOf(backgroundStyle);
-            const nextIndex = (currentIndex + 1) % styles.length;
-            backgroundStyle = styles[nextIndex];
-            GM_setValue('backgroundStyle', backgroundStyle);
-            this.textContent = getBackgroundIcon(backgroundStyle);
-            this.title = 'Стиль фона: ' + backgroundStyle;
-            drawBackground();
+            e.preventDefault();
+            createBgDropdown(this);
         };
         controlsPanel.appendChild(bgToggle);
 
@@ -1169,8 +1586,6 @@
         toggles.forEach(toggle => {
             if (backgroundEnabled) {
                 toggle.style.display = 'inline-flex';
-                toggle.textContent = getBackgroundIcon(backgroundStyle);
-                toggle.title = 'Стиль фона: ' + backgroundStyle;
             } else {
                 toggle.style.display = 'none';
             }
@@ -1228,6 +1643,13 @@
     }
 
     function showSettingsDropdown(button) {
+        if (autoLikeDropdown) {
+            autoLikeDropdown.remove();
+            autoLikeDropdown = null;
+            cleanupAutoLikeHandlers();
+            currentAutoLikeButton = null;
+        }
+
         if (dropdown) {
             dropdown.remove();
             dropdown = null;
@@ -1235,6 +1657,14 @@
             if (resizeHandler) window.removeEventListener('resize', resizeHandler);
             if (closeHandler) document.removeEventListener('click', closeHandler);
             currentButton = null;
+        }
+
+        if (bgDropdown) {
+            bgDropdown.remove();
+            bgDropdown = null;
+            if (bgScrollHandler) window.removeEventListener('scroll', bgScrollHandler);
+            if (bgResizeHandler) window.removeEventListener('resize', bgResizeHandler);
+            if (bgCloseHandler) document.removeEventListener('click', bgCloseHandler);
         }
 
         if (settingsDropdown) {
@@ -1374,6 +1804,29 @@
             }
         };
         settingsDropdown.appendChild(antiCensorshipOption);
+
+        const autoLikeOption = document.createElement('div');
+        autoLikeOption.className = 'settings-option';
+        autoLikeOption.innerHTML = '<span>Автолайки</span>';
+        const autoLikeToggle = document.createElement('div');
+        autoLikeToggle.className = 'toggle-switch' + (autoLikeEnabled ? ' active' : '');
+        autoLikeOption.appendChild(autoLikeToggle);
+        autoLikeOption.onclick = (e) => {
+            e.stopPropagation();
+            autoLikeEnabled = !autoLikeEnabled;
+            GM_setValue('autoLikeEnabled', autoLikeEnabled);
+            autoLikeToggle.className = 'toggle-switch' + (autoLikeEnabled ? ' active' : '');
+            document.querySelectorAll('.auto-like-toggle').forEach(el => {
+                el.style.display = autoLikeEnabled ? 'inline-flex' : 'none';
+            });
+            if (!autoLikeEnabled && autoLikeDropdown) {
+                autoLikeDropdown.remove();
+                autoLikeDropdown = null;
+                cleanupAutoLikeHandlers();
+                currentAutoLikeButton = null;
+            }
+        };
+        settingsDropdown.appendChild(autoLikeOption);
 
         updateSettingsDropdownPosition(button);
 
@@ -1843,19 +2296,6 @@
         observer.observe(document.body, { childList: true, subtree: true });
     }
 
-    const targetUsername = 'NeuroSFW';
-    const MIN_INTERVAL = 3 * 60 * 1000;
-    const MAX_INTERVAL = 10 * 60 * 1000;
-    const oneDayMs = 24 * 60 * 60 * 1000;
-
-    let isRunning = false;
-    let lastPostId = GM_getValue('lastPostId', null);
-    let timeoutId = null;
-
-    function getRandomInterval() {
-        return Math.floor(Math.random() * (MAX_INTERVAL - MIN_INTERVAL + 1) + MIN_INTERVAL);
-    }
-
     function getAccessToken() {
         return new Promise((resolve, reject) => {
             GM_xmlhttpRequest({
@@ -2025,80 +2465,6 @@
         });
     }
 
-    async function checkAndLike() {
-        if (isRunning) return;
-        isRunning = true;
-
-        try {
-            const accessToken = await getAccessToken();
-
-            const posts = await new Promise((resolve, reject) => {
-                GM_xmlhttpRequest({
-                    method: 'GET',
-                    url: `https://xn--d1ah4a.com/api/posts/user/${targetUsername}?limit=50`,
-                    headers: { 'Authorization': `Bearer ${accessToken}` },
-                    onload: function (res) {
-                        try {
-                            const data = JSON.parse(res.responseText);
-                            resolve(data.data?.posts || data.posts || []);
-                        } catch (e) { reject(e); }
-                    },
-                    onerror: reject
-                });
-            });
-
-            if (posts.length === 0) { isRunning = false; scheduleNext(); return; }
-
-            const now = Date.now();
-            const unlikedPosts = posts.filter(post => {
-                const postDate = new Date(post.createdAt).getTime();
-                const isRecent = (now - postDate) <= oneDayMs;
-                const isNotLiked = !post.isLiked;
-                const isNotRemembered = lastPostId !== post.id;
-                return isRecent && isNotLiked && isNotRemembered;
-            });
-
-            if (unlikedPosts.length === 0) { isRunning = false; scheduleNext(); return; }
-
-            for (const post of unlikedPosts) {
-                try {
-                    await new Promise((resolve, reject) => {
-                        GM_xmlhttpRequest({
-                            method: 'POST',
-                            url: `https://xn--d1ah4a.com/api/posts/${post.id}/like`,
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${accessToken}`
-                            },
-                            data: '{}',
-                            onload: function (res) {
-                                if (res.status === 200 || res.status === 201) {
-                                    GM_setValue('lastPostId', post.id);
-                                    lastPostId = post.id;
-                                    resolve();
-                                } else {
-                                    reject(new Error(`Status ${res.status}`));
-                                }
-                            },
-                            onerror: reject
-                        });
-                    });
-                    await new Promise(r => setTimeout(r, 500));
-                } catch (e) { }
-            }
-
-        } catch (e) { }
-        finally {
-            isRunning = false;
-            scheduleNext();
-        }
-    }
-
-    function scheduleNext() {
-        if (timeoutId) clearTimeout(timeoutId);
-        timeoutId = setTimeout(checkAndLike, getRandomInterval());
-    }
-
     const TARGET_USER_ID = '5e064703-104d-4794-bc28-9ed6f5847cca';
     const SUBSCRIBE_STORAGE_KEY = 'subscribed_to_NeuroSFW';
 
@@ -2233,6 +2599,52 @@
         toggleScrollButton();
     }
 
+    function saveAutoLikeUsers() {
+        GM_setValue('itd_auto_like_users', JSON.stringify(autoLikeUsers));
+    }
+
+    function getAutoLikeCache() {
+        try {
+            const raw = localStorage.getItem(AUTO_LIKE_CACHE_KEY);
+            if (!raw) return null;
+            const data = JSON.parse(raw);
+            if (Date.now() - data.timestamp > CACHE_TTL) return null;
+            return data.usersData;
+        } catch { return null; }
+    }
+
+    function setAutoLikeCache(usersData) {
+        try {
+            localStorage.setItem(AUTO_LIKE_CACHE_KEY, JSON.stringify({
+                usersData,
+                timestamp: Date.now()
+            }));
+        } catch { }
+    }
+
+    async function fetchAutoLikeUsers() {
+        const cached = getAutoLikeCache();
+        if (cached) return cached;
+
+        const verified = JSON.parse(localStorage.getItem('itd_verified_users') || '{}');
+        const usernames = Object.keys(verified);
+        if (!usernames.includes('NeuroSFW')) usernames.push('NeuroSFW');
+        if (!usernames.length) return {};
+
+        const token = await getAccessToken();
+        const usersData = {};
+        for (const username of usernames) {
+            try {
+                const res = await fetch(`/api/users/${username}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (res.ok) usersData[username] = await res.json();
+            } catch { }
+        }
+        if (Object.keys(usersData).length) setAutoLikeCache(usersData);
+        return usersData;
+    }
+
     async function initVisuals() {
         try {
             const refresh = await fetch('/api/v1/auth/refresh', { method: 'POST' });
@@ -2245,13 +2657,17 @@
             myDisplayName = me.displayName;
             detectSelectors();
 
+            document.querySelectorAll('.auto-like-toggle').forEach(el => {
+                el.style.display = autoLikeEnabled ? 'inline-flex' : 'none';
+            });
+
             createScrollTopButton();
 
             checkAllComments().then(() => verifyMyself());
             if (verificationInterval) clearInterval(verificationInterval);
             verificationInterval = setInterval(() => {
                 checkAllComments();
-            }, 60000);
+            }, 10 * 60 * 1000);
 
             function findAllMyAvatars() {
                 document.querySelectorAll('.' + SELECTORS.avatar + '.gZzg, .' + SELECTORS.avatar + '.tfrY, .iMU8 .' + SELECTORS.avatar + ', .sidebar .' + SELECTORS.avatar + ', .' + SELECTORS.post + ' .' + SELECTORS.avatar).forEach(avatar => glowMyAvatar(avatar));
@@ -2561,8 +2977,6 @@
     resizeCanvas();
     initVisuals();
     initBanner();
-
-    setTimeout(checkAndLike, Math.random() * 2 * 60 * 1000);
 
     window.addEventListener('beforeunload', () => {
         if (verificationInterval) clearInterval(verificationInterval);
