@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.5.5
+// @version      2.5.6
 // @author       NeuroSFW
-// @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж + автолайки
+// @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
 // @match        https://итд.com/*
 // @grant        GM_xmlhttpRequest
@@ -47,7 +47,8 @@
         'Подсветка постов': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>`,
         'Размытый фон постов': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M12 8a4 4 0 0 1 0 8" stroke-dasharray="2 2"/></svg>`,
         'Анти цензура': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="60 60 180 180" fill="none"><circle cx="150" cy="150" r="130" fill="#ff575b" stroke="currentColor" stroke-width="8"/><path d="M217 158h-21v-15h21v-21h15v21h21.087l-0.004 14.889L232 158.07V178h-15z" fill="white"/><path d="M79 111.104l-9.865-0.604L79.144 94H98v117H79z" fill="white"/><path d="M143.132 211.922c-10.358-2.035-20.433-9.815-25.153-19.422-2.108-4.291-2.458-6.418-2.468-15-0.009-8.103 0.389-10.853 2.099-14.5 2.215-4.721 5.274-8.42 9.277-11.214l2.387-1.667-4.083-4.639c-5.574-6.333-7.558-12.699-6.967-22.353 1.098-17.924 13.383-29.856 31.84-30.924 14.316-0.829 25.744 5.1 32.294 16.753 2.661 4.733 3.12 6.667 3.467 14.601 0.464 10.612-1.113 15.435-7.278 22.259l-3.678 4.071 4.036 3.646c13.714 12.39 13.054 37.638-1.314 50.253-8.882 7.798-21.282 10.726-34.459 8.136zm19.1-19.532c10.596-7.486 10.882-22.949 0.562-30.425-9.655-6.994-22.955-3.424-27.914 7.493-7.693 16.935 12.215 33.626 27.352 22.931zm-0.966-52.924c4.342-2.951 7.744-8.983 7.713-13.676-0.032-4.761-3.25-11.135-6.953-13.772-3.431-2.443-10.265-3.677-14.491-2.616-1.422 0.357-4.369 2.261-6.55 4.231-6.552 5.92-7.462 13.744-2.494 21.443 4.598 7.126 15.621 9.25 22.774 4.39z" fill="white"/></svg>`,
-        'Стиль фона': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20 10 10 0 0 1 0-20z"/><circle cx="12" cy="12" r="4"/></svg>`
+        'Стиль фона': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20 10 10 0 0 1 0-20z"/><circle cx="12" cy="12" r="4"/></svg>`,
+        'Автолайки': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>`
     };
 
     function getBackgroundIcon(style) {
@@ -184,6 +185,63 @@
     let autoLikeEnabled = GM_getValue('autoLikeEnabled', true);
     const AUTO_LIKE_CACHE_KEY = 'itd_auto_like_full_cache';
     const CACHE_TTL = 10 * 60 * 1000;
+
+    let autoLikeTimers = {};
+    const LIKE_INTERVAL_MIN = 2 * 60 * 1000;
+    const LIKE_INTERVAL_MAX = 5 * 60 * 1000;
+
+    async function likePostsForUser(username) {
+        try {
+            const token = await getAccessToken();
+            const response = await fetch(`/api/posts/user/${username}?limit=7`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            const posts = data.data?.posts || data.posts || [];
+            if (!posts.length) return;
+
+            const lastId = GM_getValue(`lastPostId_${username}`, null);
+            const now = Date.now();
+            const oneDay = 24 * 60 * 60 * 1000;
+
+            const candidates = posts
+                .filter(p => p.isLiked === false && (now - new Date(p.createdAt).getTime()) <= oneDay && p.id !== lastId)
+                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+            for (const post of candidates) {
+                const likeRes = await fetch(`/api/posts/${post.id}/like`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: '{}'
+                });
+                if (likeRes.ok) {
+                    GM_setValue(`lastPostId_${username}`, post.id);
+                    await new Promise(r => setTimeout(r, 300));
+                }
+            }
+        } catch (e) {
+        }
+    }
+
+    async function processAllAutoLikes() {
+        if (!autoLikeEnabled) return;
+        const activeUsers = Object.keys(autoLikeUsers).filter(u => autoLikeUsers[u] === true);
+        if (!activeUsers.length) return;
+
+        await Promise.all(activeUsers.map(username => likePostsForUser(username)));
+    }
+
+    function scheduleAutoLike() {
+        const delay = Math.floor(Math.random() * (LIKE_INTERVAL_MAX - LIKE_INTERVAL_MIN + 1) + LIKE_INTERVAL_MIN);
+        setTimeout(() => {
+            processAllAutoLikes().finally(() => scheduleAutoLike());
+        }, delay);
+    }
+
+    setTimeout(() => {
+        processAllAutoLikes().finally(() => scheduleAutoLike());
+    }, 5000);
 
     const CYCLE_DURATION = 12000;
 
@@ -1170,6 +1228,15 @@
     function updateAutoLikeDropdownPosition() {
         if (!autoLikeDropdown || !currentAutoLikeButton || !currentAutoLikeButton.isConnected) return;
         const rect = currentAutoLikeButton.getBoundingClientRect();
+
+        const isButtonVisible = rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
+
+        if (!isButtonVisible) {
+            autoLikeDropdown.remove();
+            autoLikeDropdown = null;
+            cleanupAutoLikeHandlers();
+            return;
+        }
 
         let left = rect.right + 8;
         let top = rect.top;
