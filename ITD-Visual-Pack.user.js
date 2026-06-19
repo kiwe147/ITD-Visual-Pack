@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.5.8
+// @version      2.5.9
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -333,10 +333,6 @@
             processAllAutoLikes().finally(() => scheduleAutoLike());
         }, delay);
     }
-
-    setTimeout(() => {
-        processAllAutoLikes().finally(() => scheduleAutoLike());
-    }, 5000);
 
     const CYCLE_DURATION = 12000;
 
@@ -3081,6 +3077,19 @@
         }
 
         async function insertStickerToComment(stickerId, stickerUrl) {
+
+            let postId = currentPostId;
+
+            if (!postId) {
+                postId = window.location.pathname.split('/post/')[1];
+                if (!postId) {
+                    const match = window.location.pathname.match(/\/post\/([^\/?#]+)/);
+                    if (match) postId = match[1];
+                }
+            }
+
+            if (!postId) throw new Error('Post ID not found');
+
             if (stickerBtn) {
                 stickerBtn.innerHTML = ICONS.LOADING;
                 stickerBtn.style.opacity = '0.6';
@@ -4866,6 +4875,207 @@
         window._fileObserver = new MutationObserver(overrideFilePicker);
         window._fileObserver.observe(document.body, { childList: true, subtree: true });
     }
+
+    (function () {
+        function applyFixes() {
+            const isMobile = window.innerWidth <= 1172;
+            const container = document.querySelector('.yYHA');
+            const createBtn = document.querySelector('.JHRx');
+            const scrollBtn = document.querySelector('.itd-scroll-top-btn');
+            const uDYwElements = document.querySelectorAll('.uDYw');
+            const eqPa = document.querySelector('.eqPa');
+            const nickContainer = document.querySelector('.ZkAR.Y5jP.Hnfk');
+
+            if (!scrollBtn) return;
+
+            if (isMobile) {
+                // === МОБИЛЬНЫЕ ФИКСЫ ===
+                uDYwElements.forEach(el => {
+                    el.style.setProperty('border-bottom', 'none', 'important');
+                });
+
+                if (!document.querySelector('#itd-mobile-fixes')) {
+                    const style = document.createElement('style');
+                    style.id = 'itd-mobile-fixes';
+                    style.textContent = `
+                        html, body { overscroll-behavior: none !important; }
+                        ::-webkit-scrollbar { display: none !important; }
+                    `;
+                    document.head.appendChild(style);
+                }
+
+                scrollBtn.style.zIndex = '1';
+                scrollBtn.style.bottom = '100px';
+                scrollBtn.style.right = '16px';
+
+                if (container) {
+                    container.style.paddingTop = '0';
+                }
+
+                if (createBtn) {
+                    createBtn.style.position = 'absolute';
+                    createBtn.style.bottom = 'calc(100% - 1px)';
+                    createBtn.style.left = '50%';
+                    createBtn.style.transform = 'translateX(-50%)';
+                    createBtn.style.width = '120px';
+                    createBtn.style.height = '36px';
+                    createBtn.style.borderRadius = '24px 24px 0 0';
+                }
+
+                if (eqPa) {
+                    eqPa.style.bottom = 'auto';
+                    eqPa.style.top = '16px';
+                }
+
+                // === РАБОТА С НИКОМ ===
+                if (nickContainer) {
+                    let wrapper = nickContainer.querySelector('.nick-wrapper');
+
+                    if (!wrapper) {
+                        wrapper = document.createElement('span');
+                        wrapper.className = 'nick-wrapper';
+                        wrapper.style.cssText = `
+                            display: flex !important;
+                            align-items: center !important;
+                            flex-wrap: wrap !important;
+                            gap: 4px !important;
+                        `;
+
+                        const controls = nickContainer.querySelector('.nick-controls-panel');
+                        const children = [];
+
+                        for (const child of nickContainer.children) {
+                            if (child === controls) continue;
+                            children.push(child);
+                        }
+
+                        nickContainer.insertBefore(wrapper, nickContainer.firstChild);
+
+                        for (const child of children) {
+                            wrapper.appendChild(child);
+                        }
+                    }
+
+                    nickContainer.style.display = 'flex';
+                    nickContainer.style.flexDirection = 'column';
+                    nickContainer.style.alignItems = 'center';
+                    nickContainer.style.gap = '4px';
+                    nickContainer.style.width = '';
+
+                    const controls = nickContainer.querySelector('.nick-controls-panel');
+                    if (controls) {
+                        controls.style.display = 'flex';
+                        controls.style.flexWrap = 'wrap';
+                        controls.style.gap = '4px';
+                        controls.style.marginTop = '0';
+                        controls.style.marginLeft = '0';
+                        controls.style.marginRight = '0';
+                        controls.style.justifyContent = 'center';
+                        controls.style.width = '';
+                    }
+                }
+
+            } else {
+                // === ВОЗВРАЩАЕМ НА ДЕСКТОП ===
+                uDYwElements.forEach(el => {
+                    el.style.removeProperty('border-bottom');
+                });
+
+                scrollBtn.style.zIndex = '';
+                scrollBtn.style.bottom = '16px';
+                scrollBtn.style.right = '16px';
+
+                if (container) {
+                    container.style.paddingTop = '';
+                }
+
+                if (createBtn) {
+                    createBtn.style.position = '';
+                    createBtn.style.bottom = '';
+                    createBtn.style.left = '';
+                    createBtn.style.transform = '';
+                    createBtn.style.width = '';
+                    createBtn.style.height = '';
+                    createBtn.style.borderRadius = '';
+                }
+
+                if (eqPa) {
+                    eqPa.style.bottom = '';
+                    eqPa.style.top = '';
+                }
+
+                if (nickContainer) {
+                    const wrapper = nickContainer.querySelector('.nick-wrapper');
+                    if (wrapper) {
+                        const children = [...wrapper.children];
+                        for (const child of children) {
+                            nickContainer.insertBefore(child, wrapper);
+                        }
+                        wrapper.remove();
+                    }
+
+                    nickContainer.style.display = '';
+                    nickContainer.style.flexDirection = '';
+                    nickContainer.style.alignItems = '';
+                    nickContainer.style.gap = '';
+                    nickContainer.style.width = '';
+                }
+
+                const controls = document.querySelector('.nick-controls-panel');
+                if (controls) {
+                    controls.style.display = '';
+                    controls.style.flexWrap = '';
+                    controls.style.gap = '';
+                    controls.style.marginTop = '';
+                    controls.style.marginLeft = '';
+                    controls.style.marginRight = '';
+                    controls.style.justifyContent = '';
+                    controls.style.width = '';
+                }
+
+                const fixStyle = document.querySelector('#itd-mobile-fixes');
+                if (fixStyle) fixStyle.remove();
+            }
+        }
+
+        applyFixes();
+
+        const observer = new MutationObserver(() => {
+            if (!window._fixing) {
+                window._fixing = true;
+                applyFixes();
+                setTimeout(() => { window._fixing = false; }, 100);
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                window._fixing = true;
+                applyFixes();
+                setTimeout(() => { window._fixing = false; }, 100);
+            }, 200);
+        });
+    })();
+
+    let currentPostId = null;
+
+    (function () {
+        const originalFetch = window.fetch;
+        window.fetch = function (...args) {
+            const url = args[0];
+            if (typeof url === 'string' && url.includes('/api/posts/') && url.includes('/comments')) {
+                const match = url.match(/\/api\/posts\/([^\/]+)\/comments/);
+                if (match) {
+                    currentPostId = match[1];
+                    console.log('📌 Post ID сохранён:', currentPostId);
+                }
+            }
+            return originalFetch.apply(this, args);
+        };
+    })();
 
     console.log('🟢 ITD Visual Pack');
 })();
