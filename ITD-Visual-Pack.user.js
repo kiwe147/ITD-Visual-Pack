@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.5.7
+// @version      2.5.8
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -40,15 +40,92 @@
         commentPreviewContainer: 'ZAfR'
     };
 
-    const SETTINGS_ICONS = {
-        'Фон': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6.75 1C6.33579 1 6 1.33579 6 1.75V3.50559C5.96824 3.53358 5.93715 3.56276 5.9068 3.59311L1.66416 7.83575C0.883107 8.6168 0.883107 9.88313 1.66416 10.6642L5.19969 14.1997C5.98074 14.9808 7.24707 14.9808 8.02812 14.1997L12.2708 9.95707C13.0518 9.17602 13.0518 7.90969 12.2708 7.12864L8.73522 3.59311C8.39027 3.24816 7.95066 3.05555 7.5 3.0153V1.75C7.5 1.33579 7.16421 1 6.75 1ZM6 5.62123V6.25C6 6.66421 6.33579 7 6.75 7C7.16421 7 7.5 6.66421 7.5 6.25V4.54033C7.56363 4.56467 7.62328 4.60249 7.67456 4.65377L11.2101 8.1893C11.2995 8.27875 11.348 8.39366 11.3555 8.51071H3.11052L6 5.62123ZM6.26035 13.1391L3.132 10.0107H10.0958L6.96746 13.1391C6.77219 13.3343 6.45561 13.3343 6.26035 13.1391Z" fill="currentColor"/><path d="M2 17.5V12.4143L3.5 13.9143V17.5C3.5 18.0523 3.94772 18.5 4.5 18.5H19.5C20.0523 18.5 20.5 18.0523 20.5 17.5V6.5C20.5 5.94771 20.0523 5.5 19.5 5.5H12.0563L10.5563 4H19.5C20.8807 4 22 5.11929 22 6.5V17.5C22 18.8807 20.8807 20 19.5 20H4.5C3.11929 20 2 18.8807 2 17.5Z" fill="currentColor"/><path d="M11 14.375C11 13.8816 11.1541 13.4027 11.3418 12.9938C11.5325 12.5784 11.7798 12.1881 12.0158 11.8595C12.2531 11.5289 12.4888 11.247 12.6647 11.0481C12.7502 10.9515 12.9062 10.7867 12.9642 10.7254L12.9697 10.7197C13.2626 10.4268 13.7374 10.4268 14.0303 10.7197L14.3353 11.0481C14.5112 11.247 14.7469 11.5289 14.9842 11.8595C15.2202 12.1881 15.4675 12.5784 15.6582 12.9938C15.8459 13.4027 16 13.8816 16 14.375C16 15.7654 14.9711 17 13.5 17C12.0289 17 11 15.7654 11 14.375ZM13.7658 12.7343C13.676 12.6092 13.5858 12.4916 13.5 12.3844C13.4142 12.4916 13.324 12.6092 13.2342 12.7343C13.0327 13.015 12.8425 13.32 12.7051 13.6195C12.5647 13.9253 12.5 14.1808 12.5 14.375C12.5 15.0663 12.9809 15.5 13.5 15.5C14.0191 15.5 14.5 15.0663 14.5 14.375C14.5 14.1808 14.4353 13.9253 14.2949 13.6195C14.1575 13.32 13.9673 13.015 13.7658 12.7343Z" fill="currentColor"/></svg>`,
-        'Подсветка ника': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M4.93 4.93l2.83 2.83M2 12h4M4.93 19.07l2.83-2.83M12 22v-4M19.07 19.07l-2.83-2.83M22 12h-4M19.07 4.93l-2.83 2.83"/><circle cx="12" cy="12" r="4"/></svg>`,
-        'Подсветка аватарок': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M5 20v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/><circle cx="12" cy="12" r="10"/></svg>`,
-        'Подсветка постов': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>`,
-        'Размытый фон постов': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M12 8a4 4 0 0 1 0 8" stroke-dasharray="2 2"/></svg>`,
-        'Анти цензура': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="60 60 180 180" fill="none"><circle cx="150" cy="150" r="130" fill="#ff575b" stroke="currentColor" stroke-width="8"/><path d="M217 158h-21v-15h21v-21h15v21h21.087l-0.004 14.889L232 158.07V178h-15z" fill="white"/><path d="M79 111.104l-9.865-0.604L79.144 94H98v117H79z" fill="white"/><path d="M143.132 211.922c-10.358-2.035-20.433-9.815-25.153-19.422-2.108-4.291-2.458-6.418-2.468-15-0.009-8.103 0.389-10.853 2.099-14.5 2.215-4.721 5.274-8.42 9.277-11.214l2.387-1.667-4.083-4.639c-5.574-6.333-7.558-12.699-6.967-22.353 1.098-17.924 13.383-29.856 31.84-30.924 14.316-0.829 25.744 5.1 32.294 16.753 2.661 4.733 3.12 6.667 3.467 14.601 0.464 10.612-1.113 15.435-7.278 22.259l-3.678 4.071 4.036 3.646c13.714 12.39 13.054 37.638-1.314 50.253-8.882 7.798-21.282 10.726-34.459 8.136zm19.1-19.532c10.596-7.486 10.882-22.949 0.562-30.425-9.655-6.994-22.955-3.424-27.914 7.493-7.693 16.935 12.215 33.626 27.352 22.931zm-0.966-52.924c4.342-2.951 7.744-8.983 7.713-13.676-0.032-4.761-3.25-11.135-6.953-13.772-3.431-2.443-10.265-3.677-14.491-2.616-1.422 0.357-4.369 2.261-6.55 4.231-6.552 5.92-7.462 13.744-2.494 21.443 4.598 7.126 15.621 9.25 22.774 4.39z" fill="white"/></svg>`,
-        'Стиль фона': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20 10 10 0 0 1 0-20z"/><circle cx="12" cy="12" r="4"/></svg>`,
-        'Автолайки': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>`
+    const ICONS = {
+        settings: {
+            'Фон': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6.75 1C6.33579 1 6 1.33579 6 1.75V3.50559C5.96824 3.53358 5.93715 3.56276 5.9068 3.59311L1.66416 7.83575C0.883107 8.6168 0.883107 9.88313 1.66416 10.6642L5.19969 14.1997C5.98074 14.9808 7.24707 14.9808 8.02812 14.1997L12.2708 9.95707C13.0518 9.17602 13.0518 7.90969 12.2708 7.12864L8.73522 3.59311C8.39027 3.24816 7.95066 3.05555 7.5 3.0153V1.75C7.5 1.33579 7.16421 1 6.75 1ZM6 5.62123V6.25C6 6.66421 6.33579 7 6.75 7C7.16421 7 7.5 6.66421 7.5 6.25V4.54033C7.56363 4.56467 7.62328 4.60249 7.67456 4.65377L11.2101 8.1893C11.2995 8.27875 11.348 8.39366 11.3555 8.51071H3.11052L6 5.62123ZM6.26035 13.1391L3.132 10.0107H10.0958L6.96746 13.1391C6.77219 13.3343 6.45561 13.3343 6.26035 13.1391Z" fill="currentColor"/><path d="M2 17.5V12.4143L3.5 13.9143V17.5C3.5 18.0523 3.94772 18.5 4.5 18.5H19.5C20.0523 18.5 20.5 18.0523 20.5 17.5V6.5C20.5 5.94771 20.0523 5.5 19.5 5.5H12.0563L10.5563 4H19.5C20.8807 4 22 5.11929 22 6.5V17.5C22 18.8807 20.8807 20 19.5 20H4.5C3.11929 20 2 18.8807 2 17.5Z" fill="currentColor"/><path d="M11 14.375C11 13.8816 11.1541 13.4027 11.3418 12.9938C11.5325 12.5784 11.7798 12.1881 12.0158 11.8595C12.2531 11.5289 12.4888 11.247 12.6647 11.0481C12.7502 10.9515 12.9062 10.7867 12.9642 10.7254L12.9697 10.7197C13.2626 10.4268 13.7374 10.4268 14.0303 10.7197L14.3353 11.0481C14.5112 11.247 14.7469 11.5289 14.9842 11.8595C15.2202 12.1881 15.4675 12.5784 15.6582 12.9938C15.8459 13.4027 16 13.8816 16 14.375C16 15.7654 14.9711 17 13.5 17C12.0289 17 11 15.7654 11 14.375ZM13.7658 12.7343C13.676 12.6092 13.5858 12.4916 13.5 12.3844C13.4142 12.4916 13.324 12.6092 13.2342 12.7343C13.0327 13.015 12.8425 13.32 12.7051 13.6195C12.5647 13.9253 12.5 14.1808 12.5 14.375C12.5 15.0663 12.9809 15.5 13.5 15.5C14.0191 15.5 14.5 15.0663 14.5 14.375C14.5 14.1808 14.4353 13.9253 14.2949 13.6195C14.1575 13.32 13.9673 13.015 13.7658 12.7343Z" fill="currentColor"/></svg>`,
+            'Подсветка ника': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M4.93 4.93l2.83 2.83M2 12h4M4.93 19.07l2.83-2.83M12 22v-4M19.07 19.07l-2.83-2.83M22 12h-4M19.07 4.93l-2.83 2.83"/><circle cx="12" cy="12" r="4"/></svg>`,
+            'Подсветка аватарок': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M5 20v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/><circle cx="12" cy="12" r="10"/></svg>`,
+            'Подсветка постов': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>`,
+            'Размытый фон постов': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M12 8a4 4 0 0 1 0 8" stroke-dasharray="2 2"/></svg>`,
+            'Анти цензура': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="60 60 180 180" fill="none"><circle cx="150" cy="150" r="130" fill="#ff575b" stroke="currentColor" stroke-width="8"/><path d="M217 158h-21v-15h21v-21h15v21h21.087l-0.004 14.889L232 158.07V178h-15z" fill="white"/><path d="M79 111.104l-9.865-0.604L79.144 94H98v117H79z" fill="white"/><path d="M143.132 211.922c-10.358-2.035-20.433-9.815-25.153-19.422-2.108-4.291-2.458-6.418-2.468-15-0.009-8.103 0.389-10.853 2.099-14.5 2.215-4.721 5.274-8.42 9.277-11.214l2.387-1.667-4.083-4.639c-5.574-6.333-7.558-12.699-6.967-22.353 1.098-17.924 13.383-29.856 31.84-30.924 14.316-0.829 25.744 5.1 32.294 16.753 2.661 4.733 3.12 6.667 3.467 14.601 0.464 10.612-1.113 15.435-7.278 22.259l-3.678 4.071 4.036 3.646c13.714 12.39 13.054 37.638-1.314 50.253-8.882 7.798-21.282 10.726-34.459 8.136zm19.1-19.532c10.596-7.486 10.882-22.949 0.562-30.425-9.655-6.994-22.955-3.424-27.914 7.493-7.693 16.935 12.215 33.626 27.352 22.931zm-0.966-52.924c4.342-2.951 7.744-8.983 7.713-13.676-0.032-4.761-3.25-11.135-6.953-13.772-3.431-2.443-10.265-3.677-14.491-2.616-1.422 0.357-4.369 2.261-6.55 4.231-6.552 5.92-7.462 13.744-2.494 21.443 4.598 7.126 15.621 9.25 22.774 4.39z" fill="white"/></svg>`,
+            'Стиль фона': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20 10 10 0 0 1 0-20z"/><circle cx="12" cy="12" r="4"/></svg>`,
+            'Автолайки': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>`
+        },
+
+        PALETTE: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v1m0 16v1M3 12h1m16 0h1M5.6 5.6l.7.7m12.1 12.1l.7.7M5.6 18.4l.7-.7m12.1-12.1l.7-.7"/><circle cx="12" cy="12" r="4"/></svg>`,
+        GEAR: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+        MESSAGES: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M5 3a3 3 0 00-3 3v10a3 3 0 003 3h1v2.47a.5.5 0 00.85.36L11.12 19H19a3 3 0 003-3V6a3 3 0 00-3-3H5zm2 5a1 1 0 000 2h10a1 1 0 100-2H7zm0 4a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>`,
+        SCROLL_TOP: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>`,
+        BANNER_IMAGE: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><circle cx="8.5" cy="8.5" r="2.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>`,
+        BANNER_CANCEL: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
+        BANNER_APPLY: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
+        YOUR_LOGO: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='36' height='36'><defs><filter id='glow' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur in='SourceGraphic' stdDeviation='3' result='blur'/></filter><linearGradient id='rainbow' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' style='stop-color:#ff0000'/><stop offset='16%' style='stop-color:#ff8800'/><stop offset='33%' style='stop-color:#ffff00'/><stop offset='50%' style='stop-color:#00ff00'/><stop offset='66%' style='stop-color:#00ffff'/><stop offset='83%' style='stop-color:#0000ff'/><stop offset='100%' style='stop-color:#ff00ff'/></linearGradient></defs><rect width='100' height='100' rx='20' fill='#1a1a1a'/><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(#rainbow)' filter='url(#glow)' opacity='0.9'>N</text><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(#rainbow)'>N</text></svg>`,
+        STICKER_BUTTON: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M9 16C9.85038 16.6303 10.8846 17 12 17C13.1154 17 14.1496 16.6303 15 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><ellipse cx="15" cy="10.5" rx="1" ry="1.5" fill="currentColor"/><ellipse cx="9" cy="10.5" rx="1" ry="1.5" fill="currentColor"/><path d="M15 22H12C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C22 4.92893 22 7.28595 22 12V15M15 22C18.866 22 22 18.866 22 15M15 22C15 20.1387 15 19.2081 15.2447 18.4549C15.7393 16.9327 16.9327 15.7393 18.4549 15.2447C19.2081 15 20.1387 15 22 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+        LOADING: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spin"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>`,
+        RECENT: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+        ADD_PACK: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4" ry="4"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`,
+        ADD: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+        EDIT: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+        DELETE: `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+        CHECK: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+        TRASH: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`,
+        EMPTY_PACK: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="3" opacity="0.3"/></svg>`,
+
+        badge: function (size) {
+            return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="1.8 1.8 20.4 20.4" fill="none">
+        <defs>
+            <filter id="vBlur_mymod_${size}" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="1.2"/>
+            </filter>
+            <pattern id="vRainbow_mymod_${size}" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+            <g filter="url(#vBlur_mymod_${size})">
+                <circle cx="4" cy="5" r="6" fill="#ff0044" opacity="1">
+                <animate attributeName="cx" values="4;8;4" dur="6s" repeatCount="indefinite"/>
+                <animate attributeName="cy" values="5;3;5" dur="5s" repeatCount="indefinite"/>
+                <animate attributeName="r" values="6;7;6" dur="7s" repeatCount="indefinite"/>
+                </circle>
+                <circle cx="16" cy="7" r="6" fill="#ff8800" opacity="1">
+                <animate attributeName="cx" values="16;12;16" dur="5s" repeatCount="indefinite"/>
+                <animate attributeName="cy" values="7;9;7" dur="6s" repeatCount="indefinite"/>
+                <animate attributeName="r" values="6;5;6" dur="5.5s" repeatCount="indefinite"/>
+                </circle>
+                <circle cx="8" cy="16" r="6.5" fill="#ffee00" opacity="1">
+                <animate attributeName="cx" values="8;10;8" dur="7s" repeatCount="indefinite"/>
+                <animate attributeName="cy" values="16;14;16" dur="4s" repeatCount="indefinite"/>
+                <animate attributeName="r" values="6.5;7.5;6.5" dur="4.5s" repeatCount="indefinite"/>
+                </circle>
+                <circle cx="20" cy="14" r="5.5" fill="#00ff44" opacity="1">
+                <animate attributeName="cx" values="20;17;20" dur="4s" repeatCount="indefinite"/>
+                <animate attributeName="cy" values="14;16;14" dur="5.5s" repeatCount="indefinite"/>
+                <animate attributeName="r" values="5.5;6.5;5.5" dur="6s" repeatCount="indefinite"/>
+                </circle>
+                <circle cx="3" cy="18" r="5" fill="#00ffff" opacity="1">
+                <animate attributeName="cx" values="3;6;3" dur="5.5s" repeatCount="indefinite"/>
+                <animate attributeName="cy" values="18;16;18" dur="6.5s" repeatCount="indefinite"/>
+                <animate attributeName="r" values="5;6;5" dur="5s" repeatCount="indefinite"/>
+                </circle>
+                <circle cx="12" cy="3" r="5.5" fill="#2288ff" opacity="1">
+                <animate attributeName="cx" values="12;9;12" dur="6.5s" repeatCount="indefinite"/>
+                <animate attributeName="cy" values="3;6;3" dur="4.5s" repeatCount="indefinite"/>
+                <animate attributeName="r" values="5.5;6.5;5.5" dur="5.5s" repeatCount="indefinite"/>
+                </circle>
+                <circle cx="21" cy="20" r="6" fill="#aa44ff" opacity="1">
+                <animate attributeName="cx" values="21;18;21" dur="4.5s" repeatCount="indefinite"/>
+                <animate attributeName="cy" values="20;18;20" dur="5s" repeatCount="indefinite"/>
+                <animate attributeName="r" values="6;5;6" dur="6s" repeatCount="indefinite"/>
+                </circle>
+                <circle cx="6" cy="9" r="4.5" fill="#ff0088" opacity="1">
+                <animate attributeName="cx" values="6;9;6" dur="5s" repeatCount="indefinite"/>
+                <animate attributeName="cy" values="9;7;9" dur="6s" repeatCount="indefinite"/>
+                <animate attributeName="r" values="4.5;5.5;4.5" dur="4s" repeatCount="indefinite"/>
+                </circle>
+            </g>
+            </pattern>
+        </defs>
+        <path fill="url(#vRainbow_mymod_${size})" fill-rule="evenodd" clip-rule="evenodd" d="M9.5924 3.20027C9.34888 3.4078 9.22711 3.51158 9.09706 3.59874C8.79896 3.79854 8.46417 3.93721 8.1121 4.00672C7.95851 4.03705 7.79903 4.04977 7.48008 4.07522C6.6787 4.13918 6.278 4.17115 5.94371 4.28923C5.17051 4.56233 4.56233 5.17051 4.28923 5.94371C4.17115 6.278 4.13918 6.6787 4.07522 7.48008C4.04977 7.79903 4.03705 7.95851 4.00672 8.1121C3.93721 8.46417 3.79854 8.79896 3.59874 9.09706C3.51158 9.22711 3.40781 9.34887 3.20027 9.5924C2.67883 10.2043 2.4181 10.5102 2.26522 10.8301C1.91159 11.57 1.91159 12.43 2.26522 13.1699C2.41811 13.4898 2.67883 13.7957 3.20027 14.4076C3.40778 14.6511 3.51158 14.7729 3.59874 14.9029C3.79854 15.201 3.93721 15.5358 4.00672 15.8879C4.03705 16.0415 4.04977 16.201 4.07522 16.5199C4.13918 17.3213 4.17115 17.722 4.28923 18.0563C4.56233 18.8295 5.17051 19.4377 5.94371 19.7108C6.278 19.8288 6.6787 19.8608 7.48008 19.9248C7.79903 19.9502 7.95851 19.963 8.1121 19.9933C8.46417 20.0628 8.79896 20.2015 9.09706 20.4013C9.22711 20.4884 9.34887 20.5922 9.5924 20.7997C10.2043 21.3212 10.5102 21.5819 10.8301 21.7348C11.57 22.0884 12.43 22.0884 13.1699 21.7348C13.4898 21.5819 13.7957 21.3212 14.4076 20.7997C14.6511 20.5922 14.7729 20.4884 14.9029 20.4013C15.201 20.2015 15.5358 20.0628 15.8879 19.9933C16.0415 19.963 16.201 19.9502 16.5199 19.9248C17.3213 19.8608 17.722 19.8288 18.0563 19.7108C18.8295 19.4377 19.4377 18.8295 19.7108 18.0563C19.8288 17.722 19.8608 17.3213 19.9248 16.5199C19.9502 16.201 19.963 16.0415 19.9933 15.8879C20.0628 15.5358 20.2015 15.201 20.4013 14.9029C20.4884 14.7729 20.5922 14.6511 20.7997 14.4076C21.3212 13.7957 21.5819 13.4898 21.7348 13.1699C22.0884 12.43 22.0884 11.57 21.7348 10.8301C21.5819 10.5102 21.3212 10.2043 20.7997 9.5924C20.5922 9.34887 20.4884 9.22711 20.4013 9.09706C20.2015 8.79896 20.0628 8.46417 19.9933 8.1121C19.963 7.95851 19.9502 7.79903 19.9248 7.48008C19.8608 6.6787 19.8288 6.278 19.7108 5.94371C19.4377 5.17051 18.8295 4.56233 18.0563 4.28923C17.722 4.17115 17.3213 4.13918 16.5199 4.07522C16.201 4.04977 16.0415 4.03705 15.8879 4.00672C15.5358 3.93721 15.201 3.79854 14.9029 3.59874C14.7729 3.51158 14.6511 3.40781 14.4076 3.20027C13.7957 2.67883 13.4898 2.41811 13.1699 2.26522C12.43 1.91159 11.57 1.91159 10.8301 2.26522C10.5102 2.4181 10.2043 2.67883 9.5924 3.20027Z"/>
+        <path fill="black" d="M16.3735 9.86314C16.6913 9.5453 16.6913 9.03 16.3735 8.71216C16.0557 8.39433 15.5403 8.39433 15.2225 8.71216L10.3723 13.5624L8.77746 11.9676C8.45963 11.6498 7.94432 11.6498 7.62649 11.9676C7.30866 12.2854 7.30866 12.8007 7.62649 13.1186L9.79678 15.2889C10.1146 15.6067 10.6299 15.6067 10.9478 15.2889L16.3735 9.86314Z"/>
+        </svg>`;
+        }
     };
 
     function getBackgroundIcon(style) {
@@ -192,10 +269,18 @@
 
     async function likePostsForUser(username) {
         try {
-            const token = await getAccessToken();
-            const response = await fetch(`/api/posts/user/${username}?limit=7`, {
+            let token = await getAccessToken();
+            let response = await fetch(`/api/posts/user/${username}?limit=7`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+
+            if (response.status === 401) {
+                token = await getAccessToken();
+                response = await fetch(`/api/posts/user/${username}?limit=7`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            }
+
             if (!response.ok) return;
             const data = await response.json();
             const posts = data.data?.posts || data.posts || [];
@@ -210,11 +295,21 @@
                 .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
             for (const post of candidates) {
-                const likeRes = await fetch(`/api/posts/${post.id}/like`, {
+                let likeRes = await fetch(`/api/posts/${post.id}/like`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: '{}'
                 });
+
+                if (likeRes.status === 401) {
+                    token = await getAccessToken();
+                    likeRes = await fetch(`/api/posts/${post.id}/like`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: '{}'
+                    });
+                }
+
                 if (likeRes.ok) {
                     GM_setValue(`lastPostId_${username}`, post.id);
                     await new Promise(r => setTimeout(r, 300));
@@ -400,34 +495,6 @@
             height: 20px !important;
         }
         .nick-style-toggle svg path, .nick-style-toggle svg circle {
-            stroke: var(--text-primary, currentColor) !important;
-            fill: none !important;
-        }
-        .settings-toggle {
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            width: 32px !important;
-            height: 32px !important;
-            margin-left: 0 !important;
-            cursor: pointer !important;
-            background: var(--bg-secondary, rgba(128, 128, 128, 0.15)) !important;
-            border-radius: 50% !important;
-            transition: all 0.2s ease !important;
-            vertical-align: middle !important;
-            flex-shrink: 0 !important;
-        }
-        .settings-toggle:hover {
-            background: var(--accent-primary, rgba(0, 128, 255, 0.3)) !important;
-        }
-        .settings-toggle svg {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            width: 20px !important;
-            height: 20px !important;
-        }
-        .settings-toggle svg path, .settings-toggle svg circle {
             stroke: var(--text-primary, currentColor) !important;
             fill: none !important;
         }
@@ -706,99 +773,6 @@
         }
     }
 
-    function drawParticles() {
-        const area = canvas.width * canvas.height;
-        const targetCount = Math.min(200, Math.floor(area * 0.0003));
-
-        if (bgState.particles.length === 0 ||
-            bgState.particles.length !== targetCount ||
-            bgState._lastWidth !== canvas.width ||
-            bgState._lastHeight !== canvas.height) {
-
-            bgState.particles = [];
-            bgState._lastWidth = canvas.width;
-            bgState._lastHeight = canvas.height;
-
-            for (let i = 0; i < targetCount; i++) {
-                bgState.particles.push({
-                    x: Math.random() * canvas.width,
-                    y: Math.random() * canvas.height,
-                    vx: (Math.random() - 0.5) * 1.2,
-                    vy: (Math.random() - 0.5) * 1.2,
-                    r: Math.random() * 3 + 1,
-                    alpha: Math.random() * 0.5 + 0.5,
-                    phase: Math.random() * Math.PI * 2,
-                    pulseSpeed: 0.02 + Math.random() * 0.04
-                });
-            }
-        }
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        const style = nickStyles[currentStyle];
-        let hue, sat, light = 85;
-        if (currentStyle === 'rainbow') {
-            hue = globalHue;
-            sat = 100;
-        } else {
-            hue = style.matrixHue || 210;
-            sat = style.matrixSat !== undefined ? style.matrixSat : 100;
-        }
-
-        const finalSat = Math.min(100, sat * 1.5);
-        const finalLight = Math.min(80, light + 15);
-        const maxDist = Math.min(200, Math.max(100, Math.min(canvas.width, canvas.height) * 0.1));
-
-        bgState.particles.forEach(p => {
-            p.x += p.vx;
-            p.y += p.vy;
-            if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
-            if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
-
-            p.phase += p.pulseSpeed;
-            const pulse = 0.8 + 0.2 * Math.sin(p.phase);
-            const currentR = p.r * pulse;
-
-            const flicker = 0.85 + 0.15 * Math.sin(p.phase * 1.5 + 1.2);
-            const currentAlpha = Math.min(1, p.alpha * flicker * 1.2);
-
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, currentR, 0, Math.PI * 2);
-            ctx.fillStyle = `hsla(${hue}, ${finalSat}%, ${finalLight}%, ${currentAlpha})`;
-            ctx.fill();
-
-            ctx.shadowColor = `hsla(${hue}, ${finalSat}%, ${finalLight}%, ${currentAlpha * 0.8})`;
-            ctx.shadowBlur = 15 + currentR * 5;
-            ctx.fill();
-            ctx.shadowBlur = 0;
-        });
-
-        for (let i = 0; i < bgState.particles.length; i++) {
-            const p1 = bgState.particles[i];
-            for (let j = i + 1; j < bgState.particles.length; j++) {
-                const p2 = bgState.particles[j];
-                const dx = p1.x - p2.x;
-                const dy = p1.y - p2.y;
-                const distSq = dx * dx + dy * dy;
-
-                if (distSq < maxDist * maxDist) {
-                    const dist = Math.sqrt(distSq);
-                    const alpha1 = Math.min(1, p1.alpha * (0.8 + 0.2 * Math.sin(p1.phase)));
-                    const alpha2 = Math.min(1, p2.alpha * (0.8 + 0.2 * Math.sin(p2.phase)));
-                    const avgAlpha = (alpha1 + alpha2) * 0.5;
-                    const distFactor = 1 - dist / maxDist;
-                    const lineAlpha = 0.35 * distFactor * avgAlpha;
-
-                    ctx.beginPath();
-                    ctx.moveTo(p1.x, p1.y);
-                    ctx.lineTo(p2.x, p2.y);
-                    ctx.strokeStyle = `hsla(${hue}, ${finalSat}%, ${finalLight}%, ${lineAlpha})`;
-                    ctx.lineWidth = 0.5 + 2.5 * distFactor;
-                    ctx.stroke();
-                }
-            }
-        }
-    }
     function drawParticles() {
         const area = canvas.width * canvas.height;
         const targetCount = Math.min(200, Math.floor(area * 0.0003));
@@ -1463,11 +1437,9 @@
                     if (nowActive) {
                         autoLikeUsers[username] = true;
                         toggle.style.background = 'var(--accent-primary, #0080FF)';
-                        dot.style.left = '20px';
                     } else {
                         delete autoLikeUsers[username];
                         toggle.style.background = 'rgba(0,0,0,0.5)';
-                        dot.style.left = '2px';
                     }
                     saveAutoLikeUsers();
                     const count = Object.keys(autoLikeUsers).length;
@@ -1506,7 +1478,7 @@
             if (Object.keys(newData).length) {
                 setAutoLikeCache(newData);
             }
-        }).catch(() => {});
+        }).catch(() => { });
     }
 
     function createDropdown(button) {
@@ -1637,7 +1609,7 @@
         const styleButton = document.createElement('span');
         styleButton.className = 'nick-style-toggle';
         styleButton.title = `Стиль: ${nickStyles[currentStyle].name}`;
-        styleButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v1m0 16v1M3 12h1m16 0h1M5.6 5.6l.7.7m12.1 12.1l.7.7M5.6 18.4l.7-.7m12.1-12.1l.7-.7"/><circle cx="12" cy="12" r="4"/></svg>`;
+        styleButton.innerHTML = ICONS.PALETTE;
 
         styleButton.addEventListener('click', (e) => {
             e.preventDefault();
@@ -1651,7 +1623,8 @@
         likeBtn.className = 'auto-like-toggle';
         likeBtn.title = 'Автолайки';
         const hasActive = Object.keys(autoLikeUsers).length > 0;
-        likeBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>`;
+        likeBtn.innerHTML = ICONS.settings['Автолайки'];
+
         likeBtn.style.cssText = `
     display: inline-flex !important;
     align-items: center !important;
@@ -1695,7 +1668,8 @@
         bgToggle.className = 'bg-style-toggle';
         bgToggle.title = 'Стиль фона';
 
-        bgToggle.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6.75 1C6.33579 1 6 1.33579 6 1.75V3.50559C5.96824 3.53358 5.93715 3.56276 5.9068 3.59311L1.66416 7.83575C0.883107 8.6168 0.883107 9.88313 1.66416 10.6642L5.19969 14.1997C5.98074 14.9808 7.24707 14.9808 8.02812 14.1997L12.2708 9.95707C13.0518 9.17602 13.0518 7.90969 12.2708 7.12864L8.73522 3.59311C8.39027 3.24816 7.95066 3.05555 7.5 3.0153V1.75C7.5 1.33579 7.16421 1 6.75 1ZM6 5.62123V6.25C6 6.66421 6.33579 7 6.75 7C7.16421 7 7.5 6.66421 7.5 6.25V4.54033C7.56363 4.56467 7.62328 4.60249 7.67456 4.65377L11.2101 8.1893C11.2995 8.27875 11.348 8.39366 11.3555 8.51071H3.11052L6 5.62123ZM6.26035 13.1391L3.132 10.0107H10.0958L6.96746 13.1391C6.77219 13.3343 6.45561 13.3343 6.26035 13.1391Z" fill="currentColor"/><path d="M2 17.5V12.4143L3.5 13.9143V17.5C3.5 18.0523 3.94772 18.5 4.5 18.5H19.5C20.0523 18.5 20.5 18.0523 20.5 17.5V6.5C20.5 5.94771 20.0523 5.5 19.5 5.5H12.0563L10.5563 4H19.5C20.8807 4 22 5.11929 22 6.5V17.5C22 18.8807 20.8807 20 19.5 20H4.5C3.11929 20 2 18.8807 2 17.5Z" fill="currentColor"/><path d="M11 14.375C11 13.8816 11.1541 13.4027 11.3418 12.9938C11.5325 12.5784 11.7798 12.1881 12.0158 11.8595C12.2531 11.5289 12.4888 11.247 12.6647 11.0481C12.7502 10.9515 12.9062 10.7867 12.9642 10.7254L12.9697 10.7197C13.2626 10.4268 13.7374 10.4268 14.0303 10.7197L14.3353 11.0481C14.5112 11.247 14.7469 11.5289 14.9842 11.8595C15.2202 12.1881 15.4675 12.5784 15.6582 12.9938C15.8459 13.4027 16 13.8816 16 14.375C16 15.7654 14.9711 17 13.5 17C12.0289 17 11 15.7654 11 14.375ZM13.7658 12.7343C13.676 12.6092 13.5858 12.4916 13.5 12.3844C13.4142 12.4916 13.324 12.6092 13.2342 12.7343C13.0327 13.015 12.8425 13.32 12.7051 13.6195C12.5647 13.9253 12.5 14.1808 12.5 14.375C12.5 15.0663 12.9809 15.5 13.5 15.5C14.0191 15.5 14.5 15.0663 14.5 14.375C14.5 14.1808 14.4353 13.9253 14.2949 13.6195C14.1575 13.32 13.9673 13.015 13.7658 12.7343Z" fill="currentColor"/></svg>`;
+        bgToggle.innerHTML = ICONS.settings['Фон'];
+
         bgToggle.style.cssText = `
         display: ${backgroundEnabled ? 'inline-flex' : 'none'};
         align-items: center;
@@ -1724,7 +1698,7 @@
         const settingsButton = document.createElement('span');
         settingsButton.className = 'settings-toggle';
         settingsButton.title = 'Настройки';
-        settingsButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+        settingsButton.innerHTML = ICONS.GEAR;
 
         settingsButton.addEventListener('click', (e) => {
             e.preventDefault();
@@ -1771,7 +1745,7 @@
         const button = document.createElement('span');
         button.className = 'settings-toggle';
         button.title = 'Настройки';
-        button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+        button.innerHTML = ICONS.GEAR;
         button.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -1787,9 +1761,9 @@
             const span = opt.querySelector('span:first-child');
             if (!span) return;
             const text = span.innerText.trim();
-            if (SETTINGS_ICONS[text]) {
+            if (ICONS.settings[text]) {
                 if (span.querySelector('svg')) return;
-                span.innerHTML = `${SETTINGS_ICONS[text]} <span style="margin-left: 8px;">${text}</span>`;
+                span.innerHTML = `${ICONS.settings[text]} <span style="margin-left: 8px;">${text}</span>`;
                 span.style.display = 'flex';
                 span.style.alignItems = 'center';
                 span.style.gap = '8px';
@@ -2093,13 +2067,7 @@
         imageBtn = document.createElement('button');
         imageBtn.className = SELECTORS.bannerDraw + ' custom-image-btn';
         imageBtn.title = 'Добавить картинку';
-        imageBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
-                <circle cx="8.5" cy="8.5" r="2.5"></circle>
-                <polyline points="21 15 16 10 5 21"></polyline>
-            </svg>
-        `;
+        imageBtn.innerHTML = ICONS.BANNER_IMAGE;
 
         if (deleteBtn) {
             buttonsContainer.insertBefore(imageBtn, deleteBtn);
@@ -2111,34 +2079,19 @@
         changeBtn.className = SELECTORS.bannerDraw + ' custom-change-btn';
         changeBtn.title = 'Сменить картинку';
         changeBtn.style.display = 'none';
-        changeBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
-                <circle cx="8.5" cy="8.5" r="2.5"></circle>
-                <polyline points="21 15 16 10 5 21"></polyline>
-            </svg>
-        `;
+        changeBtn.innerHTML = ICONS.BANNER_IMAGE;
 
         cancelBtn = document.createElement('button');
         cancelBtn.className = SELECTORS.bannerDraw + ' custom-cancel-btn';
         cancelBtn.title = 'Отмена';
         cancelBtn.style.display = 'none';
-        cancelBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-        `;
+        cancelBtn.innerHTML = ICONS.BANNER_CANCEL;
 
         applyBtn = document.createElement('button');
         applyBtn.className = SELECTORS.bannerDraw + ' custom-apply-btn';
         applyBtn.title = 'Применить';
         applyBtn.style.display = 'none';
-        applyBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-        `;
+        applyBtn.innerHTML = ICONS.BANNER_APPLY;
 
         buttonsContainer.appendChild(changeBtn);
         buttonsContainer.appendChild(cancelBtn);
@@ -2155,49 +2108,69 @@
         applyBtn.onclick = async () => {
             if (!draggableImg || !banner) return;
 
-            applyBtn.innerHTML = `
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spin-animation">
-                    <line x1="12" y1="2" x2="12" y2="6"></line>
-                    <line x1="12" y1="18" x2="12" y2="22"></line>
-                    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
-                    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
-                    <line x1="2" y1="12" x2="6" y2="12"></line>
-                    <line x1="18" y1="12" x2="22" y2="12"></line>
-                    <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
-                    <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
-                </svg>
-            `;
+            applyBtn.innerHTML = ICONS.LOADING;
             applyBtn.disabled = true;
 
             try {
                 const croppedBlob = await cropBannerImage();
 
-                const refreshRes = await fetch('/api/v1/auth/refresh', { method: 'POST' });
-                const { accessToken } = await refreshRes.json();
+                const token = await new Promise((resolve, reject) => {
+                    GM_xmlhttpRequest({
+                        method: 'POST',
+                        url: '/api/v1/auth/refresh',
+                        credentials: 'include',
+                        onload: (res) => {
+                            try {
+                                const data = JSON.parse(res.responseText);
+                                resolve(data.accessToken);
+                            } catch (e) { reject(e); }
+                        },
+                        onerror: reject
+                    });
+                });
 
                 const formData = new FormData();
                 formData.append('file', croppedBlob, 'banner.jpg');
 
-                const uploadRes = await fetch('/api/files/upload', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${accessToken}` },
-                    body: formData
+                const uploadData = await new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', '/api/files/upload');
+                    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+                    xhr.onload = () => {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            try { resolve(JSON.parse(xhr.responseText)); }
+                            catch (e) { reject(e); }
+                        } else {
+                            try {
+                                const error = JSON.parse(xhr.responseText);
+                                const message = error.error?.message || error.message || `Ошибка ${xhr.status}`;
+                                reject(new Error(message));
+                            } catch (e) {
+                                reject(new Error(`Ошибка загрузки: ${xhr.status}`));
+                            }
+                        }
+                    };
+                    xhr.onerror = () => reject(new Error('Ошибка сети'));
+                    xhr.send(formData);
                 });
-
-                if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
-
-                const uploadData = await uploadRes.json();
 
                 const updateRes = await fetch('/api/users/me', {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${accessToken}`
+                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify({ bannerId: uploadData.id })
                 });
 
-                if (!updateRes.ok) throw new Error(`Update failed: ${updateRes.status}`);
+                if (!updateRes.ok) {
+                    let errorMsg = `Ошибка обновления профиля: ${updateRes.status}`;
+                    try {
+                        const errorData = await updateRes.json();
+                        if (errorData.error?.message) errorMsg = errorData.error.message;
+                    } catch (e) { }
+                    throw new Error(errorMsg);
+                }
 
                 removeDraggableImage();
 
@@ -2209,14 +2182,22 @@
                 }
 
                 showNormalMode();
+                alert('✅ Баннер успешно обновлён!');
 
             } catch (error) {
                 console.error('Ошибка:', error);
-                applyBtn.innerHTML = `
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                `;
+
+                let message = error.message || 'Неизвестная ошибка';
+
+                if (message.includes('запрещённый контент') || message.includes('CONTENT_MODERATION')) {
+                    alert('❌ Изображение не прошло модерацию.\nПожалуйста, выберите другое изображение.');
+                } else if (message.includes('сети') || message.includes('network')) {
+                    alert('❌ Ошибка сети. Проверьте подключение к интернету.');
+                } else {
+                    alert(`❌ Ошибка: ${message}`);
+                }
+
+                applyBtn.innerHTML = ICONS.BANNER_APPLY;
                 applyBtn.disabled = false;
             }
         };
@@ -2273,11 +2254,7 @@
         if (cancelBtn) cancelBtn.style.display = 'none';
         if (applyBtn) {
             applyBtn.style.display = 'none';
-            applyBtn.innerHTML = `
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-            `;
+            applyBtn.innerHTML = ICONS.BANNER_APPLY;
             applyBtn.disabled = false;
         }
         if (changeBtn) changeBtn.style.display = 'none';
@@ -2320,6 +2297,11 @@
         });
     }
 
+    let mouseMoveHandler = null;
+    let mouseUpHandler = null;
+    let touchMoveHandler = null;
+    let touchEndHandler = null;
+
     function createDraggableImage(url) {
         banner = document.querySelector('.' + SELECTORS.banner);
         if (!banner) return;
@@ -2332,17 +2314,17 @@
         draggableImg = document.createElement('img');
         draggableImg.src = url;
         draggableImg.style.cssText = `
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: auto;
-            z-index: -1;
-            pointer-events: auto;
-            cursor: grab;
-            user-select: none;
-            -webkit-user-drag: none;
-        `;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: auto;
+        z-index: -1;
+        pointer-events: auto;
+        cursor: grab;
+        user-select: none;
+        -webkit-user-drag: none;
+    `;
         draggableImg.setAttribute('draggable', 'false');
 
         banner.appendChild(draggableImg);
@@ -2350,7 +2332,6 @@
         const updateImagePosition = () => {
             const bannerHeight = banner.clientHeight;
             const imgHeight = draggableImg.offsetHeight;
-
             currentTop = (bannerHeight - imgHeight) / 2;
             draggableImg.style.top = currentTop + 'px';
         };
@@ -2361,15 +2342,12 @@
         banner.addEventListener('wheel', (e) => {
             if (!draggableImg || isDragging) return;
             e.preventDefault();
-
             const bannerHeight = banner.clientHeight;
             const imgHeight = draggableImg.offsetHeight;
             if (imgHeight <= bannerHeight) return;
-
             const delta = e.deltaY > 0 ? -30 : 30;
             let newTop = currentTop + delta;
             newTop = Math.max(bannerHeight - imgHeight, Math.min(0, newTop));
-
             draggableImg.style.top = newTop + 'px';
             currentTop = newTop;
         }, { passive: false });
@@ -2384,20 +2362,18 @@
             draggableImg.style.transition = 'none';
         });
 
-        window.addEventListener('mousemove', (e) => {
+        mouseMoveHandler = (e) => {
             if (!isDragging || !draggableImg) return;
             e.preventDefault();
-
             const deltaY = e.clientY - dragStartY;
             let newTop = startTop + deltaY;
             const imgHeight = draggableImg.offsetHeight;
             newTop = Math.max(banner.clientHeight - imgHeight, Math.min(0, newTop));
-
             draggableImg.style.top = newTop + 'px';
             currentTop = newTop;
-        });
+        };
 
-        window.addEventListener('mouseup', () => {
+        mouseUpHandler = () => {
             if (isDragging) {
                 isDragging = false;
                 if (draggableImg) {
@@ -2405,35 +2381,30 @@
                     draggableImg.style.transition = 'top 0.1s ease-out';
                 }
             }
-        });
+        };
 
-        draggableImg.addEventListener('touchstart', (e) => {
-            if (draggableImg.offsetHeight <= banner.clientHeight) return;
-            isDragging = true;
-            dragStartY = e.touches[0].clientY;
-            startTop = currentTop;
-            draggableImg.style.transition = 'none';
-        }, { passive: false });
-
-        window.addEventListener('touchmove', (e) => {
+        touchMoveHandler = (e) => {
             if (!isDragging || !draggableImg) return;
             e.preventDefault();
-
             const deltaY = e.touches[0].clientY - dragStartY;
             let newTop = startTop + deltaY;
             const imgHeight = draggableImg.offsetHeight;
             newTop = Math.max(banner.clientHeight - imgHeight, Math.min(0, newTop));
-
             draggableImg.style.top = newTop + 'px';
             currentTop = newTop;
-        }, { passive: false });
+        };
 
-        window.addEventListener('touchend', () => {
+        touchEndHandler = () => {
             if (isDragging) {
                 isDragging = false;
                 if (draggableImg) draggableImg.style.transition = 'top 0.1s ease-out';
             }
-        });
+        };
+
+        window.addEventListener('mousemove', mouseMoveHandler);
+        window.addEventListener('mouseup', mouseUpHandler);
+        window.addEventListener('touchmove', touchMoveHandler, { passive: false });
+        window.addEventListener('touchend', touchEndHandler);
     }
 
     function removeDraggableImage() {
@@ -2443,6 +2414,23 @@
         }
         isDragging = false;
         currentTop = 0;
+
+        if (mouseMoveHandler) {
+            window.removeEventListener('mousemove', mouseMoveHandler);
+            mouseMoveHandler = null;
+        }
+        if (mouseUpHandler) {
+            window.removeEventListener('mouseup', mouseUpHandler);
+            mouseUpHandler = null;
+        }
+        if (touchMoveHandler) {
+            window.removeEventListener('touchmove', touchMoveHandler);
+            touchMoveHandler = null;
+        }
+        if (touchEndHandler) {
+            window.removeEventListener('touchend', touchEndHandler);
+            touchEndHandler = null;
+        }
     }
 
     function initBanner() {
@@ -2677,11 +2665,7 @@
 
         scrollTopButton = document.createElement('button');
         scrollTopButton.className = 'itd-scroll-top-btn';
-        scrollTopButton.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="18 15 12 9 6 15"></polyline>
-        </svg>
-    `;
+        scrollTopButton.innerHTML = ICONS.SCROLL_TOP;
 
         scrollTopButton.style.cssText = `
         position: fixed;
@@ -2907,59 +2891,7 @@
                             const size = isLarge ? 18 : 16;
                             const badge = document.createElement('span');
                             badge.className = 'mod-badge-verify';
-                            badge.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="1.8 1.8 20.4 20.4" fill="none">
-  <defs>
-    <filter id="vBlur_mymod_${size}" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="1.2"/>
-    </filter>
-    <pattern id="vRainbow_mymod_${size}" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
-      <g filter="url(#vBlur_mymod_${size})">
-        <circle cx="4" cy="5" r="6" fill="#ff0044" opacity="1">
-          <animate attributeName="cx" values="4;8;4" dur="6s" repeatCount="indefinite"/>
-          <animate attributeName="cy" values="5;3;5" dur="5s" repeatCount="indefinite"/>
-          <animate attributeName="r" values="6;7;6" dur="7s" repeatCount="indefinite"/>
-        </circle>
-        <circle cx="16" cy="7" r="6" fill="#ff8800" opacity="1">
-          <animate attributeName="cx" values="16;12;16" dur="5s" repeatCount="indefinite"/>
-          <animate attributeName="cy" values="7;9;7" dur="6s" repeatCount="indefinite"/>
-          <animate attributeName="r" values="6;5;6" dur="5.5s" repeatCount="indefinite"/>
-        </circle>
-        <circle cx="8" cy="16" r="6.5" fill="#ffee00" opacity="1">
-          <animate attributeName="cx" values="8;10;8" dur="7s" repeatCount="indefinite"/>
-          <animate attributeName="cy" values="16;14;16" dur="4s" repeatCount="indefinite"/>
-          <animate attributeName="r" values="6.5;7.5;6.5" dur="4.5s" repeatCount="indefinite"/>
-        </circle>
-        <circle cx="20" cy="14" r="5.5" fill="#00ff44" opacity="1">
-          <animate attributeName="cx" values="20;17;20" dur="4s" repeatCount="indefinite"/>
-          <animate attributeName="cy" values="14;16;14" dur="5.5s" repeatCount="indefinite"/>
-          <animate attributeName="r" values="5.5;6.5;5.5" dur="6s" repeatCount="indefinite"/>
-        </circle>
-        <circle cx="3" cy="18" r="5" fill="#00ffff" opacity="1">
-          <animate attributeName="cx" values="3;6;3" dur="5.5s" repeatCount="indefinite"/>
-          <animate attributeName="cy" values="18;16;18" dur="6.5s" repeatCount="indefinite"/>
-          <animate attributeName="r" values="5;6;5" dur="5s" repeatCount="indefinite"/>
-        </circle>
-        <circle cx="12" cy="3" r="5.5" fill="#2288ff" opacity="1">
-          <animate attributeName="cx" values="12;9;12" dur="6.5s" repeatCount="indefinite"/>
-          <animate attributeName="cy" values="3;6;3" dur="4.5s" repeatCount="indefinite"/>
-          <animate attributeName="r" values="5.5;6.5;5.5" dur="5.5s" repeatCount="indefinite"/>
-        </circle>
-        <circle cx="21" cy="20" r="6" fill="#aa44ff" opacity="1">
-          <animate attributeName="cx" values="21;18;21" dur="4.5s" repeatCount="indefinite"/>
-          <animate attributeName="cy" values="20;18;20" dur="5s" repeatCount="indefinite"/>
-          <animate attributeName="r" values="6;5;6" dur="6s" repeatCount="indefinite"/>
-        </circle>
-        <circle cx="6" cy="9" r="4.5" fill="#ff0088" opacity="1">
-          <animate attributeName="cx" values="6;9;6" dur="5s" repeatCount="indefinite"/>
-          <animate attributeName="cy" values="9;7;9" dur="6s" repeatCount="indefinite"/>
-          <animate attributeName="r" values="4.5;5.5;4.5" dur="4s" repeatCount="indefinite"/>
-        </circle>
-      </g>
-    </pattern>
-  </defs>
-  <path fill="url(#vRainbow_mymod_${size})" fill-rule="evenodd" clip-rule="evenodd" d="M9.5924 3.20027C9.34888 3.4078 9.22711 3.51158 9.09706 3.59874C8.79896 3.79854 8.46417 3.93721 8.1121 4.00672C7.95851 4.03705 7.79903 4.04977 7.48008 4.07522C6.6787 4.13918 6.278 4.17115 5.94371 4.28923C5.17051 4.56233 4.56233 5.17051 4.28923 5.94371C4.17115 6.278 4.13918 6.6787 4.07522 7.48008C4.04977 7.79903 4.03705 7.95851 4.00672 8.1121C3.93721 8.46417 3.79854 8.79896 3.59874 9.09706C3.51158 9.22711 3.40781 9.34887 3.20027 9.5924C2.67883 10.2043 2.4181 10.5102 2.26522 10.8301C1.91159 11.57 1.91159 12.43 2.26522 13.1699C2.41811 13.4898 2.67883 13.7957 3.20027 14.4076C3.40778 14.6511 3.51158 14.7729 3.59874 14.9029C3.79854 15.201 3.93721 15.5358 4.00672 15.8879C4.03705 16.0415 4.04977 16.201 4.07522 16.5199C4.13918 17.3213 4.17115 17.722 4.28923 18.0563C4.56233 18.8295 5.17051 19.4377 5.94371 19.7108C6.278 19.8288 6.6787 19.8608 7.48008 19.9248C7.79903 19.9502 7.95851 19.963 8.1121 19.9933C8.46417 20.0628 8.79896 20.2015 9.09706 20.4013C9.22711 20.4884 9.34887 20.5922 9.5924 20.7997C10.2043 21.3212 10.5102 21.5819 10.8301 21.7348C11.57 22.0884 12.43 22.0884 13.1699 21.7348C13.4898 21.5819 13.7957 21.3212 14.4076 20.7997C14.6511 20.5922 14.7729 20.4884 14.9029 20.4013C15.201 20.2015 15.5358 20.0628 15.8879 19.9933C16.0415 19.963 16.201 19.9502 16.5199 19.9248C17.3213 19.8608 17.722 19.8288 18.0563 19.7108C18.8295 19.4377 19.4377 18.8295 19.7108 18.0563C19.8288 17.722 19.8608 17.3213 19.9248 16.5199C19.9502 16.201 19.963 16.0415 19.9933 15.8879C20.0628 15.5358 20.2015 15.201 20.4013 14.9029C20.4884 14.7729 20.5922 14.6511 20.7997 14.4076C21.3212 13.7957 21.5819 13.4898 21.7348 13.1699C22.0884 12.43 22.0884 11.57 21.7348 10.8301C21.5819 10.5102 21.3212 10.2043 20.7997 9.5924C20.5922 9.34887 20.4884 9.22711 20.4013 9.09706C20.2015 8.79896 20.0628 8.46417 19.9933 8.1121C19.963 7.95851 19.9502 7.79903 19.9248 7.48008C19.8608 6.6787 19.8288 6.278 19.7108 5.94371C19.4377 5.17051 18.8295 4.56233 18.0563 4.28923C17.722 4.17115 17.3213 4.13918 16.5199 4.07522C16.201 4.04977 16.0415 4.03705 15.8879 4.00672C15.5358 3.93721 15.201 3.79854 14.9029 3.59874C14.7729 3.51158 14.6511 3.40781 14.4076 3.20027C13.7957 2.67883 13.4898 2.41811 13.1699 2.26522C12.43 1.91159 11.57 1.91159 10.8301 2.26522C10.5102 2.4181 10.2043 2.67883 9.5924 3.20027Z"/>
-  <path fill="black" d="M16.3735 9.86314C16.6913 9.5453 16.6913 9.03 16.3735 8.71216C16.0557 8.39433 15.5403 8.39433 15.2225 8.71216L10.3723 13.5624L8.77746 11.9676C8.45963 11.6498 7.94432 11.6498 7.62649 11.9676C7.30866 12.2854 7.30866 12.8007 7.62649 13.1186L9.79678 15.2889C10.1146 15.6067 10.6299 15.6067 10.9478 15.2889L16.3735 9.86314Z"/>
-</svg>`;
+                            badge.innerHTML = ICONS.badge(size);
                             badge.style.cssText = `display:inline-flex!important;align-items:center!important;width:${size}px!important;height:${size}px!important;flex-shrink:0!important;vertical-align:middle!important;margin-left:4px!important;`;
                             const voronoi = container.querySelector('.mod-badge-voronoi');
                             if (voronoi) container.insertBefore(badge, voronoi);
@@ -2972,59 +2904,7 @@
                     const isLarge = container.classList.contains(SELECTORS.largeNickClasses[0]) && container.classList.contains(SELECTORS.largeNickClasses[1]);
                     if (!container.querySelector('.mod-badge-voronoi')) {
                         const size = isLarge ? 18 : 16;
-                        const badgeSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="1.8 1.8 20.4 20.4" fill="none">
-  <defs>
-    <filter id="vBlur_mymod_${size}" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="1.2"/>
-    </filter>
-    <pattern id="vRainbow_mymod_${size}" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
-      <g filter="url(#vBlur_mymod_${size})">
-        <circle cx="4" cy="5" r="6" fill="#ff0044" opacity="1">
-          <animate attributeName="cx" values="4;8;4" dur="6s" repeatCount="indefinite"/>
-          <animate attributeName="cy" values="5;3;5" dur="5s" repeatCount="indefinite"/>
-          <animate attributeName="r" values="6;7;6" dur="7s" repeatCount="indefinite"/>
-        </circle>
-        <circle cx="16" cy="7" r="6" fill="#ff8800" opacity="1">
-          <animate attributeName="cx" values="16;12;16" dur="5s" repeatCount="indefinite"/>
-          <animate attributeName="cy" values="7;9;7" dur="6s" repeatCount="indefinite"/>
-          <animate attributeName="r" values="6;5;6" dur="5.5s" repeatCount="indefinite"/>
-        </circle>
-        <circle cx="8" cy="16" r="6.5" fill="#ffee00" opacity="1">
-          <animate attributeName="cx" values="8;10;8" dur="7s" repeatCount="indefinite"/>
-          <animate attributeName="cy" values="16;14;16" dur="4s" repeatCount="indefinite"/>
-          <animate attributeName="r" values="6.5;7.5;6.5" dur="4.5s" repeatCount="indefinite"/>
-        </circle>
-        <circle cx="20" cy="14" r="5.5" fill="#00ff44" opacity="1">
-          <animate attributeName="cx" values="20;17;20" dur="4s" repeatCount="indefinite"/>
-          <animate attributeName="cy" values="14;16;14" dur="5.5s" repeatCount="indefinite"/>
-          <animate attributeName="r" values="5.5;6.5;5.5" dur="6s" repeatCount="indefinite"/>
-        </circle>
-        <circle cx="3" cy="18" r="5" fill="#00ffff" opacity="1">
-          <animate attributeName="cx" values="3;6;3" dur="5.5s" repeatCount="indefinite"/>
-          <animate attributeName="cy" values="18;16;18" dur="6.5s" repeatCount="indefinite"/>
-          <animate attributeName="r" values="5;6;5" dur="5s" repeatCount="indefinite"/>
-        </circle>
-        <circle cx="12" cy="3" r="5.5" fill="#2288ff" opacity="1">
-          <animate attributeName="cx" values="12;9;12" dur="6.5s" repeatCount="indefinite"/>
-          <animate attributeName="cy" values="3;6;3" dur="4.5s" repeatCount="indefinite"/>
-          <animate attributeName="r" values="5.5;6.5;5.5" dur="5.5s" repeatCount="indefinite"/>
-        </circle>
-        <circle cx="21" cy="20" r="6" fill="#aa44ff" opacity="1">
-          <animate attributeName="cx" values="21;18;21" dur="4.5s" repeatCount="indefinite"/>
-          <animate attributeName="cy" values="20;18;20" dur="5s" repeatCount="indefinite"/>
-          <animate attributeName="r" values="6;5;6" dur="6s" repeatCount="indefinite"/>
-        </circle>
-        <circle cx="6" cy="9" r="4.5" fill="#ff0088" opacity="1">
-          <animate attributeName="cx" values="6;9;6" dur="5s" repeatCount="indefinite"/>
-          <animate attributeName="cy" values="9;7;9" dur="6s" repeatCount="indefinite"/>
-          <animate attributeName="r" values="4.5;5.5;4.5" dur="4s" repeatCount="indefinite"/>
-        </circle>
-      </g>
-    </pattern>
-  </defs>
-  <path fill="url(#vRainbow_mymod_${size})" fill-rule="evenodd" clip-rule="evenodd" d="M9.5924 3.20027C9.34888 3.4078 9.22711 3.51158 9.09706 3.59874C8.79896 3.79854 8.46417 3.93721 8.1121 4.00672C7.95851 4.03705 7.79903 4.04977 7.48008 4.07522C6.6787 4.13918 6.278 4.17115 5.94371 4.28923C5.17051 4.56233 4.56233 5.17051 4.28923 5.94371C4.17115 6.278 4.13918 6.6787 4.07522 7.48008C4.04977 7.79903 4.03705 7.95851 4.00672 8.1121C3.93721 8.46417 3.79854 8.79896 3.59874 9.09706C3.51158 9.22711 3.40781 9.34887 3.20027 9.5924C2.67883 10.2043 2.4181 10.5102 2.26522 10.8301C1.91159 11.57 1.91159 12.43 2.26522 13.1699C2.41811 13.4898 2.67883 13.7957 3.20027 14.4076C3.40778 14.6511 3.51158 14.7729 3.59874 14.9029C3.79854 15.201 3.93721 15.5358 4.00672 15.8879C4.03705 16.0415 4.04977 16.201 4.07522 16.5199C4.13918 17.3213 4.17115 17.722 4.28923 18.0563C4.56233 18.8295 5.17051 19.4377 5.94371 19.7108C6.278 19.8288 6.6787 19.8608 7.48008 19.9248C7.79903 19.9502 7.95851 19.963 8.1121 19.9933C8.46417 20.0628 8.79896 20.2015 9.09706 20.4013C9.22711 20.4884 9.34887 20.5922 9.5924 20.7997C10.2043 21.3212 10.5102 21.5819 10.8301 21.7348C11.57 22.0884 12.43 22.0884 13.1699 21.7348C13.4898 21.5819 13.7957 21.3212 14.4076 20.7997C14.6511 20.5922 14.7729 20.4884 14.9029 20.4013C15.201 20.2015 15.5358 20.0628 15.8879 19.9933C16.0415 19.963 16.201 19.9502 16.5199 19.9248C17.3213 19.8608 17.722 19.8288 18.0563 19.7108C18.8295 19.4377 19.4377 18.8295 19.7108 18.0563C19.8288 17.722 19.8608 17.3213 19.9248 16.5199C19.9502 16.201 19.963 16.0415 19.9933 15.8879C20.0628 15.5358 20.2015 15.201 20.4013 14.9029C20.4884 14.7729 20.5922 14.6511 20.7997 14.4076C21.3212 13.7957 21.5819 13.4898 21.7348 13.1699C22.0884 12.43 22.0884 11.57 21.7348 10.8301C21.5819 10.5102 21.3212 10.2043 20.7997 9.5924C20.5922 9.34887 20.4884 9.22711 20.4013 9.09706C20.2015 8.79896 20.0628 8.46417 19.9933 8.1121C19.963 7.95851 19.9502 7.79903 19.9248 7.48008C19.8608 6.6787 19.8288 6.278 19.7108 5.94371C19.4377 5.17051 18.8295 4.56233 18.0563 4.28923C17.722 4.17115 17.3213 4.13918 16.5199 4.07522C16.201 4.04977 16.0415 4.03705 15.8879 4.00672C15.5358 3.93721 15.201 3.79854 14.9029 3.59874C14.7729 3.51158 14.6511 3.40781 14.4076 3.20027C13.7957 2.67883 13.4898 2.41811 13.1699 2.26522C12.43 1.91159 11.57 1.91159 10.8301 2.26522C10.5102 2.4181 10.2043 2.67883 9.5924 3.20027Z"/>
-  <path fill="black" d="M16.3735 9.86314C16.6913 9.5453 16.6913 9.03 16.3735 8.71216C16.0557 8.39433 15.5403 8.39433 15.2225 8.71216L10.3723 13.5624L8.77746 11.9676C8.45963 11.6498 7.94432 11.6498 7.62649 11.9676C7.30866 12.2854 7.30866 12.8007 7.62649 13.1186L9.79678 15.2889C10.1146 15.6067 10.6299 15.6067 10.9478 15.2889L16.3735 9.86314Z"/>
-</svg>`;
+                        const badgeSVG = ICONS.badge(size);
                         const badge = document.createElement('span');
                         badge.className = 'mod-badge-voronoi';
                         badge.innerHTML = badgeSVG;
@@ -3067,7 +2947,7 @@
                 const oldSvg = nBTOblock.querySelector('svg');
                 if (!oldSvg) return;
 
-                const YOUR_ICON = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='36' height='36'><defs><filter id='glow' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur in='SourceGraphic' stdDeviation='3' result='blur'/></filter><linearGradient id='rainbow' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' style='stop-color:#ff0000'/><stop offset='16%' style='stop-color:#ff8800'/><stop offset='33%' style='stop-color:#ffff00'/><stop offset='50%' style='stop-color:#00ff00'/><stop offset='66%' style='stop-color:#00ffff'/><stop offset='83%' style='stop-color:#0000ff'/><stop offset='100%' style='stop-color:#ff00ff'/></linearGradient></defs><rect width='100' height='100' rx='20' fill='#1a1a1a'/><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(#rainbow)' filter='url(#glow)' opacity='0.9'>N</text><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(#rainbow)'>N</text></svg>`;
+                const YOUR_ICON = ICONS.YOUR_LOGO;
 
                 const link = document.createElement('a');
                 link.href = 'https://t.me/NeuroSFW';
@@ -3202,7 +3082,7 @@
 
         async function insertStickerToComment(stickerId, stickerUrl) {
             if (stickerBtn) {
-                stickerBtn.innerHTML = LOADING_ICON;
+                stickerBtn.innerHTML = ICONS.LOADING;
                 stickerBtn.style.opacity = '0.6';
                 stickerBtn.style.pointerEvents = 'none';
             }
@@ -3213,7 +3093,7 @@
 
             if (!previewContainer || !sendBtn) {
                 if (stickerBtn) {
-                    stickerBtn.innerHTML = STICKER_BUTTON_ICON;
+                    stickerBtn.innerHTML = ICONS.STICKER_BUTTON;
                     stickerBtn.style.opacity = '';
                     stickerBtn.style.pointerEvents = '';
                 }
@@ -3266,7 +3146,7 @@
                 sendBtn.style.transform = origSendTransform;
                 sendBtn.disabled = true;
                 if (stickerBtn) {
-                    stickerBtn.innerHTML = STICKER_BUTTON_ICON;
+                    stickerBtn.innerHTML = ICONS.STICKER_BUTTON;
                     stickerBtn.style.opacity = '';
                     stickerBtn.style.pointerEvents = '';
                 }
@@ -3279,7 +3159,7 @@
                 if (!stickerId || !stickerUrl) return;
 
                 sendBtn.disabled = true;
-                sendBtn.innerHTML = LOADING_ICON;
+                sendBtn.innerHTML = ICONS.LOADING;
 
                 try {
                     const commentField = document.querySelector('[contenteditable="true"][data-placeholder*="комментарий"]');
@@ -3324,16 +3204,6 @@
             previewContainer.insertBefore(previewDiv, previewContainer.firstChild);
         }
 
-        const RECENT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
-        const ADD_PACK_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4" ry="4"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`;
-        const ADD_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
-        const EDIT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
-        const DELETE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
-        const CHECK_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-        const TRASH_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
-        const STICKER_BUTTON_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M9 16C9.85038 16.6303 10.8846 17 12 17C13.1154 17 14.1496 16.6303 15 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><ellipse cx="15" cy="10.5" rx="1" ry="1.5" fill="currentColor"/><ellipse cx="9" cy="10.5" rx="1" ry="1.5" fill="currentColor"/><path d="M15 22H12C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C22 4.92893 22 7.28595 22 12V15M15 22C18.866 22 22 18.866 22 15M15 22C15 20.1387 15 19.2081 15.2447 18.4549C15.7393 16.9327 16.9327 15.7393 18.4549 15.2447C19.2081 15 20.1387 15 22 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
-        const LOADING_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spin"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>`;
-        const EMPTY_PACK_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="3" opacity="0.3"/></svg>`;
 
         const MAX_NAME_LENGTH = 20;
         const DEFAULT_PACK_NAME = 'Новый пакет';
@@ -3367,7 +3237,6 @@
         let stickerBtn = null, isProcessing = false, packHeaders = [], tabButtons = [], recentBtn = null;
         let isScrollingFromTab = false, editMode = false, currentEditPack = null;
         let dragState = { packKey: null, draggedIndex: null, placeholderIndex: null };
-        let skipDeleteConfirm = false;
 
         if (!document.getElementById('sticker-drag-styles')) {
             const style = document.createElement('style');
@@ -3544,7 +3413,7 @@
 
                 const addBtn = scrollContainer?.querySelector(`.pack-grid[data-pack="${packKey}"] .add-item-btn`);
                 if (addBtn) {
-                    addBtn.innerHTML = LOADING_ICON;
+                    addBtn.innerHTML = ICONS.LOADING;
                     addBtn.style.pointerEvents = 'none';
                 }
 
@@ -3553,7 +3422,7 @@
                     const croppedImage = await showCropEditor(imageUrl);
                     if (!croppedImage) {
                         if (addBtn) {
-                            addBtn.innerHTML = ADD_ICON;
+                            addBtn.innerHTML = ICONS.ADD;
                             addBtn.style.pointerEvents = 'auto';
                         }
                         return;
@@ -3578,7 +3447,7 @@
                 } catch (err) {
                     alert('Ошибка загрузки: ' + err.message);
                     if (addBtn) {
-                        addBtn.innerHTML = ADD_ICON;
+                        addBtn.innerHTML = ICONS.ADD;
                         addBtn.style.pointerEvents = 'auto';
                     }
                 }
@@ -4094,7 +3963,7 @@
             if (isEditingThisPack) {
                 const addBtn = document.createElement('button');
                 addBtn.className = 'add-item-btn';
-                addBtn.innerHTML = ADD_ICON;
+                addBtn.innerHTML = ICONS.ADD;
                 addBtn.title = 'Добавить стикер';
                 addBtn.style.cssText = 'aspect-ratio:1;background:var(--bg-secondary,rgba(128,128,128,0.08));border:2px dashed var(--border-color,rgba(255,255,255,0.2));border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;color:var(--text-secondary,rgba(255,255,255,0.5));transition:all 0.15s';
                 addBtn.onmouseenter = () => { addBtn.style.borderColor = 'var(--accent-primary,#0080FF)'; addBtn.style.color = 'var(--accent-primary,#0080FF)'; };
@@ -4158,7 +4027,7 @@
                 }
 
                 const deleteBtn = document.createElement('div');
-                deleteBtn.innerHTML = DELETE_ICON;
+                deleteBtn.innerHTML = ICONS.DELETE;
                 deleteBtn.style.cssText = 'position:absolute;top:2px;right:2px;width:16px;height:16px;background:rgba(0,0,0,0.6);border-radius:50%;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.7);transition:all 0.15s;z-index:2;pointer-events:auto;font-size:12px;';
                 deleteBtn.onmouseenter = (e) => { e.stopPropagation(); deleteBtn.style.background = '#ff4444'; };
                 deleteBtn.onmouseleave = (e) => { e.stopPropagation(); deleteBtn.style.background = 'rgba(0,0,0,0.6)'; };
@@ -4239,7 +4108,7 @@
                         img.style.cssText = 'width:24px;height:24px;object-fit:contain;border-radius:6px;';
                         btn.appendChild(img);
                     } else {
-                        btn.innerHTML = EMPTY_PACK_ICON;
+                        btn.innerHTML = ICONS.EMPTY_PACK;
                         btn.style.color = 'rgba(128,128,128,0.5)';
                     }
                     btn.title = pack.name || DEFAULT_PACK_NAME;
@@ -4262,7 +4131,7 @@
             header.style.cssText = 'display:flex;align-items:center;padding:8px;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.1));gap:4px;flex-shrink:0;';
 
             recentBtn = document.createElement('button');
-            recentBtn.innerHTML = RECENT_ICON;
+            recentBtn.innerHTML = ICONS.RECENT;
             recentBtn.title = 'Недавние';
             recentBtn.style.cssText = 'background:var(--accent-primary,#0080FF);border:none;width:32px;height:32px;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;color:white;';
             recentBtn.onclick = () => { exitEditMode(); scrollToPack('recent'); };
@@ -4287,7 +4156,7 @@
                     img.style.cssText = 'width:24px;height:24px;object-fit:contain;border-radius:6px;';
                     btn.appendChild(img);
                 } else {
-                    btn.innerHTML = EMPTY_PACK_ICON;
+                    btn.innerHTML = ICONS.EMPTY_PACK;
                     btn.style.color = 'rgba(128,128,128,0.5)';
                 }
                 btn.title = pack.name || DEFAULT_PACK_NAME;
@@ -4298,7 +4167,7 @@
             });
 
             const addPackBtn = document.createElement('button');
-            addPackBtn.innerHTML = ADD_PACK_ICON;
+            addPackBtn.innerHTML = ICONS.ADD_PACK;
             addPackBtn.title = 'Создать стикерпак';
             addPackBtn.style.cssText = 'background:transparent;border:none;width:32px;height:32px;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;color:var(--text-secondary,rgba(255,255,255,0.5));';
             addPackBtn.onclick = () => {
@@ -4406,7 +4275,7 @@
 
                 if (key !== 'recent') {
                     const editBtn = document.createElement('button');
-                    editBtn.innerHTML = EDIT_ICON;
+                    editBtn.innerHTML = ICONS.EDIT;
                     editBtn.title = 'Редактировать';
                     editBtn.style.cssText = 'background:transparent;border:none;width:20px;height:20px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;color:inherit;';
                     editBtn.onclick = () => {
@@ -4417,14 +4286,14 @@
 
                     const deletePackBtn = document.createElement('button');
                     deletePackBtn.className = 'delete-pack-btn';
-                    deletePackBtn.innerHTML = TRASH_ICON;
+                    deletePackBtn.innerHTML = ICONS.TRASH;
                     deletePackBtn.title = 'Удалить пак';
                     deletePackBtn.style.cssText = 'display:none;background:#ff4444;border:none;width:24px;height:24px;border-radius:6px;cursor:pointer;padding:0;align-items:center;justify-content:center;';
                     deletePackBtn.onclick = () => { if (confirm('Удалить пак?')) deleteStickerPack(key); };
                     nameContainer.appendChild(deletePackBtn);
 
                     const exitBtn = document.createElement('button');
-                    exitBtn.innerHTML = CHECK_ICON;
+                    exitBtn.innerHTML = ICONS.CHECK;
                     exitBtn.title = 'Готово';
                     exitBtn.style.cssText = 'display:none;background:var(--accent-primary,#0080FF);border:none;width:24px;height:24px;border-radius:6px;cursor:pointer;padding:0;align-items:center;justify-content:center;';
                     exitBtn.onclick = exitEditMode;
@@ -4505,7 +4374,7 @@
 
             stickerBtn = document.createElement('button');
             stickerBtn.className = 'sticker-btn';
-            stickerBtn.innerHTML = STICKER_BUTTON_ICON;
+            stickerBtn.innerHTML = ICONS.STICKER_BUTTON;
             stickerBtn.style.cssText = 'background:transparent;border:none;cursor:pointer;padding:8px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-secondary);margin-right:5px;width:36px;height:36px;';
             stickerBtn.onmouseenter = () => { stickerBtn.style.backgroundColor = 'var(--bg-hover,rgba(255,255,255,0.08))'; showPanel(); };
             stickerBtn.onmouseleave = () => { stickerBtn.style.backgroundColor = 'transparent'; hidePanel(); };
@@ -4539,7 +4408,6 @@
 
     })();
 
-    let messagesButtonAdded = false;
     let lastMemeIndex = -1;
     let messagesOverlay = null;
 
@@ -4618,11 +4486,7 @@
 
         const iconSpan = document.createElement('span');
         iconSpan.className = SELECTORS.navIcon;
-        iconSpan.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-            <path fill="currentColor" fill-rule="evenodd" d="M5 3a3 3 0 00-3 3v10a3 3 0 003 3h1v2.47a.5.5 0 00.85.36L11.12 19H19a3 3 0 003-3V6a3 3 0 00-3-3H5zm2 5a1 1 0 000 2h10a1 1 0 100-2H7zm0 4a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/>
-        </svg>
-    `;
+        iconSpan.innerHTML = ICONS.MESSAGES;
         const textSpan = document.createElement('span');
         textSpan.textContent = 'Сообщения';
         messagesLink.appendChild(iconSpan);
