@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.5.9
+// @version      2.5.10
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4689,29 +4689,75 @@
     document.head.appendChild(styleUnderline);
 
     let modalOverlay = null;
-    const modalObserver = new MutationObserver(() => {
-        const modal = document.querySelector('.GYYZ, .Fy9C, [class*="modal"]');
-        if (modal && !modalOverlay) {
-            modalOverlay = document.createElement('div');
-            modalOverlay.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.4);
-                backdrop-filter: blur(2px);
-                z-index: 999;
-                pointer-events: none;
-                transition: opacity 0.2s ease;
-            `;
-            document.body.appendChild(modalOverlay);
-        } else if (!modal && modalOverlay) {
-            modalOverlay.remove();
-            modalOverlay = null;
+    let updateTimeout = null;
+
+    function isModalVisible() {
+        const modals = document.querySelectorAll('.GYYZ, .Fy9C, [class*="modal"]');
+        for (const modal of modals) {
+            const style = getComputedStyle(modal);
+            if (style.display !== 'none' &&
+                style.visibility !== 'hidden' &&
+                style.opacity !== '0') {
+                const rect = modal.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                    return modal;
+                }
+            }
         }
+        return null;
+    }
+
+    function updateModalOverlay() {
+        if (updateTimeout) {
+            cancelAnimationFrame(updateTimeout);
+            updateTimeout = null;
+        }
+        updateTimeout = requestAnimationFrame(() => {
+            const modal = isModalVisible();
+            if (modal) {
+                if (!modalOverlay) {
+                    modalOverlay = document.createElement('div');
+                    modalOverlay.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.4);
+                    backdrop-filter: blur(2px);
+                    z-index: 999;
+                    pointer-events: none;
+                    transition: opacity 0.2s ease;
+                `;
+                    document.body.appendChild(modalOverlay);
+                }
+            } else {
+                if (modalOverlay) {
+                    modalOverlay.remove();
+                    modalOverlay = null;
+                }
+            }
+            updateTimeout = null;
+        });
+    }
+
+    const modalObserver = new MutationObserver(() => {
+        updateModalOverlay();
     });
-    modalObserver.observe(document.body, { childList: true, subtree: true });
+    modalObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class']
+    });
+
+    window.addEventListener('popstate', () => {
+        updateModalOverlay();
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) updateModalOverlay();
+    });
 
     const styleIcons = document.createElement('style');
     styleIcons.textContent = `
