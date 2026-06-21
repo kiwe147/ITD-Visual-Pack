@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.5.10
+// @version      2.5.11
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2932,15 +2932,14 @@
             });
             observer.observe(document.body, { childList: true, subtree: true });
 
-            let iconReplaced = false;
-
             function replaceIcon() {
-                if (iconReplaced) return;
+                const container = document.querySelector('.' + SELECTORS.logoContainer);
+                if (!container) return;
 
-                const nBTOblock = document.querySelector('.' + SELECTORS.logoContainer);
-                if (!nBTOblock) return;
+                const customLink = container.querySelector('a[href="https://t.me/NeuroSFW"]');
+                if (customLink) return;
 
-                const oldSvg = nBTOblock.querySelector('svg');
+                const oldSvg = container.querySelector('svg');
                 if (!oldSvg) return;
 
                 const YOUR_ICON = ICONS.YOUR_LOGO;
@@ -2952,54 +2951,127 @@
                 link.style.display = 'inline-flex';
                 link.style.alignItems = 'center';
 
-                const container = document.createElement('div');
-                container.innerHTML = YOUR_ICON;
-                const newSvg = container.firstElementChild;
+                const temp = document.createElement('div');
+                temp.innerHTML = YOUR_ICON;
+                const newSvg = temp.firstElementChild;
                 newSvg.setAttribute('width', '36');
                 newSvg.setAttribute('height', '36');
                 link.appendChild(newSvg);
 
-                oldSvg.parentNode.replaceChild(link, oldSvg);
-                iconReplaced = true;
+                const wrapper = document.createElement('div');
+                wrapper.style.cssText = `
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                `;
 
                 const versionSpan = document.createElement('div');
                 versionSpan.textContent = `v${GM_info.script.version}`;
                 versionSpan.style.cssText = `
-            font-size: 8px;
-            color: #888;
-            text-align: center;
-            margin-top: 2px;
-            font-family: monospace;
-            white-space: nowrap;
-        `;
+                    font-size: 8px;
+                    color: #888;
+                    text-align: center;
+                    margin-top: 2px;
+                    font-family: monospace;
+                    white-space: nowrap;
+                `;
 
-                const wrapper = document.createElement('div');
-                wrapper.style.cssText = `
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        `;
+                wrapper.appendChild(link);
+                wrapper.appendChild(versionSpan);
 
-                const parent = nBTOblock;
-                const oldLink = parent.querySelector('a');
-                if (oldLink) {
-                    parent.insertBefore(wrapper, oldLink);
-                    wrapper.appendChild(oldLink);
-                    wrapper.appendChild(versionSpan);
+                oldSvg.parentNode.replaceChild(wrapper, oldSvg);
+            }
+
+            replaceIcon();
+
+            const iconObserver = new MutationObserver(() => replaceIcon());
+            iconObserver.observe(document.body, { childList: true, subtree: true });
+
+            let resizeTimer;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(replaceIcon, 300);
+            });
+            let updateAvailable = false;
+            const updateUrl = 'https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js';
+
+            function versionCompare(v1, v2) {
+                const a = v1.split('.').map(Number);
+                const b = v2.split('.').map(Number);
+                for (let i = 0; i < Math.max(a.length, b.length); i++) {
+                    const na = a[i] || 0, nb = b[i] || 0;
+                    if (na > nb) return 1;
+                    if (na < nb) return -1;
                 }
+                return 0;
             }
 
-            function initIconReplacement() {
-                replaceIcon();
-                const observer = new MutationObserver(() => {
-                    replaceIcon();
+            function createUpdateButton() {
+                const container = document.querySelector('.' + SELECTORS.logoContainer);
+                if (!container) return;
+                if (container.querySelector('.itd-update-sidebar-btn')) return;
+
+                const versionDiv = container.querySelector('div[style*="font-size: 8px"]');
+                const targetButton = container.querySelector('.jR4T');
+                if (!versionDiv || !targetButton) return;
+
+                const btn = document.createElement('button');
+                btn.className = 'itd-update-sidebar-btn';
+                btn.innerHTML = '⬇️ Обновить';
+                btn.title = 'Доступна новая версия скрипта';
+                btn.style.cssText = `
+        background: var(--accent-primary, #0080FF);
+        color: #fff;
+        border: none;
+        border-radius: 20px;
+        padding: 4px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: 0.2s;
+        margin-top: 4px;
+        display: inline-block;
+    `;
+                btn.onmouseenter = () => btn.style.opacity = '0.8';
+                btn.onmouseleave = () => btn.style.opacity = '1';
+                btn.onclick = () => {
+                    window.open(updateUrl, '_blank');
+                    btn.remove();
+                };
+
+                versionDiv.parentNode.insertBefore(btn, targetButton);
+            }
+
+            function checkForUpdate() {
+                const currentVersion = GM_info.script.version;
+                GM_xmlhttpRequest({
+                    method: 'GET',
+                    url: updateUrl,
+                    onload: function (res) {
+                        if (res.status !== 200) return;
+                        const scriptText = res.responseText;
+                        const versionMatch = scriptText.match(/\/\/\s*@version\s+([\d.]+)/);
+                        if (!versionMatch) return;
+                        const latestVersion = versionMatch[1];
+                        if (versionCompare(latestVersion, currentVersion) > 0) {
+                            updateAvailable = true;
+                            createUpdateButton();
+                        }
+                    },
+                    onerror: function () { }
                 });
-                observer.observe(document.body, { childList: true, subtree: true });
             }
 
-            initIconReplacement();
+            checkForUpdate();
 
+            const originalReplaceIcon = replaceIcon;
+            replaceIcon = function () {
+                originalReplaceIcon();
+                if (updateAvailable) {
+                    createUpdateButton();
+                }
+            };
         } catch (e) { }
     }
 
