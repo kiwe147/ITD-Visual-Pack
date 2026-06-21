@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.5.14
+// @version      2.5.15
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -5176,22 +5176,30 @@
                 tempInput.style.display = 'none';
                 document.body.appendChild(tempInput);
 
+                let handled = false;
+
                 tempInput.addEventListener('change', function (e) {
+                    if (handled) return;
                     if (!this.files || !this.files.length) {
                         document.body.removeChild(tempInput);
                         return;
                     }
 
-                    const originalFile = this.files[0];
-                    const newFileName = originalFile.name.replace(/\.[^.]+$/, '') + '.gif';
-                    const newFile = new File([originalFile], newFileName, { type: 'image/gif' });
                     const dt = new DataTransfer();
-                    dt.items.add(newFile);
+                    for (const file of this.files) {
+                        if (file.type !== 'image/gif' && file.type.startsWith('image/')) {
+                            const newFileName = file.name.replace(/\.[^.]+$/, '') + '.gif';
+                            const newFile = new File([file], newFileName, { type: 'image/gif' });
+                            dt.items.add(newFile);
+                        } else {
+                            dt.items.add(file);
+                        }
+                    }
                     input.files = dt.files;
-
                     const changeEvent = new Event('change', { bubbles: true });
                     input.dispatchEvent(changeEvent);
                     document.body.removeChild(tempInput);
+                    handled = true;
                 });
 
                 tempInput.click();
@@ -5199,9 +5207,156 @@
         });
     }
 
+    /* function overridePasteHandler() {
+        const originalAddEventListener = EventTarget.prototype.addEventListener;
+        EventTarget.prototype.addEventListener = function (type, listener, options) {
+            if (type === 'paste') {
+                const wrappedListener = function (e) {
+                    const items = e.clipboardData?.items;
+                    if (!items) return;
+
+                    let hasImage = false;
+                    const imageFiles = [];
+
+                    for (const item of items) {
+                        if (item.type.startsWith('image/')) {
+                            hasImage = true;
+                            const file = item.getAsFile();
+                            if (file) {
+                                imageFiles.push(file);
+                            }
+                        }
+                    }
+
+                    if (!hasImage || !imageFiles.length) {
+                        return listener.call(this, e);
+                    }
+
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const dt = new DataTransfer();
+                    for (const file of imageFiles) {
+                        let finalFile = file;
+                        if (file.type !== 'image/gif') {
+                            const newFileName = (file.name || 'pasted_image').replace(/\.[^.]+$/, '') + '.gif';
+                            finalFile = new File([file], newFileName, { type: 'image/gif' });
+                        }
+                        dt.items.add(finalFile);
+                    }
+
+                    const pasteEvent = new ClipboardEvent('paste', {
+                        clipboardData: dt,
+                        bubbles: true,
+                        cancelable: true
+                    });
+
+                    this.dispatchEvent(pasteEvent);
+                };
+                return originalAddEventListener.call(this, type, wrappedListener, options);
+            }
+            return originalAddEventListener.call(this, type, listener, options);
+        };
+    } */
+
+    function overrideDragAndDrop() {
+        document.addEventListener('drop', function (e) {
+            const files = e.dataTransfer?.files;
+            if (!files || !files.length) return;
+
+            const dt = new DataTransfer();
+            let modified = false;
+            for (const file of files) {
+                if (file.type !== 'image/gif' && file.type.startsWith('image/')) {
+                    const newFileName = file.name.replace(/\.[^.]+$/, '') + '.gif';
+                    const newFile = new File([file], newFileName, { type: 'image/gif' });
+                    dt.items.add(newFile);
+                    modified = true;
+                } else {
+                    dt.items.add(file);
+                }
+            }
+
+            if (modified) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const target = e.target.closest('[contenteditable="true"], input, textarea');
+                if (target) {
+                    const dropEvent = new DragEvent('drop', {
+                        dataTransfer: dt,
+                        bubbles: true,
+                        cancelable: true
+                    });
+                    target.dispatchEvent(dropEvent);
+                }
+            }
+        }, true);
+
+        document.addEventListener('dragover', function (e) {
+            e.preventDefault();
+        }, true);
+    }
+
+    function overrideFetchAndXHR() {
+        const originalSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = function (body) {
+            if (body instanceof FormData) {
+                const newFormData = new FormData();
+                for (const [key, value] of body.entries()) {
+                    if (value instanceof File && value.type !== 'image/gif' && value.type.startsWith('image/')) {
+                        const newFileName = value.name.replace(/\.[^.]+$/, '') + '.gif';
+                        const newFile = new File([value], newFileName, { type: 'image/gif' });
+                        newFormData.append(key, newFile);
+                    } else {
+                        newFormData.append(key, value);
+                    }
+                }
+                return originalSend.call(this, newFormData);
+            }
+            return originalSend.call(this, body);
+        };
+
+        const originalFetch = window.fetch;
+        window.fetch = function (input, init) {
+            if (init?.body instanceof FormData) {
+                const newFormData = new FormData();
+                for (const [key, value] of init.body.entries()) {
+                    if (value instanceof File && value.type !== 'image/gif' && value.type.startsWith('image/')) {
+                        const newFileName = value.name.replace(/\.[^.]+$/, '') + '.gif';
+                        const newFile = new File([value], newFileName, { type: 'image/gif' });
+                        newFormData.append(key, newFile);
+                    } else {
+                        newFormData.append(key, value);
+                    }
+                }
+                init.body = newFormData;
+            }
+            return originalFetch.call(this, input, init);
+        };
+    }
+
+    function overrideFileReader() {
+        const originalReadAsDataURL = FileReader.prototype.readAsDataURL;
+        FileReader.prototype.readAsDataURL = function (blob) {
+            if (blob instanceof File && blob.type !== 'image/gif' && blob.type.startsWith('image/')) {
+                const newFileName = blob.name.replace(/\.[^.]+$/, '') + '.gif';
+                const newFile = new File([blob], newFileName, { type: 'image/gif' });
+                return originalReadAsDataURL.call(this, newFile);
+            }
+            return originalReadAsDataURL.call(this, blob);
+        };
+    }
+
     if (antiCensorshipEnabled) {
         setTimeout(overrideFilePicker, 500);
-        window._fileObserver = new MutationObserver(overrideFilePicker);
+        /* setTimeout(overridePasteHandler, 500); */
+        setTimeout(overrideDragAndDrop, 500);
+        setTimeout(overrideFetchAndXHR, 500);
+
+        window._fileObserver = new MutationObserver(() => {
+            overrideFilePicker();
+        });
         window._fileObserver.observe(document.body, { childList: true, subtree: true });
     }
 
@@ -5405,6 +5560,36 @@
             return originalFetch.apply(this, args);
         };
     })();
+
+    function replaceNotificationTexts() {
+        const messages = [
+            'Нет, иди нахуй',
+            'Пошёл нахуй',
+            'Иди нахуй',
+            'Нахуй иди',
+            'А не пошёл бы ты нахуй',
+            'Вали нахуй',
+            'Отвали',
+            'Хуй тебе',
+            'Ты заебал, отвали',
+            'Соси хуй'
+        ];
+
+        document.querySelectorAll('.iytG').forEach(el => {
+            el.textContent = messages[Math.floor(Math.random() * messages.length)];
+        });
+    }
+
+    const notificationObserver = new MutationObserver(() => {
+        replaceNotificationTexts();
+    });
+
+    notificationObserver.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+
+    setTimeout(replaceNotificationTexts, 500);
 
     console.log('🟢 ITD Visual Pack');
 })();
