@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.5.12
+// @version      2.5.13
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2996,7 +2996,10 @@
             let resizeTimer;
             window.addEventListener('resize', () => {
                 clearTimeout(resizeTimer);
-                resizeTimer = setTimeout(replaceIcon, 300);
+                resizeTimer = setTimeout(() => {
+                    replaceIcon();
+                    updateNavIcon();
+                }, 300);
             });
 
             let updateAvailable = false;
@@ -3078,6 +3081,109 @@
                     setTimeout(createUpdateButton, 500);
                 }
             };
+            function createNavIcon() {
+                const nav = document.querySelector('.MtNy');
+                if (!nav) return;
+                if (nav.querySelector('.my-nav-block')) return;
+
+                const block = document.createElement('div');
+                block.className = 'my-nav-block';
+                block.style.cssText = 'display: flex; align-items: center; gap: 12px; flex-shrink: 0;';
+
+                const wrapper = document.createElement('div');
+                wrapper.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 2px;';
+
+                const YOUR_ICON = ICONS.YOUR_LOGO;
+                const link = document.createElement('a');
+                link.href = 'https://t.me/NeuroSFW';
+                link.target = '_blank';
+                link.style.cursor = 'pointer';
+                link.style.display = 'inline-flex';
+                link.style.alignItems = 'center';
+                const temp = document.createElement('div');
+                temp.innerHTML = YOUR_ICON;
+                const newSvg = temp.firstElementChild;
+                newSvg.setAttribute('width', '28');
+                newSvg.setAttribute('height', '28');
+                link.appendChild(newSvg);
+                wrapper.appendChild(link);
+
+                const bottomRow = document.createElement('div');
+                bottomRow.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 2px;';
+
+                const versionSpan = document.createElement('span');
+                versionSpan.textContent = 'v' + GM_info.script.version;
+                versionSpan.style.cssText = 'font-size: 8px; color: #888; font-family: monospace; line-height: 1;';
+                bottomRow.appendChild(versionSpan);
+
+                const updateBtn = document.createElement('button');
+                updateBtn.className = 'itd-update-sidebar-btn';
+                updateBtn.title = 'Доступна новая версия';
+                updateBtn.innerHTML = ICONS.UPDATE + ' <span>Обновить</span>';
+                updateBtn.style.cssText = 'background: var(--accent-primary, #0080FF); color: #fff; border: none; border-radius: 4px; padding: 2px 6px; font-size: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; display: none; align-items: center; justify-content: center; gap: 3px; white-space: nowrap; height: 16px; line-height: 1; flex-shrink: 0; margin-top: 1px;';
+                updateBtn.onclick = function () {
+                    window.open(updateUrl, '_blank');
+                    this.remove();
+                };
+                bottomRow.appendChild(updateBtn);
+
+                wrapper.appendChild(bottomRow);
+                block.appendChild(wrapper);
+
+                nav.prepend(block);
+                fixNavLayout();
+            }
+
+            function fixNavLayout() {
+                const nav = document.querySelector('.MtNy');
+                if (!nav) return;
+                const block = nav.querySelector('.my-nav-block');
+                const tabs = nav.querySelector('.TqjP');
+                if (block && tabs) {
+                    tabs.style.flex = '1 1 auto';
+                    tabs.style.minWidth = '0';
+                    tabs.style.width = 'auto';
+                    block.style.flex = '0 0 auto';
+                    nav.style.display = 'flex';
+                    nav.style.width = '100%';
+                }
+            }
+
+            function updateNavIcon() {
+                const nav = document.querySelector('.MtNy');
+                if (!nav) return;
+                const isMobile = window.innerWidth <= 1172;
+                const block = nav.querySelector('.my-nav-block');
+                const tabs = nav.querySelector('.TqjP');
+
+                if (isMobile) {
+                    if (!block) {
+                        createNavIcon();
+                    } else {
+                        fixNavLayout();
+                    }
+                } else {
+                    if (block) block.remove();
+                    if (tabs) {
+                        tabs.style.flex = '';
+                        tabs.style.minWidth = '';
+                        tabs.style.width = '';
+                    }
+                    nav.style.width = '';
+                    nav.style.display = '';
+                }
+            }
+
+            setTimeout(updateNavIcon, 500);
+
+            const navObserver = new MutationObserver(() => {
+                const nav = document.querySelector('.MtNy');
+                if (nav) {
+                    updateNavIcon();
+                }
+            });
+            navObserver.observe(document.body, { childList: true, subtree: true });
+
         } catch (e) { }
     }
 
