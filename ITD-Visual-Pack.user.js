@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.5.16
+// @version      2.6.0
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1919,6 +1919,11 @@
             GM_setValue('postBlurEnabled', postBlurEnabled);
             postBlurToggle.className = 'toggle-switch' + (postBlurEnabled ? ' active' : '');
 
+            document.querySelectorAll('.NYk2[data-post-colored]').forEach(post => {
+                post.removeAttribute('data-post-colored');
+                post.style.removeProperty('background');
+            });
+
             if (postBlurEnabled) {
                 addBlurBackground();
                 if (window._blurObserver) window._blurObserver.disconnect();
@@ -1932,6 +1937,8 @@
                     el.classList.remove('itd-blur-active');
                 });
             }
+
+            colorizePosts();
         };
         settingsDropdown.appendChild(postBlurOption);
 
@@ -4793,7 +4800,7 @@
     const postDesignStyle = document.createElement('style');
     postDesignStyle.textContent = `
         .NYk2, article {
-            background: var(--block-bg, rgba(30, 30, 46, 0.8)) !important;
+            background: var(--block-bg, rgba(30, 30, 46, 0.8));
             backdrop-filter: blur(4px) !important;
             border-radius: 24px !important;
             margin-bottom: 16px !important;
@@ -5600,6 +5607,122 @@
     window._notificationInterval = setInterval(replaceNotificationTexts, 1000);
 
     setTimeout(replaceNotificationTexts, 100);
+
+    function getEmojiColor(emoji) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 64;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, 64, 64);
+        ctx.font = '48px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(emoji, 32, 34);
+
+        const imageData = ctx.getImageData(0, 0, 64, 64);
+        const data = imageData.data;
+
+        let r = 0, g = 0, b = 0, count = 0;
+        for (let i = 0; i < data.length; i += 4) {
+            if (data[i + 3] > 128) {
+                r += data[i];
+                g += data[i + 1];
+                b += data[i + 2];
+                count++;
+            }
+        }
+
+        if (count === 0) return null;
+
+        r = Math.round(r / count);
+        g = Math.round(g / count);
+        b = Math.round(b / count);
+
+        return { r, g, b };
+    }
+
+    function colorizePosts() {
+        const darken = 0.3;
+        document.querySelectorAll('.NYk2:not([data-post-colored])').forEach(post => {
+            const avatar = post.querySelector('.rROE .CV8f');
+            if (!avatar) return;
+
+            const emoji = avatar.textContent.trim();
+            if (!emoji) return;
+
+            const color = getEmojiColor(emoji);
+            if (!color) return;
+
+            const hasImage = post.querySelector('.UTvc img, .z3wG, .r94T img');
+
+            if (postBlurEnabled && hasImage) {
+                post.setAttribute('data-post-colored', 'true');
+                return;
+            }
+
+            const colorRgb = `rgb(${Math.round(color.r * darken)}, ${Math.round(color.g * darken)}, ${Math.round(color.b * darken)})`;
+            post.style.setProperty('background', colorRgb, 'important');
+            post.setAttribute('data-post-colored', 'true');
+        });
+    }
+
+    if (window._postColorObserver) {
+        window._postColorObserver.disconnect();
+    }
+
+    window._postColorObserver = new MutationObserver(() => {
+        if (!window.location.pathname.includes('/notifications')) {
+            colorizePosts();
+        }
+    });
+
+    window._postColorObserver.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+
+    setTimeout(colorizePosts, 500);
+
+    function colorizeNotifications() {
+        const darken = 0.3;
+        document.querySelectorAll('.bs4a:not([data-colored])').forEach(el => {
+            const avatar = el.querySelector('.CV8f');
+            if (!avatar) return;
+
+            const emoji = avatar.textContent.trim();
+            if (!emoji) return;
+
+            const color = getEmojiColor(emoji);
+            if (!color) return;
+
+            el.style.background = `rgb(${Math.round(color.r * darken)}, ${Math.round(color.g * darken)}, ${Math.round(color.b * darken)})`;
+            el.setAttribute('data-colored', 'true');
+        });
+    }
+
+    if (window._colorObserver) {
+        window._colorObserver.disconnect();
+    }
+
+    window._colorObserver = new MutationObserver(() => {
+        if (window.location.pathname.includes('/notifications')) {
+            colorizeNotifications();
+        }
+    });
+
+    window._colorObserver.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+
+    setTimeout(() => {
+        if (window.location.pathname.includes('/notifications')) {
+            colorizeNotifications();
+        }
+    }, 500);
+
 
     console.log('🟢 ITD Visual Pack');
 })();
