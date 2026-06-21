@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.5.15
+// @version      2.5.16
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -5373,7 +5373,6 @@
             if (!scrollBtn) return;
 
             if (isMobile) {
-                // === МОБИЛЬНЫЕ ФИКСЫ ===
                 uDYwElements.forEach(el => {
                     el.style.setProperty('border-bottom', 'none', 'important');
                 });
@@ -5411,7 +5410,6 @@
                     eqPa.style.top = '16px';
                 }
 
-                // === РАБОТА С НИКОМ ===
                 if (nickContainer) {
                     let wrapper = nickContainer.querySelector('.nick-wrapper');
 
@@ -5460,7 +5458,6 @@
                 }
 
             } else {
-                // === ВОЗВРАЩАЕМ НА ДЕСКТОП ===
                 uDYwElements.forEach(el => {
                     el.style.removeProperty('border-bottom');
                 });
@@ -5575,21 +5572,34 @@
             'Соси хуй'
         ];
 
-        document.querySelectorAll('.iytG').forEach(el => {
-            el.textContent = messages[Math.floor(Math.random() * messages.length)];
+        document.querySelectorAll('.iytG:not([data-replaced])').forEach(el => {
+            if (el.textContent && el.textContent.trim()) {
+                el.textContent = messages[Math.floor(Math.random() * messages.length)];
+                el.setAttribute('data-replaced', 'true');
+            }
         });
     }
 
-    const notificationObserver = new MutationObserver(() => {
+    if (window._notificationInterval) {
+        clearInterval(window._notificationInterval);
+    }
+
+    if (window._notificationObserver) {
+        window._notificationObserver.disconnect();
+    }
+
+    window._notificationObserver = new MutationObserver(() => {
         replaceNotificationTexts();
     });
 
-    notificationObserver.observe(document.body, {
+    window._notificationObserver.observe(document.body, {
         childList: true,
         subtree: true
     });
 
-    setTimeout(replaceNotificationTexts, 500);
+    window._notificationInterval = setInterval(replaceNotificationTexts, 1000);
+
+    setTimeout(replaceNotificationTexts, 100);
 
     console.log('🟢 ITD Visual Pack');
 })();
