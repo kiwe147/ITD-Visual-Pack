@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.5.13
+// @version      2.5.14
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -146,7 +146,11 @@
 
     function fixOverflowForGlowingNicks() {
         const nickContainers = document.querySelectorAll('.ZkAR.ZzyM');
-        nickContainers.forEach(nickContainer => {
+        const containersLength = nickContainers.length;
+        if (containersLength === 0) return;
+
+        for (let i = 0; i < containersLength; i++) {
+            const nickContainer = nickContainers[i];
             let parent = nickContainer.parentElement;
             let fixed = false;
             while (parent && parent !== document.body) {
@@ -159,13 +163,13 @@
             }
             if (fixed) {
                 const nickSpan = nickContainer.querySelector('.Emmg');
-                if (nickSpan && nickSpan.style.filter) {
+                if (nickSpan && nickSpan.isConnected && nickSpan.style.filter) {
                     const currentFilter = nickSpan.style.filter;
                     nickSpan.style.filter = 'none';
                     setTimeout(() => { nickSpan.style.filter = currentFilter; }, 10);
                 }
             }
-        });
+        }
     }
 
     function detectSelectors() {
@@ -260,6 +264,13 @@
     let antiCensorshipEnabled = GM_getValue('antiCensorshipEnabled', true);
     let autoLikeUsers = JSON.parse(GM_getValue('itd_auto_like_users', '{}'));
     let autoLikeEnabled = GM_getValue('autoLikeEnabled', true);
+
+    const domCache = {
+        nickContainers: new Map(),
+        avatarElements: new Map(),
+        postElements: new Map(),
+        bannerElements: new Map()
+    };
     const AUTO_LIKE_CACHE_KEY = 'itd_auto_like_full_cache';
     const CACHE_TTL = 10 * 60 * 1000;
 
@@ -941,63 +952,71 @@
 
     function updateAvatarGlow() {
         const avatars = document.querySelectorAll('.my-avatar-glow');
+        const avatarsLength = avatars.length;
+        if (avatarsLength === 0) return;
+
         if (!avatarGlowEnabled) {
-            avatars.forEach(avatar => {
-                avatar.style.filter = 'none';
-            });
+            for (let i = 0; i < avatarsLength; i++) {
+                avatars[i].style.filter = 'none';
+            }
             return;
         }
 
-        if (currentStyle === 'rainbow') {
-            const color = `hsl(${globalHue}, 100%, 55%)`;
-            avatars.forEach(avatar => {
-                avatar.style.filter = `drop-shadow(0 0 5px ${color}) drop-shadow(0 0 12px ${color})`;
-            });
-        } else {
-            const style = nickStyles[currentStyle];
-            const hue = style.avatarHue || 210;
-            const sat = style.avatarSat !== undefined ? style.avatarSat : 100;
-            avatars.forEach(avatar => {
-                avatar.style.filter = `drop-shadow(0 0 3px hsl(${hue}, ${sat}%, 60%)) drop-shadow(0 0 6px hsl(${hue}, ${sat}%, 60%))`;
-            });
+        const isRainbow = currentStyle === 'rainbow';
+        const style = nickStyles[currentStyle];
+        const hue = isRainbow ? globalHue : (style.avatarHue || 210);
+        const sat = style.avatarSat !== undefined ? style.avatarSat : 100;
+        const filterValue = isRainbow
+            ? `drop-shadow(0 0 5px hsl(${hue}, 100%, 55%)) drop-shadow(0 0 12px hsl(${hue}, 100%, 55%))`
+            : `drop-shadow(0 0 3px hsl(${hue}, ${sat}%, 60%)) drop-shadow(0 0 6px hsl(${hue}, ${sat}%, 60%))`;
+
+        for (let i = 0; i < avatarsLength; i++) {
+            avatars[i].style.filter = filterValue;
         }
     }
 
     function glowMyAvatar(avatar) {
-        if (avatar && !avatar.classList.contains('my-avatar-glow')) {
-            avatar.classList.add('my-avatar-glow');
-            updateAvatarGlow();
-            return true;
+        if (!avatar || !avatar.isConnected || avatar.classList.contains('my-avatar-glow')) {
+            return false;
         }
-        return false;
+        avatar.classList.add('my-avatar-glow');
+        updateAvatarGlow();
+        return true;
     }
 
     function updateAllNickColors() {
-        if (currentStyle === 'rainbow') {
-            const color = `hsl(${globalHue}, 100%, 55%)`;
-            for (const el of nickElements) {
+        const style = nickStyles[currentStyle];
+        const isRainbow = currentStyle === 'rainbow';
+        const color = isRainbow ? `hsl(${globalHue}, 100%, 55%)` : null;
+        const isDark = !isRainbow && document.documentElement.getAttribute('data-theme') === 'dark';
+        const gradient = isRainbow ? null : (isDark && style.gradientDark ? style.gradientDark : style.gradientLight);
+
+        const nickElementsArray = Array.from(nickElements);
+        const nickElementsLength = nickElementsArray.length;
+
+        if (nickElementsLength === 0) return;
+
+        if (isRainbow) {
+            const textShadow = `0 0 5px ${color}`;
+            for (let i = 0; i < nickElementsLength; i++) {
+                const el = nickElementsArray[i];
                 if (el && el.isConnected) {
                     el.style.color = color;
-                    el.style.textShadow = `0 0 5px ${color}`;
+                    el.style.textShadow = textShadow;
                     el.style.webkitTextFillColor = '';
                     el.style.background = '';
                 }
             }
-        } else {
-            const style = nickStyles[currentStyle];
-            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-            const gradient = isDark && style.gradientDark ? style.gradientDark : style.gradientLight;
-
-            for (const el of nickElements) {
+        } else if (gradient) {
+            for (let i = 0; i < nickElementsLength; i++) {
+                const el = nickElementsArray[i];
                 if (el && el.isConnected) {
-                    if (gradient) {
-                        el.style.background = gradient;
-                        el.style.webkitBackgroundClip = 'text';
-                        el.style.backgroundClip = 'text';
-                        el.style.webkitTextFillColor = 'transparent';
-                        el.style.color = '';
-                        el.style.textShadow = '';
-                    }
+                    el.style.background = gradient;
+                    el.style.webkitBackgroundClip = 'text';
+                    el.style.backgroundClip = 'text';
+                    el.style.webkitTextFillColor = 'transparent';
+                    el.style.color = '';
+                    el.style.textShadow = '';
                 }
             }
         }
@@ -1005,7 +1024,12 @@
 
     function updateNickGlow() {
         if (!nickGlowEnabled) {
-            for (const nickSpan of nickElements) {
+            const nickElementsArray = Array.from(nickElements);
+            const nickElementsLength = nickElementsArray.length;
+            if (nickElementsLength === 0) return;
+
+            for (let i = 0; i < nickElementsLength; i++) {
+                const nickSpan = nickElementsArray[i];
                 if (nickSpan && nickSpan.isConnected) {
                     const parentBlock = nickSpan.closest('.' + SELECTORS.nickContainer);
                     if (parentBlock) {
@@ -1016,24 +1040,23 @@
             return;
         }
 
-        if (currentStyle === 'rainbow') {
-            const color = `hsl(${globalHue}, 100%, 55%)`;
-            for (const nickSpan of nickElements) {
-                if (nickSpan && nickSpan.isConnected) {
-                    const parentBlock = nickSpan.closest('.' + SELECTORS.nickContainer);
-                    if (parentBlock) {
-                        parentBlock.style.filter = `drop-shadow(0 0 6px ${color}) drop-shadow(0 0 12px ${color})`;
-                    }
-                }
-            }
-        } else {
-            const style = nickStyles[currentStyle];
-            for (const nickSpan of nickElements) {
-                if (nickSpan && nickSpan.isConnected) {
-                    const parentBlock = nickSpan.closest('.' + SELECTORS.nickContainer);
-                    if (parentBlock && style.glow) {
-                        parentBlock.style.filter = style.glow;
-                    }
+        const isRainbow = currentStyle === 'rainbow';
+        const color = isRainbow ? `hsl(${globalHue}, 100%, 55%)` : null;
+        const style = nickStyles[currentStyle];
+        const glow = isRainbow ? color : style.glow;
+
+        const nickElementsArray = Array.from(nickElements);
+        const nickElementsLength = nickElementsArray.length;
+        if (nickElementsLength === 0) return;
+
+        const glowValue = isRainbow ? `drop-shadow(0 0 6px ${color}) drop-shadow(0 0 12px ${color})` : glow;
+
+        for (let i = 0; i < nickElementsLength; i++) {
+            const nickSpan = nickElementsArray[i];
+            if (nickSpan && nickSpan.isConnected) {
+                const parentBlock = nickSpan.closest('.' + SELECTORS.nickContainer);
+                if (parentBlock) {
+                    parentBlock.style.filter = glowValue;
                 }
             }
         }
@@ -1042,8 +1065,13 @@
     function updateColors() {
         if (currentStyle === 'rainbow') {
             globalHue += colorDirection * 0.8;
-            if (globalHue >= 360) { globalHue = 360; colorDirection = -1; }
-            else if (globalHue <= 0) { globalHue = 0; colorDirection = 1; }
+            if (globalHue >= 360) {
+                globalHue = 360;
+                colorDirection = -1;
+            } else if (globalHue <= 0) {
+                globalHue = 0;
+                colorDirection = 1;
+            }
         }
 
         updateAllNickColors();
@@ -1326,6 +1354,78 @@
         autoLikeScrollHandler = autoLikeResizeHandler = autoLikeCloseHandler = null;
     }
 
+    function renderAutoLikeUsers(container, footer, usersData) {
+        const users = Object.keys(usersData).sort((a, b) => a === 'NeuroSFW' ? -1 : b === 'NeuroSFW' ? 1 : a.localeCompare(b));
+
+        if (!users.length) {
+            container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);">Нет пользователей</div>';
+            footer.textContent = 'Активно: 0';
+            return;
+        }
+
+        container.innerHTML = '';
+        for (const username of users) {
+            const data = usersData[username];
+            if (!data) continue;
+            const displayName = (data.displayName || username).slice(0, 20);
+            const avatar = data.avatar || '👤';
+            const isActive = autoLikeUsers[username] || false;
+
+            const row = document.createElement('div');
+            row.className = 'auto-like-option-fixed';
+            row.style.cssText = 'padding:8px 12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;border-radius:16px;transition:all 0.15s;';
+            row.onmouseenter = () => row.style.background = 'var(--bg-hover, rgba(0,128,255,0.15))';
+            row.onmouseleave = () => row.style.background = 'transparent';
+
+            const left = document.createElement('div');
+            left.style.cssText = 'display:flex;align-items:center;gap:10px;flex:1;min-width:0;';
+            const av = document.createElement('div');
+            av.textContent = avatar;
+            av.style.cssText = 'width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;background:rgba(0,0,0,0.2);flex-shrink:0;';
+            left.appendChild(av);
+            const names = document.createElement('div');
+            names.style.cssText = 'display:flex;flex-direction:column;min-width:0;';
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = displayName;
+            nameSpan.style.cssText = 'font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+            names.appendChild(nameSpan);
+            const unameSpan = document.createElement('span');
+            unameSpan.textContent = `@${username}`;
+            unameSpan.style.cssText = 'font-size:11px;color:var(--text-secondary);';
+            names.appendChild(unameSpan);
+            left.appendChild(names);
+            row.appendChild(left);
+
+            const toggle = document.createElement('div');
+            toggle.className = 'toggle-switch' + (isActive ? ' active' : '');
+            toggle.style.cssText = 'width:40px;height:22px;background:rgba(0,0,0,0.5);border-radius:11px;position:relative;transition:all 0.2s ease;flex-shrink:0;cursor:pointer;';
+            toggle.style.background = isActive ? 'var(--accent-primary, #0080FF)' : 'rgba(0,0,0,0.5)';
+            row.appendChild(toggle);
+
+            row.addEventListener('click', () => {
+                const nowActive = toggle.classList.toggle('active');
+                if (nowActive) {
+                    autoLikeUsers[username] = true;
+                    toggle.style.background = 'var(--accent-primary, #0080FF)';
+                } else {
+                    delete autoLikeUsers[username];
+                    toggle.style.background = 'rgba(0,0,0,0.5)';
+                }
+                saveAutoLikeUsers();
+                const count = Object.keys(autoLikeUsers).length;
+                footer.textContent = count > 0 ? `Активно: ${count}` : 'Активно: 0';
+
+                if (currentAutoLikeButton) {
+                    currentAutoLikeButton.style.color = count > 0 ? 'var(--accent-primary, #0080FF)' : 'var(--text-primary, currentColor)';
+                }
+            });
+
+            container.appendChild(row);
+        }
+        const activeCount = Object.keys(autoLikeUsers).length;
+        footer.textContent = activeCount > 0 ? `Активно: ${activeCount}` : 'Активно: 0';
+    }
+
     function createAutoLikeDropdown(button) {
         if (dropdown) {
             dropdown.remove();
@@ -1383,74 +1483,8 @@
         footer.style.cssText = 'padding:8px 12px;text-align:center;font-size:12px;color:var(--text-secondary);border-top:1px solid var(--border-color);flex-shrink:0;';
         autoLikeDropdown.appendChild(footer);
 
-        const usersData = getAutoLikeCache() || {};
-        const users = Object.keys(usersData).sort((a, b) => a === 'NeuroSFW' ? -1 : b === 'NeuroSFW' ? 1 : a.localeCompare(b));
-
-        if (!users.length) {
-            container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);">Нет пользователей</div>';
-            footer.textContent = 'Активно: 0';
-        } else {
-            for (const username of users) {
-                const data = usersData[username];
-                if (!data) continue;
-                const displayName = (data.displayName || username).slice(0, 20);
-                const avatar = data.avatar || '👤';
-                const isActive = autoLikeUsers[username] || false;
-
-                const row = document.createElement('div');
-                row.className = 'auto-like-option-fixed';
-                row.style.cssText = 'padding:8px 12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;border-radius:16px;transition:all 0.15s;';
-                row.onmouseenter = () => row.style.background = 'var(--bg-hover, rgba(0,128,255,0.15))';
-                row.onmouseleave = () => row.style.background = 'transparent';
-
-                const left = document.createElement('div');
-                left.style.cssText = 'display:flex;align-items:center;gap:10px;flex:1;min-width:0;';
-                const av = document.createElement('div');
-                av.textContent = avatar;
-                av.style.cssText = 'width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;background:rgba(0,0,0,0.2);flex-shrink:0;';
-                left.appendChild(av);
-                const names = document.createElement('div');
-                names.style.cssText = 'display:flex;flex-direction:column;min-width:0;';
-                const nameSpan = document.createElement('span');
-                nameSpan.textContent = displayName;
-                nameSpan.style.cssText = 'font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-                names.appendChild(nameSpan);
-                const unameSpan = document.createElement('span');
-                unameSpan.textContent = `@${username}`;
-                unameSpan.style.cssText = 'font-size:11px;color:var(--text-secondary);';
-                names.appendChild(unameSpan);
-                left.appendChild(names);
-                row.appendChild(left);
-
-                const toggle = document.createElement('div');
-                toggle.className = 'toggle-switch' + (isActive ? ' active' : '');
-                toggle.style.cssText = 'width:40px;height:22px;background:rgba(0,0,0,0.5);border-radius:11px;position:relative;transition:all 0.2s ease;flex-shrink:0;cursor:pointer;';
-                toggle.style.background = isActive ? 'var(--accent-primary, #0080FF)' : 'rgba(0,0,0,0.5)';
-                row.appendChild(toggle);
-
-                row.addEventListener('click', () => {
-                    const nowActive = toggle.classList.toggle('active');
-                    if (nowActive) {
-                        autoLikeUsers[username] = true;
-                        toggle.style.background = 'var(--accent-primary, #0080FF)';
-                    } else {
-                        delete autoLikeUsers[username];
-                        toggle.style.background = 'rgba(0,0,0,0.5)';
-                    }
-                    saveAutoLikeUsers();
-                    const count = Object.keys(autoLikeUsers).length;
-                    footer.textContent = count > 0 ? `Активно: ${count}` : 'Активно: 0';
-
-                    if (currentAutoLikeButton) {
-                        currentAutoLikeButton.style.color = count > 0 ? 'var(--accent-primary, #0080FF)' : 'var(--text-primary, currentColor)';
-                    }
-                });
-
-                container.appendChild(row);
-            }
-            const activeCount = Object.keys(autoLikeUsers).length;
-            footer.textContent = activeCount > 0 ? `Активно: ${activeCount}` : 'Активно: 0';
-        }
+        container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);">Загрузка...</div>';
+        footer.textContent = 'Активно: 0';
 
         document.body.appendChild(autoLikeDropdown);
         updateAutoLikeDropdownPosition();
@@ -1470,11 +1504,16 @@
         };
         setTimeout(() => document.addEventListener('click', autoLikeCloseHandler), 0);
 
-        fetchAutoLikeUsers().then(newData => {
-            if (Object.keys(newData).length) {
-                setAutoLikeCache(newData);
+        fetchAutoLikeUsers().then(usersData => {
+            if (Object.keys(usersData).length) {
+                setAutoLikeCache(usersData);
             }
-        }).catch(() => { });
+            renderAutoLikeUsers(container, footer, usersData);
+            updateAutoLikeDropdownPosition();
+        }).catch(() => {
+            container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);">Ошибка загрузки</div>';
+            footer.textContent = 'Активно: 0';
+        });
     }
 
     function createDropdown(button) {
@@ -1592,7 +1631,7 @@
 
     function addToggleButtonToNick(nickContainer) {
         const nickSpan = nickContainer.querySelector('.' + SELECTORS.nickText);
-        if (!nickSpan) return;
+        if (!nickSpan || !nickSpan.isConnected) return;
 
         const nickText = nickSpan.textContent.trim();
         if (nickText !== myUsername && nickText !== myDisplayName) return;
@@ -1737,7 +1776,7 @@
     let settingsCloseHandler = null;
 
     function addSettingsButtonToNick(nickContainer) {
-        if (nickContainer.querySelector('.settings-toggle')) return;
+        if (!nickContainer || !nickContainer.isConnected || nickContainer.querySelector('.settings-toggle')) return;
         const button = document.createElement('span');
         button.className = 'settings-toggle';
         button.title = 'Настройки';
@@ -2818,19 +2857,22 @@
 
             function findAllMyNicks() {
                 const verifiedUsers = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}');
-                document.querySelectorAll('.' + SELECTORS.nickContainer).forEach(container => {
-                    const nickSpan = container.querySelector('.' + SELECTORS.nickText);
-                    if (!nickSpan) return;
-                    const nickText = nickSpan.textContent.trim();
+                const nickContainers = document.querySelectorAll('.' + SELECTORS.nickContainer);
+                const containersLength = nickContainers.length;
+                if (containersLength === 0) return;
 
+                const myUsernameLower = myUsername.toLowerCase();
+                const myDisplayNameLower = myDisplayName.toLowerCase();
+
+                for (let i = 0; i < containersLength; i++) {
+                    const container = nickContainers[i];
+                    const nickSpan = container.querySelector('.' + SELECTORS.nickText);
+                    if (!nickSpan) continue;
+
+                    const nickText = nickSpan.textContent.trim();
+                    const nickTextLower = nickText.toLowerCase();
                     let username = null;
-                    const isInsidePostOrNotification = !!(
-                        container.closest('article, .' + SELECTORS.post) ||
-                        container.closest('.nC4O') ||
-                        container.closest('.jWwe, .QAQH') ||
-                        container.closest('.l8Uc') ||
-                        container.closest('.aLWf, .bs4a')
-                    );
+                    const isInsidePostOrNotification = !!(container.closest('article, .' + SELECTORS.post) || container.closest('.nC4O') || container.closest('.jWwe, .QAQH') || container.closest('.l8Uc') || container.closest('.aLWf, .bs4a'));
 
                     if (isInsidePostOrNotification) {
                         let link = null;
@@ -2881,7 +2923,7 @@
                         }
                     }
 
-                    if (username && verifiedUsers[username] && username !== myUsername && nickText !== myUsername && nickText !== myDisplayName) {
+                    if (username && verifiedUsers[username] && username !== myUsername && nickTextLower !== myUsernameLower && nickTextLower !== myDisplayNameLower) {
                         if (!container.querySelector('.mod-badge-verify')) {
                             const isLarge = container.classList.contains(SELECTORS.largeNickClasses[0]) && container.classList.contains(SELECTORS.largeNickClasses[1]);
                             const size = isLarge ? 18 : 16;
@@ -2895,8 +2937,9 @@
                         }
                     }
 
-                    if (nickText !== myUsername && nickText !== myDisplayName) return;
+                    if (nickTextLower !== myUsernameLower && nickTextLower !== myDisplayNameLower) continue;
                     if (!nickElements.has(nickSpan)) nickElements.add(nickSpan);
+
                     const isLarge = container.classList.contains(SELECTORS.largeNickClasses[0]) && container.classList.contains(SELECTORS.largeNickClasses[1]);
                     if (!container.querySelector('.mod-badge-voronoi')) {
                         const size = isLarge ? 18 : 16;
@@ -2915,7 +2958,7 @@
                         addToggleButtonToNick(container);
                         addSettingsButtonToNick(container);
                     }
-                });
+                }
             }
 
             findAllMyAvatars();
@@ -3211,7 +3254,7 @@
                 }
             });
             navObserver.observe(document.body, { childList: true, subtree: true });
-
+            scheduleAutoLike();
         } catch (e) { }
     }
 
@@ -3231,21 +3274,39 @@
     }
 
     function updateNickGlowVisibility() {
-        for (const nickSpan of nickElements) {
+        const isRainbow = currentStyle === 'rainbow';
+        const glowColor = isRainbow ? `drop-shadow(0 0 6px hsl(${globalHue}, 100%, 55%)) drop-shadow(0 0 12px hsl(${globalHue}, 100%, 55%))` : (nickStyles[currentStyle].glow || '');
+        const nickElementsArray = Array.from(nickElements);
+        const nickElementsLength = nickElementsArray.length;
+        if (nickElementsLength === 0) return;
+
+        for (let i = 0; i < nickElementsLength; i++) {
+            const nickSpan = nickElementsArray[i];
             if (nickSpan && nickSpan.isConnected) {
                 const parentBlock = nickSpan.closest('.' + SELECTORS.nickContainer);
                 if (parentBlock) {
-                    parentBlock.style.filter = nickGlowEnabled ? (currentStyle === 'rainbow' ? `drop-shadow(0 0 6px hsl(${globalHue}, 100%, 55%)) drop-shadow(0 0 12px hsl(${globalHue}, 100%, 55%))` : (nickStyles[currentStyle].glow || '')) : 'none';
+                    parentBlock.style.filter = nickGlowEnabled ? glowColor : 'none';
                 }
             }
         }
     }
 
     function updateAvatarGlowVisibility() {
+        const isRainbow = currentStyle === 'rainbow';
+        const rainbowFilter = `drop-shadow(0 0 5px hsl(${globalHue}, 100%, 55%)) drop-shadow(0 0 12px hsl(${globalHue}, 100%, 55%))`;
+        const style = nickStyles[currentStyle];
+        const hue = style.avatarHue || 210;
+        const sat = style.avatarSat !== undefined ? style.avatarSat : 100;
+        const standardFilter = `drop-shadow(0 0 5px hsl(${hue}, ${sat}%, 60%)) drop-shadow(0 0 12px hsl(${hue}, ${sat}%, 60%))`;
+        const filterValue = avatarGlowEnabled ? (isRainbow ? rainbowFilter : standardFilter) : 'none';
+
         const avatars = document.querySelectorAll('.my-avatar-glow');
-        avatars.forEach(avatar => {
-            avatar.style.filter = avatarGlowEnabled ? (currentStyle === 'rainbow' ? `drop-shadow(0 0 5px hsl(${globalHue}, 100%, 55%)) drop-shadow(0 0 12px hsl(${globalHue}, 100%, 55%))` : `drop-shadow(0 0 5px hsl(${nickStyles[currentStyle].avatarHue || 210}, ${nickStyles[currentStyle].avatarSat !== undefined ? nickStyles[currentStyle].avatarSat : 100}%, 60%)) drop-shadow(0 0 12px hsl(${nickStyles[currentStyle].avatarHue || 210}, ${nickStyles[currentStyle].avatarSat !== undefined ? nickStyles[currentStyle].avatarSat : 100}%, 60%))`) : 'none';
-        });
+        const avatarsLength = avatars.length;
+        if (avatarsLength === 0) return;
+
+        for (let i = 0; i < avatarsLength; i++) {
+            avatars[i].style.filter = filterValue;
+        }
     }
 
     updateBackgroundVisibility();
@@ -4444,7 +4505,9 @@
             packHeaders = [];
 
             const allKeys = ['recent', ...userPacks.map(p => p.id)];
-            allKeys.forEach(key => {
+            const allKeysLength = allKeys.length;
+            for (let i = 0; i < allKeysLength; i++) {
+                const key = allKeys[i];
                 const header = document.createElement('div');
                 header.className = 'pack-header';
                 header.dataset.pack = key;
@@ -4535,9 +4598,13 @@
                 grid.dataset.pack = key;
                 grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:3px;padding:0 10px 16px;';
                 const stickers = stickerPacks[key] || [];
-                stickers.forEach((s, i) => grid.appendChild(createStickerButton(s, key, i, false)));
+                const stickersLength = stickers.length;
+                for (let j = 0; j < stickersLength; j++) {
+                    const s = stickers[j];
+                    grid.appendChild(createStickerButton(s, key, j, false));
+                }
                 scrollContainer.appendChild(grid);
-            });
+            }
         }
 
         function scrollToPack(packKey) {
@@ -4550,21 +4617,25 @@
         }
 
         function updateActiveTabFromScroll() {
-            if (editMode) return;
+            if (editMode || !scrollContainer) return;
             const top = scrollContainer.getBoundingClientRect().top + 50;
             let active = 'recent', min = Infinity;
-            packHeaders.forEach(({ element, key }) => {
+            const packHeadersLength = packHeaders.length;
+            for (let i = 0; i < packHeadersLength; i++) {
+                const { element, key } = packHeaders[i];
                 const d = element.getBoundingClientRect().top - top;
                 if (d <= 0 && Math.abs(d) < min) { min = Math.abs(d); active = key; }
-            });
+            }
             if (recentBtn) recentBtn.style.background = active === 'recent' ? 'var(--accent-primary,#0080FF)' : 'transparent';
-            tabButtons.forEach(t => {
+            const tabButtonsLength = tabButtons.length;
+            for (let i = 0; i < tabButtonsLength; i++) {
+                const t = tabButtons[i];
                 t.button.style.background = t.key === active ? 'var(--accent-primary,#0080FF)' : 'transparent';
-            });
+            }
         }
 
         function showPanel() {
-            if (!stickerBtn) return;
+            if (!stickerBtn || !stickerBtn.isConnected) return;
             if (hideTimeout) clearTimeout(hideTimeout);
             createStickerPanel();
             if (!scrollContainer || !scrollContainer.children.length) renderAllContent();
