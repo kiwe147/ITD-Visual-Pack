@@ -3081,6 +3081,32 @@
                     setTimeout(createUpdateButton, 500);
                 }
             };
+            function checkNavUpdateButton() {
+                const nav = document.querySelector('.MtNy');
+                if (!nav) return;
+                const block = nav.querySelector('.my-nav-block');
+                if (!block) return;
+                const updateBtn = block.querySelector('.itd-update-sidebar-btn');
+                if (!updateBtn) return;
+
+                GM_xmlhttpRequest({
+                    method: 'GET',
+                    url: updateUrl,
+                    onload: function (res) {
+                        if (res.status !== 200) return;
+                        const scriptText = res.responseText;
+                        const versionMatch = scriptText.match(/\/\/\s*@version\s+([\d.]+)/);
+                        if (!versionMatch) return;
+                        const latestVersion = versionMatch[1];
+                        const currentVersion = GM_info.script.version;
+                        if (versionCompare(latestVersion, currentVersion) > 0) {
+                            updateBtn.style.display = 'inline-flex';
+                        }
+                    },
+                    onerror: function () { }
+                });
+            }
+
             function createNavIcon() {
                 const nav = document.querySelector('.MtNy');
                 if (!nav) return;
@@ -3132,6 +3158,8 @@
 
                 nav.prepend(block);
                 fixNavLayout();
+
+                checkNavUpdateButton();
             }
 
             function fixNavLayout() {
