@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.5.11
+// @version      2.5.12
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -70,7 +70,7 @@
         CHECK: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
         TRASH: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`,
         EMPTY_PACK: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="3" opacity="0.3"/></svg>`,
-
+        UPDATE: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
         badge: function (size) {
             return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="1.8 1.8 20.4 20.4" fill="none">
         <defs>
@@ -2935,52 +2935,57 @@
             function replaceIcon() {
                 const container = document.querySelector('.' + SELECTORS.logoContainer);
                 if (!container) return;
-
                 const customLink = container.querySelector('a[href="https://t.me/NeuroSFW"]');
                 if (customLink) return;
-
                 const oldSvg = container.querySelector('svg');
                 if (!oldSvg) return;
-
                 const YOUR_ICON = ICONS.YOUR_LOGO;
-
                 const link = document.createElement('a');
                 link.href = 'https://t.me/NeuroSFW';
                 link.target = '_blank';
                 link.style.cursor = 'pointer';
                 link.style.display = 'inline-flex';
                 link.style.alignItems = 'center';
-
                 const temp = document.createElement('div');
                 temp.innerHTML = YOUR_ICON;
                 const newSvg = temp.firstElementChild;
                 newSvg.setAttribute('width', '36');
                 newSvg.setAttribute('height', '36');
                 link.appendChild(newSvg);
-
-                const wrapper = document.createElement('div');
-                wrapper.style.cssText = `
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                `;
-
-                const versionSpan = document.createElement('div');
-                versionSpan.textContent = `v${GM_info.script.version}`;
-                versionSpan.style.cssText = `
-                    font-size: 8px;
-                    color: #888;
-                    text-align: center;
-                    margin-top: 2px;
-                    font-family: monospace;
-                    white-space: nowrap;
-                `;
-
-                wrapper.appendChild(link);
-                wrapper.appendChild(versionSpan);
-
-                oldSvg.parentNode.replaceChild(wrapper, oldSvg);
+                const versionBtn = container.querySelector('.jR4T');
+                let bottomBlock = container.querySelector('div[style*="font-size: 8px;"]');
+                container.innerHTML = '';
+                container.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; gap: 4px;';
+                const topRow = document.createElement('div');
+                topRow.style.cssText = 'display: flex; flex-direction: row; align-items: center; gap: 10px;';
+                topRow.appendChild(link);
+                if (versionBtn) {
+                    versionBtn.style.margin = '0';
+                    versionBtn.style.padding = '0';
+                    topRow.appendChild(versionBtn);
+                } else {
+                    const fallbackBtn = document.createElement('button');
+                    fallbackBtn.className = 'jR4T';
+                    fallbackBtn.textContent = 'v1.1.1';
+                    fallbackBtn.style.margin = '0';
+                    fallbackBtn.style.padding = '0';
+                    topRow.appendChild(fallbackBtn);
+                }
+                container.appendChild(topRow);
+                if (bottomBlock) {
+                    bottomBlock.style.margin = '0';
+                    bottomBlock.style.justifyContent = 'flex-start';
+                    container.appendChild(bottomBlock);
+                } else {
+                    const newBottom = document.createElement('div');
+                    newBottom.style.cssText = 'display: flex; align-items: center; justify-content: flex-start; font-size: 8px; color: #888; text-align: center; font-family: monospace; white-space: nowrap; gap: 4px; margin: 0;';
+                    const versionSpan = document.createElement('span');
+                    versionSpan.textContent = 'v' + GM_info.script.version;
+                    versionSpan.style.display = 'inline-block';
+                    newBottom.appendChild(versionSpan);
+                    container.appendChild(newBottom);
+                    container._bottomBlock = newBottom;
+                }
             }
 
             replaceIcon();
@@ -2993,8 +2998,9 @@
                 clearTimeout(resizeTimer);
                 resizeTimer = setTimeout(replaceIcon, 300);
             });
+
             let updateAvailable = false;
-            const updateUrl = 'https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js';
+            const updateUrl = 'https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js?t=' + Date.now();
 
             function versionCompare(v1, v2) {
                 const a = v1.split('.').map(Number);
@@ -3011,36 +3017,33 @@
                 const container = document.querySelector('.' + SELECTORS.logoContainer);
                 if (!container) return;
                 if (container.querySelector('.itd-update-sidebar-btn')) return;
-
-                const versionDiv = container.querySelector('div[style*="font-size: 8px"]');
-                const targetButton = container.querySelector('.jR4T');
-                if (!versionDiv || !targetButton) return;
-
+                let bottomBlock = container.querySelector('div[style*="font-size: 8px;"]');
+                if (!bottomBlock) {
+                    const allDivs = container.querySelectorAll('div');
+                    for (const div of allDivs) {
+                        if (div.textContent.includes('v' + GM_info.script.version)) {
+                            bottomBlock = div;
+                            break;
+                        }
+                    }
+                }
+                if (!bottomBlock) return;
+                let versionSpan = bottomBlock.querySelector('span');
+                if (!versionSpan) {
+                    versionSpan = document.createElement('span');
+                    versionSpan.textContent = 'v' + GM_info.script.version;
+                    versionSpan.style.display = 'inline-block';
+                    bottomBlock.prepend(versionSpan);
+                }
                 const btn = document.createElement('button');
                 btn.className = 'itd-update-sidebar-btn';
-                btn.innerHTML = '⬇️ Обновить';
-                btn.title = 'Доступна новая версия скрипта';
-                btn.style.cssText = `
-        background: var(--accent-primary, #0080FF);
-        color: #fff;
-        border: none;
-        border-radius: 20px;
-        padding: 4px 12px;
-        font-size: 12px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: 0.2s;
-        margin-top: 4px;
-        display: inline-block;
-    `;
-                btn.onmouseenter = () => btn.style.opacity = '0.8';
-                btn.onmouseleave = () => btn.style.opacity = '1';
-                btn.onclick = () => {
-                    window.open(updateUrl, '_blank');
-                    btn.remove();
-                };
-
-                versionDiv.parentNode.insertBefore(btn, targetButton);
+                btn.title = 'Доступна новая версия';
+                btn.innerHTML = ICONS.UPDATE + ' <span>Обновить</span>';
+                btn.style.cssText = 'background: var(--accent-primary, #0080FF); color: #fff; border: none; border-radius: 4px; padding: 2px 6px; font-size: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 3px; white-space: nowrap; height: 16px; line-height: 1; flex-shrink: 0;';
+                btn.onmouseenter = function () { this.style.transform = 'scale(1.05)'; this.style.background = '#0066cc'; };
+                btn.onmouseleave = function () { this.style.transform = 'scale(1)'; this.style.background = 'var(--accent-primary, #0080FF)'; };
+                btn.onclick = function () { window.open(updateUrl, '_blank'); this.remove(); };
+                versionSpan.after(btn);
             }
 
             function checkForUpdate() {
@@ -3054,22 +3057,25 @@
                         const versionMatch = scriptText.match(/\/\/\s*@version\s+([\d.]+)/);
                         if (!versionMatch) return;
                         const latestVersion = versionMatch[1];
+                        console.log('📊 Текущая версия:', currentVersion);
+                        console.log('📊 Последняя версия:', latestVersion);
                         if (versionCompare(latestVersion, currentVersion) > 0) {
                             updateAvailable = true;
-                            createUpdateButton();
+                            console.log('✅ Доступно обновление!');
+                            setTimeout(createUpdateButton, 1000);
                         }
                     },
                     onerror: function () { }
                 });
             }
 
-            checkForUpdate();
+            setTimeout(checkForUpdate, 1000);
 
             const originalReplaceIcon = replaceIcon;
             replaceIcon = function () {
                 originalReplaceIcon();
                 if (updateAvailable) {
-                    createUpdateButton();
+                    setTimeout(createUpdateButton, 500);
                 }
             };
         } catch (e) { }
