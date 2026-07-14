@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.6.1
+// @version      2.7.0
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -19,25 +19,29 @@
     'use strict';
 
     const SELECTORS = {
-        nickText: 'Emmg',
-        nickContainer: 'ZkAR',
-        avatar: 'rROE',
-        post: 'NYk2',
-        banner: 'Kb7T',
-        bannerButtons: 'eqPa',
-        bannerDraw: 'v2dL',
-        bannerDelete: 'uoB2',
-        sidebar: 'lVAS',
-        nav: 'ER2o',
-        navLink: 'xjQA',
-        navIcon: 'TsX6',
-        logoContainer: 'mjPV',
-        largeNickClasses: ['Y5jP', 'Hnfk'],
-        smallNickClasses: ['ZzyM'],
-        stickerContainer: 'LhKP',
-        stickerMicBtn: 'dVsc.Grgu',
-        stickerSendBtn: 'dVsc.oBDS.ttOR',
-        commentPreviewContainer: 'ZAfR'
+        nickText: 'drJg',
+        nickContainer: 'U91s',
+        nickRow: 'Ru5n',
+        avatar: 'h8t0',
+        post: 'ti2o',
+        banner: 'HSCi',
+        bannerButtons: 'O4A4',
+        bannerDraw: 'APod',
+        bannerDelete: 'wUeR',
+        sidebar: 'XguD',
+        nav: 'jlTV',
+        navLink: 'OrAy',
+        navIcon: 'oj18',
+        stickerContainer: 'JCtv',
+        stickerMicBtn: 'Te3H',
+        commentPreviewContainer: '',
+        logoContainer: 'Nyj6',
+        badgeVerify: 'mod-badge-verify',
+        badgeVoronoi: 'mod-badge-voronoi',
+        article: 'article',
+        postContainer: 'O6e2',
+        linkProfile: 'a[href*="/@"]',
+        nickParent: 'lkx7'
     };
 
     const ICONS = {
@@ -1629,14 +1633,14 @@
         setTimeout(() => document.addEventListener('click', closeHandler), 0);
     }
 
-    function addToggleButtonToNick(nickContainer) {
-        const nickSpan = nickContainer.querySelector('.' + SELECTORS.nickText);
-        if (!nickSpan || !nickSpan.isConnected) return;
+    function addToggleButtonToNick(ru5n) {
+        let nickSpan = ru5n.querySelector('.' + SELECTORS.nickText);
+        if (!nickSpan) return;
 
         const nickText = nickSpan.textContent.trim();
         if (nickText !== myUsername && nickText !== myDisplayName) return;
 
-        if (nickContainer.querySelector('.nick-controls-panel')) return;
+        if (ru5n.querySelector('.nick-controls-panel')) return;
 
         const controlsPanel = document.createElement('div');
         controlsPanel.className = 'nick-controls-panel';
@@ -1645,13 +1649,11 @@
         styleButton.className = 'nick-style-toggle';
         styleButton.title = `Стиль: ${nickStyles[currentStyle].name}`;
         styleButton.innerHTML = ICONS.PALETTE;
-
         styleButton.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
             createDropdown(styleButton);
         });
-
         controlsPanel.appendChild(styleButton);
 
         const likeBtn = document.createElement('span');
@@ -1659,7 +1661,6 @@
         likeBtn.title = 'Автолайки';
         const hasActive = Object.keys(autoLikeUsers).length > 0;
         likeBtn.innerHTML = ICONS.settings['Автолайки'];
-
         likeBtn.style.cssText = `
     display: inline-flex !important;
     align-items: center !important;
@@ -1702,9 +1703,7 @@
         const bgToggle = document.createElement('span');
         bgToggle.className = 'bg-style-toggle';
         bgToggle.title = 'Стиль фона';
-
         bgToggle.innerHTML = ICONS.settings['Фон'];
-
         bgToggle.style.cssText = `
         display: ${backgroundEnabled ? 'inline-flex' : 'none'};
         align-items: center;
@@ -1734,16 +1733,19 @@
         settingsButton.className = 'settings-toggle';
         settingsButton.title = 'Настройки';
         settingsButton.innerHTML = ICONS.GEAR;
-
         settingsButton.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
             showSettingsDropdown(settingsButton);
         });
-
         controlsPanel.appendChild(settingsButton);
 
-        nickContainer.appendChild(controlsPanel);
+        const bxp = ru5n.querySelector('.' + SELECTORS.nickParent);
+        if (bxp) {
+            bxp.after(controlsPanel);
+        } else {
+            ru5n.appendChild(controlsPanel);
+        }
     }
 
     function updateBackgroundToggleButtons() {
@@ -1774,20 +1776,6 @@
 
     let settingsDropdown = null;
     let settingsCloseHandler = null;
-
-    function addSettingsButtonToNick(nickContainer) {
-        if (!nickContainer || !nickContainer.isConnected || nickContainer.querySelector('.settings-toggle')) return;
-        const button = document.createElement('span');
-        button.className = 'settings-toggle';
-        button.title = 'Настройки';
-        button.innerHTML = ICONS.GEAR;
-        button.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            showSettingsDropdown(button);
-        });
-        nickContainer.appendChild(button);
-    }
 
     function addIconsToMenu(menu) {
         if (!menu || menu.hasAttribute('data-icons-added')) return;
@@ -2816,95 +2804,44 @@
 
             function findAllMyNicks() {
                 const verifiedUsers = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}');
-                const nickContainers = document.querySelectorAll('.' + SELECTORS.nickContainer);
-                const containersLength = nickContainers.length;
-                if (containersLength === 0) return;
-
                 const myUsernameLower = myUsername.toLowerCase();
                 const myDisplayNameLower = myDisplayName.toLowerCase();
 
-                for (let i = 0; i < containersLength; i++) {
-                    const container = nickContainers[i];
-                    const nickSpan = container.querySelector('.' + SELECTORS.nickText);
-                    if (!nickSpan) continue;
-
+                document.querySelectorAll('.' + SELECTORS.nickText).forEach(nickSpan => {
                     const nickText = nickSpan.textContent.trim();
                     const nickTextLower = nickText.toLowerCase();
-                    let username = null;
-                    const isInsidePostOrNotification = !!(container.closest('article, .' + SELECTORS.post) || container.closest('.nC4O') || container.closest('.jWwe, .QAQH') || container.closest('.l8Uc') || container.closest('.aLWf, .bs4a'));
+                    if (nickTextLower !== myUsernameLower && nickTextLower !== myDisplayNameLower) return;
 
-                    if (isInsidePostOrNotification) {
-                        let link = null;
-                        if (container.closest('.bs4a')) {
-                            link = container.closest('.bs4a')?.querySelector('.uUD4 a[href*="/@"]');
-                        }
-                        if (!link && container.closest('.KdXP')) {
-                            const kdxp = container.closest('.KdXP');
-                            if (container.closest('.Towf') && !container.classList.contains('p2CX')) {
-                                const repostAuthorAvatar = kdxp.closest('.NYk2')?.querySelector('.Towf .z8zp a[href*="/@"]');
-                                if (repostAuthorAvatar) link = repostAuthorAvatar;
-                            } else if (container.classList.contains('p2CX')) {
-                                const originalAuthorAvatar = kdxp.querySelector('.rROE.oCs0 a[href*="/@"]');
-                                if (originalAuthorAvatar) link = originalAuthorAvatar;
-                            }
-                        }
-                        if (!link && container.closest('.jWwe')) {
-                            link = container.closest('.jWwe')?.querySelector('.c6r0 a[href*="/@"]');
-                        }
-                        if (!link) {
-                            const postContainer = container.closest('.Towf');
-                            if (postContainer && !container.closest('.KdXP')) {
-                                link = postContainer.querySelector('.z8zp a[href*="/@"]') || postContainer.querySelector('a[href*="/@"]');
-                            }
-                        }
-                        if (link) {
-                            const match = link.href.match(/\/@([^\/?#]+)/);
-                            if (match) username = match[1];
-                        }
-                        if (!username && container.classList.contains('p2CX')) {
-                            if (!nickText.includes(' ') && !nickText.startsWith('#')) {
-                                username = nickText;
-                            }
-                        }
-                    } else {
-                        const yo4n = container.parentElement?.querySelector('.yo4N');
-                        if (yo4n && yo4n.textContent.trim().startsWith('@')) {
-                            username = yo4n.textContent.trim().substring(1);
-                        }
-                        if (!username) {
-                            const jysy = document.querySelector('.JYSY');
-                            if (jysy && jysy.textContent.trim().startsWith('@')) {
-                                const profileUsername = jysy.textContent.trim().substring(1);
-                                if (container.classList.contains(SELECTORS.largeNickClasses[0]) && container.classList.contains(SELECTORS.largeNickClasses[1])) {
-                                    username = profileUsername;
-                                }
-                            }
-                        }
-                    }
+                    let container = nickSpan.closest('.' + SELECTORS.nickRow);
+                    if (!container) container = nickSpan.closest('.' + SELECTORS.nickContainer);
+                    if (!container) container = nickSpan.closest('.qRfF');
+                    if (!container) container = nickSpan.closest('.NDI3');
+                    if (!container) container = nickSpan.closest('header');
+                    if (!container) return;
 
-                    if (username && verifiedUsers[username] && username !== myUsername && nickTextLower !== myUsernameLower && nickTextLower !== myDisplayNameLower) {
-                        if (!container.querySelector('.mod-badge-verify')) {
-                            const isLarge = container.classList.contains(SELECTORS.largeNickClasses[0]) && container.classList.contains(SELECTORS.largeNickClasses[1]);
-                            const size = isLarge ? 18 : 16;
-                            const badge = document.createElement('span');
-                            badge.className = 'mod-badge-verify';
-                            badge.innerHTML = ICONS.badge(size);
-                            badge.style.cssText = `display:inline-flex!important;align-items:center!important;width:${size}px!important;height:${size}px!important;flex-shrink:0!important;vertical-align:middle!important;margin-left:4px!important;`;
-                            const voronoi = container.querySelector('.mod-badge-voronoi');
-                            if (voronoi) container.insertBefore(badge, voronoi);
-                            else nickSpan.insertAdjacentElement('afterend', badge);
-                        }
-                    }
-
-                    if (nickTextLower !== myUsernameLower && nickTextLower !== myDisplayNameLower) continue;
                     if (!nickElements.has(nickSpan)) nickElements.add(nickSpan);
 
-                    const isLarge = container.classList.contains(SELECTORS.largeNickClasses[0]) && container.classList.contains(SELECTORS.largeNickClasses[1]);
-                    if (!container.querySelector('.mod-badge-voronoi')) {
+                    const link = container.closest(SELECTORS.linkProfile);
+                    const username = link ? link.href.split('/@')[1] : null;
+
+                    if (username && verifiedUsers[username] && username !== myUsername) {
+                        if (!container.querySelector('.' + SELECTORS.badgeVerify)) {
+                            const isLarge = container.closest('.KDyw');
+                            const size = isLarge ? 18 : 16;
+                            const badge = document.createElement('span');
+                            badge.className = SELECTORS.badgeVerify;
+                            badge.innerHTML = ICONS.badge(size);
+                            badge.style.cssText = `display:inline-flex!important;align-items:center!important;width:${size}px!important;height:${size}px!important;flex-shrink:0!important;vertical-align:middle!important;margin-left:4px!important;`;
+                            nickSpan.insertAdjacentElement('afterend', badge);
+                        }
+                    }
+
+                    if (!container.querySelector('.' + SELECTORS.badgeVoronoi)) {
+                        const isLarge = container.closest('.KDyw');
                         const size = isLarge ? 18 : 16;
                         const badgeSVG = ICONS.badge(size);
                         const badge = document.createElement('span');
-                        badge.className = 'mod-badge-voronoi';
+                        badge.className = SELECTORS.badgeVoronoi;
                         badge.innerHTML = badgeSVG;
                         badge.style.cssText = `display: inline-flex !important; align-items: center !important; justify-content: center !important; width: ${size}px !important; height: ${size}px !important; min-width: ${size}px !important; min-height: ${size}px !important; max-width: ${size}px !important; max-height: ${size}px !important; flex-shrink: 0 !important; vertical-align: middle !important; overflow: hidden !important;`;
                         const svg = badge.querySelector('svg');
@@ -2913,11 +2850,13 @@
                         }
                         nickSpan.parentNode.insertBefore(badge, nickSpan.nextSibling);
                     }
+
+                    const isLarge = container.closest('.KDyw');
                     if (isLarge) {
-                        addToggleButtonToNick(container);
-                        addSettingsButtonToNick(container);
+                        const ru5n = container.closest('.' + SELECTORS.nickRow) || container;
+                        addToggleButtonToNick(ru5n);
                     }
-                }
+                });
             }
 
             findAllMyAvatars();
@@ -2925,12 +2864,12 @@
             updateAllNickColors();
             updateNickGlow();
             updateAvatarGlow();
-            fixOverflowForGlowingNicks();
+            // fixOverflowForGlowingNicks();
 
             const observer = new MutationObserver(() => {
                 findAllMyAvatars();
                 findAllMyNicks();
-                fixOverflowForGlowingNicks();
+                // fixOverflowForGlowingNicks();
             });
             observer.observe(document.body, { childList: true, subtree: true });
 
