@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.8.0
+// @version      2.9.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -10,7 +10,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        unsafeWindow
-// @run-at       document-idle
+// @run-at       document-start
 // @downloadURL  https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js
 // @updateURL    https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js
 // @icon         data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><filter id='glow' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur in='SourceGraphic' stdDeviation='3' result='blur'/></filter><linearGradient id='rainbow' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' style='stop-color:%23ff0000'/><stop offset='16%' style='stop-color:%23ff8800'/><stop offset='33%' style='stop-color:%23ffff00'/><stop offset='50%' style='stop-color:%2300ff00'/><stop offset='66%' style='stop-color:%2300ffff'/><stop offset='83%' style='stop-color:%230000ff'/><stop offset='100%' style='stop-color:%23ff00ff'/></linearGradient></defs><rect width='100' height='100' rx='20' fill='%231a1a1a'/><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(%23rainbow)' filter='url(%23glow)' opacity='0.9'>N</text><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(%23rainbow)'>N</text></svg>
@@ -18,6 +18,262 @@
 
 (function () {
     'use strict';
+
+    // ==== заставка:начало
+    // Заставка при входе: белые буквы ИТД прилетают целиком, как части костюма, и с ударом
+    // встают на место — лёгкая тряска, вспышка, искры, звук. Всё — анимации с задержками,
+    // поэтому любой кадр можно остановить и проверить (test/intro.py).
+    const INTRO = {
+        LOCK: [620, 1020, 1420],             // когда буква встаёт на место, мс
+        FLY: 520,                            // полёт до касания
+        SETTLE: 170,                         // дожим после касания
+        SHAKE: [4, 6, 9],                    // сила тряски, px
+        VOLUME: 0.28,                        // общая громкость звука (было 0.55 — громко)
+        // откуда летит: угол (0 — справа, 90 — снизу), разворот, масштаб «из камеры»
+        FROM: [{ ang: 200, rot: -110, sc: 1.8 }, { ang: 272, rot: 80, sc: 2.4 }, { ang: -12, rot: 130, sc: 1.6 }]
+    };
+    INTRO.EXIT = INTRO.LOCK[2] + 700;
+
+    // Звук синтезом, без файлов: свист полёта, металлический лязг стыковки, в конце — тяжёлый удар.
+    // at(мс от начала ролика) → время звуковой карты.
+    function introSound(ctx, at) {
+        const out = ctx.createDynamicsCompressor();
+        out.connect(ctx.destination);
+        const master = ctx.createGain();
+        master.gain.value = INTRO.VOLUME;
+        master.connect(out);
+        const noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+        const nd = noise.getChannelData(0);
+        for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+        const env = (param, t, peak, attack, decay) => {
+            param.setValueAtTime(0.0001, t);
+            param.exponentialRampToValueAtTime(peak, t + attack);
+            param.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+        };
+        function whoosh(t, dur) {
+            const src = ctx.createBufferSource();
+            src.buffer = noise;
+            const bp = ctx.createBiquadFilter();
+            bp.type = 'bandpass';
+            bp.Q.value = 1.2;
+            bp.frequency.setValueAtTime(300, t);
+            bp.frequency.exponentialRampToValueAtTime(3200, t + dur);
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.exponentialRampToValueAtTime(0.45, t + dur * 0.95);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.05);
+            src.connect(bp).connect(g).connect(master);
+            src.start(t);
+            src.stop(t + dur + 0.1);
+        }
+        // Последний удар гаснет плавно: быстро до половины, дальше ровно до нуля (TAIL секунд),
+        // плюс эхо. Экспонента до нуля глохла за полсекунды — на слух как обрыв.
+        // Хвост несут только низы (бум и гул); металл всегда короткий — долгий звенит колоколом.
+        const TAIL = 1.6;
+        const tailEnv = (param, t, peak, attack) => {
+            param.setValueAtTime(0.0001, t);
+            param.exponentialRampToValueAtTime(peak, t + attack);
+            param.exponentialRampToValueAtTime(peak * 0.5, t + attack + 0.3);
+            param.linearRampToValueAtTime(0, t + attack + 0.3 + TAIL);
+        };
+        // эхо: свёртка с затухающим шумом — хвост тает сам
+        const echo = ctx.createConvolver();
+        const ir = ctx.createBuffer(2, ctx.sampleRate * 1.8, ctx.sampleRate);
+        for (let c = 0; c < 2; c++) {
+            const d = ir.getChannelData(c);
+            for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.5);
+        }
+        echo.buffer = ir;
+        const echoGain = ctx.createGain();
+        echoGain.gain.value = 0.35;
+        echo.connect(echoGain).connect(master);
+
+        function clank(t, heavy) {
+            const end = t + (heavy ? 0.3 + TAIL + 0.1 : 1.2);
+            const thump = ctx.createOscillator();              // низкий удар
+            thump.frequency.setValueAtTime(heavy ? 110 : 150, t);
+            // у тяжёлого не ниже 45 Гц: ниже колонки не играют, и хвост пропадал бы раньше времени
+            thump.frequency.exponentialRampToValueAtTime(heavy ? 45 : 48, t + (heavy ? 0.9 : 0.25));
+            const tg = ctx.createGain();
+            if (heavy) tailEnv(tg.gain, t, 1, 0.004);
+            else env(tg.gain, t, 0.8, 0.004, 0.3);
+            thump.connect(tg).connect(master);
+            if (heavy) tg.connect(echo);
+            thump.start(t);
+            thump.stop(end);
+            if (heavy) {                                       // глухой гул под хвостом
+                const rumble = ctx.createBufferSource();
+                rumble.buffer = noise;
+                rumble.loop = true;
+                const lp = ctx.createBiquadFilter();
+                lp.type = 'lowpass';
+                lp.frequency.value = 160;
+                const rg = ctx.createGain();
+                tailEnv(rg.gain, t, 0.9, 0.01);
+                rumble.connect(lp).connect(rg).connect(master);
+                rg.connect(echo);
+                rumble.start(t);
+                rumble.stop(end);
+            }
+            [1, 1.47, 2.09, 2.76, 3.9].forEach((k, i) => {      // металл: негармоничные призвуки
+                const m = ctx.createOscillator();
+                m.type = 'triangle';
+                m.frequency.value = (heavy ? 420 : 560) * k;
+                const mg = ctx.createGain();
+                env(mg.gain, t, 0.16 / (i + 1), 0.002, (heavy ? 0.6 : 0.45) / (1 + i * 0.4));
+                m.connect(mg).connect(master);
+                m.start(t);
+                m.stop(t + 1);
+            });
+            const click = ctx.createBufferSource();            // щелчок касания
+            click.buffer = noise;
+            const hp = ctx.createBiquadFilter();
+            hp.type = 'highpass';
+            hp.frequency.value = 2000;
+            const cg = ctx.createGain();
+            env(cg.gain, t, 0.6, 0.001, 0.05);
+            click.connect(hp).connect(cg).connect(master);
+            click.start(t, Math.random() * 0.5);
+            click.stop(t + 0.1);
+        }
+        INTRO.LOCK.forEach((lock, i) => {
+            whoosh(at(lock - INTRO.FLY), INTRO.FLY / 1000);
+            clank(at(lock), i === 2);
+        });
+    }
+
+    function playIntro() {
+        const root = document.documentElement;
+        const css = document.createElement('style');
+        css.textContent = `
+            .vpi-overlay { position: fixed; inset: 0; z-index: 2147483647; background: #000; overflow: hidden; cursor: pointer; }
+            .vpi-world { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+            .vpi-word { display: flex; gap: .05em; color: #fff; user-select: none; line-height: 1;
+                font: 900 min(24vw, 36vh)/1 "Arial Black", "Segoe UI Black", "Helvetica Neue", Arial, sans-serif; }
+            .vpi-letter { display: inline-block; will-change: transform, opacity, filter; }
+            .vpi-fx { position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; }
+            .vpi-spark { width: 2px; height: 16px; margin: -8px 0 0 -1px; border-radius: 1px;
+                background: linear-gradient(#fff, rgba(255,255,255,0)); }
+            .vpi-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+        `;
+        const el = (cls, parent, text) => {
+            const e = document.createElement('div');
+            e.className = cls;
+            if (text) e.textContent = text;
+            parent.appendChild(e);
+            return e;
+        };
+        const ov = el('vpi-overlay', root);
+        const world = el('vpi-world', ov);
+        const word = el('vpi-word', world);
+        const flash = el('vpi-flash', ov);
+        root.appendChild(css);
+        const prevOverflow = root.style.overflow;
+        root.style.overflow = 'hidden';
+
+        const { LOCK, FLY, SETTLE, SHAKE, FROM, EXIT } = INTRO;
+        const vmax = Math.max(innerWidth, innerHeight);
+        const rnd = (a, b) => a + Math.random() * (b - a);
+        const anims = [];
+        const play = (target, frames, opts) => { const a = target.animate(frames, { fill: 'both', ...opts }); anims.push(a); return a; };
+
+        function shake(at, amp) {
+            const frames = [];
+            for (let i = 0, n = 8; i <= n; i++) {
+                const k = i === n ? 0 : amp * Math.pow(1 - i / n, 1.5) * (i % 2 ? -1 : 1);
+                frames.push({ transform: `translate(${k * rnd(.6, 1)}px, ${k * rnd(-.8, .8)}px)` });
+            }
+            play(world, frames, { delay: at, duration: 340, fill: 'none', composite: 'add' });
+        }
+        function burst(at, x, y, size, strong) {
+            // искры — от края буквы наружу; до удара их нет
+            for (let i = 0, n = strong ? 20 : 10; i < n; i++) {
+                const s = el('vpi-fx vpi-spark', world);
+                const ang = rnd(0, Math.PI * 2), r0 = size * .22, dist = size * rnd(.3, strong ? .75 : .55);
+                const rot = ang * 180 / Math.PI + 90, c = Math.cos(ang), sn = Math.sin(ang);
+                play(s, [
+                    { transform: `translate(${x + c * r0}px, ${y + sn * r0}px) rotate(${rot}deg)`, opacity: 1 },
+                    { transform: `translate(${x + c * (r0 + dist)}px, ${y + sn * (r0 + dist)}px) rotate(${rot}deg) scaleY(.2)`, opacity: 0 }
+                ], { delay: at, duration: rnd(300, 560), easing: 'cubic-bezier(.1,.8,.3,1)', fill: 'forwards' });
+            }
+            play(flash, [{ opacity: 0 }, { opacity: strong ? .14 : .06, offset: .12 }, { opacity: 0 }],
+                { delay: at, duration: strong ? 380 : 220, fill: 'none' });
+        }
+
+        const letters = [...'ИТД'].map(ch => el('vpi-letter', word, ch));
+        const wr = world.getBoundingClientRect();
+        letters.forEach((box, i) => {
+            const lock = LOCK[i], f = FROM[i];
+            const lr = box.getBoundingClientRect();
+            const cx = lr.left - wr.left + lr.width / 2, cy = lr.top - wr.top + lr.height / 2;
+            const a = f.ang * Math.PI / 180, dist = vmax * .75;
+            const dx = Math.cos(a) * dist, dy = Math.sin(a) * dist;
+            const hit = FLY / (FLY + SETTLE);
+            // разгон до самого касания, затем проскок чуть дальше и сжатие от удара
+            play(box, [
+                { transform: `translate(${dx}px, ${dy}px) rotate(${f.rot}deg) scale(${f.sc})`, opacity: 0, filter: 'blur(10px) drop-shadow(0 0 0 rgba(255,255,255,0))', easing: 'cubic-bezier(.6,0,.9,.35)' },
+                { opacity: 1, offset: hit * .25 },
+                { transform: `translate(${-dx * .012}px, ${-dy * .012}px) scale(1.07, .93)`, opacity: 1, filter: 'blur(0px) drop-shadow(0 0 30px rgba(255,255,255,.9))', offset: hit, easing: 'cubic-bezier(.2,.9,.3,1)' },
+                { transform: 'none', opacity: 1, filter: 'blur(0px) drop-shadow(0 0 10px rgba(255,255,255,.3))' }
+            ], { delay: lock - FLY, duration: FLY + SETTLE });
+            shake(lock, SHAKE[i]);
+            burst(lock, cx, cy, lr.height * (i === 2 ? 2.2 : 1.5), i === 2);
+        });
+
+        // собралось — пауза, наезд камеры и растворение
+        play(world, [
+            { transform: 'scale(1)', opacity: 1, filter: 'blur(0px)' },
+            { transform: 'scale(1.12)', opacity: 0, filter: 'blur(10px)' }
+        ], { delay: EXIT, duration: 520, easing: 'cubic-bezier(.5,0,.75,0)', fill: 'forwards' });
+        const out = play(ov, [{ opacity: 1 }, { opacity: 0 }], { delay: EXIT + 140, duration: 480, fill: 'forwards' });
+
+        // Звук: браузер пускает его без клика, только если разрешает сайту автозвук.
+        // Не пустил сразу — молчим: запоздалый лязг после заставки хуже тишины.
+        const t0 = performance.now();
+        let ctx = null;
+        try {
+            ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const go = () => {
+                const base = ctx.currentTime - (performance.now() - t0) / 1000;
+                introSound(ctx, ms => Math.max(ctx.currentTime, base + ms / 1000));
+            };
+            if (ctx.state === 'running') go();
+            else ctx.resume().then(() => { if (performance.now() - t0 < 150) go(); else ctx.close(); }, () => {});
+        } catch (e) { ctx = null; }
+
+        let done = false;
+        const cleanup = () => {
+            if (done) return;
+            done = true;
+            ov.remove();
+            css.remove();
+            root.style.overflow = prevOverflow;
+            if (ctx) setTimeout(() => ctx.close().catch(() => {}), 3500);   // дать дотаять хвосту последнего удара
+        };
+        out.finished.then(cleanup, cleanup);
+        setTimeout(cleanup, EXIT + 3000);           // если анимации не доиграют (вкладка в фоне)
+        // клик или клавиша — пропустить
+        const skip = () => {
+            if (done) return;
+            removeEventListener('keydown', skip, true);
+            if (ctx) ctx.close().catch(() => {});
+            ctx = null;
+            ov.animate([{ opacity: getComputedStyle(ov).opacity }, { opacity: 0 }], { duration: 200, fill: 'forwards' }).finished.then(cleanup, cleanup);
+        };
+        ov.addEventListener('click', skip);
+        addEventListener('keydown', skip, true);
+        return anims;
+    }
+    // ==== заставка:конец
+
+    if (window.top === window.self && GM_getValue('introEnabled', true)
+        && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        try { playIntro(); } catch (e) { console.warn('[ITD VP] заставка', e); }
+    }
+
+    // Остальное — когда страница разобрана (раньше весь скрипт и запускался на document-idle);
+    // заставке нужен document-start, чтобы закрыть страницу с первого кадра.
+    const start = () => {
 
     // ================= Поиск элементов сайта =================
     // Классы ИТД (drJg, U91s, iciV…) — хеши сборки, они меняются при каждом обновлении сайта.
@@ -60,8 +316,7 @@
         notification: 'vp-notif',
         notificationText: 'vp-notif-text',
         badgeVerify: 'mod-badge-verify',
-        badgeVoronoi: 'mod-badge-voronoi',
-        linkProfile: 'a[href^="/@"]'
+        badgeVoronoi: 'mod-badge-voronoi'
     };
     SELECTORS.commentPreviewContainer = SELECTORS.commentBox;
     SELECTORS.nickParent = SELECTORS.nickContainer;
@@ -102,14 +357,20 @@
     }
 
     const FIND = {
-        post: () => $$('article'),
-        repost: () => $$('article span[data-icon="share"]')
+        // Пост: в ленте — article; открытый пост собран из div — узнаём его по подвалу с кнопкой
+        // «Нравится» и шапке над ним (ближайший предок, у которого шапка — прямой потомок)
+        post: () => [...new Set([...$$('article'), ...$$('footer')
+            .filter(f => !f.closest('article') && f.querySelector('button[aria-label="Нравится"]'))
+            .map(f => { let el = f.parentElement; for (let i = 0; el && i < 4 && !el.querySelector(':scope > header'); i++) el = el.parentElement; return el; })
+            .filter(el => el && el.querySelector(':scope > header'))])],
+        repost: () => F('post').flatMap(p => $$('span[data-icon="share"]', p))
             .filter(s => !s.closest('footer, button'))
             .map(s => s.parentElement && s.parentElement.parentElement).filter(Boolean),
-        postMedia: () => $$('img[data-post-media-image], article video'),
-        postAction: () => $$('article button[aria-label]').filter(b => b.querySelector('[data-icon]')),
-        postText: () => $$('article div').filter(d => ownText(d) && !d.closest('header, footer, a, button, time')),
-        avatarLink: () => $$('article ' + PROFILE_LINK).filter(a => !a.closest('header') && a.firstElementChild),
+        postMedia: () => [...$$('img[data-post-media-image]'), ...F('post').flatMap(p => $$('video', p))],
+        postAction: () => F('post').flatMap(p => $$('button[aria-label]', p)).filter(b => b.querySelector('[data-icon]')),
+        postText: () => F('post').flatMap(p => $$('div', p)).filter(d => ownText(d) && !d.closest('header, footer, a, button, time')),
+        // аватар-ссылка — ссылка на профиль, внутри которой блок (у ссылки с ником внутри span)
+        avatarLink: () => F('post').flatMap(p => $$(PROFILE_LINK, p)).filter(a => a.firstElementChild && a.firstElementChild.tagName === 'DIV'),
         avatar: () => {
             const sample = F('avatarLink').map(a => a.firstElementChild);
             if (sample[0]) learn('avatar', sample[0]);
@@ -118,7 +379,7 @@
             return [...all];
         },
         nickContainer: () => {
-            const sample = $$('article header ' + PROFILE_LINK + ' > span');
+            const sample = F('post').flatMap(p => $$('header ' + PROFILE_LINK + ' > span', p));
             if (sample[0]) learn('nick', sample[0]);
             const all = new Set(sample);
             byLearned('nick').forEach(el => { if (el.textContent.trim()) all.add(el); });
@@ -129,8 +390,9 @@
             .filter(s => s.querySelector('img, svg') && !s.matches('.' + SELECTORS.badgeVoronoi + ', .' + SELECTORS.badgeVerify))),
         nickRow: () => F('nickContainer').map(c => (c.closest(PROFILE_LINK) || c).parentElement).filter(Boolean),
         // Крупный ник — в шапке профиля: не ссылка и не внутри поста, рядом строка «@ник»
-        nickLarge: () => F('nickContainer').filter(c => !c.closest('a, article')
-            && [...(c.parentElement ? c.parentElement.children : [])].some(s => /^@\S+$/.test(s.textContent.trim()))),
+        // Крупный ник — в шапке профиля: не ссылка, не в посте, рядом «@ник» и баннер. Строки окон
+        // «Подписчики»/«Подписки» устроены так же, но баннера рядом нет — их отсекаем.
+        nickLarge: () => F('nickContainer').filter(c => !c.closest('a, article, .' + SELECTORS.post) && atLoginOf(c) && isProfileHeader(c)),
         banner: () => $$('img[alt="Banner"]').map(i => i.parentElement).filter(Boolean),
         bannerButtons: () => F('banner').map(b => [...b.children].find(c => c.querySelector('button'))).filter(Boolean),
         bannerDelete: () => F('bannerButtons').flatMap(c => $$('button', c))
@@ -156,23 +418,36 @@
         stickerSendBtn: () => F('stickerContainer').map(r => siteButtons(r).pop()).filter(Boolean),
         commentBox: () => commentInputs().map(i => i.closest('form') || (commentRow(i) || i).parentElement).filter(Boolean),
         modal: () => $$('[role="dialog"], [aria-modal="true"], dialog[open]'),
-        // Уведомления: пункт списка — ближайший предок времени, у которого есть соседи-пункты
-        notification: () => location.pathname.startsWith('/notifications') ? [...new Set($$('time')
-            .filter(t => !t.closest('article'))
-            .map(t => {
-                let el = t;
-                while (el.parentElement && el.parentElement !== document.body) {
-                    const p = el.parentElement;
-                    if ([...p.children].filter(c => c.querySelector('time')).length > 1) return el;
-                    el = p;
-                }
-                return null;
-            }).filter(Boolean))] : [],
-        // Текст уведомления — один на пункт: самый длинный текст вне ника, аватара и времени
-        notificationText: () => F('notification').map(n => $$('span, p, div', n)
-            .filter(e => ownText(e) && !e.closest('time, ' + PROFILE_LINK + ', .' + SELECTORS.nickContainer + ', .' + SELECTORS.avatar))
-            .sort((a, b) => b.textContent.length - a.textContent.length)[0]).filter(Boolean)
+        // Уведомления: пункт — строка-кнопка со ссылкой на профиль (дата там простой span, не time)
+        notification: () => location.pathname.startsWith('/notifications')
+            ? $$('[role="button"]').filter(b => b.querySelector(PROFILE_LINK) && !b.closest('article')
+                && !b.parentElement.closest('[role="button"]'))
+            : [],
+        // Текст действия («оценил(а) ваш пост») — первый текст сразу после ссылки с ником
+        notificationText: () => F('notification').map(n => {
+            // ссылка с ником идёт после ссылки-аватарки: берём последнюю ссылку с текстом
+            const nickLink = $$(PROFILE_LINK, n).filter(a => a.textContent.trim() && !a.querySelector('.' + SELECTORS.avatar)).pop();
+            const el = nickLink && nickLink.nextElementSibling;
+            return el && ownText(el) ? el : null;
+        }).filter(Boolean)
     };
+
+    // «@ник» в той же строке, что и имя (шапка профиля, строки окон подписок) — логин без ссылки
+    function atLoginOf(c) {
+        const row = c.parentElement;
+        const at = row && [...row.children].find(s => /^@[\w.]+$/.test(s.textContent.trim()));
+        return at ? at.textContent.trim().slice(1) : null;
+    }
+    function isProfileHeader(c) {
+        for (let el = c, i = 0; el && i < 7; el = el.parentElement, i++) {
+            if (el.querySelector('img[alt="Banner"]')) return true;
+        }
+        if (document.querySelector('img[alt="Banner"]')) return false;      // баннер есть, но не рядом — это не шапка
+        // профиль без баннера: шапка — не строка списка, где у соседей тоже ники
+        const item = c.parentElement && c.parentElement.parentElement;
+        return !(item && item.parentElement && [...item.parentElement.children]
+            .filter(x => x !== item && x.querySelector('.' + SELECTORS.nickContainer)).length);
+    }
 
     function commentInputs() {
         return $$('[contenteditable="true"][data-placeholder]').filter(i => /коммент/i.test(i.getAttribute('data-placeholder')));
@@ -251,45 +526,75 @@
         if (lost.length) console.warn('[ITD VP] не нашёл на странице:', lost.join(', '), '— похоже, сайт поменял разметку. Подробно: itdvp.diag()');
     }, 4000);
 
+    // Иконки мода — один стиль: контур 1.8 px, скруглённые концы, сетка 24×24, цвет — currentColor.
+    // Каждая рисует свою функцию: по ней должно быть понятно, что делает кнопка.
+    const svgIcon = (body, size = 20, stroke = 'currentColor') =>
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+    // фон: рамка с искрой — «живой фон»
+    const I_BG = '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M12 8.2l1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1z"/><path d="M17.5 6.8v1.6M16.7 7.6h1.6"/>';
+
     const ICONS = {
         settings: {
-            'Фон': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6.75 1C6.33579 1 6 1.33579 6 1.75V3.50559C5.96824 3.53358 5.93715 3.56276 5.9068 3.59311L1.66416 7.83575C0.883107 8.6168 0.883107 9.88313 1.66416 10.6642L5.19969 14.1997C5.98074 14.9808 7.24707 14.9808 8.02812 14.1997L12.2708 9.95707C13.0518 9.17602 13.0518 7.90969 12.2708 7.12864L8.73522 3.59311C8.39027 3.24816 7.95066 3.05555 7.5 3.0153V1.75C7.5 1.33579 7.16421 1 6.75 1ZM6 5.62123V6.25C6 6.66421 6.33579 7 6.75 7C7.16421 7 7.5 6.66421 7.5 6.25V4.54033C7.56363 4.56467 7.62328 4.60249 7.67456 4.65377L11.2101 8.1893C11.2995 8.27875 11.348 8.39366 11.3555 8.51071H3.11052L6 5.62123ZM6.26035 13.1391L3.132 10.0107H10.0958L6.96746 13.1391C6.77219 13.3343 6.45561 13.3343 6.26035 13.1391Z" fill="currentColor"/><path d="M2 17.5V12.4143L3.5 13.9143V17.5C3.5 18.0523 3.94772 18.5 4.5 18.5H19.5C20.0523 18.5 20.5 18.0523 20.5 17.5V6.5C20.5 5.94771 20.0523 5.5 19.5 5.5H12.0563L10.5563 4H19.5C20.8807 4 22 5.11929 22 6.5V17.5C22 18.8807 20.8807 20 19.5 20H4.5C3.11929 20 2 18.8807 2 17.5Z" fill="currentColor"/><path d="M11 14.375C11 13.8816 11.1541 13.4027 11.3418 12.9938C11.5325 12.5784 11.7798 12.1881 12.0158 11.8595C12.2531 11.5289 12.4888 11.247 12.6647 11.0481C12.7502 10.9515 12.9062 10.7867 12.9642 10.7254L12.9697 10.7197C13.2626 10.4268 13.7374 10.4268 14.0303 10.7197L14.3353 11.0481C14.5112 11.247 14.7469 11.5289 14.9842 11.8595C15.2202 12.1881 15.4675 12.5784 15.6582 12.9938C15.8459 13.4027 16 13.8816 16 14.375C16 15.7654 14.9711 17 13.5 17C12.0289 17 11 15.7654 11 14.375ZM13.7658 12.7343C13.676 12.6092 13.5858 12.4916 13.5 12.3844C13.4142 12.4916 13.324 12.6092 13.2342 12.7343C13.0327 13.015 12.8425 13.32 12.7051 13.6195C12.5647 13.9253 12.5 14.1808 12.5 14.375C12.5 15.0663 12.9809 15.5 13.5 15.5C14.0191 15.5 14.5 15.0663 14.5 14.375C14.5 14.1808 14.4353 13.9253 14.2949 13.6195C14.1575 13.32 13.9673 13.015 13.7658 12.7343Z" fill="currentColor"/></svg>`,
-            'Подсветка ника': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M4.93 4.93l2.83 2.83M2 12h4M4.93 19.07l2.83-2.83M12 22v-4M19.07 19.07l-2.83-2.83M22 12h-4M19.07 4.93l-2.83 2.83"/><circle cx="12" cy="12" r="4"/></svg>`,
-            'Подсветка аватарок': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M5 20v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/><circle cx="12" cy="12" r="10"/></svg>`,
-            'Подсветка постов': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>`,
-            'Размытый фон постов': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M12 8a4 4 0 0 1 0 8" stroke-dasharray="2 2"/></svg>`,
-            'Анти цензура': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="60 60 180 180" fill="none"><circle cx="150" cy="150" r="130" fill="#ff575b" stroke="currentColor" stroke-width="8"/><path d="M217 158h-21v-15h21v-21h15v21h21.087l-0.004 14.889L232 158.07V178h-15z" fill="white"/><path d="M79 111.104l-9.865-0.604L79.144 94H98v117H79z" fill="white"/><path d="M143.132 211.922c-10.358-2.035-20.433-9.815-25.153-19.422-2.108-4.291-2.458-6.418-2.468-15-0.009-8.103 0.389-10.853 2.099-14.5 2.215-4.721 5.274-8.42 9.277-11.214l2.387-1.667-4.083-4.639c-5.574-6.333-7.558-12.699-6.967-22.353 1.098-17.924 13.383-29.856 31.84-30.924 14.316-0.829 25.744 5.1 32.294 16.753 2.661 4.733 3.12 6.667 3.467 14.601 0.464 10.612-1.113 15.435-7.278 22.259l-3.678 4.071 4.036 3.646c13.714 12.39 13.054 37.638-1.314 50.253-8.882 7.798-21.282 10.726-34.459 8.136zm19.1-19.532c10.596-7.486 10.882-22.949 0.562-30.425-9.655-6.994-22.955-3.424-27.914 7.493-7.693 16.935 12.215 33.626 27.352 22.931zm-0.966-52.924c4.342-2.951 7.744-8.983 7.713-13.676-0.032-4.761-3.25-11.135-6.953-13.772-3.431-2.443-10.265-3.677-14.491-2.616-1.422 0.357-4.369 2.261-6.55 4.231-6.552 5.92-7.462 13.744-2.494 21.443 4.598 7.126 15.621 9.25 22.774 4.39z" fill="white"/></svg>`,
-            'Стиль фона': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20 10 10 0 0 1 0-20z"/><circle cx="12" cy="12" r="4"/></svg>`,
-            'Автолайки': `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>`
+            'Фон': svgIcon(I_BG),
+            // буква с искрой — светящийся ник
+            'Подсветка ника': svgIcon('<path d="M4 19 9 5h1l5 14M5.8 14.5h7.4"/><path d="M18.5 3.5v4M16.5 5.5h4"/><path d="M19 11.5v2M18 12.5h2"/>'),
+            // человек в пунктирном ореоле — светящаяся аватарка
+            'Подсветка аватарок': svgIcon('<circle cx="12" cy="10" r="3"/><path d="M7 17.5a5.5 5.5 0 0 1 10 0"/><circle cx="12" cy="12" r="9.5" stroke-dasharray="2.2 2.6"/>'),
+            // карточка поста в пунктирной рамке — подсветка поста
+            'Подсветка постов': svgIcon('<rect x="5" y="6" width="14" height="12" rx="2.5"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/><rect x="2" y="3" width="20" height="18" rx="4.5" stroke-dasharray="2.2 2.6"/>'),
+            // карточка с пятном в пунктирном ореоле — размытый фон поста
+            'Размытый фон постов': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="12" r="5" stroke-dasharray="1.4 2"/>'),
+            // перечёркнутый щит — без цензуры
+            'Анти цензура': svgIcon('<path d="M12 3 5 6v5.2c0 4.3 2.9 7.9 7 9.8 1.6-.7 3-1.7 4.1-3M19 13.5c.1-.8.2-1.5.2-2.3V6L12 3"/><path d="m3 3 18 18"/>'),
+            'Стиль фона': svgIcon(I_BG),
+            // кадр с кнопкой воспроизведения — заставка при входе
+            'Заставка при входе': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><path d="m10 9 5 3-5 3z"/>'),
+            // сердце со стрелкой повтора — лайки сами
+            'Автолайки': svgIcon('<path transform="translate(.5 1) scale(.74)" stroke-width="2.43" d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/><path d="M21.3 17.2a3.3 3.3 0 1 1-1-2.4"/><path d="M21 12.9v2.3h-2.3"/>')
         },
 
-        PALETTE: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v1m0 16v1M3 12h1m16 0h1M5.6 5.6l.7.7m12.1 12.1l.7.7M5.6 18.4l.7-.7m12.1-12.1l.7-.7"/><circle cx="12" cy="12" r="4"/></svg>`,
-        GEAR: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+        // палитра — стиль ника
+        PALETTE: svgIcon('<path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 0 0 5-5C21 6.4 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="14.5" cy="7" r="1"/><circle cx="17" cy="10.5" r="1"/>'),
+        // шестерёнка — настройки
+        GEAR: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
         MESSAGES: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M5 3a3 3 0 00-3 3v10a3 3 0 003 3h1v2.47a.5.5 0 00.85.36L11.12 19H19a3 3 0 003-3V6a3 3 0 00-3-3H5zm2 5a1 1 0 000 2h10a1 1 0 100-2H7zm0 4a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>`,
-        SCROLL_TOP: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>`,
-        BANNER_IMAGE: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><circle cx="8.5" cy="8.5" r="2.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>`,
-        BANNER_CANCEL: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
-        BANNER_APPLY: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
+        // стрелка к черте — наверх ленты
+        SCROLL_TOP: svgIcon('<path d="M5 4.5h14"/><path d="M12 20V9M7 13.5l5-5 5 5"/>', 22),
+        // картинка с плюсом — поставить свою картинку в баннер
+        BANNER_IMAGE: svgIcon('<path d="M20 12.5V17a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17V7a2.5 2.5 0 0 1 2.5-2.5H12"/><circle cx="9" cy="9.5" r="1.5"/><path d="m20 15.5-3.5-3.5L8 19.5"/><path d="M18 2.5v6M15 5.5h6"/>'),
+        // картинка со стрелками по кругу — сменить картинку
+        BANNER_CHANGE: svgIcon('<path d="M20 11.5V17a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17V7a2.5 2.5 0 0 1 2.5-2.5h5"/><circle cx="9" cy="9.5" r="1.5"/><path d="m20 15.5-3.5-3.5L8 19.5"/><path d="M15 6.5a3 3 0 0 1 5.2-1.8M21 3v2.4h-2.4"/>'),
+        BANNER_CANCEL: svgIcon('<path d="M18 6 6 18M6 6l12 12"/>'),
+        BANNER_APPLY: svgIcon('<path d="m5 12.5 4.5 4.5L19 7.5"/>'),
         YOUR_LOGO: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='36' height='36'><defs><filter id='glow' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur in='SourceGraphic' stdDeviation='3' result='blur'/></filter><linearGradient id='rainbow' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' style='stop-color:#ff0000'/><stop offset='16%' style='stop-color:#ff8800'/><stop offset='33%' style='stop-color:#ffff00'/><stop offset='50%' style='stop-color:#00ff00'/><stop offset='66%' style='stop-color:#00ffff'/><stop offset='83%' style='stop-color:#0000ff'/><stop offset='100%' style='stop-color:#ff00ff'/></linearGradient></defs><rect width='100' height='100' rx='20' fill='#1a1a1a'/><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(#rainbow)' filter='url(#glow)' opacity='0.9'>N</text><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(#rainbow)'>N</text></svg>`,
-        STICKER_BUTTON: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M9 16C9.85038 16.6303 10.8846 17 12 17C13.1154 17 14.1496 16.6303 15 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><ellipse cx="15" cy="10.5" rx="1" ry="1.5" fill="currentColor"/><ellipse cx="9" cy="10.5" rx="1" ry="1.5" fill="currentColor"/><path d="M15 22H12C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C22 4.92893 22 7.28595 22 12V15M15 22C18.866 22 22 18.866 22 15M15 22C15 20.1387 15 19.2081 15.2447 18.4549C15.7393 16.9327 16.9327 15.7393 18.4549 15.2447C19.2081 15 20.1387 15 22 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
-        LOADING: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spin"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>`,
-        RECENT: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
-        ADD_PACK: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4" ry="4"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`,
-        ADD: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
-        EDIT: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
-        DELETE: `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
-        CHECK: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
-        TRASH: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`,
-        EMPTY_PACK: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="3" opacity="0.3"/></svg>`,
-        UPDATE: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+        // наклейка с загнутым углом — стикеры
+        STICKER_BUTTON: svgIcon('<path d="M15 21H8a5 5 0 0 1-5-5V8a5 5 0 0 1 5-5h8a5 5 0 0 1 5 5v7z"/><path d="M15 21v-2.5a3.5 3.5 0 0 1 3.5-3.5H21"/><path d="M8.5 13.5a4.5 4.5 0 0 0 6 .5"/><path d="M9 9h.01M15 9h.01" stroke-width="2.6"/>'),
+        // дуга, крутится — загрузка
+        LOADING: svgIcon('<path d="M21 12a9 9 0 1 1-6.2-8.6"/>', 22).replace('<svg ', '<svg class="spin" '),
+        // часы — недавние стикеры
+        RECENT: svgIcon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/>', 18),
+        // квадрат с плюсом — новый набор
+        ADD_PACK: svgIcon('<rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M12 8.5v7M8.5 12h7"/>', 18),
+        ADD: svgIcon('<path d="M12 5v14M5 12h14"/>', 24),
+        EDIT: svgIcon('<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>', 14),
+        DELETE: svgIcon('<path d="M18 6 6 18M6 6l12 12"/>', 12),
+        CHECK: svgIcon('<path d="m5 12.5 4.5 4.5L19 7.5"/>', 16, '#fff'),
+        TRASH: svgIcon('<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/>', 16, '#fff'),
+        EMPTY_PACK: svgIcon('<rect x="3.5" y="3.5" width="17" height="17" rx="4.5" stroke-dasharray="2.5 2.5" opacity=".5"/>', 18),
+        // стрелка в лоток — скачать обновление
+        UPDATE: svgIcon('<path d="M12 4v10M7.5 9.5 12 14l4.5-4.5"/><path d="M4.5 15v2.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V15"/>', 14),
+        // Радужная заливка бейджа (размытые круги с анимацией) — одна на страницу в скрытом SVG,
+        // бейджи на неё ссылаются. Раньше у каждого бейджа была своя копия с 24 анимациями.
         badge: function (size) {
-            return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="1.8 1.8 20.4 20.4" fill="none">
+            if (!document.getElementById('vp-badge-defs')) {
+                const holder = document.createElement('div');
+                holder.innerHTML = `<svg id="vp-badge-defs" width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
         <defs>
-            <filter id="vBlur_mymod_${size}" x="-20%" y="-20%" width="140%" height="140%">
+            <filter id="vp-badge-blur" x="-20%" y="-20%" width="140%" height="140%">
             <feGaussianBlur stdDeviation="1.2"/>
             </filter>
-            <pattern id="vRainbow_mymod_${size}" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
-            <g filter="url(#vBlur_mymod_${size})">
+            <pattern id="vp-badge-rainbow" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+            <g filter="url(#vp-badge-blur)">
                 <circle cx="4" cy="5" r="6" fill="#ff0044" opacity="1">
                 <animate attributeName="cx" values="4;8;4" dur="6s" repeatCount="indefinite"/>
                 <animate attributeName="cy" values="5;3;5" dur="5s" repeatCount="indefinite"/>
@@ -333,21 +638,15 @@
             </g>
             </pattern>
         </defs>
-        <path fill="url(#vRainbow_mymod_${size})" fill-rule="evenodd" clip-rule="evenodd" d="M9.5924 3.20027C9.34888 3.4078 9.22711 3.51158 9.09706 3.59874C8.79896 3.79854 8.46417 3.93721 8.1121 4.00672C7.95851 4.03705 7.79903 4.04977 7.48008 4.07522C6.6787 4.13918 6.278 4.17115 5.94371 4.28923C5.17051 4.56233 4.56233 5.17051 4.28923 5.94371C4.17115 6.278 4.13918 6.6787 4.07522 7.48008C4.04977 7.79903 4.03705 7.95851 4.00672 8.1121C3.93721 8.46417 3.79854 8.79896 3.59874 9.09706C3.51158 9.22711 3.40781 9.34887 3.20027 9.5924C2.67883 10.2043 2.4181 10.5102 2.26522 10.8301C1.91159 11.57 1.91159 12.43 2.26522 13.1699C2.41811 13.4898 2.67883 13.7957 3.20027 14.4076C3.40778 14.6511 3.51158 14.7729 3.59874 14.9029C3.79854 15.201 3.93721 15.5358 4.00672 15.8879C4.03705 16.0415 4.04977 16.201 4.07522 16.5199C4.13918 17.3213 4.17115 17.722 4.28923 18.0563C4.56233 18.8295 5.17051 19.4377 5.94371 19.7108C6.278 19.8288 6.6787 19.8608 7.48008 19.9248C7.79903 19.9502 7.95851 19.963 8.1121 19.9933C8.46417 20.0628 8.79896 20.2015 9.09706 20.4013C9.22711 20.4884 9.34887 20.5922 9.5924 20.7997C10.2043 21.3212 10.5102 21.5819 10.8301 21.7348C11.57 22.0884 12.43 22.0884 13.1699 21.7348C13.4898 21.5819 13.7957 21.3212 14.4076 20.7997C14.6511 20.5922 14.7729 20.4884 14.9029 20.4013C15.201 20.2015 15.5358 20.0628 15.8879 19.9933C16.0415 19.963 16.201 19.9502 16.5199 19.9248C17.3213 19.8608 17.722 19.8288 18.0563 19.7108C18.8295 19.4377 19.4377 18.8295 19.7108 18.0563C19.8288 17.722 19.8608 17.3213 19.9248 16.5199C19.9502 16.201 19.963 16.0415 19.9933 15.8879C20.0628 15.5358 20.2015 15.201 20.4013 14.9029C20.4884 14.7729 20.5922 14.6511 20.7997 14.4076C21.3212 13.7957 21.5819 13.4898 21.7348 13.1699C22.0884 12.43 22.0884 11.57 21.7348 10.8301C21.5819 10.5102 21.3212 10.2043 20.7997 9.5924C20.5922 9.34887 20.4884 9.22711 20.4013 9.09706C20.2015 8.79896 20.0628 8.46417 19.9933 8.1121C19.963 7.95851 19.9502 7.79903 19.9248 7.48008C19.8608 6.6787 19.8288 6.278 19.7108 5.94371C19.4377 5.17051 18.8295 4.56233 18.0563 4.28923C17.722 4.17115 17.3213 4.13918 16.5199 4.07522C16.201 4.04977 16.0415 4.03705 15.8879 4.00672C15.5358 3.93721 15.201 3.79854 14.9029 3.59874C14.7729 3.51158 14.6511 3.40781 14.4076 3.20027C13.7957 2.67883 13.4898 2.41811 13.1699 2.26522C12.43 1.91159 11.57 1.91159 10.8301 2.26522C10.5102 2.4181 10.2043 2.67883 9.5924 3.20027Z"/>
+        </svg>`;
+                document.body.appendChild(holder.firstElementChild);
+            }
+            return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="1.8 1.8 20.4 20.4" fill="none">
+        <path fill="url(#vp-badge-rainbow)" fill-rule="evenodd" clip-rule="evenodd" d="M9.5924 3.20027C9.34888 3.4078 9.22711 3.51158 9.09706 3.59874C8.79896 3.79854 8.46417 3.93721 8.1121 4.00672C7.95851 4.03705 7.79903 4.04977 7.48008 4.07522C6.6787 4.13918 6.278 4.17115 5.94371 4.28923C5.17051 4.56233 4.56233 5.17051 4.28923 5.94371C4.17115 6.278 4.13918 6.6787 4.07522 7.48008C4.04977 7.79903 4.03705 7.95851 4.00672 8.1121C3.93721 8.46417 3.79854 8.79896 3.59874 9.09706C3.51158 9.22711 3.40781 9.34887 3.20027 9.5924C2.67883 10.2043 2.4181 10.5102 2.26522 10.8301C1.91159 11.57 1.91159 12.43 2.26522 13.1699C2.41811 13.4898 2.67883 13.7957 3.20027 14.4076C3.40778 14.6511 3.51158 14.7729 3.59874 14.9029C3.79854 15.201 3.93721 15.5358 4.00672 15.8879C4.03705 16.0415 4.04977 16.201 4.07522 16.5199C4.13918 17.3213 4.17115 17.722 4.28923 18.0563C4.56233 18.8295 5.17051 19.4377 5.94371 19.7108C6.278 19.8288 6.6787 19.8608 7.48008 19.9248C7.79903 19.9502 7.95851 19.963 8.1121 19.9933C8.46417 20.0628 8.79896 20.2015 9.09706 20.4013C9.22711 20.4884 9.34887 20.5922 9.5924 20.7997C10.2043 21.3212 10.5102 21.5819 10.8301 21.7348C11.57 22.0884 12.43 22.0884 13.1699 21.7348C13.4898 21.5819 13.7957 21.3212 14.4076 20.7997C14.6511 20.5922 14.7729 20.4884 14.9029 20.4013C15.201 20.2015 15.5358 20.0628 15.8879 19.9933C16.0415 19.963 16.201 19.9502 16.5199 19.9248C17.3213 19.8608 17.722 19.8288 18.0563 19.7108C18.8295 19.4377 19.4377 18.8295 19.7108 18.0563C19.8288 17.722 19.8608 17.3213 19.9248 16.5199C19.9502 16.201 19.963 16.0415 19.9933 15.8879C20.0628 15.5358 20.2015 15.201 20.4013 14.9029C20.4884 14.7729 20.5922 14.6511 20.7997 14.4076C21.3212 13.7957 21.5819 13.4898 21.7348 13.1699C22.0884 12.43 22.0884 11.57 21.7348 10.8301C21.5819 10.5102 21.3212 10.2043 20.7997 9.5924C20.5922 9.34887 20.4884 9.22711 20.4013 9.09706C20.2015 8.79896 20.0628 8.46417 19.9933 8.1121C19.963 7.95851 19.9502 7.79903 19.9248 7.48008C19.8608 6.6787 19.8288 6.278 19.7108 5.94371C19.4377 5.17051 18.8295 4.56233 18.0563 4.28923C17.722 4.17115 17.3213 4.13918 16.5199 4.07522C16.201 4.04977 16.0415 4.03705 15.8879 4.00672C15.5358 3.93721 15.201 3.79854 14.9029 3.59874C14.7729 3.51158 14.6511 3.40781 14.4076 3.20027C13.7957 2.67883 13.4898 2.41811 13.1699 2.26522C12.43 1.91159 11.57 1.91159 10.8301 2.26522C10.5102 2.4181 10.2043 2.67883 9.5924 3.20027Z"/>
         <path fill="black" d="M16.3735 9.86314C16.6913 9.5453 16.6913 9.03 16.3735 8.71216C16.0557 8.39433 15.5403 8.39433 15.2225 8.71216L10.3723 13.5624L8.77746 11.9676C8.45963 11.6498 7.94432 11.6498 7.62649 11.9676C7.30866 12.2854 7.30866 12.8007 7.62649 13.1186L9.79678 15.2889C10.1146 15.6067 10.6299 15.6067 10.9478 15.2889L16.3735 9.86314Z"/>
         </svg>`;
         }
     };
-
-    function getBackgroundIcon(style) {
-        const icons = {
-            matrix: 'M',
-            stars: '★',
-            waves: '≈',
-            particles: '•'
-        };
-        return icons[style] || 'M';
-    }
 
     const VERIFICATION_POST_ID = 'a0d6625a-b3ec-44c4-98da-48422af101d5';
     const SECRET_SALT = 'ITD_MOD_2026_SECRET_SALT_NEUROSFW';
@@ -355,39 +654,12 @@
     let verificationInterval = null;
     let isVerifying = false;
 
-    function fixOverflowForGlowingNicks() {
-        const nickContainers = document.querySelectorAll('.' + SELECTORS.nickContainer);
-        const containersLength = nickContainers.length;
-        if (containersLength === 0) return;
-
-        for (let i = 0; i < containersLength; i++) {
-            const nickContainer = nickContainers[i];
-            let parent = nickContainer.parentElement;
-            let fixed = false;
-            while (parent && parent !== document.body) {
-                const overflow = getComputedStyle(parent).overflow;
-                if (overflow === 'hidden' || overflow === 'auto') {
-                    parent.style.setProperty('overflow', 'visible', 'important');
-                    fixed = true;
-                }
-                parent = parent.parentElement;
-            }
-            if (fixed) {
-                const nickSpan = nickContainer.querySelector('.' + SELECTORS.nickText);
-                if (nickSpan && nickSpan.isConnected && nickSpan.style.filter) {
-                    const currentFilter = nickSpan.style.filter;
-                    nickSpan.style.filter = 'none';
-                    setTimeout(() => { nickSpan.style.filter = currentFilter; }, 10);
-                }
-            }
-        }
-    }
-
     let globalHue = 0;
     let colorDirection = 1;
     let myUsername = null;
     let myDisplayName = null;
-    let nickElements = new Set();
+    let postBorderEnabled = GM_getValue('postBorderEnabled', true);
+    let postBlurEnabled = GM_getValue('postBlurEnabled', true);
     let currentStyle = GM_getValue('nickStyle', 'white');
     let backgroundEnabled = GM_getValue('backgroundEnabled', true);
     let backgroundStyle = GM_getValue('backgroundStyle', 'matrix');
@@ -397,103 +669,39 @@
     let autoLikeUsers = JSON.parse(GM_getValue('itd_auto_like_users', '{}'));
     let autoLikeEnabled = GM_getValue('autoLikeEnabled', true);
 
-    const domCache = {
-        nickContainers: new Map(),
-        avatarElements: new Map(),
-        postElements: new Map(),
-        bannerElements: new Map()
-    };
-
-    const selectorCache = new Map();
-
-    function resilientFind(key, finderFn, ...args) {
-        const cached = selectorCache.get(key);
-        if (cached && cached.isConnected) return cached;
-        const found = finderFn(...args);
-        if (found) selectorCache.set(key, found);
-        else selectorCache.delete(key);
-        return found;
+    // Мой аватар — в первой ссылке на мой профиль
+    function myAvatarEl() {
+        if (!myUsername) return null;
+        const link = document.querySelector(`a[href="/@${myUsername}" i]`);
+        if (!link) return null;
+        const container = link.querySelector(':scope > div');
+        if (container && container.querySelector('span')) return container;
+        return link.firstElementChild || link.querySelector('span');
     }
-
-    const FINDERS = {
-        nickSpan: () => {
-            if (!myUsername && !myDisplayName) return null;
-            const spans = [...document.querySelectorAll('span')];
-            return spans.find(s => !s.children.length && (
-                s.textContent.trim() === myUsername ||
-                s.textContent.trim() === '@' + myUsername ||
-                s.textContent.trim() === myDisplayName
-            ));
-        },
-        isLargeProfile: () => [...document.querySelectorAll('span')].some(s => s.textContent.trim() === 'подписчиков'),
-        myAvatar: () => {
-            if (!myUsername) return null;
-            const link = document.querySelector(`a[href="/@${myUsername}"], a[href*="/@${myUsername}"]`);
-            if (!link) return null;
-            const container = link.querySelector(':scope > div');
-            if (container && container.querySelector('span')) return container;
-            return link.firstElementChild || link.querySelector('span');
-        },
-        navFeedLink: () => [...document.querySelectorAll('nav a')].find(a => a.textContent.trim() === 'Лента'),
-        commentInput: () => document.querySelector('[contenteditable="true"][data-placeholder*="комментарий"]')
-    };
     const AUTO_LIKE_CACHE_KEY = 'itd_auto_like_full_cache';
     const CACHE_TTL = 10 * 60 * 1000;
 
-    let autoLikeTimers = {};
     const LIKE_INTERVAL_MIN = 2 * 60 * 1000;
     const LIKE_INTERVAL_MAX = 5 * 60 * 1000;
+    const DAY = 24 * 60 * 60 * 1000;
 
+    // лайкнуть посты пользователя за последние сутки, которые ещё не лайкнуты
     async function likePostsForUser(username) {
         try {
-            let token = await getAccessToken();
-            let response = await fetch(`/api/posts/user/${username}?limit=7`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (response.status === 401) {
-                token = await getAccessToken();
-                response = await fetch(`/api/posts/user/${username}?limit=7`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-            }
-
-            if (!response.ok) return;
-            const data = await response.json();
-            const posts = data.data?.posts || data.posts || [];
-            if (!posts.length) return;
-
-            const lastId = GM_getValue(`lastPostId_${username}`, null);
-            const now = Date.now();
-            const oneDay = 24 * 60 * 60 * 1000;
-
-            const candidates = posts
-                .filter(p => p.isLiked === false && (now - new Date(p.createdAt).getTime()) <= oneDay && p.id !== lastId)
-                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-            for (const post of candidates) {
-                let likeRes = await fetch(`/api/posts/${post.id}/like`, {
+            const res = await api(`/api/posts/user/${username}?limit=7`);
+            if (!res.ok) return;
+            const data = await res.json();
+            const posts = (data.data?.posts || data.posts || [])
+                .filter(p => p.isLiked === false && Date.now() - new Date(p.createdAt).getTime() <= DAY);
+            for (const post of posts) {
+                const like = await api(`/api/posts/${post.id}/like`, {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json' },
                     body: '{}'
                 });
-
-                if (likeRes.status === 401) {
-                    token = await getAccessToken();
-                    likeRes = await fetch(`/api/posts/${post.id}/like`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                        body: '{}'
-                    });
-                }
-
-                if (likeRes.ok) {
-                    GM_setValue(`lastPostId_${username}`, post.id);
-                    await new Promise(r => setTimeout(r, 300));
-                }
+                if (like.ok) await new Promise(r => setTimeout(r, 300));
             }
-        } catch (e) {
-        }
+        } catch (e) { }
     }
 
     async function processAllAutoLikes() {
@@ -511,7 +719,6 @@
         }, delay);
     }
 
-    const CYCLE_DURATION = 12000;
 
     const nickStyles = {
         fire: {
@@ -643,34 +850,39 @@
             vertical-align: middle !important;
             flex-shrink: 0 !important;
         }
-        .nick-style-toggle {
+        .vp-pill-btn {
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
             width: 32px !important;
             height: 32px !important;
-            margin-left: 0 !important;
             cursor: pointer !important;
             background: var(--bg-secondary, rgba(128, 128, 128, 0.15)) !important;
             border-radius: 50% !important;
-            transition: all 0.2s ease !important;
+            transition: background 0.2s ease, color 0.2s ease !important;
             vertical-align: middle !important;
             flex-shrink: 0 !important;
+            user-select: none !important;
+            color: var(--text-primary, currentColor) !important;
         }
-        .nick-style-toggle:hover {
-            background: var(--accent-primary, rgba(0, 128, 255, 0.3)) !important;
-        }
-        .nick-style-toggle svg {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            width: 20px !important;
-            height: 20px !important;
-        }
-        .nick-style-toggle svg path, .nick-style-toggle svg circle {
-            stroke: var(--text-primary, currentColor) !important;
-            fill: none !important;
-        }
+        .vp-pill-btn:hover { background: var(--accent-primary, rgba(0, 128, 255, 0.3)) !important; }
+        .vp-pill-btn.vp-hidden { display: none !important; }
+        .vp-pill-btn.vp-on { color: var(--accent-primary, #0080FF) !important; }
+        .vp-pill-btn.vp-on:hover { color: #fff !important; }
+        .vp-pill-btn svg:not([width]) { width: 20px !important; height: 20px !important; }
+        .vp-pill-btn svg:not([fill]) { fill: none !important; }
+        .vp-menu-icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-primary, currentColor); }
+        .vp-menu-note { padding: 20px; text-align: center; color: var(--text-secondary); }
+        .vp-setting-label { display: flex; align-items: center; gap: 8px; }
+        .nick-style-dropdown.vp-like-menu { min-width: 240px !important; max-height: 400px; display: flex; flex-direction: column; overflow: hidden; z-index: 10002 !important; }
+        .vp-like-list { overflow-y: auto; flex: 1; padding: 4px 0; display: flex; flex-direction: column; gap: 2px; max-height: 350px; }
+        .vp-like-footer { padding: 8px 12px; text-align: center; font-size: 12px; color: var(--text-secondary); border-top: 1px solid var(--border-color); flex-shrink: 0; }
+        .nick-style-option.vp-like-row { justify-content: space-between !important; }
+        .vp-like-user { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+        .vp-like-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; background: rgba(0, 0, 0, 0.2); flex-shrink: 0; }
+        .vp-like-names { display: flex; flex-direction: column; min-width: 0; }
+        .vp-like-name { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-like-login { font-size: 11px; color: var(--text-secondary); }
         .nick-style-dropdown {
             background: var(--block-bg, #1e1e2e) !important;
             border-radius: 24px !important;
@@ -721,34 +933,6 @@
         }
         .nick-style-option:not(:last-child) {
             margin-bottom: 2px !important;
-        }
-        .settings-toggle {
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            width: 32px !important;
-            height: 32px !important;
-            margin-left: 0 !important;
-            cursor: pointer !important;
-            background: var(--bg-secondary, rgba(128, 128, 128, 0.15)) !important;
-            border-radius: 50% !important;
-            transition: all 0.2s ease !important;
-            vertical-align: middle !important;
-            flex-shrink: 0 !important;
-        }
-        .settings-toggle:hover {
-            background: var(--accent-primary, rgba(0, 128, 255, 0.3)) !important;
-        }
-        .settings-toggle svg {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            width: 20px !important;
-            height: 20px !important;
-        }
-        .settings-toggle svg path, .settings-toggle svg circle {
-            stroke: var(--text-primary, currentColor) !important;
-            fill: none !important;
         }
         .settings-dropdown {
             background: var(--block-bg, #1e1e2e) !important;
@@ -812,450 +996,561 @@
     `;
     document.head.appendChild(globalStyles);
 
+    // ================= Фоны (выбираются в таблетке у ника) =================
+    // Рисуются в цвете стиля ника (у радуги — бегущим оттенком) на полупрозрачном слое под сайтом.
+    // Кадр ~30 раз в секунду, скорости заданы на 50 мс (dt), от частоты кадров не зависят.
+    // Свечение — заранее нарисованные спрайты, а не shadowBlur: тот считался бы каждый кадр.
     const canvas = document.createElement('canvas');
-    canvas.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;opacity:0.18;pointer-events:none;`;
+    canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;opacity:0.2;pointer-events:none;transition:opacity .4s ease;';
     document.body.appendChild(canvas);
     const ctx = canvas.getContext('2d');
-    const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
-    const fontSize = 14;
-    let columns, drops = [];
-    let bgState = {
-        stars: [],
-        particles: [],
-        time: 0
-    };
+    let W = 0, H = 0;
+    let bg = null, bgName = '';                          // текущий фон и его состояние
+    const mouse = { x: -1e4, y: -1e4 };
+    // курсор — в координатах холста: холст может быть уже окна (полоса прокрутки)
+    let canvasRect = { left: 0, top: 0, width: 1, height: 1 };
+    addEventListener('pointermove', e => {
+        mouse.x = (e.clientX - canvasRect.left) * W / canvasRect.width;
+        mouse.y = (e.clientY - canvasRect.top) * H / canvasRect.height;
+    }, { passive: true });
+    document.addEventListener('pointerleave', () => { mouse.x = mouse.y = -1e4; });
 
+    // Картинка холста — ровно по его размеру на экране. Раньше бралась ширина окна вместе с
+    // полосой прокрутки: картинка чуть сжималась, и точка курсора у частиц уезжала влево.
     function resizeCanvas() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        columns = Math.floor(canvas.width / fontSize);
-        drops.length = columns;
-        for (let i = 0; i < drops.length; i++) {
-            if (drops[i] === undefined) drops[i] = Math.random() * canvas.height / fontSize;
-        }
+        const r = canvas.getBoundingClientRect();
+        const w = Math.round(r.width) || innerWidth, h = Math.round(r.height) || innerHeight;
+        canvasRect = { left: r.left, top: r.top, width: r.width || w, height: r.height || h };
+        if (w === W && h === H) return;
+        canvas.width = W = w;
+        canvas.height = H = h;
+        bgName = '';                                     // пересобрать фон под новый размер
+    }
+    const rand = (a, b) => a + Math.random() * (b - a);
+    const hsla = (h, s, l, a) => `hsla(${Math.round(h)}, ${Math.round(s)}%, ${Math.round(l)}%, ${a})`;
+    function theme() {
+        if (currentStyle === 'rainbow') return { h: globalHue, s: 100 };
+        const st = nickStyles[currentStyle];
+        return { h: st.matrixHue || 210, s: st.matrixSat ?? 100 };
     }
 
-    function drawMatrix() {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.font = `${fontSize}px monospace`;
-
-        const style = nickStyles[currentStyle];
-        for (let i = 0; i < drops.length; i++) {
-            let charHue, saturation;
-            if (style.animated) {
-                charHue = globalHue + (Math.random() - 0.5) * 25;
-                saturation = 100;
-            } else {
-                charHue = (style.matrixHue || 210) + (Math.random() - 0.5) * 25;
-                saturation = style.matrixSat !== undefined ? style.matrixSat : 100;
-            }
-            ctx.fillStyle = `hsl(${charHue}, ${saturation}%, 40%)`;
-            const text = chars[Math.floor(Math.random() * chars.length)];
-            ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-            if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
-            drops[i]++;
+    // Спрайты по цвету, с кешем: мягкое свечение, диск боке, занавес сияния
+    const spriteCache = new Map();
+    function sprite(kind, h, s, l) {
+        const key = kind + Math.round(h) + ',' + Math.round(s) + ',' + Math.round(l);
+        let c = spriteCache.get(key);
+        if (c) return c;
+        if (spriteCache.size > 400) spriteCache.clear();
+        c = document.createElement('canvas');
+        const g = c.getContext('2d');
+        if (kind === 'curtain') {                        // снизу яркий край, вверх тает
+            c.width = 1; c.height = 128;
+            const grad = g.createLinearGradient(0, 0, 0, 128);
+            grad.addColorStop(0, hsla(h, s, l, 0));
+            grad.addColorStop(0.55, hsla(h, s, l, 0.3));
+            grad.addColorStop(0.9, hsla(h, s, l + 10, 1));
+            grad.addColorStop(1, hsla(h, s, l, 0));
+            g.fillStyle = grad;
+            g.fillRect(0, 0, 1, 128);
+        } else {
+            c.width = c.height = 64;
+            const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+            const stops = kind === 'disc'
+                ? [[0, 0.5], [0.72, 0.6], [0.86, 0.3], [1, 0]]          // диск с чуть ярким краем
+                : [[0, 1], [0.35, 0.4], [0.7, 0.08], [1, 0]];           // свечение
+            stops.forEach(([o, a]) => grad.addColorStop(o, hsla(h, s, l, a)));
+            g.fillStyle = grad;
+            g.fillRect(0, 0, 64, 64);
         }
+        spriteCache.set(key, c);
+        return c;
+    }
+    function drawSprite(kind, x, y, r, h, s, l, a) {
+        ctx.globalAlpha = Math.max(0, Math.min(1, a));
+        ctx.drawImage(sprite(kind, h, s, l), x - r, y - r, r * 2, r * 2);
+        ctx.globalAlpha = 1;
+    }
+    // стереть часть прошлого кадра до прозрачности — хвосты тают, страница не темнеет
+    function fadeOut(k, dt) {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.fillStyle = `rgba(0, 0, 0, ${1 - Math.pow(1 - k, dt)})`;
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalCompositeOperation = 'source-over';
     }
 
-    function initStars() {
-        bgState.stars = [];
-        for (let i = 0; i < 150; i++) {
-            bgState.stars.push({
-                x: Math.random() * canvas.width,
-                y: Math.random() * canvas.height,
-                r: Math.random() * 2 + 0.5,
-                alpha: Math.random(),
-                speed: 0.005 + Math.random() * 0.02
-            });
-        }
-    }
+    const MATRIX_CHARS = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
+    const WAVES = [
+        { amp1: 100, freq1: 0.008, speed1: 0.4, amp2: 50, freq2: 0.018, speed2: 0.7, amp3: 70, freq3: 0.004, speed3: 0.25, alpha: 0.45, offset: 0, dh: 0, dl: 15 },
+        { amp1: 80, freq1: 0.009, speed1: 0.5, amp2: 40, freq2: 0.020, speed2: 0.8, amp3: 60, freq3: 0.005, speed3: 0.3, alpha: 0.35, offset: 1.5, dh: 15, dl: 10 },
+        { amp1: 60, freq1: 0.010, speed1: 0.6, amp2: 30, freq2: 0.022, speed2: 0.9, amp3: 50, freq3: 0.006, speed3: 0.35, alpha: 0.28, offset: 3.0, dh: -15, dl: 5 },
+        { amp1: 40, freq1: 0.011, speed1: 0.7, amp2: 20, freq2: 0.025, speed2: 1.0, amp3: 30, freq3: 0.007, speed3: 0.4, alpha: 0.20, offset: 4.5, dh: 30, dl: 0 }
+    ];
 
-    function drawStars() {
-        const currentArea = canvas.width * canvas.height;
-        const expectedCount = Math.min(2000, Math.floor(currentArea * 0.0003));
-
-        if (bgState.stars.length === 0 ||
-            bgState.stars.length !== expectedCount ||
-            bgState._lastWidth !== canvas.width ||
-            bgState._lastHeight !== canvas.height) {
-
-            bgState.stars = [];
-            bgState._lastWidth = canvas.width;
-            bgState._lastHeight = canvas.height;
-
-            const count = expectedCount;
-
-            for (let i = 0; i < count; i++) {
-                bgState.stars.push({
-                    x: Math.random() * canvas.width,
-                    y: Math.random() * canvas.height,
-                    r: Math.random() * 2.5 + 0.5,
-                    alpha: Math.random(),
-                    speed: 0.02 + Math.random() * 0.06,
-                    phase: Math.random() * Math.PI * 2
+    const BACKGROUNDS = {
+        // Колонки символов с разной скоростью, яркая «голова», хвост тает
+        matrix: {
+            opacity: 0.2,
+            init() {
+                const size = 15;
+                return { size, cols: Array.from({ length: Math.ceil(W / size) }, () => ({ y: rand(-H / size, H / size), v: rand(0.35, 1), prev: null })) };
+            },
+            draw(s, dt, { h, s: sat }) {
+                fadeOut(0.06, dt);
+                ctx.font = `${s.size}px monospace`;
+                ctx.textBaseline = 'top';
+                s.cols.forEach((c, i) => {
+                    const cell = Math.floor(c.y);
+                    c.y += c.v * dt;
+                    const next = Math.floor(c.y);
+                    if (next !== cell) {
+                        const x = i * s.size;
+                        if (c.prev) {                    // прошлая голова становится телом
+                            ctx.clearRect(x, c.prev.y * s.size, s.size, s.size);
+                            ctx.fillStyle = hsla(h + rand(-12, 12), sat, 45, 1);
+                            ctx.fillText(c.prev.ch, x, c.prev.y * s.size);
+                        }
+                        const ch = MATRIX_CHARS[Math.random() * MATRIX_CHARS.length | 0];
+                        ctx.fillStyle = hsla(h, Math.min(sat, 50), 88, 1);
+                        ctx.fillText(ch, x, next * s.size);
+                        c.prev = { ch, y: next };
+                    }
+                    if (c.y * s.size > H && Math.random() < 0.03 * dt) Object.assign(c, { y: rand(-15, 0), v: rand(0.35, 1), prev: null });
                 });
             }
-        }
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        const style = nickStyles[currentStyle];
-        let hue, sat, light = 60;
-        if (currentStyle === 'rainbow') {
-            hue = globalHue;
-            sat = 100;
-        } else {
-            hue = style.matrixHue || 210;
-            sat = style.matrixSat !== undefined ? style.matrixSat : 100;
-        }
-
-        const finalSat = Math.min(100, sat * 1.2);
-
-        bgState.stars.forEach(s => {
-            s.phase += s.speed;
-            const alpha = 0.1 + 0.9 * (0.5 + 0.5 * Math.sin(s.phase));
-            const flash = Math.random() > 0.99 ? 1.5 : 1.0;
-            const finalAlpha = Math.min(1, alpha * flash);
-
-            ctx.beginPath();
-            ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-            ctx.fillStyle = `hsla(${hue}, ${finalSat}%, ${light}%, ${finalAlpha})`;
-            ctx.fill();
-
-            if (s.r > 1.5) {
-                ctx.shadowColor = `hsla(${hue}, ${finalSat}%, ${light}%, ${finalAlpha * 0.8})`;
-                ctx.shadowBlur = 20 + s.r * 5;
-                ctx.fill();
-                ctx.shadowBlur = 0;
-            }
-        });
-    }
-
-    function initParticles() {
-        bgState.particles = [];
-        for (let i = 0; i < 80; i++) {
-            bgState.particles.push({
-                x: Math.random() * canvas.width,
-                y: Math.random() * canvas.height,
-                vx: (Math.random() - 0.5) * 0.5,
-                vy: (Math.random() - 0.5) * 0.5,
-                r: Math.random() * 2 + 1,
-                alpha: Math.random() * 0.5 + 0.2
-            });
-        }
-    }
-
-    function drawParticles() {
-        const area = canvas.width * canvas.height;
-        const targetCount = Math.min(200, Math.floor(area * 0.0003));
-
-        if (bgState.particles.length === 0 ||
-            bgState.particles.length !== targetCount ||
-            bgState._lastWidth !== canvas.width ||
-            bgState._lastHeight !== canvas.height) {
-
-            bgState.particles = [];
-            bgState._lastWidth = canvas.width;
-            bgState._lastHeight = canvas.height;
-
-            for (let i = 0; i < targetCount; i++) {
-                bgState.particles.push({
-                    x: Math.random() * canvas.width,
-                    y: Math.random() * canvas.height,
-                    vx: (Math.random() - 0.5) * 1.2,
-                    vy: (Math.random() - 0.5) * 1.2,
-                    r: Math.random() * 3 + 1,
-                    alpha: Math.random() * 0.5 + 0.5,
-                    phase: Math.random() * Math.PI * 2,
-                    pulseSpeed: 0.02 + Math.random() * 0.04
-                });
-            }
-        }
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        const style = nickStyles[currentStyle];
-        let hue, sat, light = 85;
-        if (currentStyle === 'rainbow') {
-            hue = globalHue;
-            sat = 100;
-        } else {
-            hue = style.matrixHue || 210;
-            sat = style.matrixSat !== undefined ? style.matrixSat : 100;
-        }
-
-        const finalSat = Math.min(100, sat * 1.5);
-        const finalLight = Math.min(80, light + 15);
-        const maxDist = Math.min(200, Math.max(100, Math.min(canvas.width, canvas.height) * 0.1));
-        const maxDistSq = maxDist * maxDist;
-
-        bgState.particles.forEach(p => {
-            p.x += p.vx;
-            p.y += p.vy;
-            if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
-            if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
-
-            p.phase += p.pulseSpeed;
-            const pulse = 0.8 + 0.2 * Math.sin(p.phase);
-            const currentR = p.r * pulse;
-
-            const flicker = 0.85 + 0.15 * Math.sin(p.phase * 1.5 + 1.2);
-            const currentAlpha = Math.min(1, p.alpha * flicker * 1.2);
-
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, currentR, 0, Math.PI * 2);
-            ctx.fillStyle = `hsla(${hue}, ${finalSat}%, ${finalLight}%, ${currentAlpha})`;
-            ctx.fill();
-
-            ctx.shadowColor = `hsla(${hue}, ${finalSat}%, ${finalLight}%, ${currentAlpha * 0.8})`;
-            ctx.shadowBlur = 15 + currentR * 5;
-            ctx.fill();
-            ctx.shadowBlur = 0;
-        });
-
-        for (let i = 0; i < bgState.particles.length; i++) {
-            const p1 = bgState.particles[i];
-            for (let j = i + 1; j < bgState.particles.length; j++) {
-                const p2 = bgState.particles[j];
-                const dx = p1.x - p2.x;
-                const dy = p1.y - p2.y;
-                const distSq = dx * dx + dy * dy;
-
-                if (distSq < maxDistSq) {
-                    const dist = Math.sqrt(distSq);
-                    const alpha1 = Math.min(1, p1.alpha * (0.8 + 0.2 * Math.sin(p1.phase)));
-                    const alpha2 = Math.min(1, p2.alpha * (0.8 + 0.2 * Math.sin(p2.phase)));
-                    const avgAlpha = (alpha1 + alpha2) * 0.5;
-                    const distFactor = 1 - dist / maxDist;
-                    const lineAlpha = 0.35 * distFactor * avgAlpha;
-
-                    ctx.beginPath();
-                    ctx.moveTo(p1.x, p1.y);
-                    ctx.lineTo(p2.x, p2.y);
-                    ctx.strokeStyle = `hsla(${hue}, ${finalSat}%, ${finalLight}%, ${lineAlpha})`;
-                    ctx.lineWidth = 0.5 + 2.5 * distFactor;
-                    ctx.stroke();
+        },
+        // Три слоя глубины: мерцают, медленно плывут (ближние быстрее), иногда падающая звезда
+        stars: {
+            opacity: 0.4,
+            init() {
+                const n = Math.min(600, Math.floor(W * H / 3500));
+                return {
+                    stars: Array.from({ length: n }, () => {
+                        const d = Math.random() ** 2;    // ближних меньше
+                        return { x: rand(0, W), y: rand(0, H), d, r: 0.5 + d * 1.8, ph: rand(0, 6.3), sp: rand(0.03, 0.1) };
+                    }),
+                    shoot: null, wait: rand(40, 120)
+                };
+            },
+            draw(s, dt, { h, s: sat }) {
+                ctx.clearRect(0, 0, W, H);
+                const S = Math.min(100, sat * 1.2);
+                // точки собираем в 8 пачек по яркости: 8 заливок на кадр вместо сотен
+                const packs = Array.from({ length: 8 }, () => new Path2D());
+                for (const st of s.stars) {
+                    st.ph += st.sp * dt;
+                    st.x -= (0.03 + st.d * 0.3) * dt;
+                    if (st.x < -5) { st.x = W + 5; st.y = rand(0, H); }
+                    const a = 0.2 + 0.8 * (0.5 + 0.5 * Math.sin(st.ph));
+                    if (st.r > 1.4) drawSprite('glow', st.x, st.y, st.r * 7, h, S, 70, a * 0.3);
+                    const pack = packs[Math.min(7, a * 8 | 0)];
+                    pack.moveTo(st.x + st.r, st.y);
+                    pack.arc(st.x, st.y, st.r, 0, Math.PI * 2);
+                }
+                ctx.fillStyle = hsla(h, S, 82, 1);
+                packs.forEach((pack, i) => { ctx.globalAlpha = (i + 0.5) / 8; ctx.fill(pack); });
+                ctx.globalAlpha = 1;
+                s.wait -= dt;
+                if (!s.shoot && s.wait <= 0) {
+                    s.shoot = { x: rand(W * 0.3, W * 1.05), y: rand(-20, H * 0.35), vx: -rand(16, 24), vy: rand(6, 10), life: 1 };
+                    s.wait = rand(80, 220);
+                }
+                const p = s.shoot;
+                if (p) {
+                    p.x += p.vx * dt; p.y += p.vy * dt; p.life -= 0.035 * dt;
+                    const tx = p.x - p.vx * 7, ty = p.y - p.vy * 7;
+                    const tail = ctx.createLinearGradient(p.x, p.y, tx, ty);
+                    tail.addColorStop(0, hsla(h, S * 0.5, 95, Math.max(0, p.life)));
+                    tail.addColorStop(1, hsla(h, S, 70, 0));
+                    ctx.strokeStyle = tail;
+                    ctx.lineWidth = 2;
+                    ctx.lineCap = 'round';
+                    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(tx, ty); ctx.stroke();
+                    drawSprite('glow', p.x, p.y, 10, h, S * 0.5, 90, p.life * 0.8);
+                    if (p.life <= 0 || p.x < -200 || p.y > H + 200) s.shoot = null;
                 }
             }
+        },
+        // Сеть точек; курсор издалека притягивает, вблизи расталкивает, к нему тянутся линии
+        particles: {
+            opacity: 0.35,
+            init() {
+                const n = Math.min(130, Math.floor(W * H / 14000));
+                return { ps: Array.from({ length: n }, () => ({ x: rand(0, W), y: rand(0, H), vx: rand(-0.6, 0.6), vy: rand(-0.6, 0.6), r: rand(1.2, 3), ph: rand(0, 6.3) })) };
+            },
+            draw(s, dt, { h, s: sat }) {
+                ctx.clearRect(0, 0, W, H);
+                const S = Math.min(100, sat * 1.4), link = Math.max(110, Math.min(170, Math.min(W, H) * 0.14)), link2 = link * link;
+                const ps = s.ps;
+                for (const p of ps) {
+                    const dx = mouse.x - p.x, dy = mouse.y - p.y, d2 = dx * dx + dy * dy;
+                    if (d2 < 48000 && d2 > 1) {
+                        const d = Math.sqrt(d2), f = (d < 90 ? -1.2 : 0.3) / d;
+                        p.vx += dx * f * 0.05 * dt; p.vy += dy * f * 0.05 * dt;
+                    }
+                    const sp = Math.hypot(p.vx, p.vy);
+                    if (sp > 1.3) { p.vx *= 1.3 / sp; p.vy *= 1.3 / sp; }
+                    if (sp < 0.15) { p.vx += rand(-0.05, 0.05); p.vy += rand(-0.05, 0.05); }
+                    p.x += p.vx * dt; p.y += p.vy * dt; p.ph += 0.05 * dt;
+                    if (p.x < 0 || p.x > W) { p.vx *= -1; p.x = Math.max(0, Math.min(W, p.x)); }
+                    if (p.y < 0 || p.y > H) { p.vy *= -1; p.y = Math.max(0, Math.min(H, p.y)); }
+                }
+                // линии — в 6 пачек по прозрачности: 6 обводок на кадр вместо сотен
+                const lines = Array.from({ length: 6 }, () => new Path2D());
+                const add = (a, x1, y1, x2, y2) => { const l = lines[Math.min(5, a * 6 | 0)]; l.moveTo(x1, y1); l.lineTo(x2, y2); };
+                for (let i = 0; i < ps.length; i++) {
+                    const a = ps[i];
+                    for (let j = i + 1; j < ps.length; j++) {
+                        const b = ps[j], dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy;
+                        if (d2 < link2) add(0.45 * (1 - Math.sqrt(d2) / link) / 0.7, a.x, a.y, b.x, b.y);
+                    }
+                    const mx = mouse.x - a.x, my = mouse.y - a.y, m2 = mx * mx + my * my;
+                    if (m2 < link2 * 1.7) add(1 - Math.sqrt(m2 / (link2 * 1.7)), a.x, a.y, mouse.x, mouse.y);
+                }
+                ctx.strokeStyle = hsla(h, S, 75, 1);
+                ctx.lineWidth = 1;
+                lines.forEach((l, i) => { ctx.globalAlpha = 0.7 * (i + 0.5) / 6; ctx.stroke(l); });
+                ctx.globalAlpha = 1;
+                const dots = new Path2D();
+                for (const p of ps) {
+                    const r = p.r * (0.85 + 0.15 * Math.sin(p.ph));
+                    drawSprite('glow', p.x, p.y, r * 5, h, S, 70, 0.4);
+                    dots.moveTo(p.x + r, p.y);
+                    dots.arc(p.x, p.y, r, 0, Math.PI * 2);
+                }
+                ctx.fillStyle = hsla(h, S, 85, 1);
+                ctx.fill(dots);
+            }
+        },
+        // Четыре волны; под каждой — полупрозрачная заливка, получаются слои
+        waves: {
+            opacity: 0.3,
+            init() { return { time: rand(0, 50) }; },
+            draw(s, dt, { h, s: sat }) {
+                ctx.clearRect(0, 0, W, H);
+                s.time += 0.01 * dt;
+                const S = Math.min(100, sat * 1.3), L = 75;
+                const k = Math.min(200, Math.max(80, H * 0.15)) / 100, mid = H * 0.5;
+                WAVES.forEach((c, w) => {
+                    ctx.beginPath();
+                    for (let x = 0; x <= W; x += 3) {
+                        const y = mid + (Math.sin(x * c.freq1 + s.time * c.speed1 + c.offset) * c.amp1
+                            + Math.sin(x * c.freq2 + s.time * c.speed2 + c.offset * 0.7) * c.amp2
+                            + Math.sin(x * c.freq3 + s.time * c.speed3 + c.offset * 2) * c.amp3) * k;
+                        x ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+                    }
+                    const color = hsla(h + c.dh, S, L + c.dl, 1);
+                    const width = 2 + w * 0.5;
+                    ctx.strokeStyle = color;
+                    ctx.globalAlpha = c.alpha * 0.14;
+                    ctx.lineWidth = width + 10 + w * 3;
+                    ctx.stroke();
+                    ctx.globalAlpha = c.alpha;
+                    ctx.lineWidth = width;
+                    ctx.stroke();
+                    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+                    const fill = ctx.createLinearGradient(0, mid - 150 * k, 0, H);
+                    fill.addColorStop(0, hsla(h + c.dh, S, L, 0.06));
+                    fill.addColorStop(1, hsla(h + c.dh, S, L, 0));
+                    ctx.globalAlpha = 1;
+                    ctx.fillStyle = fill;
+                    ctx.fill();
+                });
+            }
+        },
+        // Северное сияние: три переливающихся занавеса из вертикальных лучей
+        aurora: {
+            opacity: 0.45,
+            init() { return { t: rand(0, 100) }; },
+            draw(s, dt, { h, s: sat }) {
+                ctx.clearRect(0, 0, W, H);
+                s.t += 0.012 * dt;
+                const S = Math.min(100, sat * 1.15), step = 6;
+                ctx.globalCompositeOperation = 'lighter';
+                // base — нижний край занавеса (доля высоты): середина сияния — у центра экрана
+                [
+                    { base: 0.64, amp: 0.08, len: 0.3, dh: 0, a: 0.45, f: 0.0021, sp: 1 },
+                    { base: 0.72, amp: 0.06, len: 0.24, dh: 45, a: 0.3, f: 0.0016, sp: -0.7 },
+                    { base: 0.58, amp: 0.05, len: 0.2, dh: -40, a: 0.28, f: 0.0027, sp: 0.55 }
+                ].forEach(b => {
+                    const img = sprite('curtain', h + b.dh, S, 60);
+                    for (let x = 0; x < W; x += step) {
+                        const y = H * (b.base + b.amp * Math.sin(x * b.f + s.t * b.sp) + 0.025 * Math.sin(x * b.f * 3.1 - s.t * 1.7 * b.sp));
+                        const len = H * b.len * (0.6 + 0.4 * Math.sin(x * 0.011 + s.t * 2.3 * b.sp));
+                        ctx.globalAlpha = b.a * (0.5 + 0.5 * Math.sin(x * 0.004 - s.t * 1.3 + b.dh));
+                        ctx.drawImage(img, x, y - len, step + 1, len);
+                    }
+                });
+                ctx.globalAlpha = 1;
+                ctx.globalCompositeOperation = 'source-over';
+            }
+        },
+        // Боке: мягкие диски всплывают на разной глубине — ближние крупнее, прозрачнее и быстрее
+        bokeh: {
+            opacity: 0.4,
+            init() {
+                const n = Math.min(45, Math.floor(W * H / 38000));
+                return { b: Array.from({ length: n }, () => this.spawn(rand(0, H))) };
+            },
+            spawn(y) {
+                const d = Math.random();
+                return { x: rand(0, W), y, d, r: 12 + d * 80, vy: -(0.12 + d * 0.45), ph: rand(0, 6.3), dh: rand(-30, 30), a: 0.5 - d * 0.28 };
+            },
+            draw(s, dt, { h, s: sat }) {
+                ctx.clearRect(0, 0, W, H);
+                const S = Math.min(100, sat * 1.2);
+                ctx.globalCompositeOperation = 'lighter';
+                s.b.forEach((p, i) => {
+                    p.y += p.vy * dt;
+                    p.ph += 0.02 * dt;
+                    p.x += Math.sin(p.ph) * 0.25 * dt;
+                    if (p.y < -p.r) s.b[i] = this.spawn(H + p.r);
+                    drawSprite('disc', p.x, p.y, p.r, h + p.dh, S, 62, p.a * (0.75 + 0.25 * Math.sin(p.ph * 1.7)));
+                });
+                ctx.globalCompositeOperation = 'source-over';
+            }
+        },
+        // Синтвейв: солнце с прорезями над горизонтом и сетка, которая едет на тебя
+        grid: {
+            opacity: 0.4,
+            init() { return { z: 0 }; },
+            draw(s, dt, { h, s: sat }) {
+                ctx.clearRect(0, 0, W, H);
+                s.z = (s.z + 0.012 * dt) % 1;
+                const hor = H * 0.6, S = Math.min(100, Math.max(sat, 25) * 1.1), cx = W / 2;
+                const R = Math.min(W, H) * 0.18, cy = hor - R * 0.6;
+                drawSprite('glow', cx, cy, R * 2.4, h + 20, S, 60, 0.35);
+                const sun = ctx.createLinearGradient(0, cy - R, 0, cy + R);
+                sun.addColorStop(0, hsla(h + 45, S, 72, 0.95));
+                sun.addColorStop(1, hsla(h - 25, S, 55, 0.95));
+                ctx.fillStyle = sun;
+                ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+                ctx.globalCompositeOperation = 'destination-out';
+                for (let i = 0; i < 6; i++) ctx.fillRect(cx - R, cy + R * (0.02 + i * 0.105), 2 * R, 1.5 + i * 1.2);
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.clearRect(0, hor, W, H - hor);               // ниже горизонта — земля
+                const floor = ctx.createLinearGradient(0, hor, 0, H);
+                floor.addColorStop(0, hsla(h, S, 45, 0.22));
+                floor.addColorStop(1, hsla(h, S, 30, 0));
+                ctx.fillStyle = floor;
+                ctx.fillRect(0, hor, W, H - hor);
+                ctx.strokeStyle = hsla(h, S, 68, 1);
+                ctx.lineWidth = 1.2;
+                const n = 18;
+                for (let i = -n; i <= n; i++) {                   // лучи из точки схода
+                    ctx.globalAlpha = 0.55;
+                    ctx.beginPath(); ctx.moveTo(cx + i * 6, hor); ctx.lineTo(cx + i * (W / n) * 1.4, H); ctx.stroke();
+                }
+                for (let i = 0; i < 18; i++) {                    // поперечные линии уезжают к зрителю
+                    const d = i + 1 - s.z, y = hor + (H - hor) * 0.9 / d;
+                    if (y > H) continue;
+                    ctx.globalAlpha = Math.min(0.8, 1.2 / d);
+                    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+                }
+                ctx.globalAlpha = 1;
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = hsla(h + 20, S, 75, 0.9);
+                ctx.beginPath(); ctx.moveTo(0, hor); ctx.lineTo(W, hor); ctx.stroke();
+                // дымка у горизонта прячет густую сетку вдали
+                const haze = ctx.createLinearGradient(0, hor, 0, hor + (H - hor) * 0.3);
+                haze.addColorStop(0, 'rgba(0, 0, 0, 1)');
+                haze.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.fillStyle = haze;
+                ctx.fillRect(0, hor + 1, W, (H - hor) * 0.3);
+                ctx.globalCompositeOperation = 'source-over';
+            }
+        },
+        // Снегопад: хлопья на разной глубине, ветер меняется, ближние светятся
+        snow: {
+            opacity: 0.5,
+            init() {
+                const n = Math.min(260, Math.floor(W * H / 6000));
+                return { f: Array.from({ length: n }, () => this.spawn(rand(0, H))), windT: rand(0, 100) };
+            },
+            spawn(y) {
+                const d = Math.random() ** 1.5;
+                return { x: rand(0, W), y, d, r: 0.8 + d * 2.6, ph: rand(0, 6.3) };
+            },
+            draw(s, dt, { h, s: sat }) {
+                ctx.clearRect(0, 0, W, H);
+                s.windT += 0.004 * dt;
+                const wind = Math.sin(s.windT) * 0.6 + Math.sin(s.windT * 2.7) * 0.3;
+                const S = sat * 0.4;
+                const packs = Array.from({ length: 4 }, () => new Path2D());   // 4 заливки по глубине
+                s.f.forEach((p, i) => {
+                    p.ph += 0.03 * dt;
+                    p.y += (0.35 + p.d * 1.4) * dt;
+                    p.x += (wind * (0.4 + p.d) + Math.sin(p.ph) * 0.3) * dt;
+                    if (p.y > H + 5) { s.f[i] = this.spawn(-5); return; }
+                    if (p.x > W + 5) p.x = -5; else if (p.x < -5) p.x = W + 5;
+                    if (p.d > 0.6) drawSprite('glow', p.x, p.y, p.r * 3.5, h, S, 85, 0.45);
+                    const pack = packs[Math.min(3, p.d * 4 | 0)];
+                    pack.moveTo(p.x + p.r, p.y);
+                    pack.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                });
+                ctx.fillStyle = hsla(h, S, 90, 1);
+                packs.forEach((pack, i) => { ctx.globalAlpha = 0.45 + (i + 0.5) / 4 * 0.55; ctx.fill(pack); });
+                ctx.globalAlpha = 1;
+            }
         }
+    };
+
+    function drawBackground(dt = 1) {
+        const def = BACKGROUNDS[backgroundStyle] || BACKGROUNDS.matrix;
+        if (bgName !== backgroundStyle) {
+            bgName = backgroundStyle;
+            ctx.clearRect(0, 0, W, H);
+            bg = def.init();
+            canvas.style.opacity = def.opacity;
+        }
+        def.draw(bg, dt, theme());
     }
 
-    function drawWaves() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        bgState.time += 0.01;
+    // ================= Покраска: мой ник, его свечение, мои аватарки, рамка поста =================
+    // Мои ники, их блоки и аватарки помечены классами, а цвет живёт в четырёх CSS-правилах.
+    // Меняются только правила: новые элементы красятся сами, радуга трогает четыре правила,
+    // а не каждый ник на странице.
+    const paintStyle = document.createElement('style');
+    paintStyle.textContent = '.vp-my-nick {} .vp-my-nick-box {} .my-avatar-glow {} .vp-post:hover {} '
+        + '.vp-nav-link.vp-active .vp-nav-icon {} .vp-tabs > div:empty {} :root {} ::selection {}';
+    document.head.appendChild(paintStyle);
+    let paintKey = '', paintRootKey = '';
 
+    function borderColorOf(style) {
+        // как было: цвет стиля с прозрачностью 0.6 (hex) или 0.3 (hsl)
+        if (style.color && style.color !== 'rainbow' && style.color.startsWith('#')) {
+            const hex = style.color.length === 4 ? style.color.replace(/#(.)(.)(.)/, '#$1$1$2$2$3$3') : style.color;
+            const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+            return `rgba(${r}, ${g}, ${b}, 0.6)`;
+        }
+        return `hsla(${style.avatarHue || 210}, ${style.avatarSat ?? 100}%, 60%, 0.3)`;
+    }
+
+    function paint() {
         const style = nickStyles[currentStyle];
-        let hue, sat, light = 60;
-        if (currentStyle === 'rainbow') {
-            hue = globalHue;
-            sat = 100;
+        const rainbow = currentStyle === 'rainbow';
+        const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const h = Math.round(globalHue * 10) / 10;
+        const key = [currentStyle, rainbow ? h : '', dark, nickGlowEnabled, avatarGlowEnabled, postBorderEnabled].join();
+        if (key === paintKey) return;
+        paintKey = key;
+        const [nick, nickBox, avatar, post, navIcon, tab, root, selection] = [...paintStyle.sheet.cssRules].map(r => r.style);
+        const hsl = `hsl(${h}, 100%, 55%)`;
+        if (rainbow) {
+            nick.cssText = `color: ${hsl} !important; text-shadow: 0 0 5px ${hsl} !important;`;
         } else {
-            hue = style.matrixHue || 210;
-            sat = style.matrixSat !== undefined ? style.matrixSat : 100;
+            const gradient = dark && style.gradientDark ? style.gradientDark : style.gradientLight;
+            nick.cssText = `background: ${gradient} !important; -webkit-background-clip: text !important; background-clip: text !important; -webkit-text-fill-color: transparent !important;`;
         }
+        nickBox.cssText = !nickGlowEnabled ? '' : `filter: ${rainbow ? `drop-shadow(0 0 6px ${hsl}) drop-shadow(0 0 12px ${hsl})` : style.glow} !important;`;
+        const ah = style.avatarHue || 210, as = style.avatarSat ?? 100;
+        avatar.cssText = !avatarGlowEnabled ? '' : `filter: ${rainbow
+            ? `drop-shadow(0 0 5px ${hsl}) drop-shadow(0 0 12px ${hsl})`
+            : `drop-shadow(0 0 3px hsl(${ah}, ${as}%, 60%)) drop-shadow(0 0 6px hsl(${ah}, ${as}%, 60%))`} !important;`;
+        const border = rainbow ? `hsla(${h}, 100%, 55%, 0.3)` : borderColorOf(style);
+        post.cssText = !postBorderEnabled ? '' : `border-color: ${border} !important; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3), 0 0 0 2px ${border} !important;`;
 
-        const finalSat = Math.min(100, sat * 1.3);
-        const finalLight = Math.min(80, light + 15);
-
-        const waveConfigs = [
-            { amp1: 100, freq1: 0.008, speed1: 0.4, amp2: 50, freq2: 0.018, speed2: 0.7, amp3: 70, freq3: 0.004, speed3: 0.25, alpha: 0.45, offset: 0 },
-            { amp1: 80, freq1: 0.009, speed1: 0.5, amp2: 40, freq2: 0.020, speed2: 0.8, amp3: 60, freq3: 0.005, speed3: 0.3, alpha: 0.35, offset: 1.5 },
-            { amp1: 60, freq1: 0.010, speed1: 0.6, amp2: 30, freq2: 0.022, speed2: 0.9, amp3: 50, freq3: 0.006, speed3: 0.35, alpha: 0.28, offset: 3.0 },
-            { amp1: 40, freq1: 0.011, speed1: 0.7, amp2: 20, freq2: 0.025, speed2: 1.0, amp3: 30, freq3: 0.007, speed3: 0.4, alpha: 0.20, offset: 4.5 }
-        ];
-
-        const colors = [
-            `hsla(${hue}, ${finalSat}%, ${finalLight + 15}%, ${waveConfigs[0].alpha})`,
-            `hsla(${hue + 15}, ${finalSat}%, ${finalLight + 10}%, ${waveConfigs[1].alpha})`,
-            `hsla(${hue - 15}, ${finalSat}%, ${finalLight + 5}%, ${waveConfigs[2].alpha})`,
-            `hsla(${hue + 30}, ${finalSat}%, ${finalLight}%, ${waveConfigs[3].alpha})`
-        ];
-
-        const waveHeight = Math.min(200, Math.max(80, canvas.height * 0.15));
-        const waveOffset = canvas.height * 0.5;
-
-        waveConfigs.forEach((cfg, w) => {
-            ctx.beginPath();
-            for (let x = 0; x < canvas.width; x += 1.5) {
-                const y = waveOffset +
-                    Math.sin(x * cfg.freq1 + bgState.time * cfg.speed1 + cfg.offset) * cfg.amp1 * (waveHeight / 100) +
-                    Math.sin(x * cfg.freq2 + bgState.time * cfg.speed2 + cfg.offset * 0.7) * cfg.amp2 * (waveHeight / 100) +
-                    Math.sin(x * cfg.freq3 + bgState.time * cfg.speed3 + cfg.offset * 2) * cfg.amp3 * (waveHeight / 100);
-                x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-            }
-
-            ctx.strokeStyle = colors[w];
-            ctx.lineWidth = 2 + w * 0.5;
-            ctx.shadowColor = colors[w];
-            ctx.shadowBlur = 15 + w * 5;
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-        });
-    }
-
-    function drawBackground() {
-        if (!backgroundEnabled) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            return;
-        }
-        switch (backgroundStyle) {
-            case 'stars':
-                drawStars();
-                break;
-            case 'waves':
-                drawWaves();
-                break;
-            case 'particles':
-                drawParticles();
-                break;
-            case 'matrix':
-            default:
-                drawMatrix();
-                break;
+        // цвет стиля — по интерфейсу: иконка активного пункта меню, бегунок вкладок
+        const accent = rainbow ? `hsl(${h}, 100%, 62%)` : accentOf(style);
+        navIcon.cssText = `color: ${accent} !important; filter: drop-shadow(0 0 6px ${accent}) !important;`;
+        tab.cssText = `box-shadow: inset 0 0 0 1px ${accent}, 0 0 14px -4px ${accent} !important;`;
+        // прокрутка, выделение и фокус висят на корне — их меняем редко (у радуги шагом 30°),
+        // иначе каждый кадр пересчитывалась бы вся страница
+        const rootKey = rainbow ? 'r' + Math.round(h / 30) : accent;
+        if (rootKey !== paintRootKey) {
+            paintRootKey = rootKey;
+            const slow = rainbow ? `hsl(${Math.round(h / 30) * 30}, 100%, 62%)` : accent;
+            root.cssText = `--vp-accent: ${slow}; scrollbar-color: color-mix(in srgb, ${slow} 55%, transparent) transparent;`;
+            selection.cssText = `background: color-mix(in srgb, ${slow} 45%, transparent) !important;`;
         }
     }
+    // сплошной цвет стиля; у белого — белый
+    function accentOf(style) {
+        if (style.color && style.color.startsWith('#')) return style.color;
+        return `hsl(${style.avatarHue || 210}, ${style.avatarSat ?? 100}%, 62%)`;
+    }
+    new MutationObserver(paint).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
-    function updateAvatarGlow() {
-        const avatars = document.querySelectorAll('.my-avatar-glow');
-        const avatarsLength = avatars.length;
-        if (avatarsLength === 0) return;
-
-        if (!avatarGlowEnabled) {
-            for (let i = 0; i < avatarsLength; i++) {
-                avatars[i].style.filter = 'none';
-            }
-            return;
-        }
-
-        const isRainbow = currentStyle === 'rainbow';
-        const style = nickStyles[currentStyle];
-        const hue = isRainbow ? globalHue : (style.avatarHue || 210);
-        const sat = style.avatarSat !== undefined ? style.avatarSat : 100;
-        const filterValue = isRainbow
-            ? `drop-shadow(0 0 5px hsl(${hue}, 100%, 55%)) drop-shadow(0 0 12px hsl(${hue}, 100%, 55%))`
-            : `drop-shadow(0 0 3px hsl(${hue}, ${sat}%, 60%)) drop-shadow(0 0 6px hsl(${hue}, ${sat}%, 60%))`;
-
-        for (let i = 0; i < avatarsLength; i++) {
-            avatars[i].style.filter = filterValue;
-        }
+    // радуга: оттенок ходит туда-обратно 0 → 360 → 0
+    function stepHue(dt = 1) {
+        globalHue += colorDirection * 0.8 * dt;
+        if (globalHue >= 360) { globalHue = 360; colorDirection = -1; }
+        else if (globalHue <= 0) { globalHue = 0; colorDirection = 1; }
     }
 
     function glowMyAvatar(avatar) {
-        if (!avatar || !avatar.isConnected || avatar.classList.contains('my-avatar-glow')) {
-            return false;
+        if (avatar && avatar.isConnected) avatar.classList.add('my-avatar-glow');
+    }
+    function markMyNick(nickSpan) {
+        nickSpan.classList.add('vp-my-nick');
+        const box = nickSpan.closest('.' + SELECTORS.nickContainer);
+        if (box) box.classList.add('vp-my-nick-box');
+    }
+
+    // ================= Таблетка у ника и её меню =================
+    // Одно меню за раз: открытие закрывает прежнее, повторный клик по кнопке — тоже закрывает.
+    // Меню держится у кнопки при прокрутке (ловим прокрутку любого блока: сайт крутит #root,
+    // а не окно) и закрывается кликом мимо или когда кнопка ушла с экрана.
+    let popup = null;                                   // { el, btn }
+
+    function closePopup() {
+        if (!popup) return;
+        popup.el.remove();
+        window.removeEventListener('scroll', placePopup, true);
+        window.removeEventListener('resize', placePopup);
+        document.removeEventListener('click', clickOutsidePopup, true);
+        popup = null;
+    }
+    function placePopup() {
+        if (!popup) return;
+        const r = popup.btn.getBoundingClientRect();
+        if (!popup.btn.isConnected || r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) {
+            closePopup();
+            return;
         }
-        avatar.classList.add('my-avatar-glow');
-        updateAvatarGlow();
+        const w = popup.el.offsetWidth, h = popup.el.offsetHeight;
+        let left = r.right + 8;
+        if (left + w > innerWidth) left = r.left - w - 8;
+        popup.el.style.left = Math.max(8, left) + 'px';
+        popup.el.style.top = Math.max(8, Math.min(r.top, innerHeight - h - 8)) + 'px';
+    }
+    function clickOutsidePopup(e) {
+        if (popup && !popup.el.contains(e.target) && !popup.btn.contains(e.target)) closePopup();
+    }
+    function openPopup(btn, el) {
+        const same = popup && popup.btn === btn;
+        closePopup();
+        if (same) return false;
+        popup = { el, btn };
+        el.style.position = 'fixed';
+        document.body.appendChild(el);
+        placePopup();
+        window.addEventListener('scroll', placePopup, true);
+        window.addEventListener('resize', placePopup);
+        document.addEventListener('click', clickOutsidePopup, true);
         return true;
     }
 
-    function updateAllNickColors() {
-        const style = nickStyles[currentStyle];
-        const isRainbow = currentStyle === 'rainbow';
-        const color = isRainbow ? `hsl(${globalHue}, 100%, 55%)` : null;
-        const isDark = !isRainbow && document.documentElement.getAttribute('data-theme') === 'dark';
-        const gradient = isRainbow ? null : (isDark && style.gradientDark ? style.gradientDark : style.gradientLight);
-
-        const nickElementsArray = Array.from(nickElements);
-        const nickElementsLength = nickElementsArray.length;
-
-        if (nickElementsLength === 0) return;
-
-        if (isRainbow) {
-            const textShadow = `0 0 5px ${color}`;
-            for (let i = 0; i < nickElementsLength; i++) {
-                const el = nickElementsArray[i];
-                if (el && el.isConnected) {
-                    el.style.color = color;
-                    el.style.textShadow = textShadow;
-                    el.style.webkitTextFillColor = '';
-                    el.style.background = '';
-                }
-            }
-        } else if (gradient) {
-            for (let i = 0; i < nickElementsLength; i++) {
-                const el = nickElementsArray[i];
-                if (el && el.isConnected) {
-                    el.style.background = gradient;
-                    el.style.webkitBackgroundClip = 'text';
-                    el.style.backgroundClip = 'text';
-                    el.style.webkitTextFillColor = 'transparent';
-                    el.style.color = '';
-                    el.style.textShadow = '';
-                }
-            }
-        }
+    function menuOption(icon, label, onPick) {
+        const option = document.createElement('div');
+        option.className = 'nick-style-option';
+        const text = document.createElement('span');
+        text.textContent = label;
+        option.append(icon, text);
+        option.onclick = (e) => { e.stopPropagation(); onPick(); closePopup(); };
+        return option;
+    }
+    function menuBox() {
+        const menu = document.createElement('div');
+        menu.className = 'nick-style-dropdown';
+        return menu;
     }
 
-    function updateNickGlow() {
-        if (!nickGlowEnabled) {
-            const nickElementsArray = Array.from(nickElements);
-            const nickElementsLength = nickElementsArray.length;
-            if (nickElementsLength === 0) return;
-
-            for (let i = 0; i < nickElementsLength; i++) {
-                const nickSpan = nickElementsArray[i];
-                if (nickSpan && nickSpan.isConnected) {
-                    const parentBlock = nickSpan.closest('.' + SELECTORS.nickContainer);
-                    if (parentBlock) {
-                        parentBlock.style.filter = 'none';
-                    }
-                }
-            }
-            return;
-        }
-
-        const isRainbow = currentStyle === 'rainbow';
-        const color = isRainbow ? `hsl(${globalHue}, 100%, 55%)` : null;
-        const style = nickStyles[currentStyle];
-        const glow = isRainbow ? color : style.glow;
-
-        const nickElementsArray = Array.from(nickElements);
-        const nickElementsLength = nickElementsArray.length;
-        if (nickElementsLength === 0) return;
-
-        const glowValue = isRainbow ? `drop-shadow(0 0 6px ${color}) drop-shadow(0 0 12px ${color})` : glow;
-
-        for (let i = 0; i < nickElementsLength; i++) {
-            const nickSpan = nickElementsArray[i];
-            if (nickSpan && nickSpan.isConnected) {
-                const parentBlock = nickSpan.closest('.' + SELECTORS.nickContainer);
-                if (parentBlock) {
-                    parentBlock.style.filter = glowValue;
-                }
-            }
-        }
-    }
-
-    function updateColors() {
-        if (currentStyle === 'rainbow') {
-            globalHue += colorDirection * 0.8;
-            if (globalHue >= 360) {
-                globalHue = 360;
-                colorDirection = -1;
-            } else if (globalHue <= 0) {
-                globalHue = 0;
-                colorDirection = 1;
-            }
-        }
-
-        updateAllNickColors();
-        updateNickGlow();
-        updateAvatarGlow();
-    }
-
-    let dropdown = null;
-    let scrollHandler = null;
-    let resizeHandler = null;
-    let closeHandler = null;
-    let currentButton = null;
-
+    // --- стиль ника
     function getColorDot(styleKey) {
         const style = nickStyles[styleKey];
         const dot = document.createElement('div');
         dot.className = 'style-color-dot';
-
         if (styleKey === 'rainbow') {
             dot.classList.add('rainbow-dot');
         } else {
@@ -1264,661 +1559,209 @@
         }
         return dot;
     }
-
-    function updateDropdownPosition() {
-        if (!dropdown || !currentButton || !currentButton.isConnected) return;
-        const rect = currentButton.getBoundingClientRect();
-
-        const isButtonVisible = rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
-
-        if (!isButtonVisible) {
-            dropdown.remove();
-            dropdown = null;
-            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
-            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
-            if (closeHandler) document.removeEventListener('click', closeHandler);
-            currentButton = null;
-            return;
-        }
-
-        let left = rect.right + 8;
-        let top = rect.top;
-
-        const dropdownWidth = 210;
-        if (left + dropdownWidth > window.innerWidth) {
-            left = rect.left - dropdownWidth - 8;
-        }
-
-        if (left < 8) {
-            left = 8;
-        }
-
-        const dropdownHeight = styleKeys.length * 42;
-        if (top + dropdownHeight > window.innerHeight) {
-            top = window.innerHeight - dropdownHeight - 8;
-        }
-        if (top < 8) {
-            top = 8;
-        }
-
-        dropdown.style.position = 'fixed';
-        dropdown.style.top = `${top}px`;
-        dropdown.style.left = `${left}px`;
+    function openStyleMenu(btn) {
+        const menu = menuBox();
+        styleKeys.forEach(key => menu.appendChild(menuOption(getColorDot(key), nickStyles[key].name, () => {
+            currentStyle = key;
+            GM_setValue('nickStyle', key);
+            paint();
+            btn.title = `Стиль: ${nickStyles[key].name}`;
+        })));
+        openPopup(btn, menu);
     }
 
-    let bgDropdown = null;
-    let bgScrollHandler = null;
-    let bgResizeHandler = null;
-    let bgCloseHandler = null;
-    let currentBgButton = null;
-
-    function getBgIconDot(styleKey) {
-        const icons = {
-            matrix: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><text x="12" y="16" font-size="14" text-anchor="middle" fill="currentColor" stroke="none">01</text></svg>`,
-            stars: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
-            waves: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12c2.5-3 5-3 7.5 0s5 3 7.5 0"/><path d="M3 18c2.5-3 5-3 7.5 0s5 3 7.5 0"/><path d="M3 6c2.5-3 5-3 7.5 0s5 3 7.5 0"/></svg>`,
-            particles: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><circle cx="12" cy="12" r="2"/><line x1="6" y1="6" x2="18" y2="6"/><line x1="6" y1="6" x2="6" y2="18"/><line x1="18" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="18"/><line x1="6" y1="6" x2="12" y2="12"/><line x1="18" y1="6" x2="12" y2="12"/></svg>`
-        };
-        const dot = document.createElement('div');
-        dot.style.cssText = `
-        width: 24px;
-        height: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        color: var(--text-primary, currentColor);
-    `;
-        dot.innerHTML = icons[styleKey] || icons.matrix;
-        return dot;
-    }
-
-    function updateBgDropdownPosition() {
-        if (!bgDropdown || !currentBgButton || !currentBgButton.isConnected) return;
-        const rect = currentBgButton.getBoundingClientRect();
-
-        const isButtonVisible = rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
-
-        if (!isButtonVisible) {
-            bgDropdown.remove();
-            bgDropdown = null;
-            if (bgScrollHandler) window.removeEventListener('scroll', bgScrollHandler);
-            if (bgResizeHandler) window.removeEventListener('resize', bgResizeHandler);
-            if (bgCloseHandler) document.removeEventListener('click', bgCloseHandler);
-            currentBgButton = null;
-            return;
-        }
-
-        let left = rect.right + 8;
-        let top = rect.top;
-
-        const dropdownWidth = 210;
-        if (left + dropdownWidth > window.innerWidth) {
-            left = rect.left - dropdownWidth - 8;
-        }
-
-        if (left < 8) {
-            left = 8;
-        }
-
-        const dropdownHeight = 4 * 42;
-        if (top + dropdownHeight > window.innerHeight) {
-            top = window.innerHeight - dropdownHeight - 8;
-        }
-        if (top < 8) {
-            top = 8;
-        }
-
-        bgDropdown.style.position = 'fixed';
-        bgDropdown.style.top = `${top}px`;
-        bgDropdown.style.left = `${left}px`;
-    }
-
-    function createBgDropdown(button) {
-        if (autoLikeDropdown) {
-            autoLikeDropdown.remove();
-            autoLikeDropdown = null;
-            cleanupAutoLikeHandlers();
-            currentAutoLikeButton = null;
-        }
-
-        if (dropdown) {
-            dropdown.remove();
-            dropdown = null;
-            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
-            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
-            if (closeHandler) document.removeEventListener('click', closeHandler);
-            currentButton = null;
-        }
-
-        if (settingsDropdown) {
-            settingsDropdown.remove();
-            settingsDropdown = null;
-            if (settingsCloseHandler) document.removeEventListener('click', settingsCloseHandler);
-            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
-            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
-        }
-
-        if (bgDropdown) {
-            bgDropdown.remove();
-            if (bgScrollHandler) window.removeEventListener('scroll', bgScrollHandler);
-            if (bgResizeHandler) window.removeEventListener('resize', bgResizeHandler);
-            if (bgCloseHandler) document.removeEventListener('click', bgCloseHandler);
-        }
-
-        currentBgButton = button;
-        bgDropdown = document.createElement('div');
-        bgDropdown.className = 'nick-style-dropdown';
-        bgDropdown.style.minWidth = '210px';
-
-        const bgStyles = ['matrix', 'stars', 'waves', 'particles'];
-        const styleNames = {
-            matrix: 'Матрица',
-            stars: 'Звёзды',
-            waves: 'Волны',
-            particles: 'Частицы'
-        };
-
-        bgStyles.forEach(key => {
-            const option = document.createElement('div');
-            option.className = 'nick-style-option';
-
-            const iconDot = getBgIconDot(key);
-            const textSpan = document.createElement('span');
-            textSpan.textContent = styleNames[key];
-
-            option.appendChild(iconDot);
-            option.appendChild(textSpan);
-
-            option.onclick = (e) => {
-                e.stopPropagation();
+    // --- стиль фона
+    const BG_STYLES = {
+        matrix: { name: 'Матрица', icon: svgIcon('<path d="M6 3v3M6 9.5v5M6 18v3M12 3v6M12 12.5v2M12 18v3M18 3v2M18 8.5v6M18 18v3"/>') },
+        stars: { name: 'Звёзды', icon: svgIcon('<path d="M10 3.5l1.6 3.9 3.9 1.6-3.9 1.6L10 14.5l-1.6-3.9L4.5 9l3.9-1.6z"/><path d="M17.5 13.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/>') },
+        waves: { name: 'Волны', icon: svgIcon('<path d="M3 8c2.5-3 5-3 7.5 0s5 3 7.5 0M3 13c2.5-3 5-3 7.5 0s5 3 7.5 0M3 18c2.5-3 5-3 7.5 0s5 3 7.5 0"/>') },
+        particles: { name: 'Частицы', icon: svgIcon('<circle cx="5" cy="7" r="1.8"/><circle cx="18" cy="5" r="1.8"/><circle cx="12" cy="13" r="1.8"/><circle cx="6" cy="19" r="1.8"/><circle cx="19" cy="17" r="1.8"/><path d="m6.6 8.1 3.9 3.8M16.6 6.2l-3.5 5.2M10.7 14.4l-3.4 3.4M13.6 13.8l3.8 2.4"/>') },
+        aurora: { name: 'Сияние', icon: svgIcon('<path d="M3 14c3-5 6-7 9-7s6 2 9 7"/><path d="M6 17c2-3 4-4.5 6-4.5s4 1.5 6 4.5"/><path d="M3 21h18"/>') },
+        bokeh: { name: 'Боке', icon: svgIcon('<circle cx="8" cy="9" r="4"/><circle cx="16.5" cy="15.5" r="4.5"/><circle cx="17" cy="6" r="1.5"/>') },
+        grid: { name: 'Неон-сетка', icon: svgIcon('<path d="M8 8a4 4 0 0 1 8 0"/><path d="M2 12h20"/><path d="M12 12v9M12 12l-8 9M12 12l8 9M5 17h14"/>') },
+        snow: { name: 'Снегопад', icon: svgIcon('<path d="M12 2v20M3.3 7l17.4 10M3.3 17 20.7 7"/><path d="m9 4 3 2 3-2M9 20l3-2 3 2"/>') }
+    };
+    function openBgMenu(btn) {
+        const menu = menuBox();
+        Object.entries(BG_STYLES).forEach(([key, bg]) => {
+            const icon = document.createElement('div');
+            icon.className = 'vp-menu-icon';
+            icon.innerHTML = bg.icon;
+            menu.appendChild(menuOption(icon, bg.name, () => {
                 backgroundStyle = key;
-                GM_setValue('backgroundStyle', backgroundStyle);
-
-                if (currentBgButton) {
-                    currentBgButton.title = 'Стиль фона: ' + styleNames[backgroundStyle];
-                }
-
-                updateBackgroundToggleButtons();
-
-                drawBackground();
-
-                bgDropdown.remove();
-                bgDropdown = null;
-                if (bgScrollHandler) window.removeEventListener('scroll', bgScrollHandler);
-                if (bgResizeHandler) window.removeEventListener('resize', bgResizeHandler);
-                if (bgCloseHandler) document.removeEventListener('click', bgCloseHandler);
-                currentBgButton = null;
-            };
-            bgDropdown.appendChild(option);
+                GM_setValue('backgroundStyle', key);
+                btn.title = 'Стиль фона: ' + bg.name;
+            }));
         });
-
-        updateBgDropdownPosition();
-        document.body.appendChild(bgDropdown);
-
-        bgScrollHandler = () => updateBgDropdownPosition();
-        bgResizeHandler = () => updateBgDropdownPosition();
-
-        window.addEventListener('scroll', bgScrollHandler);
-        window.addEventListener('resize', bgResizeHandler);
-
-        bgCloseHandler = (e) => {
-            if (bgDropdown && !bgDropdown.contains(e.target) && e.target !== currentBgButton) {
-                bgDropdown.remove();
-                bgDropdown = null;
-                window.removeEventListener('scroll', bgScrollHandler);
-                window.removeEventListener('resize', bgResizeHandler);
-                document.removeEventListener('click', bgCloseHandler);
-                currentBgButton = null;
-            }
-        };
-        setTimeout(() => document.addEventListener('click', bgCloseHandler), 0);
+        openPopup(btn, menu);
     }
 
-    let autoLikeDropdown = null;
-    let autoLikeScrollHandler = null;
-    let autoLikeResizeHandler = null;
-    let autoLikeCloseHandler = null;
-    let currentAutoLikeButton = null;
-
-    function updateAutoLikeDropdownPosition() {
-        if (!autoLikeDropdown || !currentAutoLikeButton || !currentAutoLikeButton.isConnected) return;
-        const rect = currentAutoLikeButton.getBoundingClientRect();
-
-        const isButtonVisible = rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
-
-        if (!isButtonVisible) {
-            autoLikeDropdown.remove();
-            autoLikeDropdown = null;
-            cleanupAutoLikeHandlers();
-            return;
-        }
-
-        let left = rect.right + 8;
-        let top = rect.top;
-
-        const dropdownWidth = 240;
-        if (left + dropdownWidth > window.innerWidth) {
-            left = rect.left - dropdownWidth - 8;
-        }
-        if (left < 8) left = 8;
-
-        const dropdownHeight = 400;
-        if (top + dropdownHeight > window.innerHeight) {
-            top = window.innerHeight - dropdownHeight - 8;
-        }
-        if (top < 8) top = 8;
-
-        autoLikeDropdown.style.top = top + 'px';
-        autoLikeDropdown.style.left = left + 'px';
+    // --- автолайки: список тех, кого лайкать
+    function updateAutoLikeButtons() {
+        const active = Object.keys(autoLikeUsers).length > 0;
+        document.querySelectorAll('.auto-like-toggle').forEach(b => {
+            b.classList.toggle('vp-on', active);
+            b.classList.toggle('vp-hidden', !autoLikeEnabled);
+        });
     }
-
-    function cleanupAutoLikeHandlers() {
-        if (autoLikeScrollHandler) window.removeEventListener('scroll', autoLikeScrollHandler);
-        if (autoLikeResizeHandler) window.removeEventListener('resize', autoLikeResizeHandler);
-        if (autoLikeCloseHandler) document.removeEventListener('click', autoLikeCloseHandler);
-        autoLikeScrollHandler = autoLikeResizeHandler = autoLikeCloseHandler = null;
-    }
-
-    function renderAutoLikeUsers(container, footer, usersData) {
+    function renderAutoLikeUsers(list, footer, usersData) {
         const users = Object.keys(usersData).sort((a, b) => a === 'NeuroSFW' ? -1 : b === 'NeuroSFW' ? 1 : a.localeCompare(b));
-
+        const count = () => { footer.textContent = `Активно: ${Object.keys(autoLikeUsers).length}`; };
+        count();
         if (!users.length) {
-            container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);">Нет пользователей</div>';
-            footer.textContent = 'Активно: 0';
+            list.innerHTML = '<div class="vp-menu-note">Нет пользователей</div>';
             return;
         }
-
-        container.innerHTML = '';
+        list.innerHTML = '';
         for (const username of users) {
             const data = usersData[username];
             if (!data) continue;
-            const displayName = (data.displayName || username).slice(0, 20);
-            const avatar = data.avatar || '👤';
-            const isActive = autoLikeUsers[username] || false;
-
             const row = document.createElement('div');
-            row.className = 'auto-like-option-fixed';
-            row.style.cssText = 'padding:8px 12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;border-radius:16px;transition:all 0.15s;';
-            row.onmouseenter = () => row.style.background = 'var(--bg-hover, rgba(0,128,255,0.15))';
-            row.onmouseleave = () => row.style.background = 'transparent';
-
-            const left = document.createElement('div');
-            left.style.cssText = 'display:flex;align-items:center;gap:10px;flex:1;min-width:0;';
-            const av = document.createElement('div');
-            av.textContent = avatar;
-            av.style.cssText = 'width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;background:rgba(0,0,0,0.2);flex-shrink:0;';
-            left.appendChild(av);
-            const names = document.createElement('div');
-            names.style.cssText = 'display:flex;flex-direction:column;min-width:0;';
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = displayName;
-            nameSpan.style.cssText = 'font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-            names.appendChild(nameSpan);
-            const unameSpan = document.createElement('span');
-            unameSpan.textContent = `@${username}`;
-            unameSpan.style.cssText = 'font-size:11px;color:var(--text-secondary);';
-            names.appendChild(unameSpan);
-            left.appendChild(names);
-            row.appendChild(left);
-
-            const toggle = document.createElement('div');
-            toggle.className = 'toggle-switch' + (isActive ? ' active' : '');
-            toggle.style.cssText = 'width:40px;height:22px;background:rgba(0,0,0,0.5);border-radius:11px;position:relative;transition:all 0.2s ease;flex-shrink:0;cursor:pointer;';
-            toggle.style.background = isActive ? 'var(--accent-primary, #0080FF)' : 'rgba(0,0,0,0.5)';
-            row.appendChild(toggle);
-
-            row.addEventListener('click', () => {
-                const nowActive = toggle.classList.toggle('active');
-                if (nowActive) {
-                    autoLikeUsers[username] = true;
-                    toggle.style.background = 'var(--accent-primary, #0080FF)';
-                } else {
-                    delete autoLikeUsers[username];
-                    toggle.style.background = 'rgba(0,0,0,0.5)';
-                }
+            row.className = 'nick-style-option vp-like-row';
+            row.innerHTML = `<div class="vp-like-user"><div class="vp-like-avatar"></div><div class="vp-like-names"><span class="vp-like-name"></span><span class="vp-like-login"></span></div></div><div class="toggle-switch"></div>`;
+            row.querySelector('.vp-like-avatar').textContent = data.avatar || '👤';
+            row.querySelector('.vp-like-name').textContent = (data.displayName || username).slice(0, 20);
+            row.querySelector('.vp-like-login').textContent = '@' + username;
+            const toggle = row.querySelector('.toggle-switch');
+            toggle.classList.toggle('active', !!autoLikeUsers[username]);
+            row.onclick = (e) => {
+                e.stopPropagation();
+                if (toggle.classList.toggle('active')) autoLikeUsers[username] = true;
+                else delete autoLikeUsers[username];
                 saveAutoLikeUsers();
-                const count = Object.keys(autoLikeUsers).length;
-                footer.textContent = count > 0 ? `Активно: ${count}` : 'Активно: 0';
+                count();
+                updateAutoLikeButtons();
+            };
+            list.appendChild(row);
+        }
+    }
+    function openAutoLikeMenu(btn) {
+        const menu = menuBox();
+        menu.classList.add('vp-like-menu');
+        menu.innerHTML = '<div class="vp-like-list"><div class="vp-menu-note">Загрузка...</div></div><div class="vp-like-footer">Активно: 0</div>';
+        const list = menu.firstElementChild, footer = menu.lastElementChild;
+        if (!openPopup(btn, menu)) return;
+        fetchAutoLikeUsers().then(usersData => {
+            renderAutoLikeUsers(list, footer, usersData);
+            placePopup();
+        }).catch(() => {
+            list.innerHTML = '<div class="vp-menu-note">Ошибка загрузки</div>';
+        });
+    }
 
-                if (currentAutoLikeButton) {
-                    currentAutoLikeButton.style.color = count > 0 ? 'var(--accent-primary, #0080FF)' : 'var(--text-primary, currentColor)';
+    // --- настройки: список переключателей
+    function applyPostBlurSetting() {
+        document.querySelectorAll('.' + SELECTORS.post + '[data-post-colored]').forEach(post => {
+            post.removeAttribute('data-post-colored');
+            post.classList.remove('vp-emoji-tint');
+        });
+        if (postBlurEnabled) {
+            addBlurBackground();
+        } else {
+            document.querySelectorAll('.itd-blur-container').forEach(el => el.remove());
+            document.querySelectorAll('.' + SELECTORS.post + ', .' + SELECTORS.repost).forEach(el => {
+                el.removeAttribute('data-blur-bg');
+                el.classList.remove('itd-blur-active');
+            });
+        }
+        colorizePosts();
+    }
+    function applyAntiCensorshipSetting() {
+        if (antiCensorshipEnabled) {
+            document.querySelectorAll('input[type="file"][data-overridden]').forEach(input => {
+                input.removeAttribute('data-overridden');
+                if (input._originalClick) {
+                    input.click = input._originalClick;
                 }
             });
-
-            container.appendChild(row);
-        }
-        const activeCount = Object.keys(autoLikeUsers).length;
-        footer.textContent = activeCount > 0 ? `Активно: ${activeCount}` : 'Активно: 0';
-    }
-
-    function createAutoLikeDropdown(button) {
-        if (dropdown) {
-            dropdown.remove();
-            dropdown = null;
-            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
-            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
-            if (closeHandler) document.removeEventListener('click', closeHandler);
-            scrollHandler = resizeHandler = closeHandler = null;
-            currentButton = null;
-        }
-        if (bgDropdown) {
-            bgDropdown.remove();
-            bgDropdown = null;
-            if (bgScrollHandler) window.removeEventListener('scroll', bgScrollHandler);
-            if (bgResizeHandler) window.removeEventListener('resize', bgResizeHandler);
-            if (bgCloseHandler) document.removeEventListener('click', bgCloseHandler);
-            bgScrollHandler = bgResizeHandler = bgCloseHandler = null;
-            currentBgButton = null;
-        }
-        if (settingsDropdown) {
-            settingsDropdown.remove();
-            settingsDropdown = null;
-            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
-            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
-            if (settingsCloseHandler) document.removeEventListener('click', settingsCloseHandler);
-            scrollHandler = resizeHandler = settingsCloseHandler = null;
-        }
-        if (autoLikeDropdown) { autoLikeDropdown.remove(); cleanupAutoLikeHandlers(); }
-
-        currentAutoLikeButton = button;
-        autoLikeDropdown = document.createElement('div');
-        autoLikeDropdown.className = 'nick-style-dropdown';
-        autoLikeDropdown.style.cssText = `
-        min-width: 240px;
-        max-height: 400px;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        position: fixed;
-        background: var(--block-bg, #1e1e2e);
-        border-radius: 24px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-        border: 1px solid var(--border-color, rgba(255,255,255,0.1));
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        z-index: 10002;
-        animation: dropdownFadeIn 0.15s ease;
-    `;
-
-        const container = document.createElement('div');
-        container.style.cssText = 'overflow-y:auto;flex:1;padding:4px 0;display:flex;flex-direction:column;gap:2px;max-height:350px;';
-        autoLikeDropdown.appendChild(container);
-
-        const footer = document.createElement('div');
-        footer.style.cssText = 'padding:8px 12px;text-align:center;font-size:12px;color:var(--text-secondary);border-top:1px solid var(--border-color);flex-shrink:0;';
-        autoLikeDropdown.appendChild(footer);
-
-        container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);">Загрузка...</div>';
-        footer.textContent = 'Активно: 0';
-
-        document.body.appendChild(autoLikeDropdown);
-        updateAutoLikeDropdownPosition();
-
-        autoLikeScrollHandler = () => updateAutoLikeDropdownPosition();
-        autoLikeResizeHandler = () => updateAutoLikeDropdownPosition();
-        window.addEventListener('scroll', autoLikeScrollHandler);
-        window.addEventListener('resize', autoLikeResizeHandler);
-
-        autoLikeCloseHandler = (e) => {
-            if (autoLikeDropdown && !autoLikeDropdown.contains(e.target) && e.target !== currentAutoLikeButton) {
-                autoLikeDropdown.remove();
-                autoLikeDropdown = null;
-                cleanupAutoLikeHandlers();
-                currentAutoLikeButton = null;
-            }
-        };
-        setTimeout(() => document.addEventListener('click', autoLikeCloseHandler), 0);
-
-        fetchAutoLikeUsers().then(usersData => {
-            if (Object.keys(usersData).length) {
-                setAutoLikeCache(usersData);
-            }
-            renderAutoLikeUsers(container, footer, usersData);
-            updateAutoLikeDropdownPosition();
-        }).catch(() => {
-            container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);">Ошибка загрузки</div>';
-            footer.textContent = 'Активно: 0';
-        });
-    }
-
-    function createDropdown(button) {
-        if (autoLikeDropdown) {
-            autoLikeDropdown.remove();
-            autoLikeDropdown = null;
-            cleanupAutoLikeHandlers();
-            currentAutoLikeButton = null;
-        }
-
-        if (settingsDropdown) {
-            settingsDropdown.remove();
-            settingsDropdown = null;
-            if (settingsCloseHandler) document.removeEventListener('click', settingsCloseHandler);
-            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
-            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
-        }
-
-        if (bgDropdown) {
-            bgDropdown.remove();
-            bgDropdown = null;
-            if (bgScrollHandler) window.removeEventListener('scroll', bgScrollHandler);
-            if (bgResizeHandler) window.removeEventListener('resize', bgResizeHandler);
-            if (bgCloseHandler) document.removeEventListener('click', bgCloseHandler);
-        }
-
-        if (dropdown) {
-            dropdown.remove();
-            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
-            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
-            if (closeHandler) document.removeEventListener('click', closeHandler);
-        }
-
-        currentButton = button;
-        dropdown = document.createElement('div');
-        dropdown.className = 'nick-style-dropdown';
-
-        styleKeys.forEach(key => {
-            const style = nickStyles[key];
-            const option = document.createElement('div');
-            option.className = 'nick-style-option';
-
-            const colorDot = getColorDot(key);
-            const textSpan = document.createElement('span');
-            textSpan.textContent = style.name;
-
-            option.appendChild(colorDot);
-            option.appendChild(textSpan);
-
-            option.onclick = (e) => {
-                e.stopPropagation();
-                currentStyle = key;
-                GM_setValue('nickStyle', currentStyle);
-
-                const avatars = document.querySelectorAll('.my-avatar-glow');
-                avatars.forEach(avatar => {
-                    avatar.style.filter = '';
-                });
-
-                for (const el of nickElements) {
-                    if (el && el.isConnected) {
-                        if (currentStyle === 'rainbow') {
-                            el.style.background = '';
-                        } else {
-                            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-                            const gradient = isDark && style.gradientDark ? style.gradientDark : style.gradientLight;
-                            if (gradient) {
-                                el.style.background = gradient;
-                                el.style.webkitBackgroundClip = 'text';
-                                el.style.backgroundClip = 'text';
-                                el.style.webkitTextFillColor = 'transparent';
-                            }
-                        }
-                    }
+            overrideFilePicker();
+            if (window._fileObserver) window._fileObserver.disconnect();
+            window._fileObserver = new MutationObserver(overrideFilePicker);
+            window._fileObserver.observe(document.body, { childList: true, subtree: true });
+        } else {
+            if (window._fileObserver) window._fileObserver.disconnect();
+            document.querySelectorAll('input[type="file"][data-overridden]').forEach(input => {
+                input.removeAttribute('data-overridden');
+                if (input._originalClick) {
+                    input.click = input._originalClick;
                 }
-                updateAllNickColors();
-                updateNickGlow();
-                updateAvatarGlow();
-                initPostBorderSync();
-
-                dropdown.remove();
-                dropdown = null;
-                if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
-                if (resizeHandler) window.removeEventListener('resize', resizeHandler);
-                if (closeHandler) document.removeEventListener('click', closeHandler);
-                currentButton = null;
-
-                const btn = document.querySelector('.nick-style-toggle');
-                if (btn) btn.title = `Стиль: ${style.name}`;
+            });
+        }
+    }
+    // label совпадает с ключом ICONS.settings — оттуда значок пункта
+    const SETTINGS = [
+        { label: 'Фон', get: () => backgroundEnabled, set: v => { backgroundEnabled = v; updateBackgroundVisibility(); updateBackgroundToggleButtons(); }, key: 'backgroundEnabled' },
+        { label: 'Подсветка ника', get: () => nickGlowEnabled, set: v => { nickGlowEnabled = v; paint(); }, key: 'nickGlowEnabled' },
+        { label: 'Подсветка аватарок', get: () => avatarGlowEnabled, set: v => { avatarGlowEnabled = v; paint(); }, key: 'avatarGlowEnabled' },
+        { label: 'Подсветка постов', get: () => postBorderEnabled, set: v => { postBorderEnabled = v; paint(); }, key: 'postBorderEnabled' },
+        { label: 'Заставка при входе', get: () => GM_getValue('introEnabled', true), set: () => { }, key: 'introEnabled' },
+        { label: 'Размытый фон постов', get: () => postBlurEnabled, set: v => { postBlurEnabled = v; applyPostBlurSetting(); }, key: 'postBlurEnabled' },
+        { label: 'Анти цензура', get: () => antiCensorshipEnabled, set: v => { antiCensorshipEnabled = v; applyAntiCensorshipSetting(); }, key: 'antiCensorshipEnabled' },
+        {
+            label: 'Автолайки', get: () => autoLikeEnabled, key: 'autoLikeEnabled',
+            set: v => { autoLikeEnabled = v; updateAutoLikeButtons(); }
+        }
+    ];
+    function openSettingsMenu(btn) {
+        const menu = document.createElement('div');
+        menu.className = 'settings-dropdown';
+        for (const opt of SETTINGS) {
+            const row = document.createElement('div');
+            row.className = 'settings-option';
+            row.innerHTML = `<span class="vp-setting-label">${ICONS.settings[opt.label] || ''}<span></span></span><div class="toggle-switch"></div>`;
+            row.querySelector('.vp-setting-label > span').textContent = opt.label;
+            const toggle = row.lastElementChild;
+            toggle.classList.toggle('active', !!opt.get());
+            row.onclick = (e) => {
+                e.stopPropagation();
+                const v = !opt.get();
+                GM_setValue(opt.key, v);
+                opt.set(v);
+                toggle.classList.toggle('active', v);
             };
-            dropdown.appendChild(option);
-        });
-
-        updateDropdownPosition();
-        document.body.appendChild(dropdown);
-
-        scrollHandler = () => updateDropdownPosition();
-        resizeHandler = () => updateDropdownPosition();
-
-        window.addEventListener('scroll', scrollHandler);
-        window.addEventListener('resize', resizeHandler);
-
-        closeHandler = (e) => {
-            if (dropdown && !dropdown.contains(e.target) && e.target !== currentButton) {
-                dropdown.remove();
-                dropdown = null;
-                window.removeEventListener('scroll', scrollHandler);
-                window.removeEventListener('resize', resizeHandler);
-                document.removeEventListener('click', closeHandler);
-                currentButton = null;
-            }
-        };
-        setTimeout(() => document.addEventListener('click', closeHandler), 0);
+            menu.appendChild(row);
+        }
+        openPopup(btn, menu);
     }
 
+    // --- сама таблетка: четыре круглые кнопки справа от крупного ника в шапке профиля
+    function pillButton(cls, title, icon, open) {
+        const b = document.createElement('span');
+        b.className = 'vp-pill-btn ' + cls;
+        b.title = title;
+        b.innerHTML = icon;
+        b.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            open(b);
+        });
+        return b;
+    }
     function addToggleButtonToNick(ru5n) {
-        let nickSpan = ru5n.querySelector('.' + SELECTORS.nickText);
+        const nickSpan = ru5n.querySelector('.' + SELECTORS.nickText);
         if (!nickSpan) return;
-
         const nickText = nickSpan.textContent.trim();
         if (nickText !== myUsername && nickText !== myDisplayName) return;
-
         if (ru5n.querySelector('.nick-controls-panel')) return;
 
-        const controlsPanel = document.createElement('div');
-        controlsPanel.className = 'nick-controls-panel';
-
-        const styleButton = document.createElement('span');
-        styleButton.className = 'nick-style-toggle';
-        styleButton.title = `Стиль: ${nickStyles[currentStyle].name}`;
-        styleButton.innerHTML = ICONS.PALETTE;
-        styleButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            createDropdown(styleButton);
-        });
-        controlsPanel.appendChild(styleButton);
-
-        const likeBtn = document.createElement('span');
-        likeBtn.className = 'auto-like-toggle';
-        likeBtn.title = 'Автолайки';
-        const hasActive = Object.keys(autoLikeUsers).length > 0;
-        likeBtn.innerHTML = ICONS.settings['Автолайки'];
-        likeBtn.style.cssText = `
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 32px !important;
-    height: 32px !important;
-    cursor: pointer !important;
-    background: var(--bg-secondary, rgba(128, 128, 128, 0.15)) !important;
-    border-radius: 50% !important;
-    transition: all 0.2s ease !important;
-    color: ${hasActive ? 'var(--accent-primary, #0080FF)' : 'var(--text-primary, currentColor)'} !important;
-    user-select: none !important;
-    flex-shrink: 0 !important;
-`;
-        likeBtn.onmouseenter = () => {
-            likeBtn.style.background = 'var(--accent-primary, rgba(0, 128, 255, 0.3))';
-            if (likeBtn.style.color === 'var(--accent-primary, #0080FF)') {
-                likeBtn.style.color = 'white';
-            }
-        };
-        likeBtn.onmouseleave = () => {
-            likeBtn.style.background = 'var(--bg-secondary, rgba(128, 128, 128, 0.15))';
-            const hasActive = Object.keys(autoLikeUsers).length > 0;
-            likeBtn.style.color = hasActive ? 'var(--accent-primary, #0080FF)' : 'var(--text-primary, currentColor)';
-        };
-        likeBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            if (autoLikeDropdown) {
-                autoLikeDropdown.remove();
-                autoLikeDropdown = null;
-                cleanupAutoLikeHandlers();
-                currentAutoLikeButton = null;
-                return;
-            }
-            createAutoLikeDropdown(likeBtn);
-        });
-        controlsPanel.appendChild(likeBtn);
-
-        const bgToggle = document.createElement('span');
-        bgToggle.className = 'bg-style-toggle';
-        bgToggle.title = 'Стиль фона';
-        bgToggle.innerHTML = ICONS.settings['Фон'];
-        bgToggle.style.cssText = `
-        display: ${backgroundEnabled ? 'inline-flex' : 'none'};
-        align-items: center;
-        justify-content: center;
-        width: 32px;
-        height: 32px;
-        margin-left: 0;
-        cursor: pointer;
-        background: var(--bg-secondary, rgba(128, 128, 128, 0.15));
-        border-radius: 50%;
-        transition: all 0.2s ease;
-        vertical-align: middle;
-        flex-shrink: 0;
-        color: var(--text-primary, currentColor);
-        user-select: none;
-        `;
-        bgToggle.onmouseenter = () => { bgToggle.style.background = 'var(--accent-primary, rgba(0, 128, 255, 0.3))'; };
-        bgToggle.onmouseleave = () => { bgToggle.style.background = 'var(--bg-secondary, rgba(128, 128, 128, 0.15))'; };
-        bgToggle.onclick = function (e) {
-            e.stopPropagation();
-            e.preventDefault();
-            createBgDropdown(this);
-        };
-        controlsPanel.appendChild(bgToggle);
-
-        const settingsButton = document.createElement('span');
-        settingsButton.className = 'settings-toggle';
-        settingsButton.title = 'Настройки';
-        settingsButton.innerHTML = ICONS.GEAR;
-        settingsButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            showSettingsDropdown(settingsButton);
-        });
-        controlsPanel.appendChild(settingsButton);
-
-        const bxp = ru5n.querySelector('.' + SELECTORS.nickParent);
-        if (bxp) {
-            bxp.after(controlsPanel);
-        } else {
-            ru5n.appendChild(controlsPanel);
-        }
+        const panel = document.createElement('div');
+        panel.className = 'nick-controls-panel';
+        panel.append(
+            pillButton('nick-style-toggle', `Стиль: ${nickStyles[currentStyle].name}`, ICONS.PALETTE, openStyleMenu),
+            pillButton('auto-like-toggle', 'Автолайки', ICONS.settings['Автолайки'], openAutoLikeMenu),
+            pillButton('bg-style-toggle', 'Стиль фона', ICONS.settings['Фон'], openBgMenu),
+            pillButton('settings-toggle', 'Настройки', ICONS.GEAR, openSettingsMenu)
+        );
+        const nick = ru5n.querySelector('.' + SELECTORS.nickContainer);
+        if (nick) nick.after(panel);
+        else ru5n.appendChild(panel);
+        updateAutoLikeButtons();
+        updateBackgroundToggleButtons();
     }
 
     function updateBackgroundToggleButtons() {
-        const toggles = document.querySelectorAll('.bg-style-toggle');
-        toggles.forEach(toggle => {
-            if (backgroundEnabled) {
-                toggle.style.display = 'inline-flex';
-            } else {
-                toggle.style.display = 'none';
-            }
-        });
+        // кнопка стиля фона — только когда фон включён (прятать классом: у кнопок display с !important)
+        document.querySelectorAll('.bg-style-toggle').forEach(b => b.classList.toggle('vp-hidden', !backgroundEnabled));
     }
 
     let draggableImg = null;
@@ -1935,279 +1778,6 @@
     let cancelBtn = null;
     let applyBtn = null;
     let changeBtn = null;
-
-    let settingsDropdown = null;
-    let settingsCloseHandler = null;
-
-    function addIconsToMenu(menu) {
-        if (!menu || menu.hasAttribute('data-icons-added')) return;
-        const options = menu.querySelectorAll('.settings-option');
-        options.forEach(opt => {
-            const span = opt.querySelector('span:first-child');
-            if (!span) return;
-            const text = span.innerText.trim();
-            if (ICONS.settings[text]) {
-                if (span.querySelector('svg')) return;
-                span.innerHTML = `${ICONS.settings[text]} <span style="margin-left: 8px;">${text}</span>`;
-                span.style.display = 'flex';
-                span.style.alignItems = 'center';
-                span.style.gap = '8px';
-            }
-        });
-        menu.setAttribute('data-icons-added', 'true');
-    }
-
-    function showSettingsDropdown(button) {
-        if (autoLikeDropdown) {
-            autoLikeDropdown.remove();
-            autoLikeDropdown = null;
-            cleanupAutoLikeHandlers();
-            currentAutoLikeButton = null;
-        }
-
-        if (dropdown) {
-            dropdown.remove();
-            dropdown = null;
-            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
-            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
-            if (closeHandler) document.removeEventListener('click', closeHandler);
-            currentButton = null;
-        }
-
-        if (bgDropdown) {
-            bgDropdown.remove();
-            bgDropdown = null;
-            if (bgScrollHandler) window.removeEventListener('scroll', bgScrollHandler);
-            if (bgResizeHandler) window.removeEventListener('resize', bgResizeHandler);
-            if (bgCloseHandler) document.removeEventListener('click', bgCloseHandler);
-        }
-
-        if (settingsDropdown) {
-            settingsDropdown.remove();
-            if (settingsCloseHandler) document.removeEventListener('click', settingsCloseHandler);
-            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
-            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
-        }
-
-        settingsDropdown = document.createElement('div');
-        settingsDropdown.className = 'settings-dropdown';
-
-        const backgroundOption = document.createElement('div');
-        backgroundOption.className = 'settings-option';
-        backgroundOption.innerHTML = '<span>Фон</span>';
-        const backgroundToggle = document.createElement('div');
-        backgroundToggle.className = 'toggle-switch' + (backgroundEnabled ? ' active' : '');
-        backgroundOption.appendChild(backgroundToggle);
-        backgroundOption.onclick = (e) => {
-            e.stopPropagation();
-            backgroundEnabled = !backgroundEnabled;
-            GM_setValue('backgroundEnabled', backgroundEnabled);
-            backgroundToggle.className = 'toggle-switch' + (backgroundEnabled ? ' active' : '');
-            updateBackgroundVisibility();
-            updateBackgroundToggleButtons();
-        };
-        settingsDropdown.appendChild(backgroundOption);
-
-        const nickGlowOption = document.createElement('div');
-        nickGlowOption.className = 'settings-option';
-        nickGlowOption.innerHTML = '<span>Подсветка ника</span>';
-        const nickGlowToggle = document.createElement('div');
-        nickGlowToggle.className = 'toggle-switch' + (nickGlowEnabled ? ' active' : '');
-        nickGlowOption.appendChild(nickGlowToggle);
-        nickGlowOption.onclick = (e) => {
-            e.stopPropagation();
-            nickGlowEnabled = !nickGlowEnabled;
-            GM_setValue('nickGlowEnabled', nickGlowEnabled);
-            nickGlowToggle.className = 'toggle-switch' + (nickGlowEnabled ? ' active' : '');
-            updateNickGlowVisibility();
-        };
-        settingsDropdown.appendChild(nickGlowOption);
-
-        const avatarGlowOption = document.createElement('div');
-        avatarGlowOption.className = 'settings-option';
-        avatarGlowOption.innerHTML = '<span>Подсветка аватарок</span>';
-        const avatarGlowToggle = document.createElement('div');
-        avatarGlowToggle.className = 'toggle-switch' + (avatarGlowEnabled ? ' active' : '');
-        avatarGlowOption.appendChild(avatarGlowToggle);
-        avatarGlowOption.onclick = (e) => {
-            e.stopPropagation();
-            avatarGlowEnabled = !avatarGlowEnabled;
-            GM_setValue('avatarGlowEnabled', avatarGlowEnabled);
-            avatarGlowToggle.className = 'toggle-switch' + (avatarGlowEnabled ? ' active' : '');
-            updateAvatarGlowVisibility();
-        };
-        settingsDropdown.appendChild(avatarGlowOption);
-
-        const postBorderOption = document.createElement('div');
-        postBorderOption.className = 'settings-option';
-        postBorderOption.innerHTML = '<span>Подсветка постов</span>';
-        const postBorderToggle = document.createElement('div');
-        postBorderToggle.className = 'toggle-switch' + (postBorderEnabled ? ' active' : '');
-        postBorderOption.appendChild(postBorderToggle);
-        postBorderOption.onclick = (e) => {
-            e.stopPropagation();
-            postBorderEnabled = !postBorderEnabled;
-            GM_setValue('postBorderEnabled', postBorderEnabled);
-            postBorderToggle.className = 'toggle-switch' + (postBorderEnabled ? ' active' : '');
-            if (postBorderEnabled) {
-                initPostBorderSync();
-            } else {
-                if (postBorderSyncStyle) postBorderSyncStyle.remove();
-            }
-        };
-        settingsDropdown.appendChild(postBorderOption);
-
-        const postBlurOption = document.createElement('div');
-        postBlurOption.className = 'settings-option';
-        postBlurOption.innerHTML = '<span>Размытый фон постов</span>';
-        const postBlurToggle = document.createElement('div');
-        postBlurToggle.className = 'toggle-switch' + (postBlurEnabled ? ' active' : '');
-        postBlurOption.appendChild(postBlurToggle);
-        postBlurOption.onclick = (e) => {
-            e.stopPropagation();
-            postBlurEnabled = !postBlurEnabled;
-            GM_setValue('postBlurEnabled', postBlurEnabled);
-            postBlurToggle.className = 'toggle-switch' + (postBlurEnabled ? ' active' : '');
-
-            document.querySelectorAll('.' + SELECTORS.post + '[data-post-colored]').forEach(post => {
-                post.removeAttribute('data-post-colored');
-                post.style.removeProperty('background');
-            });
-
-            if (postBlurEnabled) {
-                addBlurBackground();
-            } else {
-                document.querySelectorAll('.itd-blur-container').forEach(el => el.remove());
-                document.querySelectorAll('.' + SELECTORS.post + ', .' + SELECTORS.repost).forEach(el => {
-                    el.removeAttribute('data-blur-bg');
-                    el.classList.remove('itd-blur-active');
-                });
-            }
-
-            colorizePosts();
-        };
-        settingsDropdown.appendChild(postBlurOption);
-
-        const antiCensorshipOption = document.createElement('div');
-        antiCensorshipOption.className = 'settings-option';
-        antiCensorshipOption.innerHTML = '<span>Анти цензура</span>';
-        const antiCensorshipToggle = document.createElement('div');
-        antiCensorshipToggle.className = 'toggle-switch' + (antiCensorshipEnabled ? ' active' : '');
-        antiCensorshipOption.appendChild(antiCensorshipToggle);
-        antiCensorshipOption.onclick = (e) => {
-            e.stopPropagation();
-            antiCensorshipEnabled = !antiCensorshipEnabled;
-            GM_setValue('antiCensorshipEnabled', antiCensorshipEnabled);
-            antiCensorshipToggle.className = 'toggle-switch' + (antiCensorshipEnabled ? ' active' : '');
-
-            if (antiCensorshipEnabled) {
-                document.querySelectorAll('input[type="file"][data-overridden]').forEach(input => {
-                    input.removeAttribute('data-overridden');
-                    if (input._originalClick) {
-                        input.click = input._originalClick;
-                    }
-                });
-                overrideFilePicker();
-                if (window._fileObserver) window._fileObserver.disconnect();
-                window._fileObserver = new MutationObserver(overrideFilePicker);
-                window._fileObserver.observe(document.body, { childList: true, subtree: true });
-            } else {
-                if (window._fileObserver) window._fileObserver.disconnect();
-                document.querySelectorAll('input[type="file"][data-overridden]').forEach(input => {
-                    input.removeAttribute('data-overridden');
-                    if (input._originalClick) {
-                        input.click = input._originalClick;
-                    }
-                });
-            }
-        };
-        settingsDropdown.appendChild(antiCensorshipOption);
-
-        const autoLikeOption = document.createElement('div');
-        autoLikeOption.className = 'settings-option';
-        autoLikeOption.innerHTML = '<span>Автолайки</span>';
-        const autoLikeToggle = document.createElement('div');
-        autoLikeToggle.className = 'toggle-switch' + (autoLikeEnabled ? ' active' : '');
-        autoLikeOption.appendChild(autoLikeToggle);
-        autoLikeOption.onclick = (e) => {
-            e.stopPropagation();
-            autoLikeEnabled = !autoLikeEnabled;
-            GM_setValue('autoLikeEnabled', autoLikeEnabled);
-            autoLikeToggle.className = 'toggle-switch' + (autoLikeEnabled ? ' active' : '');
-            document.querySelectorAll('.auto-like-toggle').forEach(el => {
-                el.style.display = autoLikeEnabled ? 'inline-flex' : 'none';
-            });
-            if (!autoLikeEnabled && autoLikeDropdown) {
-                autoLikeDropdown.remove();
-                autoLikeDropdown = null;
-                cleanupAutoLikeHandlers();
-                currentAutoLikeButton = null;
-            }
-        };
-        settingsDropdown.appendChild(autoLikeOption);
-
-        updateSettingsDropdownPosition(button);
-
-        addIconsToMenu(settingsDropdown);
-
-        document.body.appendChild(settingsDropdown);
-
-        settingsCloseHandler = (e) => {
-            if (!settingsDropdown.contains(e.target) && e.target !== button) {
-                settingsDropdown.remove();
-                settingsDropdown = null;
-                document.removeEventListener('click', settingsCloseHandler);
-                window.removeEventListener('scroll', scrollHandler);
-                window.removeEventListener('resize', resizeHandler);
-            }
-        };
-        setTimeout(() => document.addEventListener('click', settingsCloseHandler), 0);
-
-        scrollHandler = () => updateSettingsDropdownPosition(button);
-        resizeHandler = () => updateSettingsDropdownPosition(button);
-
-        window.addEventListener('scroll', scrollHandler);
-        window.addEventListener('resize', resizeHandler);
-    }
-
-    function updateSettingsDropdownPosition(button) {
-        if (!settingsDropdown || !button || !button.isConnected) return;
-        const rect = button.getBoundingClientRect();
-
-        const isButtonVisible = rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
-
-        if (!isButtonVisible) {
-            settingsDropdown.remove();
-            settingsDropdown = null;
-            if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
-            if (resizeHandler) window.removeEventListener('resize', resizeHandler);
-            if (settingsCloseHandler) document.removeEventListener('click', settingsCloseHandler);
-            return;
-        }
-
-        let left = rect.right + 8;
-        let top = rect.top;
-
-        const dropdownWidth = 220;
-        if (left + dropdownWidth > window.innerWidth) {
-            left = rect.left - dropdownWidth - 8;
-        }
-
-        if (left < 8) {
-            left = 8;
-        }
-
-        const dropdownHeight = 60;
-        if (top + dropdownHeight > window.innerHeight) {
-            top = window.innerHeight - dropdownHeight - 8;
-        }
-        if (top < 8) {
-            top = 8;
-        }
-
-        settingsDropdown.style.top = top + 'px';
-        settingsDropdown.style.left = left + 'px';
-    }
 
     function addBannerStyles() {
         if (document.getElementById('custom-banner-styles')) return;
@@ -2267,7 +1837,7 @@
         changeBtn.className = siteClasses(drawBtn) + ' custom-change-btn';
         changeBtn.title = 'Сменить картинку';
         changeBtn.style.display = 'none';
-        changeBtn.innerHTML = ICONS.BANNER_IMAGE;
+        changeBtn.innerHTML = ICONS.BANNER_CHANGE;
 
         cancelBtn = document.createElement('button');
         cancelBtn.className = siteClasses(drawBtn) + ' custom-cancel-btn';
@@ -2302,20 +1872,7 @@
             try {
                 const croppedBlob = await cropBannerImage();
 
-                const token = await new Promise((resolve, reject) => {
-                    GM_xmlhttpRequest({
-                        method: 'POST',
-                        url: '/api/v1/auth/refresh',
-                        credentials: 'include',
-                        onload: (res) => {
-                            try {
-                                const data = JSON.parse(res.responseText);
-                                resolve(data.accessToken);
-                            } catch (e) { reject(e); }
-                        },
-                        onerror: reject
-                    });
-                });
+                const token = await getAccessToken();
 
                 const formData = new FormData();
                 formData.append('file', croppedBlob, 'banner.jpg');
@@ -2624,177 +2181,100 @@
     function initBanner() {
         setTimeout(() => createAllButtons(), 500);
 
-        const observer = new MutationObserver(() => createAllButtons());
-        observer.observe(document.body, { childList: true, subtree: true });
+        onDom(function bannerButtons() { createAllButtons(); });
     }
 
-    function getAccessToken() {
-        return new Promise((resolve, reject) => {
-            GM_xmlhttpRequest({
-                method: 'POST',
-                url: 'https://xn--d1ah4a.com/api/v1/auth/refresh',
-                credentials: 'include',
-                onload: function (res) {
-                    try {
-                        const data = JSON.parse(res.responseText);
-                        resolve(data.accessToken);
-                    } catch (e) { reject(e); }
-                },
-                onerror: reject
-            });
-        });
+    // ================= API сайта =================
+    // Токен доступа живёт недолго: держим его 4 минуты, одновременные запросы ждут одно обновление
+    // (раньше автолайк обновлял токен на каждого пользователя разом), на 401 — берём свежий.
+    let token = null, tokenTime = 0, tokenPending = null;
+    function getAccessToken(force) {
+        if (!force && token && Date.now() - tokenTime < 4 * 60 * 1000) return Promise.resolve(token);
+        if (!tokenPending) {
+            tokenPending = fetch('/api/v1/auth/refresh', { method: 'POST', credentials: 'include' })
+                .then(r => r.json())
+                .then(d => { token = d.accessToken; tokenTime = Date.now(); return token; })
+                .finally(() => { tokenPending = null; });
+        }
+        return tokenPending;
+    }
+    async function api(path, opts = {}) {
+        const call = t => fetch(path, { credentials: 'include', ...opts, headers: { ...opts.headers, Authorization: `Bearer ${t}` } });
+        let res = await call(await getAccessToken());
+        if (res.status === 401) res = await call(await getAccessToken(true));
+        return res;
     }
 
+    // ================= Кто пользуется модом =================
+    // Каждый пользователь мода оставляет под служебным постом комментарий-код (хеш ника с солью + флаги).
+    // Кто оставил верный код — «свой», ему вешаем вериф-бейдж.
     function hashString(str) {
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
-            const char = str.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
+            hash = ((hash << 5) - hash) + str.charCodeAt(i);
             hash = hash & hash;
         }
         return Math.abs(hash).toString(36);
     }
-
     function generateCode(username) {
         return hashString(username + SECRET_SALT).substring(0, 8).padEnd(8, '0');
     }
-
-    function isValidCode(username, code) {
-        return code === generateCode(username);
-    }
-
     function parseCode(commentText) {
-        const match = commentText.match(/^([A-Za-z0-9]{8})(\d+)$/);
-        if (!match) return null;
-        return { code: match[1], flags: match[2] };
+        const match = (commentText || '').match(/^([A-Za-z0-9]{8})(\d+)$/);
+        return match ? { code: match[1], flags: match[2] } : null;
+    }
+    const isModCode = (username, parsed) => parsed && parsed.flags[0] === '1' && parsed.code === generateCode(username);
+
+    async function loadVerificationComments() {
+        const res = await api(`/api/posts/${VERIFICATION_POST_ID}/comments?limit=100`);
+        if (!res.ok) throw new Error('комментарии: ' + res.status);
+        const data = await res.json();
+        return data.data?.comments || data.comments || [];
     }
 
-    function checkAllComments() {
-        return new Promise(async (resolve, reject) => {
-            if (isVerifying) return resolve(null);
-            isVerifying = true;
-            try {
-                const token = await getAccessToken();
-                GM_xmlhttpRequest({
-                    method: 'GET',
-                    url: `https://xn--d1ah4a.com/api/posts/${VERIFICATION_POST_ID}/comments?limit=100`,
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    onload: function (res) {
-                        try {
-                            const data = JSON.parse(res.responseText);
-                            const comments = data.data?.comments || data.comments || [];
-                            const verifiedUsers = {};
-                            const seenUsers = new Set();
-                            for (const c of comments) {
-                                const parsed = parseCode(c.content);
-                                if (!parsed) continue;
-                                if (parsed.flags[0] !== '1') continue;
-                                if (!isValidCode(c.author.username, parsed.code)) continue;
-                                if (seenUsers.has(c.author.username)) continue;
-                                seenUsers.add(c.author.username);
-                                verifiedUsers[c.author.username] = {
-                                    code: parsed.code,
-                                    commentId: c.id,
-                                    hasMod: true,
-                                    flags: parsed.flags
-                                };
-                            }
-                            const oldData = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}');
-                            if (JSON.stringify(verifiedUsers) !== JSON.stringify(oldData)) {
-                                localStorage.setItem(VERIFICATION_STORAGE_KEY, JSON.stringify(verifiedUsers));
-                                console.log('🔄 Данные верификации обновлены');
-                            }
-                            isVerifying = false;
-                            resolve(verifiedUsers);
-                        } catch (e) {
-                            console.error('Ошибка парсинга:', e);
-                            isVerifying = false;
-                            reject(e);
-                        }
-                    },
-                    onerror: function (err) {
-                        console.error('Ошибка запроса:', err);
-                        isVerifying = false;
-                        reject(err);
-                    }
-                });
-            } catch (e) {
-                console.error('Ошибка getAccessToken:', e);
-                isVerifying = false;
-                reject(e);
+    async function checkAllComments() {
+        if (isVerifying) return null;
+        isVerifying = true;
+        try {
+            const verifiedUsers = {};
+            for (const c of await loadVerificationComments()) {
+                const name = c.author?.username;
+                const parsed = parseCode(c.content);
+                if (!name || verifiedUsers[name] || !isModCode(name, parsed)) continue;
+                verifiedUsers[name] = { code: parsed.code, commentId: c.id, hasMod: true, flags: parsed.flags };
             }
-        });
+            if (JSON.stringify(verifiedUsers) !== localStorage.getItem(VERIFICATION_STORAGE_KEY)) {
+                localStorage.setItem(VERIFICATION_STORAGE_KEY, JSON.stringify(verifiedUsers));
+            }
+            return verifiedUsers;
+        } catch (e) {
+            console.warn('[ITD VP] верификация:', e);
+            return null;
+        } finally {
+            isVerifying = false;
+        }
     }
 
-    function verifyMyself() {
-        return new Promise(async (resolve) => {
-            if (!myUsername) return resolve(false);
-            try {
-                const token = await getAccessToken();
-                const myCode = generateCode(myUsername);
-                GM_xmlhttpRequest({
-                    method: 'GET',
-                    url: `https://xn--d1ah4a.com/api/posts/${VERIFICATION_POST_ID}/comments?limit=100`,
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    onload: async (res) => {
-                        try {
-                            const data = JSON.parse(res.responseText);
-                            const existingComments = data.data?.comments || data.comments || [];
-                            const myComments = existingComments.filter(c => {
-                                const parsed = parseCode(c.content);
-                                return c.author?.username === myUsername && parsed;
-                            });
-                            const validComment = myComments.find(c => {
-                                const parsed = parseCode(c.content);
-                                return parsed.flags[0] === '1' && isValidCode(myUsername, parsed.code);
-                            });
-                            if (validComment) {
-                                console.log('✅ Уже верифицированы');
-                                return resolve(true);
-                            }
-                            for (const c of myComments) {
-                                await new Promise((resolveDel) => {
-                                    GM_xmlhttpRequest({
-                                        method: 'DELETE',
-                                        url: `https://xn--d1ah4a.com/api/comments/${c.id}`,
-                                        headers: { 'Authorization': `Bearer ${token}` },
-                                        onload: () => resolveDel(),
-                                        onerror: () => resolveDel()
-                                    });
-                                });
-                            }
-                            const commentText = myCode + '1';
-                            GM_xmlhttpRequest({
-                                method: 'POST',
-                                url: `https://xn--d1ah4a.com/api/posts/${VERIFICATION_POST_ID}/comments`,
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${token}`
-                                },
-                                data: JSON.stringify({ content: commentText }),
-                                onload: async (createRes) => {
-                                    if (createRes.status === 200 || createRes.status === 201) {
-                                        console.log('✅ Верифицированы!');
-                                        await checkAllComments();
-                                        resolve(true);
-                                    } else {
-                                        resolve(false);
-                                    }
-                                },
-                                onerror: () => resolve(false)
-                            });
-                        } catch (e) {
-                            console.error('Ошибка:', e);
-                            resolve(false);
-                        }
-                    },
-                    onerror: () => resolve(false)
-                });
-            } catch (e) {
-                console.error('Ошибка verifyMyself:', e);
-                resolve(false);
-            }
-        });
+    // свой код под служебным постом: есть верный — ничего не делаем, иначе старые удаляем и пишем новый
+    async function verifyMyself() {
+        if (!myUsername) return false;
+        try {
+            const mine = (await loadVerificationComments())
+                .filter(c => c.author?.username === myUsername && parseCode(c.content));
+            if (mine.some(c => isModCode(myUsername, parseCode(c.content)))) return true;
+            for (const c of mine) await api(`/api/comments/${c.id}`, { method: 'DELETE' }).catch(() => { });
+            const res = await api(`/api/posts/${VERIFICATION_POST_ID}/comments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: generateCode(myUsername) + '1' })
+            });
+            if (!res.ok) return false;
+            await checkAllComments();
+            return true;
+        } catch (e) {
+            console.warn('[ITD VP] верификация себя:', e);
+            return false;
+        }
     }
 
     let scrollTopButton = null;
@@ -2910,62 +2390,59 @@
         if (!usernames.includes('NeuroSFW')) usernames.push('NeuroSFW');
         if (!usernames.length) return {};
 
-        const token = await getAccessToken();
         const usersData = {};
-        for (const username of usernames) {
+        await Promise.all(usernames.map(async username => {
             try {
-                const res = await fetch(`/api/users/${username}`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                const res = await api(`/api/users/${username}`);
                 if (res.ok) usersData[username] = await res.json();
             } catch { }
-        }
+        }));
         if (Object.keys(usersData).length) setAutoLikeCache(usersData);
         return usersData;
     }
 
     async function initVisuals() {
         try {
-            const refresh = await fetch('/api/v1/auth/refresh', { method: 'POST' });
-            const { accessToken } = await refresh.json();
-            const meRes = await fetch('/api/users/me', {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            const me = await meRes.json();
+            const me = await (await api('/api/users/me')).json();
+            if (!me || !me.username) return;              // не вошли или API не ответил — свои ники искать не по чему
             myUsername = me.username;
-            myDisplayName = me.displayName;
-            const myUserId = me.id;
+            myDisplayName = me.displayName || me.username;
             tagAll();
 
-            document.querySelectorAll('.auto-like-toggle').forEach(el => {
-                el.style.display = autoLikeEnabled ? 'inline-flex' : 'none';
-            });
+            updateAutoLikeButtons();
 
             createScrollTopButton();
 
-            checkAllComments().then(() => verifyMyself());
+            checkAllComments().then(() => { markVerifiedUsers(); return verifyMyself(); });
             if (verificationInterval) clearInterval(verificationInterval);
             verificationInterval = setInterval(() => {
                 checkAllComments();
             }, 10 * 60 * 1000);
 
             function findAllMyAvatars() {
-                const primaryAvatar = resilientFind('myAvatar', FINDERS.myAvatar);
+                const primaryAvatar = myAvatarEl();
                 if (primaryAvatar) glowMyAvatar(primaryAvatar);
                 const me = myUsername.toLowerCase();
                 const isMe = href => ((href || '').split('/@')[1] || '').split(/[/?#]/)[0].toLowerCase() === me;
                 document.querySelectorAll('.' + SELECTORS.avatar).forEach(avatar => {
                     const link = avatar.closest(PROFILE_LINK);
                     if (link) { if (isMe(link.getAttribute('href'))) glowMyAvatar(avatar); return; }
-                    if (avatar.closest('article')) return;          // аватар в репосте — чужой
+                    if (avatar.closest('.' + SELECTORS.post)) return;   // аватар в репосте — чужой
                     // поле нового поста или шапка моего профиля
                     const inComposer = avatar.parentElement && avatar.parentElement.querySelector('[contenteditable="true"]');
-                    if (inComposer || isMe(location.pathname)) glowMyAvatar(avatar);
+                    // на своём профиле — только аватар шапки (он в паре уровней от крупного ника),
+                    // а не все аватары в окнах «Подписчики» и «Подписки»
+                    if (inComposer || (isMe(location.pathname) && nearLargeNick(avatar))) glowMyAvatar(avatar);
                 });
+            }
+            function nearLargeNick(el) {
+                for (let p = el, i = 0; p && i < 5; p = p.parentElement, i++) {
+                    if (p.querySelector('.' + SELECTORS.nickLarge)) return true;
+                }
+                return false;
             }
 
             function findAllMyNicks() {
-                const verifiedUsers = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}');
                 const myUsernameLower = myUsername.toLowerCase();
                 const myDisplayNameLower = myDisplayName.toLowerCase();
 
@@ -2979,25 +2456,10 @@
                     if (!container) container = nickSpan.closest('header');
                     if (!container) return;
 
-                    if (!nickElements.has(nickSpan)) nickElements.add(nickSpan);
+                    markMyNick(nickSpan);
 
-                    const link = container.closest(SELECTORS.linkProfile);
-                    const username = link ? link.href.split('/@')[1] : null;
-
-                    if (username && verifiedUsers[username] && username !== myUsername) {
-                        if (!container.querySelector('.' + SELECTORS.badgeVerify)) {
-                            const isLarge = FINDERS.isLargeProfile();
-                            const size = isLarge ? 18 : 16;
-                            const badge = document.createElement('span');
-                            badge.className = SELECTORS.badgeVerify;
-                            badge.innerHTML = ICONS.badge(size);
-                            badge.style.cssText = `display:inline-flex!important;align-items:center!important;width:${size}px!important;height:${size}px!important;flex-shrink:0!important;vertical-align:middle!important;margin-left:4px!important;`;
-                            nickSpan.insertAdjacentElement('afterend', badge);
-                        }
-                    }
-
+                    const isLarge = !!nickSpan.closest('.' + SELECTORS.nickLarge);
                     if (!container.querySelector('.' + SELECTORS.badgeVoronoi)) {
-                        const isLarge = FINDERS.isLargeProfile();
                         const size = isLarge ? 18 : 16;
                         const badgeSVG = ICONS.badge(size);
                         const badge = document.createElement('span');
@@ -3011,7 +2473,7 @@
                         nickSpan.parentNode.insertBefore(badge, nickSpan.nextSibling);
                     }
 
-                    const isLarge = resilientFind('isLargeProfile', () => FINDERS.isLargeProfile() ? document.body : null);
+                    // Таблетка с кнопками — только у крупного ника в шапке профиля, не у ника на своих постах
                     if (isLarge) {
                         const ru5n = container.closest('.' + SELECTORS.nickRow) || container;
                         addToggleButtonToNick(ru5n);
@@ -3019,16 +2481,52 @@
                 });
             }
 
+            // Вериф-бейдж — у всех, кто пользуется модом (список — из комментариев под служебным
+            // постом), где бы ни стоял их ник: лента, комментарии, окна подписчиков и подписок, шапка профиля.
+            const userOf = href => ((href || '').split('/@')[1] || '').split(/[/?#]/)[0].toLowerCase();
+            function nickLeaf(root) {
+                const tagged = root.querySelector('.' + SELECTORS.nickText);
+                if (tagged) return tagged;
+                // имя — первый текстовый лист с буквами: не «@ник», не эмодзи-аватар, не наши значки
+                return [...root.querySelectorAll('span, p, div')].find(e => {
+                    if (e.children.length) return false;
+                    const t = e.textContent.trim();
+                    return t && !t.startsWith('@') && /[\p{L}\p{N}]/u.test(t)
+                        && !e.closest('.' + SELECTORS.avatar + ', .' + SELECTORS.badgeVerify + ', .' + SELECTORS.badgeVoronoi + ', time');
+                }) || null;
+            }
+            function addVerifyBadge(nick, size) {
+                if (!nick || !nick.parentElement || nick.parentElement.querySelector('.' + SELECTORS.badgeVerify)) return;
+                const badge = document.createElement('span');
+                badge.className = SELECTORS.badgeVerify;
+                badge.innerHTML = ICONS.badge(size);
+                badge.style.cssText = `display:inline-flex!important;align-items:center!important;width:${size}px!important;height:${size}px!important;flex-shrink:0!important;vertical-align:middle!important;margin-left:4px!important;`;
+                nick.insertAdjacentElement('afterend', badge);
+            }
+            function markVerifiedUsers() {
+                const verified = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}');
+                const names = new Set(Object.keys(verified).map(u => u.toLowerCase()));
+                names.delete(myUsername.toLowerCase());          // у меня свой значок
+                if (!names.size) return;
+                document.querySelectorAll(PROFILE_LINK).forEach(link => {
+                    if (names.has(userOf(link.getAttribute('href')))) addVerifyBadge(nickLeaf(link), 16);
+                });
+                // имя без ссылки, но с «@ником» рядом: шапка профиля и строки окон подписок
+                document.querySelectorAll('.' + SELECTORS.nickContainer).forEach(c => {
+                    if (c.closest(PROFILE_LINK)) return;
+                    const login = atLoginOf(c);
+                    if (login && names.has(login.toLowerCase())) addVerifyBadge(nickLeaf(c), c.matches('.' + SELECTORS.nickLarge) ? 18 : 16);
+                });
+            }
+
             findAllMyAvatars();
             findAllMyNicks();
-            updateAllNickColors();
-            updateNickGlow();
-            updateAvatarGlow();
-            // fixOverflowForGlowingNicks();
 
+            markVerifiedUsers();
             onDom(function myNickAndAvatar() {
                 findAllMyAvatars();
                 findAllMyNicks();
+                markVerifiedUsers();
             });
 
             function replaceIcon() {
@@ -3052,7 +2550,7 @@
                 newSvg.setAttribute('height', '36');
                 link.appendChild(newSvg);
                 const versionBtn = container.querySelector('.' + SELECTORS.versionBtn);
-                let bottomBlock = container.querySelector('div[style*="font-size: 8px;"]');
+                let bottomBlock = container.querySelector('.vp-version-row');
                 container.innerHTML = '';
                 container.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; gap: 4px;';
                 const topRow = document.createElement('div');
@@ -3077,10 +2575,11 @@
                     container.appendChild(bottomBlock);
                 } else {
                     const newBottom = document.createElement('div');
-                    newBottom.style.cssText = 'display: flex; align-items: center; justify-content: flex-start; font-size: 8px; color: #888; text-align: center; font-family: monospace; white-space: nowrap; gap: 4px; margin: 0;';
+                    newBottom.className = 'vp-version-row';
                     const versionSpan = document.createElement('span');
+                    versionSpan.className = 'vp-version-chip';
+                    versionSpan.title = 'ITD Visual Pack';
                     versionSpan.textContent = 'v' + GM_info.script.version;
-                    versionSpan.style.display = 'inline-block';
                     newBottom.appendChild(versionSpan);
                     container.appendChild(newBottom);
                     container._bottomBlock = newBottom;
@@ -3100,8 +2599,25 @@
                 }, 300);
             });
 
-            let updateAvailable = false;
+            // Новая версия на GitHub: читаем только начало файла (там @version), не чаще раза в час,
+            // ответ помним между загрузками. Раньше весь файл качался при каждом заходе, а на телефоне — дважды.
             const updateUrl = 'https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js?t=' + Date.now();
+            function latestVersion() {
+                let cached = null;
+                try { cached = JSON.parse(GM_getValue('vp_latest', 'null')); } catch (e) { }
+                if (cached && Date.now() - cached.at < 60 * 60 * 1000) return Promise.resolve(cached.v);
+                return new Promise(resolve => GM_xmlhttpRequest({
+                    method: 'GET',
+                    url: updateUrl,
+                    headers: { Range: 'bytes=0-2047' },
+                    onload: res => {
+                        const m = (res.status === 200 || res.status === 206) && res.responseText.match(/\/\/\s*@version\s+([\d.]+)/);
+                        if (m) GM_setValue('vp_latest', JSON.stringify({ v: m[1], at: Date.now() }));
+                        resolve(m ? m[1] : null);
+                    },
+                    onerror: () => resolve(null)
+                }));
+            }
 
             function versionCompare(v1, v2) {
                 const a = v1.split('.').map(Number);
@@ -3118,92 +2634,25 @@
                 const container = document.querySelector('.' + SELECTORS.logoContainer);
                 if (!container) return;
                 if (container.querySelector('.itd-update-sidebar-btn')) return;
-                let bottomBlock = container.querySelector('div[style*="font-size: 8px;"]');
-                if (!bottomBlock) {
-                    const allDivs = container.querySelectorAll('div');
-                    for (const div of allDivs) {
-                        if (div.textContent.includes('v' + GM_info.script.version)) {
-                            bottomBlock = div;
-                            break;
-                        }
-                    }
-                }
-                if (!bottomBlock) return;
-                let versionSpan = bottomBlock.querySelector('span');
-                if (!versionSpan) {
-                    versionSpan = document.createElement('span');
-                    versionSpan.textContent = 'v' + GM_info.script.version;
-                    versionSpan.style.display = 'inline-block';
-                    bottomBlock.prepend(versionSpan);
-                }
+                const row = container.querySelector('.vp-version-row');
+                if (!row) return;
                 const btn = document.createElement('button');
                 btn.className = 'itd-update-sidebar-btn';
                 btn.title = 'Доступна новая версия';
                 btn.innerHTML = ICONS.UPDATE + ' <span>Обновить</span>';
-                btn.style.cssText = 'background: var(--accent-primary, #0080FF); color: #fff; border: none; border-radius: 4px; padding: 2px 6px; font-size: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 3px; white-space: nowrap; height: 16px; line-height: 1; flex-shrink: 0;';
-                btn.onmouseenter = function () { this.style.transform = 'scale(1.05)'; this.style.background = '#0066cc'; };
-                btn.onmouseleave = function () { this.style.transform = 'scale(1)'; this.style.background = 'var(--accent-primary, #0080FF)'; };
                 btn.onclick = function () { window.open(updateUrl, '_blank'); this.remove(); };
-                versionSpan.after(btn);
+                row.appendChild(btn);
             }
 
-            function checkForUpdate() {
-                const currentVersion = GM_info.script.version;
-                GM_xmlhttpRequest({
-                    method: 'GET',
-                    url: updateUrl,
-                    onload: function (res) {
-                        if (res.status !== 200) return;
-                        const scriptText = res.responseText;
-                        const versionMatch = scriptText.match(/\/\/\s*@version\s+([\d.]+)/);
-                        if (!versionMatch) return;
-                        const latestVersion = versionMatch[1];
-                        console.log('📊 Текущая версия:', currentVersion);
-                        console.log('📊 Последняя версия:', latestVersion);
-                        if (versionCompare(latestVersion, currentVersion) > 0) {
-                            updateAvailable = true;
-                            console.log('✅ Доступно обновление!');
-                            setTimeout(createUpdateButton, 1000);
-                        }
-                    },
-                    onerror: function () { }
-                });
-            }
-
-            setTimeout(checkForUpdate, 1000);
+            let updateAvailable = false;
+            const updateCheck = latestVersion().then(v => (updateAvailable = !!v && versionCompare(v, GM_info.script.version) > 0));
+            updateCheck.then(yes => { if (yes) setTimeout(createUpdateButton, 1000); });
 
             const originalReplaceIcon = replaceIcon;
             replaceIcon = function () {
                 originalReplaceIcon();
-                if (updateAvailable) {
-                    setTimeout(createUpdateButton, 500);
-                }
+                if (updateAvailable) createUpdateButton();
             };
-            function checkNavUpdateButton() {
-                const nav = document.querySelector('.' + SELECTORS.feedBar);
-                if (!nav) return;
-                const block = nav.querySelector('.my-nav-block');
-                if (!block) return;
-                const updateBtn = block.querySelector('.itd-update-sidebar-btn');
-                if (!updateBtn) return;
-
-                GM_xmlhttpRequest({
-                    method: 'GET',
-                    url: updateUrl,
-                    onload: function (res) {
-                        if (res.status !== 200) return;
-                        const scriptText = res.responseText;
-                        const versionMatch = scriptText.match(/\/\/\s*@version\s+([\d.]+)/);
-                        if (!versionMatch) return;
-                        const latestVersion = versionMatch[1];
-                        const currentVersion = GM_info.script.version;
-                        if (versionCompare(latestVersion, currentVersion) > 0) {
-                            updateBtn.style.display = 'inline-flex';
-                        }
-                    },
-                    onerror: function () { }
-                });
-            }
 
             function createNavIcon() {
                 const nav = document.querySelector('.' + SELECTORS.feedBar);
@@ -3233,18 +2682,18 @@
                 wrapper.appendChild(link);
 
                 const bottomRow = document.createElement('div');
-                bottomRow.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 2px;';
+                bottomRow.className = 'vp-version-row vp-version-col';
 
                 const versionSpan = document.createElement('span');
+                versionSpan.className = 'vp-version-chip';
                 versionSpan.textContent = 'v' + GM_info.script.version;
-                versionSpan.style.cssText = 'font-size: 8px; color: #888; font-family: monospace; line-height: 1;';
                 bottomRow.appendChild(versionSpan);
 
                 const updateBtn = document.createElement('button');
                 updateBtn.className = 'itd-update-sidebar-btn';
                 updateBtn.title = 'Доступна новая версия';
                 updateBtn.innerHTML = ICONS.UPDATE + ' <span>Обновить</span>';
-                updateBtn.style.cssText = 'background: var(--accent-primary, #0080FF); color: #fff; border: none; border-radius: 4px; padding: 2px 6px; font-size: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; display: none; align-items: center; justify-content: center; gap: 3px; white-space: nowrap; height: 16px; line-height: 1; flex-shrink: 0; margin-top: 1px;';
+                updateBtn.style.display = 'none';
                 updateBtn.onclick = function () {
                     window.open(updateUrl, '_blank');
                     this.remove();
@@ -3257,7 +2706,7 @@
                 nav.prepend(block);
                 fixNavLayout();
 
-                checkNavUpdateButton();
+                updateCheck.then(yes => { if (yes) updateBtn.style.display = 'inline-flex'; });
             }
 
             function fixNavLayout() {
@@ -3309,9 +2758,30 @@
         } catch (e) { }
     }
 
-    let interval = setInterval(() => { updateColors(); drawBackground(); }, 50);
+    // Кадр через requestAnimationFrame: в свёрнутой вкладке он сам встаёт на паузу.
+    // Статичный цвет рисуется один раз (paint), радуга — каждый кадр.
+    // Фон рисуется на частоте экрана. Если кадры начинают пропадать (слабый компьютер, тяжёлая
+    // страница), фон сам переходит на каждый второй кадр: картинка та же, только реже.
+    let lastFrame = 0, bestGap = 1000, slow = 0, halfRate = false, odd = false;
+    function frame(t) {
+        requestAnimationFrame(frame);
+        if (halfRate && (odd = !odd)) return;
+        const gap = lastFrame ? t - lastFrame : 16.7;
+        lastFrame = t;
+        if (gap > 0 && gap < 100) {
+            const base = halfRate ? gap / 2 : gap;
+            bestGap = Math.min(bestGap, base);          // родной интервал экрана
+            slow = base > bestGap * 1.7 ? slow + 1 : Math.max(0, slow - 2);
+            if (!halfRate && slow > 45) halfRate = true;
+        }
+        const dt = Math.min(3, gap / 50);                // доля от 50 мс: скорости не зависят от частоты кадров
+        if (currentStyle === 'rainbow') { stepHue(dt); paint(); }
+        if (backgroundEnabled) drawBackground(dt);
+    }
+    paint();
+    requestAnimationFrame(frame);
 
-    window.addEventListener('resize', resizeCanvas);
+    new ResizeObserver(resizeCanvas).observe(canvas);   // и окно, и появление полосы прокрутки
     resizeCanvas();
     initVisuals();
     initBanner();
@@ -3324,45 +2794,7 @@
         canvas.style.display = backgroundEnabled ? 'block' : 'none';
     }
 
-    function updateNickGlowVisibility() {
-        const isRainbow = currentStyle === 'rainbow';
-        const glowColor = isRainbow ? `drop-shadow(0 0 6px hsl(${globalHue}, 100%, 55%)) drop-shadow(0 0 12px hsl(${globalHue}, 100%, 55%))` : (nickStyles[currentStyle].glow || '');
-        const nickElementsArray = Array.from(nickElements);
-        const nickElementsLength = nickElementsArray.length;
-        if (nickElementsLength === 0) return;
-
-        for (let i = 0; i < nickElementsLength; i++) {
-            const nickSpan = nickElementsArray[i];
-            if (nickSpan && nickSpan.isConnected) {
-                const parentBlock = nickSpan.closest('.' + SELECTORS.nickContainer);
-                if (parentBlock) {
-                    parentBlock.style.filter = nickGlowEnabled ? glowColor : 'none';
-                }
-            }
-        }
-    }
-
-    function updateAvatarGlowVisibility() {
-        const isRainbow = currentStyle === 'rainbow';
-        const rainbowFilter = `drop-shadow(0 0 5px hsl(${globalHue}, 100%, 55%)) drop-shadow(0 0 12px hsl(${globalHue}, 100%, 55%))`;
-        const style = nickStyles[currentStyle];
-        const hue = style.avatarHue || 210;
-        const sat = style.avatarSat !== undefined ? style.avatarSat : 100;
-        const standardFilter = `drop-shadow(0 0 5px hsl(${hue}, ${sat}%, 60%)) drop-shadow(0 0 12px hsl(${hue}, ${sat}%, 60%))`;
-        const filterValue = avatarGlowEnabled ? (isRainbow ? rainbowFilter : standardFilter) : 'none';
-
-        const avatars = document.querySelectorAll('.my-avatar-glow');
-        const avatarsLength = avatars.length;
-        if (avatarsLength === 0) return;
-
-        for (let i = 0; i < avatarsLength; i++) {
-            avatars[i].style.filter = filterValue;
-        }
-    }
-
     updateBackgroundVisibility();
-    updateNickGlowVisibility();
-    updateAvatarGlowVisibility();
 
     (function () {
         'use strict';
@@ -3386,8 +2818,7 @@
         }
 
         async function uploadImageToServer(file) {
-            const refresh = await fetch('/api/v1/auth/refresh', { method: 'POST', credentials: 'include' });
-            const { accessToken } = await refresh.json();
+            const accessToken = await getAccessToken();
             const formData = new FormData();
             formData.append('file', file);
             const res = await fetch('/api/files/upload', {
@@ -3458,10 +2889,7 @@
                         <div style="width: 80px; height: 80px; position: relative; border-radius: 8px; overflow: hidden;">
                             <img src="${stickerUrl}" style="width: 100%; height: 100%; object-fit: cover;">
                             <button class="vp-sticker-remove" style="position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; background: rgba(0,0,0,0.6); border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white;">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M18 6L6 18" stroke="currentColor" stroke-linecap="round"/>
-                                    <path d="M6 6L18 18" stroke="currentColor" stroke-linecap="round"/>
-                                </svg>
+                                ${svgIcon('<path d="M18 6 6 18M6 6l12 12"/>', 14)}
                             </button>
                         </div>
                     </div>
@@ -3485,7 +2913,6 @@
                 }
             };
 
-            const originalOnClick = sendBtn.onclick;
             sendBtn.onclick = async (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -3501,8 +2928,7 @@
                     const postId = window.location.pathname.split('/post/')[1];
                     if (!postId) throw new Error('Post ID not found');
 
-                    const refresh = await fetch('/api/v1/auth/refresh', { method: 'POST', credentials: 'include' });
-                    const { accessToken } = await refresh.json();
+                    const accessToken = await getAccessToken();
 
                     const response = await fetch(`/api/posts/${postId}/comments`, {
                         method: 'POST',
@@ -3797,7 +3223,6 @@
                 let originalWidth, originalHeight;
                 let originalX, originalY;
                 let currentAspectRatio = null;
-                let snapTimeout = null;
                 let activeRatioBtn = null;
 
                 const modal = document.createElement('div');
@@ -4737,28 +4162,16 @@
             if (c && !c.querySelector('.sticker-btn')) addStickerButton();
         });
 
-        let lastUrl = location.href;
-        new MutationObserver(() => {
-            if (location.href !== lastUrl) {
-                lastUrl = location.href;
-                setTimeout(() => {
-                    const c = document.querySelector('.' + SELECTORS.stickerContainer);
-                    if (c && !c.querySelector('.sticker-btn')) addStickerButton();
-                }, 1000);
-            }
-        }).observe(document, { subtree: true, childList: true });
-
         setTimeout(addStickerButton, 1000);
 
     })();
 
-    let lastMemeIndex = -1;
     let messagesOverlay = null;
 
     function addMessagesButton() {
         const nav = document.querySelector('.' + SELECTORS.sidebar + ' .' + SELECTORS.nav)
             || document.querySelector('.' + SELECTORS.nav)
-            || FINDERS.navFeedLink()?.closest('nav');
+            || [...document.querySelectorAll('nav a')].find(a => a.textContent.trim() === 'Лента')?.closest('nav');
         if (!nav) return;
 
         const notificationsLink = nav.querySelector('a[href="/notifications"]');
@@ -4931,61 +4344,6 @@
     `;
     document.head.appendChild(postDesignStyle);
 
-    let postBorderEnabled = GM_getValue('postBorderEnabled', true);
-    let postBorderSyncStyle = null;
-
-    function initPostBorderSync() {
-        if (!postBorderEnabled) return;
-        let borderColor;
-        if (currentStyle === 'rainbow') {
-            borderColor = `hsla(${globalHue}, 100%, 55%, 0.3)`;
-        } else {
-            const style = nickStyles[currentStyle];
-            if (style.color && style.color !== 'rainbow') {
-                borderColor = style.color;
-            } else {
-                const hue = style.avatarHue || 210;
-                const sat = style.avatarSat !== undefined ? style.avatarSat : 100;
-                borderColor = `hsl(${hue}, ${sat}%, 60%)`;
-            }
-            if (borderColor && borderColor.startsWith('#')) {
-                const r = parseInt(borderColor.slice(1, 3), 16);
-                const g = parseInt(borderColor.slice(3, 5), 16);
-                const b = parseInt(borderColor.slice(5, 7), 16);
-                borderColor = `rgba(${r}, ${g}, ${b}, 0.6)`;
-            } else if (borderColor && borderColor.startsWith('rgb')) {
-                borderColor = borderColor.replace('rgb', 'rgba').replace(')', ', 0.3)');
-            } else if (borderColor && borderColor.startsWith('hsl')) {
-                borderColor = borderColor.replace('hsl', 'hsla').replace(')', ', 0.3)');
-            }
-        }
-        if (postBorderSyncStyle) postBorderSyncStyle.remove();
-        postBorderSyncStyle = document.createElement('style');
-        postBorderSyncStyle.textContent = `
-            .vp-post:hover {
-                border-color: ${borderColor} !important;
-                box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3), 0 0 0 2px ${borderColor} !important;
-            }
-        `;
-        document.head.appendChild(postBorderSyncStyle);
-    }
-
-    const originalUpdateColors = updateColors;
-    updateColors = function () {
-        originalUpdateColors();
-        if (currentStyle === 'rainbow') initPostBorderSync();
-    };
-    let _currentStyle = currentStyle;
-    Object.defineProperty(window, 'currentStyle', {
-        get: () => _currentStyle,
-        set: (val) => {
-            _currentStyle = val;
-            initPostBorderSync();
-        }
-    });
-    currentStyle = _currentStyle;
-
-    initPostBorderSync();
 
     const styleSidebar = document.createElement('style');
     styleSidebar.textContent = `
@@ -5009,7 +4367,7 @@
     const styleUnderline = document.createElement('style');
     styleUnderline.textContent = `
         .vp-nick .vp-nick-text {
-            transition: all 0.2s ease;
+            transition: text-decoration-color 0.2s ease;
         }
         a[href^="/@"]:hover .vp-nick-text {
             text-decoration: underline;
@@ -5073,8 +4431,11 @@
         });
     }
 
-    const modalObserver = new MutationObserver(() => {
-        updateModalOverlay();
+    // Свои покраски (ники и аватарки — в радуге каждый кадр) окно не открывают: их пропускаем,
+    // иначе проверка окон с пересчётом раскладки шла бы 20 раз в секунду.
+    const PAINTED = '.vp-nick, .vp-nick-text, .my-avatar-glow';
+    const modalObserver = new MutationObserver(muts => {
+        if (muts.some(m => m.type === 'childList' || !m.target.matches(PAINTED))) updateModalOverlay();
     });
     modalObserver.observe(document.body, {
         childList: true,
@@ -5182,8 +4543,6 @@
         }
     `;
     document.head.appendChild(styleBlurPosts);
-
-    let postBlurEnabled = GM_getValue('postBlurEnabled', true);
 
     onDom(function postBlur() { if (postBlurEnabled) addBlurBackground(); });
 
@@ -5626,7 +4985,12 @@
 
     onDom(replaceNotificationTexts);
 
+    const emojiColors = new Map();
     function getEmojiColor(emoji) {
+        if (!emojiColors.has(emoji)) emojiColors.set(emoji, measureEmojiColor(emoji));
+        return emojiColors.get(emoji);
+    }
+    function measureEmojiColor(emoji) {
         const canvas = document.createElement('canvas');
         canvas.width = 64;
         canvas.height = 64;
@@ -5661,17 +5025,41 @@
         return { r, g, b };
     }
 
+    // Цвет эмодзи для оттенка карточки: средний цвет, поднятый по яркости и насыщенности,
+    // иначе тёмные и серые эмодзи давали мутно-бурую заливку. Возвращает «r, g, b».
+    const emojiTints = new Map();
+    function emojiTint(emoji) {
+        if (emojiTints.has(emoji)) return emojiTints.get(emoji);
+        const c = getEmojiColor(emoji);
+        let tint = null;
+        if (c) {
+            const [r, g, b] = [c.r, c.g, c.b].map(v => v / 255);
+            const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+            let hue = 0;
+            if (d) hue = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+            const sat = d ? Math.min(1, d / (1 - Math.abs(2 * l - 1)) * 1.25) : 0;
+            const L = 0.55, C = (1 - Math.abs(2 * L - 1)) * sat, X = C * (1 - Math.abs((hue % 2 + 2) % 2 - 1)), m = L - C / 2;
+            const [R, G, B] = [[C, X, 0], [X, C, 0], [0, C, X], [0, X, C], [X, 0, C], [C, 0, X]][Math.floor((hue + 6) % 6)];
+            tint = [R, G, B].map(v => Math.round((v + m) * 255)).join(', ');
+        }
+        emojiTints.set(emoji, tint);
+        return tint;
+    }
+    function tintCard(el, emoji) {
+        const tint = emoji && emojiTint(emoji);
+        if (!tint) return false;
+        el.style.setProperty('--vp-emoji', tint);
+        el.classList.add('vp-emoji-tint');
+        return true;
+    }
+
     function colorizePosts() {
-        const darken = 0.3;
         document.querySelectorAll('.' + SELECTORS.post + ':not([data-post-colored])').forEach(post => {
             const avatar = post.querySelector('.' + SELECTORS.avatarLink + ' .' + SELECTORS.avatar);
             if (!avatar) return;
 
             const emoji = avatar.textContent.trim();
             if (!emoji) return;
-
-            const color = getEmojiColor(emoji);
-            if (!color) return;
 
             const hasImage = post.querySelector('.' + SELECTORS.postMedia);
 
@@ -5680,8 +5068,7 @@
                 return;
             }
 
-            const colorRgb = `rgb(${Math.round(color.r * darken)}, ${Math.round(color.g * darken)}, ${Math.round(color.b * darken)})`;
-            post.style.setProperty('background', colorRgb, 'important');
+            tintCard(post, emoji);
             post.setAttribute('data-post-colored', 'true');
         });
     }
@@ -5690,20 +5077,23 @@
         if (!location.pathname.includes('/notifications')) colorizePosts();
     });
 
+    // Эмодзи-аватарка пункта: выученный класс аватара в уведомлениях может не совпасть,
+    // поэтому ищем сам лист с одной эмодзи — сначала внутри ссылки на профиль
+    const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|[\u200d\ufe0f\u{1F3FB}-\u{1F3FF}])+$/u;
+    function emojiAvatarOf(item) {
+        const tagged = item.querySelector('.' + SELECTORS.avatar);
+        if (tagged && tagged.textContent.trim()) return tagged.textContent.trim();
+        const leaves = [...item.querySelectorAll('span, div')].filter(e => !e.children.length && EMOJI_ONLY.test(e.textContent.trim()));
+        const leaf = leaves.find(e => e.closest(PROFILE_LINK)) || leaves[0];
+        return leaf ? leaf.textContent.trim() : null;
+    }
+
     function colorizeNotifications() {
-        const darken = 0.3;
-        document.querySelectorAll('.' + SELECTORS.notification + ':not([data-colored])').forEach(el => {
-            const avatar = el.querySelector('.' + SELECTORS.avatar);
-            if (!avatar) return;
-
-            const emoji = avatar.textContent.trim();
-            if (!emoji) return;
-
-            const color = getEmojiColor(emoji);
-            if (!color) return;
-
-            el.style.background = `rgb(${Math.round(color.r * darken)}, ${Math.round(color.g * darken)}, ${Math.round(color.b * darken)})`;
-            el.setAttribute('data-colored', 'true');
+        document.querySelectorAll('.' + SELECTORS.notification).forEach(el => {
+            const emoji = emojiAvatarOf(el);
+            // сайт переиспользует пункты списка — перекрашиваем, если эмодзи сменилась
+            if (!emoji || el.getAttribute('data-colored') === emoji) return;
+            if (tintCard(el, emoji)) el.setAttribute('data-colored', emoji);
         });
     }
 
@@ -5712,5 +5102,77 @@
     });
 
 
+
+    // ================= Дизайн и удобство =================
+    const designStyle = document.createElement('style');
+    designStyle.textContent = `
+        /* Оттенок карточки по эмодзи (уведомления, посты без картинки): мягкий градиент от левого
+           края поверх родного фона и тонкая рамка того же цвета; при наведении — чуть ярче */
+        @property --vp-tint { syntax: '<number>'; inherits: false; initial-value: 0.3; }
+        .vp-emoji-tint {
+            background-image: linear-gradient(105deg,
+                rgba(var(--vp-emoji), var(--vp-tint)) 0%,
+                rgba(var(--vp-emoji), calc(var(--vp-tint) * 0.4)) 45%,
+                rgba(var(--vp-emoji), calc(var(--vp-tint) * 0.1)) 100%) !important;
+            border: 1px solid rgba(var(--vp-emoji), 0.22) !important;
+            transition: --vp-tint 0.25s ease, border-color 0.25s ease !important;
+        }
+        .vp-emoji-tint:hover { --vp-tint: 0.42; border-color: rgba(var(--vp-emoji), 0.4) !important; }
+
+        /* Версия мода под логотипом: чип и кнопка обновления вместо надписи в 8px */
+        .vp-version-row { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; }
+        .vp-version-col { flex-direction: column; gap: 3px; margin: 0; }
+        .vp-version-chip {
+            font: 600 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+            color: var(--text-secondary, #8a8a8a); letter-spacing: 0.02em;
+            padding: 3px 6px; border-radius: 6px; background: var(--bg-hover, rgba(255, 255, 255, 0.08));
+        }
+        .itd-update-sidebar-btn {
+            display: inline-flex; align-items: center; gap: 4px; border: 0; cursor: pointer;
+            font-family: inherit; font-size: 10px; font-weight: 700; line-height: 1; color: #fff; white-space: nowrap;
+            padding: 4px 8px; border-radius: 999px;
+            background: linear-gradient(135deg, #2a8cff, #6a5bff);
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14) inset, 0 4px 14px rgba(60, 120, 255, 0.35);
+            transition: transform 0.15s ease, filter 0.15s ease;
+            animation: vpUpdatePulse 2.6s ease-in-out infinite;
+        }
+        .itd-update-sidebar-btn:hover { transform: translateY(-1px); filter: brightness(1.12); }
+        .itd-update-sidebar-btn svg { width: 11px; height: 11px; }
+        @keyframes vpUpdatePulse {
+            0%, 100% { box-shadow: 0 0 0 1px rgba(255,255,255,.14) inset, 0 4px 14px rgba(60,120,255,.35); }
+            50% { box-shadow: 0 0 0 1px rgba(255,255,255,.14) inset, 0 4px 22px rgba(60,120,255,.6); }
+        }
+
+        /* Клавиатура: видимый фокус */
+        .vp-nav-link:focus-visible, .vp-post-action:focus-visible, .vp-pill-btn:focus-visible,
+        .nick-style-option:focus-visible, .settings-option:focus-visible {
+            outline: 2px solid var(--vp-accent, #0080ff) !important; outline-offset: 2px !important;
+        }
+        .vp-nav-link .vp-nav-icon { transition: color 0.2s ease, filter 0.2s ease; }
+
+        /* Кто просил меньше движения — без появлений и пульса */
+        @media (prefers-reduced-motion: reduce) {
+            .vp-post, .vp-sidebar, .vp-sidebar-right, .vp-notif, .itd-update-sidebar-btn { animation: none !important; }
+            .vp-emoji-tint { transition: none !important; }
+        }
+    `;
+    document.head.appendChild(designStyle);
+
+    // Активный пункт меню — по адресу страницы (у сайта это хеш-класс, он меняется)
+    function markActiveNav() {
+        const path = location.pathname;
+        document.querySelectorAll('.' + SELECTORS.navLink).forEach(a => {
+            const href = a.getAttribute('href') || '';
+            const active = href.startsWith('/') && (href === path || (href !== '/' && path.startsWith(href + '/')));
+            a.classList.toggle('vp-active', active);
+        });
+    }
+    markActiveNav();
+    onDom(markActiveNav);
+    addEventListener('popstate', markActiveNav);
+
     console.log('🟢 ITD Visual Pack');
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
+    else start();
 })();
