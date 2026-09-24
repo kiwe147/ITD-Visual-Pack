@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.0
+// @version      3.0.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -31,7 +31,7 @@
         FLY: 520,                            // полёт до касания
         SETTLE: 170,                         // дожим после касания
         SHAKE: [4, 6, 9],                    // сила тряски, px
-        VOLUME: 0.22,                        // общая громкость звука (0.55 → 0.28 → 0.22: владелец просил тише)
+        VOLUME: 0.11,                        // общая громкость звука (0.55 → 0.28 → 0.22 → 0.11: владелец просил тише)
         // откуда летит: угол (0 — справа, 90 — снизу), разворот, масштаб «из камеры»
         FROM: [{ ang: 200, rot: -110, sc: 1.8 }, { ang: 272, rot: 80, sc: 2.4 }, { ang: -12, rot: 130, sc: 1.6 }],
         // X за словом (как на иконке «ИТД X»): два росчерка крест-накрест после последнего удара
@@ -614,9 +614,12 @@
     // Логотип скрипта задаётся в ОДНОМ месте — строкой @icon в шапке. Tampermonkey показывает
     // его в своём списке, а мы берём его оттуда же (GM_info) для логотипа в углу сайта.
     // Нет картинки — логотип сайта остаётся свой.
-    function scriptLogo(size) {
+    function scriptIconSrc() {
         const meta = (GM_info.scriptMetaStr || '').match(/^\/\/ @icon\s+(.+?)\s*$/m);
-        const src = (GM_info.script && GM_info.script.icon) || (meta && meta[1]);
+        return (GM_info.script && GM_info.script.icon) || (meta && meta[1]) || null;
+    }
+    function scriptLogo(size) {
+        const src = scriptIconSrc();
         if (!src) return null;
         const img = document.createElement('img');
         img.src = src;
@@ -625,6 +628,26 @@
         img.style.cssText = `width:${size}px;height:${size}px;display:block;border-radius:${Math.round(size * 0.25)}px;`;
         return img;
     }
+    // Вкладка браузера: наша иконка (та же строка @icon) и название «ИТД X». Сайт сам меняет
+    // заголовок и иконку при переходах — следим за <head> и возвращаем своё.
+    const TAB_TITLE = 'ИТД X';
+    function brandTab() {
+        if (document.title !== TAB_TITLE) document.title = TAB_TITLE;
+        const src = scriptIconSrc();
+        if (!src) return;
+        let ours = document.getElementById('vp-favicon');
+        document.querySelectorAll('link[rel~="icon"]').forEach(l => { if (l !== ours) l.remove(); });
+        if (!ours) {
+            ours = document.createElement('link');
+            ours.id = 'vp-favicon';
+            ours.rel = 'icon';
+            ours.type = 'image/svg+xml';
+            ours.href = src;
+            document.head.appendChild(ours);
+        }
+    }
+    brandTab();
+    new MutationObserver(brandTab).observe(document.head, { childList: true, subtree: true, characterData: true });
     const svgIcon = (body, size = 20, stroke = 'currentColor') =>
         `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
     // фон: рамка с искрой — «живой фон»
@@ -648,6 +671,10 @@
             'Стекло': svgIcon('<rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/><path d="M11.5 15.5l3-3M11.5 18.5l6-6"/>'),
             // динамик с волнами — звуки интерфейса
             'Звуки интерфейса': svgIcon('<path d="M4 9.5h3l4-3.5v12l-4-3.5H4z"/><path d="M15 9a4 4 0 0 1 0 6M17.5 6.5a7.5 7.5 0 0 1 0 11"/>'),
+            // карточки лесенкой, верхняя тает — сцена ленты
+            'Сцена ленты': svgIcon('<rect x="5" y="3" width="14" height="5" rx="1.5" stroke-dasharray="2 2"/><rect x="4" y="10" width="16" height="5" rx="1.5"/><rect x="3" y="17" width="18" height="5" rx="1.5"/>'),
+            // экран с лучами вокруг — свечение видео
+            'Свечение видео': svgIcon('<rect x="6" y="7" width="12" height="10" rx="2"/><path d="m11 10 3 2-3 2z"/><path d="M3 5.5 4.5 7M21 5.5 19.5 7M3 18.5 4.5 17M21 18.5 19.5 17M12 2.5v2M12 19.5v2"/>'),
             // кадр с кнопкой воспроизведения — заставка при входе
             'Заставка при входе': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><path d="m10 9 5 3-5 3z"/>'),
             // сердце со стрелкой повтора — лайки сами
@@ -1014,9 +1041,11 @@
         .vp-menu-note { padding: 20px; text-align: center; color: var(--text-secondary); }
         .vp-setting-label { display: flex; align-items: center; gap: 8px; }
         .nick-style-dropdown.vp-like-menu { min-width: 240px !important; max-height: 400px; display: flex; flex-direction: column; overflow: hidden; z-index: 10002 !important; }
-        .vp-like-list { overflow-y: auto; flex: 1; padding: 4px 0; display: flex; flex-direction: column; gap: 2px; max-height: 350px; }
+        .vp-like-list { overflow-y: auto; overflow-x: hidden; flex: 1; padding: 4px 0; display: flex; flex-direction: column; gap: 2px; max-height: 350px; }
         .vp-like-footer { padding: 8px 12px; text-align: center; font-size: 12px; color: var(--text-secondary); border-top: 1px solid var(--border-color); flex-shrink: 0; }
         .nick-style-option.vp-like-row { justify-content: space-between !important; }
+        /* строки списка автолайков при наведении не сдвигаем — иначе вылезают за край и появлялась полоса прокрутки снизу */
+        .nick-style-option.vp-like-row:hover { transform: none !important; }
         .vp-like-user { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
         .vp-like-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; background: rgba(0, 0, 0, 0.2); flex-shrink: 0; }
         .vp-like-names { display: flex; flex-direction: column; min-width: 0; }
@@ -1880,7 +1909,9 @@
             set: v => { autoLikeEnabled = v; updateAutoLikeButtons(); }
         },
         { label: 'Стекло', get: () => glassEnabled, set: v => { glassEnabled = v; applyGlass(); }, key: 'glassEnabled' },
-        { label: 'Звуки интерфейса', get: () => uiSoundEnabled, set: v => { uiSoundEnabled = v; if (v) uiSound('toggle'); }, key: 'uiSoundEnabled' }
+        { label: 'Звуки интерфейса', get: () => uiSoundEnabled, set: v => { uiSoundEnabled = v; if (v) uiSound('toggle'); }, key: 'uiSoundEnabled' },
+        { label: 'Сцена ленты', get: () => sceneEnabled, set: v => { sceneEnabled = v; document.documentElement.classList.toggle('vp-scene', v); sceneKick(); }, key: 'sceneEnabled' },
+        { label: 'Свечение видео', get: () => ambientEnabled, set: v => { ambientEnabled = v; applyAmbient(); }, key: 'ambientEnabled' }
     ];
     function openSettingsMenu(btn) {
         const menu = document.createElement('div');
@@ -5495,7 +5526,43 @@
             88% { text-shadow: -2px 0 rgba(255, 0, 200, .85), 2px 0 rgba(0, 255, 240, .85); transform: translateX(-1px); }
             89% { text-shadow: 1.5px 0 rgba(255, 0, 200, .75), -1.5px 0 rgba(0, 255, 240, .75); transform: none; }
         }
+        /* 20. Сцена ленты: положение поста на экране (считает sceneFrame) → прозрачность и масштаб */
+        html.vp-scene article.vp-post {
+            animation: none !important; transform-origin: 50% 0;
+            opacity: var(--vp-so, 1); transform: translateY(var(--vp-sy, 0px)) scale(var(--vp-ss, 1));
+        }
+
+        /* 22. Свечение видео */
+        .vp-ambient-host { isolation: isolate; }
+        .vp-ambient { position: absolute; z-index: -1; pointer-events: none; border-radius: 40px; opacity: 0;
+            filter: blur(26px) saturate(1.7); transition: opacity .8s ease; }
+        .vp-ambient.vp-on { opacity: .8; }
+
+        /* 26. Бегунок вкладок: свой переход вместо сайтового */
+        .vp-tab-ind { transition: background-color .2s ease !important; }
+
+        /* 27. Карточка профиля */
+        .vp-hc { position: fixed; z-index: 10005; width: 300px; border-radius: 22px; overflow: hidden; cursor: pointer;
+            background: var(--block-bg, #1c1c1c); color: var(--text-primary, #fff);
+            border: 1px solid color-mix(in srgb, var(--text-primary, #fff) 10%, transparent);
+            box-shadow: 0 18px 50px rgba(0, 0, 0, .45); backdrop-filter: var(--vp-glass-filter, blur(18px));
+            -webkit-backdrop-filter: var(--vp-glass-filter, blur(18px)); animation: vpHcIn .22s cubic-bezier(.2, 1.2, .4, 1); }
+        .vp-hc-banner { height: 84px; background-size: cover; background-position: center; }
+        .vp-hc-body { padding: 0 16px 14px; }
+        .vp-hc-ava { width: 60px; height: 60px; margin-top: -30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 30px; background: var(--block-bg, #1c1c1c); border: 3px solid var(--block-bg, #1c1c1c); overflow: hidden; position: relative; }
+        .vp-hc-ava img { width: 100%; height: 100%; object-fit: cover; }
+        .vp-hc-name { margin-top: 6px; font-weight: 700; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-hc-login { font-size: 13px; color: var(--text-secondary, #8a8a8a); }
+        .vp-hc-bio { margin-top: 8px; font-size: 13px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        .vp-hc-bio:empty { display: none; }
+        .vp-hc-stats { display: flex; gap: 14px; margin-top: 10px; font-size: 13px; color: var(--text-secondary, #8a8a8a); }
+        .vp-hc-stats:empty { display: none; }
+        .vp-hc-stats b { color: var(--text-primary, #fff); }
+        @keyframes vpHcIn { from { opacity: 0; transform: translateY(6px) scale(.97); } }
+
         @media (prefers-reduced-motion: reduce) {
+            .vp-hc { animation: none; }
             .vp-count::after { animation: none; counter-reset: vpn var(--vp-to); }
             .vp-nav-blob { transition: none; }
         }
@@ -5577,18 +5644,25 @@
         if (blobAt && to.top === blobAt.top && to.left === blobAt.left && to.width === blobAt.width && to.height === blobAt.height) return;
         blob.style.borderRadius = getComputedStyle(active).borderRadius;
         const px = r => ({ top: r.top + 'px', left: r.left + 'px', width: r.width + 'px', height: r.height + 'px' });
-        if (blobAt && !calm && blob.style.opacity === '1') {
-            const lo = Math.min(blobAt.top, to.top), hi = Math.max(blobAt.top + blobAt.height, to.top + to.height);
-            blob.animate([
-                px(blobAt),
-                { ...px({ top: lo, left: to.left + to.width * .04, width: to.width * .92, height: hi - lo }), offset: .45 },
-                px(to)
-            ], { duration: 460, easing: 'cubic-bezier(.65, 0, .25, 1)' });
-        }
-        Object.assign(blob.style, px(to));
+        // Перетекание считаем по кадрам (proxFrame): подложка растягивается к новому пункту,
+        // стягивается на нём, а по пути сдвигается так же, как кнопки, мимо которых идёт.
+        if (blobAt && !calm && blob.style.opacity === '1') blobAnim = { from: blobAt, to, t0: performance.now() };
+        else { blobAnim = null; Object.assign(blob.style, px(to)); }
         blob.style.opacity = '1';
         blobAt = to;
-        proxKick();                                  // сдвиг подложки — догнать сдвиг новой кнопки
+        proxKick();
+    }
+    let blobAnim = null;
+    const BLOB_MS = 460;
+    const easeIO = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    const lerp = (a, b, t) => a + (b - a) * t;
+    // геометрия подложки в момент перетекания: 0–45% — растяжение от старого до нового, дальше — стяжка
+    function blobGeom(an, now) {
+        const p = Math.min(1, (now - an.t0) / BLOB_MS), f = an.from, t = an.to;
+        const lo = Math.min(f.top, t.top), hi = Math.max(f.top + f.height, t.top + t.height);
+        const mid = { top: lo, left: t.left + t.width * .04, width: t.width * .92, height: hi - lo };
+        const [a, b, q] = p < .45 ? [f, mid, easeIO(p / .45)] : [mid, t, easeIO((p - .45) / .55)];
+        return { g: { top: lerp(a.top, b.top, q), left: lerp(a.left, b.left, q), width: lerp(a.width, b.width, q), height: lerp(a.height, b.height, q) }, done: p >= 1 };
     }
     onDom(moveNavBlob);
     addEventListener('resize', () => { blobAt = null; moveNavBlob(); });
@@ -5603,6 +5677,7 @@
         const nav = document.querySelector('.' + SELECTORS.nav);
         if (!nav) return;
         let moving = false, activeK = 0;
+        const rows = [];                                  // центры кнопок и их сдвиг — для перетекания
         nav.querySelectorAll(':scope > .' + SELECTORS.navLink).forEach(a => {
             const r = a.getBoundingClientRect();
             const d = proxY === null ? Infinity : proxY - (r.top + r.height / 2);
@@ -5617,10 +5692,25 @@
             const icon = a.querySelector('.' + SELECTORS.navIcon);
             if (icon) icon.style.transform = k ? `scale(${(1 + 0.12 * k).toFixed(3)})` : '';
             if (a.classList.contains('vp-active')) activeK = k;
+            rows.push([a.offsetTop + a.offsetHeight / 2, k]);
         });
         // подложка едет за своей кнопкой отдельно и плавно: после смены пункта она догоняет
         // сдвиг новой кнопки, а не остаётся со сдвигом старой
-        if (blob) {
+        if (blob && blobAnim) {
+            // сдвиг — как у кнопки, через которую сейчас идёт середина подложки (между кнопками — плавно)
+            const { g, done } = blobGeom(blobAnim, performance.now());
+            const y = g.top + g.height / 2;
+            let k = rows.length ? rows[0][1] : 0;
+            for (let i = 0; i < rows.length; i++) {
+                if (y <= rows[i][0]) { k = i ? lerp(rows[i - 1][1], rows[i][1], (y - rows[i - 1][0]) / (rows[i][0] - rows[i - 1][0])) : rows[0][1]; break; }
+                k = rows[i][1];
+            }
+            blobK = k;
+            Object.assign(blob.style, { top: g.top + 'px', left: g.left + 'px', width: g.width + 'px', height: g.height + 'px' });
+            blob.style.transform = blobK ? `translateX(${(blobK * PROX_MAX).toFixed(2)}px)` : '';
+            if (done) blobAnim = null;
+            moving = true;
+        } else if (blob) {
             blobK = Math.abs(activeK - blobK) < 0.004 ? activeK : blobK + (activeK - blobK) * 0.22;
             if (blobK !== activeK) moving = true;
             blob.style.transform = blobK ? `translateX(${(blobK * PROX_MAX).toFixed(2)}px)` : '';
@@ -5640,6 +5730,192 @@
         }, { passive: true });
         document.addEventListener('pointerleave', () => { proxY = null; proxKick(); });
     }
+
+    // --- 20. Сцена ленты: посты, уходящие за верх, уменьшаются и тают; снизу — проявляются.
+    // Анимации привязаны к прокрутке средствами браузера (animation-timeline) — без кода на кадр.
+    // (animation-timeline: view() не годится: меряет пост от ближайшего блока с обрезкой, а не от
+    // экрана — у всех постов выходило одно и то же.) Считаем сами, только видимые посты, раз за кадр.
+    let sceneEnabled = GM_getValue('sceneEnabled', true) && !calm;
+    document.documentElement.classList.toggle('vp-scene', sceneEnabled);
+    const sceneSeen = new Set();
+    const sceneIO = new IntersectionObserver(es => es.forEach(e => {
+        if (e.isIntersecting) { sceneSeen.add(e.target); sceneKick(); }
+        else { sceneSeen.delete(e.target); ['--vp-so', '--vp-sy', '--vp-ss'].forEach(v => e.target.style.removeProperty(v)); }
+    }), { rootMargin: '150px 0px' });
+    const ease = t => t * t * (3 - 2 * t);
+    let sceneQueued = false;
+    function sceneFrame() {
+        sceneQueued = false;
+        if (!sceneEnabled) return;
+        const H = innerHeight;
+        for (const a of sceneSeen) {
+            const r = a.getBoundingClientRect();
+            // Мягко: читать не мешает. Уходящий бледнеет, только когда за верх ушла его четверть,
+            // и не до конца; входящий снизу не тускнеет — лишь чуть поднимается на своё место.
+            const out = ease(Math.max(0, Math.min(1, (-r.top - r.height * 0.25) / Math.max(1, r.height * 0.75))));
+            const inn = ease(Math.max(0, Math.min(1, (H - r.top) / 220)));
+            a.style.setProperty('--vp-so', (1 - 0.45 * out).toFixed(3));
+            a.style.setProperty('--vp-ss', (1 - 0.04 * out).toFixed(4));
+            a.style.setProperty('--vp-sy', (14 * (1 - inn)).toFixed(1) + 'px');
+        }
+    }
+    const sceneKick = () => { if (!sceneQueued) { sceneQueued = true; requestAnimationFrame(sceneFrame); } };
+    addEventListener('scroll', sceneKick, { capture: true, passive: true });
+    addEventListener('resize', sceneKick);
+    onDom(function sceneWatch() {
+        document.querySelectorAll('article.' + SELECTORS.post).forEach(a => { if (!a._vpScene) { a._vpScene = true; sceneIO.observe(a); } });
+        sceneKick();
+    });
+
+    // --- 22. Свечение видео: вокруг видео растекается свет его же кадра (как «эмбиент» у YouTube).
+    // Кадр — в маленький холст раз в 150 мс, размывает его CSS; работает только для видимых видео.
+    let ambientEnabled = GM_getValue('ambientEnabled', true);
+    const ambient = new Map();                          // видео → { cv, g, host }
+    const ambientSeen = new Set();
+    const ambientIO = new IntersectionObserver(es => es.forEach(e => e.isIntersecting ? ambientSeen.add(e.target) : ambientSeen.delete(e.target)));
+    function ambientScan() {
+        if (!ambientEnabled || calm) return;
+        document.querySelectorAll('.' + SELECTORS.post + ' video').forEach(v => {
+            if (ambient.has(v)) return;
+            const host = v.closest('.' + SELECTORS.post);
+            const cv = document.createElement('canvas');
+            cv.className = 'vp-ambient';
+            cv.width = 48; cv.height = 27;
+            host.classList.add('vp-ambient-host');
+            // поверх размытой подложки поста (если она есть), но под содержимым
+            const under = host.querySelector(':scope > .itd-blur-container');
+            if (under) under.after(cv); else host.prepend(cv);
+            ambient.set(v, { cv, g: cv.getContext('2d'), host });
+            ambientIO.observe(v);
+            v.addEventListener('loadeddata', () => ambientDraw(v));
+            v.addEventListener('seeked', () => ambientDraw(v));
+        });
+    }
+    function ambientDraw(v) {
+        const a = ambient.get(v);
+        if (!a || !v.isConnected || v.readyState < 2) return;
+        const vr = v.getBoundingClientRect(), hr = a.host.getBoundingClientRect(), pad = 26;
+        Object.assign(a.cv.style, { left: (vr.left - hr.left - pad) + 'px', top: (vr.top - hr.top - pad) + 'px',
+            width: (vr.width + pad * 2) + 'px', height: (vr.height + pad * 2) + 'px' });
+        try { a.g.drawImage(v, 0, 0, 48, 27); a.cv.classList.add('vp-on'); } catch (e) { /* кадр ещё не готов */ }
+    }
+    setInterval(() => {
+        if (!ambientEnabled) return;
+        for (const v of ambientSeen) if (!v.paused || !ambient.get(v)?.cv.classList.contains('vp-on')) ambientDraw(v);
+        for (const [v, a] of ambient) if (!v.isConnected) { a.cv.remove(); ambient.delete(v); ambientSeen.delete(v); }
+    }, 150);
+    function applyAmbient() {
+        if (ambientEnabled) ambientScan();
+        else { for (const [v, a] of ambient) { a.cv.remove(); ambientIO.unobserve(v); } ambient.clear(); ambientSeen.clear(); }
+    }
+    onDom(ambientScan);
+
+    // --- 26. Вкладки «Для вас / Лента кланов / Подписки»: бегунок перетекает, как подложка меню.
+    // Сайт двигает бегунок сам (стиль translateX + width) — ловим смену и проигрываем свою анимацию.
+    const tabObs = new MutationObserver(muts => muts.forEach(m => liquidTab(m.target, m.oldValue || '')));
+    const num = (str, re) => { const m = str.match(re); return m ? parseFloat(m[1]) : null; };
+    function liquidTab(ind, old) {
+        const now = ind.getAttribute('style') || '';
+        const x0 = num(old, /translateX\((-?[\d.]+)px/), x1 = num(now, /translateX\((-?[\d.]+)px/);
+        const w0 = num(old, /width:\s*([\d.]+)px/), w1 = num(now, /width:\s*([\d.]+)px/);
+        if (x0 === null || x1 === null || w0 === null || w1 === null || x0 === x1) return;
+        if (calm) return;
+        const lo = Math.min(x0, x1), span = Math.abs(x1 - x0) + Math.max(w0, w1);
+        ind.animate([
+            { transform: `translateX(${x0}px)`, width: w0 + 'px' },
+            { transform: `translateX(${lo}px)`, width: span + 'px', offset: .45 },
+            { transform: `translateX(${x1}px)`, width: w1 + 'px' }
+        ], { duration: 440, easing: 'cubic-bezier(.65, 0, .25, 1)' });
+    }
+    onDom(function hookTabs() {
+        document.querySelectorAll('.' + SELECTORS.tabs + ' > div:empty').forEach(ind => {
+            if (ind._vpTab) return;
+            ind._vpTab = true;
+            ind.classList.add('vp-tab-ind');
+            tabObs.observe(ind, { attributes: true, attributeFilter: ['style'], attributeOldValue: true });
+        });
+    });
+
+    // --- 27. Карточка профиля при наведении на ник или аватар: баннер, аватар, описание, счётчики
+    const hcCache = new Map();
+    let hc = null, hcTimer = 0, hcHide = 0, hcUser = null, hcLink = null, hcKeysShown = false;
+    const loginOf = href => ((href || '').match(/^\/@([\w.]+)/) || [])[1] || null;
+    function hcData(user) {
+        if (!hcCache.has(user)) hcCache.set(user, api('/api/users/' + encodeURIComponent(user)).then(r => r.ok ? r.json() : null)
+            .then(j => {
+                const d = j && (j.data || j.user || j);
+                if (d && !hcKeysShown) { hcKeysShown = true; console.debug('[ITD VP] карточка профиля, поля:', Object.keys(d).join(', ')); }
+                return d;
+            }).catch(() => null));
+        return hcCache.get(user);
+    }
+    const pick = (...vals) => vals.find(v => v !== undefined && v !== null && v !== '');
+    function hcBuild(user, d) {
+        const el = document.createElement('div');
+        el.className = 'vp-hc';
+        const banner = pick(d.banner && (d.banner.url || d.banner), d.bannerUrl, d.banner_url, d.cover && (d.cover.url || d.cover));
+        const ava = pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl, d.emoji, '👤');
+        const followers = pick(d.followersCount, d.followers_count, d.stats && d.stats.followers, typeof d.followers === 'number' ? d.followers : undefined);
+        const following = pick(d.followingCount, d.following_count, d.stats && d.stats.following, typeof d.following === 'number' ? d.following : undefined);
+        const bio = pick(d.bio, d.description, d.about, '');
+        const tint = typeof ava === 'string' && !/^https?:|^\//.test(ava) ? emojiTint(ava) : null;
+        el.innerHTML = `<div class="vp-hc-banner"></div><div class="vp-hc-body"><div class="vp-hc-ava"></div>
+            <div class="vp-hc-name"></div><div class="vp-hc-login"></div><div class="vp-hc-bio"></div><div class="vp-hc-stats"></div></div>`;
+        const bn = el.querySelector('.vp-hc-banner');
+        if (typeof banner === 'string' && banner) bn.style.backgroundImage = `url("${banner.replace(/"/g, '')}")`;
+        else bn.style.background = tint ? `linear-gradient(120deg, rgb(${tint}), rgba(${tint}, .25))` : 'linear-gradient(120deg, var(--vp-accent, #0080ff), transparent)';
+        const av = el.querySelector('.vp-hc-ava');
+        if (/^https?:|^\//.test(ava)) { const img = document.createElement('img'); img.src = ava; av.appendChild(img); } else av.textContent = ava;
+        el.querySelector('.vp-hc-name').textContent = pick(d.displayName, d.display_name, d.name, user);
+        el.querySelector('.vp-hc-login').textContent = '@' + pick(d.username, user);
+        el.querySelector('.vp-hc-bio').textContent = bio;
+        const st = el.querySelector('.vp-hc-stats');
+        [[followers, 'подписчиков'], [following, 'подписок']].forEach(([n, label]) => {
+            if (n === undefined) return;
+            const b = document.createElement('span');
+            b.innerHTML = '<b></b> ';
+            b.firstChild.textContent = n;
+            b.append(label);
+            st.appendChild(b);
+        });
+        el.addEventListener('pointerenter', () => clearTimeout(hcHide));
+        el.addEventListener('pointerleave', hcScheduleHide);
+        el.addEventListener('click', () => { if (hcLink && hcLink.isConnected) hcLink.click(); hcClose(); });
+        return el;
+    }
+    function hcPlace(el, link) {
+        const r = link.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
+        let top = r.bottom + 10;
+        if (top + h > innerHeight - 8) top = Math.max(8, r.top - h - 10);
+        el.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + 'px';
+        el.style.top = top + 'px';
+    }
+    async function hcShow(link, user) {
+        const d = await hcData(user);
+        if (!d || !link.isConnected || !link.matches(':hover')) return;
+        hcClose();
+        hc = hcBuild(user, d);
+        hcUser = user; hcLink = link;
+        document.body.appendChild(hc);
+        hcPlace(hc, link);
+    }
+    function hcClose() { if (hc) { hc.remove(); hc = null; hcUser = null; } }
+    function hcScheduleHide() { clearTimeout(hcHide); hcHide = setTimeout(hcClose, 220); }
+    document.addEventListener('pointerover', e => {
+        const a = e.target.closest && e.target.closest(PROFILE_LINK);
+        if (!a || a.closest('nav, .' + SELECTORS.sidebar + ', .vp-hc, .nick-controls-panel')) return;
+        const user = loginOf(a.getAttribute('href'));
+        if (!user) return;
+        clearTimeout(hcHide);
+        if (hc && hcUser === user) return;
+        clearTimeout(hcTimer);
+        hcTimer = setTimeout(() => hcShow(a, user), 450);
+    }, true);
+    document.addEventListener('pointerout', e => {
+        const a = e.target.closest && e.target.closest(PROFILE_LINK);
+        if (a && !a.contains(e.relatedTarget)) { clearTimeout(hcTimer); hcScheduleHide(); }
+    }, true);
+    addEventListener('scroll', () => { clearTimeout(hcTimer); hcClose(); }, { capture: true, passive: true });
 
     // --- 13. Баннер с глубиной
     let bannerTop0 = null, bannerQueued = false;
@@ -5704,11 +5980,11 @@
                 o.start(t + at);
                 o.stop(t + at + dur + 0.02);
             };
-            // громкости уже в 2 раза тише первой версии (владелец просил)
-            if (kind === 'like') { tone(520, 880, 0.09, 0.03); tone(880, 1320, 0.12, 0.0225, 'sine', 0.06); }  // «пи-пинь»
-            else if (kind === 'toggle') tone(1400, 900, 0.05, 0.02, 'triangle');                               // щелчок
-            else if (kind === 'nav') tone(300, 220, 0.07, 0.025);                                               // мягкий «тук»
-            else tone(900, 700, 0.04, 0.015, 'triangle');                                                       // клик
+            // громкости — в 4 раза тише первой версии (владелец дважды просил тише в 2 раза)
+            if (kind === 'like') { tone(520, 880, 0.09, 0.015); tone(880, 1320, 0.12, 0.0113, 'sine', 0.06); }  // «пи-пинь»
+            else if (kind === 'toggle') tone(1400, 900, 0.05, 0.01, 'triangle');                                // щелчок
+            else if (kind === 'nav') tone(300, 220, 0.07, 0.0125);                                               // мягкий «тук»
+            else tone(900, 700, 0.04, 0.0075, 'triangle');                                                       // клик
         } catch (e) { /* звук не главное */ }
     }
     document.addEventListener('click', e => {
