@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.7.0
+// @version      2.8.0
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -9,6 +9,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        unsafeWindow
 // @run-at       document-idle
 // @downloadURL  https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js
 // @updateURL    https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js
@@ -18,31 +19,237 @@
 (function () {
     'use strict';
 
+    // ================= Поиск элементов сайта =================
+    // Классы ИТД (drJg, U91s, iciV…) — хеши сборки, они меняются при каждом обновлении сайта.
+    // Поэтому элементы ищем по тому, что не меняется: тегам (article, nav, aside, header, time),
+    // ссылкам /@ник, подписям кнопок (aria-label, title), alt и data-атрибутам.
+    // Найденному элементу вешаем СВОЙ класс vp-*, и весь остальной код и CSS работают только
+    // с ними. Если сайт поменяет разметку, сломается одна функция в FIND, а не весь скрипт;
+    // какая — видно в консоли: itdvp.diag().
     const SELECTORS = {
-        nickText: 'drJg',
-        nickContainer: 'U91s',
-        nickRow: 'Ru5n',
-        avatar: 'h8t0',
-        post: 'ti2o',
-        banner: 'HSCi',
-        bannerButtons: 'O4A4',
-        bannerDraw: 'APod',
-        bannerDelete: 'wUeR',
-        sidebar: 'XguD',
-        nav: 'jlTV',
-        navLink: 'OrAy',
-        navIcon: 'oj18',
-        stickerContainer: 'JCtv',
-        stickerMicBtn: 'Te3H',
-        commentPreviewContainer: '',
-        logoContainer: 'Nyj6',
+        post: 'vp-post',                  // карточка поста (article)
+        repost: 'vp-repost',              // вложенная карточка репоста внутри поста
+        postText: 'vp-post-text',
+        postMedia: 'vp-post-media',
+        postAction: 'vp-post-action',     // кнопки «Нравится», «Комментировать», «Репост»
+        avatarLink: 'vp-avatar-link',     // ссылка-аватар в посте
+        avatar: 'vp-avatar',
+        nickContainer: 'vp-nick',         // имя + значки
+        nickText: 'vp-nick-text',         // само имя
+        nickBadges: 'vp-nick-badges',
+        nickRow: 'vp-nick-row',           // строка, в которой стоит ник
+        nickLarge: 'vp-nick-large',       // крупный ник в шапке профиля
+        banner: 'vp-banner',
+        bannerButtons: 'vp-banner-buttons',
+        bannerDraw: 'vp-banner-draw',
+        bannerDelete: 'vp-banner-delete',
+        sidebar: 'vp-sidebar',
+        sidebarRight: 'vp-sidebar-right',
+        nav: 'vp-nav',
+        navLink: 'vp-nav-link',
+        navIcon: 'vp-nav-icon',
+        logoContainer: 'vp-logo',
+        versionBtn: 'vp-version',
+        tabs: 'vp-tabs',                  // «Для вас / Подписки», «Посты / Лайки»
+        feedBar: 'vp-feed-bar',           // верхняя полоса ленты: вкладки + поиск
+        commentBox: 'vp-comment-box',     // обёртка формы комментария
+        stickerContainer: 'vp-comment-row',
+        stickerMicBtn: 'vp-comment-mic',
+        stickerSendBtn: 'vp-comment-send',
+        modal: 'vp-modal',
+        notification: 'vp-notif',
+        notificationText: 'vp-notif-text',
         badgeVerify: 'mod-badge-verify',
         badgeVoronoi: 'mod-badge-voronoi',
-        article: 'article',
-        postContainer: 'O6e2',
-        linkProfile: 'a[href*="/@"]',
-        nickParent: 'lkx7'
+        linkProfile: 'a[href^="/@"]'
     };
+    SELECTORS.commentPreviewContainer = SELECTORS.commentBox;
+    SELECTORS.nickParent = SELECTORS.nickContainer;
+
+    const PROFILE_LINK = 'a[href^="/@"]';
+    const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+    const ownText = el => [...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim());
+
+    // Классы сайта у элемента, без наших vp-*: нужны, когда свой элемент должен выглядеть
+    // как родной (свои кнопки баннера, пункт меню «Сообщения»)
+    function siteClasses(el) {
+        return el ? [...el.classList].filter(c => !c.startsWith('vp-')).join(' ') : '';
+    }
+    // Классы, общие для всех элементов: у пунктов меню это «обычный пункт» без «активного»
+    function commonClasses(els) {
+        if (!els.length) return '';
+        return [...els[0].classList].filter(c => !c.startsWith('vp-') && els.every(e => e.classList.contains(c))).join(' ');
+    }
+
+    // Выученные классы. Надёжный образец (ник и аватар в шапке поста) даёт класс компонента,
+    // по нему находим тот же компонент там, где надёжной приметы нет: шапка профиля, репост,
+    // поле нового поста. Учимся заново на каждой странице, запоминаем на случай страниц без постов.
+    const learned = JSON.parse(GM_getValue('vp_learned', '{}'));
+    function learn(role, el) {
+        const cls = el && [...el.classList].find(c => !c.startsWith('vp-'));
+        if (cls && learned[role] !== cls) {
+            learned[role] = cls;
+            GM_setValue('vp_learned', JSON.stringify(learned));
+        }
+    }
+    const byLearned = role => learned[role] ? [...document.getElementsByClassName(learned[role])] : [];
+
+    // Самый глубокий span с текстом внутри ника (имя бывает вложено: span > span > span)
+    function nickTextOf(container) {
+        if (!container.children.length) return container;
+        return $$('span', container).find(s => !s.children.length && s.textContent.trim()
+            && !s.closest('.' + SELECTORS.badgeVoronoi + ', .' + SELECTORS.badgeVerify)) || null;
+    }
+
+    const FIND = {
+        post: () => $$('article'),
+        repost: () => $$('article span[data-icon="share"]')
+            .filter(s => !s.closest('footer, button'))
+            .map(s => s.parentElement && s.parentElement.parentElement).filter(Boolean),
+        postMedia: () => $$('img[data-post-media-image], article video'),
+        postAction: () => $$('article button[aria-label]').filter(b => b.querySelector('[data-icon]')),
+        postText: () => $$('article div').filter(d => ownText(d) && !d.closest('header, footer, a, button, time')),
+        avatarLink: () => $$('article ' + PROFILE_LINK).filter(a => !a.closest('header') && a.firstElementChild),
+        avatar: () => {
+            const sample = F('avatarLink').map(a => a.firstElementChild);
+            if (sample[0]) learn('avatar', sample[0]);
+            const all = new Set(sample);
+            byLearned('avatar').forEach(el => { if (el.querySelector('span, img')) all.add(el); });
+            return [...all];
+        },
+        nickContainer: () => {
+            const sample = $$('article header ' + PROFILE_LINK + ' > span');
+            if (sample[0]) learn('nick', sample[0]);
+            const all = new Set(sample);
+            byLearned('nick').forEach(el => { if (el.textContent.trim()) all.add(el); });
+            return [...all];
+        },
+        nickText: () => F('nickContainer').map(nickTextOf).filter(Boolean),
+        nickBadges: () => F('nickContainer').flatMap(c => [...c.children]
+            .filter(s => s.querySelector('img, svg') && !s.matches('.' + SELECTORS.badgeVoronoi + ', .' + SELECTORS.badgeVerify))),
+        nickRow: () => F('nickContainer').map(c => (c.closest(PROFILE_LINK) || c).parentElement).filter(Boolean),
+        // Крупный ник — в шапке профиля: не ссылка и не внутри поста, рядом строка «@ник»
+        nickLarge: () => F('nickContainer').filter(c => !c.closest('a, article')
+            && [...(c.parentElement ? c.parentElement.children : [])].some(s => /^@\S+$/.test(s.textContent.trim()))),
+        banner: () => $$('img[alt="Banner"]').map(i => i.parentElement).filter(Boolean),
+        bannerButtons: () => F('banner').map(b => [...b.children].find(c => c.querySelector('button'))).filter(Boolean),
+        bannerDelete: () => F('bannerButtons').flatMap(c => $$('button', c))
+            .filter(b => /удал/i.test(b.title || '') || b.innerHTML.includes('points="3 6 5 6 21 6"')),
+        bannerDraw: () => F('bannerButtons').map(c => $$('button', c)
+            .find(b => !/custom-/.test(b.className) && !/удал/i.test(b.title || '') && !b.innerHTML.includes('points="3 6 5 6 21 6"'))).filter(Boolean),
+        nav: () => $$('nav').filter(n => n.querySelector('a[href="/"], a[href="/notifications"]')),
+        navLink: () => F('nav').flatMap(n => $$(':scope > a', n)),
+        navIcon: () => F('navLink').map(a => a.firstElementChild).filter(s => s && s.tagName === 'SPAN' && s.querySelector('svg')),
+        sidebar: () => $$('aside').filter(a => a.querySelector('nav')),
+        sidebarRight: () => $$('aside').filter(a => !a.querySelector('nav')),
+        // Логотип стоит прямо перед меню; после замены иконки внутри уже наша ссылка
+        logoContainer: () => F('nav').map(n => n.previousElementSibling)
+            .filter(d => d && (d.querySelector('svg, button') || d.querySelector('a[href="https://t.me/NeuroSFW"]'))),
+        versionBtn: () => F('logoContainer').flatMap(c => $$('button', c))
+            .filter(b => /^v\d/.test(b.textContent.trim()) && !b.classList.contains('itd-update-sidebar-btn')),
+        tabs: () => [...new Set($$('button')
+            .filter(b => ['Для вас', 'Подписки', 'Лента кланов', 'Посты', 'Лайки'].includes(b.textContent.trim()))
+            .map(b => b.parentElement))],
+        feedBar: () => F('tabs').filter(t => /Для вас/.test(t.textContent)).map(t => t.parentElement).filter(Boolean),
+        stickerContainer: () => commentInputs().map(commentRow).filter(Boolean),
+        stickerMicBtn: () => F('stickerContainer').map(r => siteButtons(r)).filter(bs => bs.length > 1).map(bs => bs[0]),
+        stickerSendBtn: () => F('stickerContainer').map(r => siteButtons(r).pop()).filter(Boolean),
+        commentBox: () => commentInputs().map(i => i.closest('form') || (commentRow(i) || i).parentElement).filter(Boolean),
+        modal: () => $$('[role="dialog"], [aria-modal="true"], dialog[open]'),
+        // Уведомления: пункт списка — ближайший предок времени, у которого есть соседи-пункты
+        notification: () => location.pathname.startsWith('/notifications') ? [...new Set($$('time')
+            .filter(t => !t.closest('article'))
+            .map(t => {
+                let el = t;
+                while (el.parentElement && el.parentElement !== document.body) {
+                    const p = el.parentElement;
+                    if ([...p.children].filter(c => c.querySelector('time')).length > 1) return el;
+                    el = p;
+                }
+                return null;
+            }).filter(Boolean))] : [],
+        // Текст уведомления — один на пункт: самый длинный текст вне ника, аватара и времени
+        notificationText: () => F('notification').map(n => $$('span, p, div', n)
+            .filter(e => ownText(e) && !e.closest('time, ' + PROFILE_LINK + ', .' + SELECTORS.nickContainer + ', .' + SELECTORS.avatar))
+            .sort((a, b) => b.textContent.length - a.textContent.length)[0]).filter(Boolean)
+    };
+
+    function commentInputs() {
+        return $$('[contenteditable="true"][data-placeholder]').filter(i => /коммент/i.test(i.getAttribute('data-placeholder')));
+    }
+    // Строка ввода комментария — ближайший предок поля, в котором есть кнопки
+    function commentRow(input) {
+        let el = input.parentElement;
+        for (let i = 0; el && i < 6; i++, el = el.parentElement) {
+            if (siteButtons(el).length) return el;
+        }
+        return null;
+    }
+    const siteButtons = root => $$('button', root).filter(b => !b.classList.contains('sticker-btn'));
+
+    // Порядок важен: ник и аватар учатся на постах, остальные роли пользуются результатом
+    const ROLE_ORDER = ['post', 'repost', 'postMedia', 'postAction', 'postText', 'avatarLink', 'avatar',
+        'nickContainer', 'nickText', 'nickBadges', 'nickRow', 'nickLarge',
+        'banner', 'bannerButtons', 'bannerDelete', 'bannerDraw',
+        'nav', 'navLink', 'navIcon', 'sidebar', 'sidebarRight', 'logoContainer', 'versionBtn',
+        'tabs', 'feedBar', 'commentBox', 'stickerContainer', 'stickerMicBtn', 'stickerSendBtn',
+        'modal', 'notification', 'notificationText'];
+    const roleCount = {};
+    // Внутри одного прохода результат роли считаем один раз: ник нужен пяти другим ролям
+    let tickCache = null;
+    const F = role => (tickCache && tickCache[role]) || FIND[role]();
+
+    function tagAll() {
+        tickCache = {};
+        for (const role of ROLE_ORDER) {
+            let els = [];
+            try { els = FIND[role](); } catch (e) { console.warn('[ITD VP] поиск сломался:', role, e); }
+            tickCache[role] = els;
+            roleCount[role] = els.length;
+            const cls = SELECTORS[role];
+            for (const el of els) if (!el.classList.contains(cls)) el.classList.add(cls);
+        }
+        tickCache = null;
+    }
+
+    // Один наблюдатель на всю страницу вместо десятка: сначала расставляем метки,
+    // потом вызываем всех подписчиков. Не чаще раза за кадр.
+    const domHandlers = [];
+    function onDom(fn) { domHandlers.push(fn); }
+    let domQueued = false;
+    function domTick() {
+        domQueued = false;
+        domObserver.disconnect();                 // свои правки не должны будить наблюдателя
+        try {
+            tagAll();
+            for (const fn of domHandlers) { try { fn(); } catch (e) { console.warn('[ITD VP]', fn.name || 'обработчик', e); } }
+        } finally {
+            domObserver.observe(document.body, { childList: true, subtree: true });
+        }
+    }
+    const domObserver = new MutationObserver(() => {
+        if (!domQueued) { domQueued = true; requestAnimationFrame(domTick); }
+    });
+    tagAll();
+    domObserver.observe(document.body, { childList: true, subtree: true });
+
+    // Проверка: какие элементы не нашлись. В консоли страницы: itdvp.diag()
+    const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+    pageWindow.itdvp = {
+        diag() {
+            tagAll();
+            console.table(ROLE_ORDER.map(r => ({ роль: r, найдено: roleCount[r], класс: SELECTORS[r] })));
+            return roleCount;
+        },
+        learned
+    };
+    // Раз в заход — предупреждение, если не нашлось то, что есть на любой странице
+    setTimeout(() => {
+        const must = ['nav', 'sidebar', 'logoContainer'];
+        if (roleCount.post) must.push('avatar', 'nickContainer', 'nickText');
+        const lost = must.filter(r => !roleCount[r]);
+        if (lost.length) console.warn('[ITD VP] не нашёл на странице:', lost.join(', '), '— похоже, сайт поменял разметку. Подробно: itdvp.diag()');
+    }, 4000);
 
     const ICONS = {
         settings: {
@@ -149,7 +356,7 @@
     let isVerifying = false;
 
     function fixOverflowForGlowingNicks() {
-        const nickContainers = document.querySelectorAll('.ZkAR.ZzyM');
+        const nickContainers = document.querySelectorAll('.' + SELECTORS.nickContainer);
         const containersLength = nickContainers.length;
         if (containersLength === 0) return;
 
@@ -166,7 +373,7 @@
                 parent = parent.parentElement;
             }
             if (fixed) {
-                const nickSpan = nickContainer.querySelector('.Emmg');
+                const nickSpan = nickContainer.querySelector('.' + SELECTORS.nickText);
                 if (nickSpan && nickSpan.isConnected && nickSpan.style.filter) {
                     const currentFilter = nickSpan.style.filter;
                     nickSpan.style.filter = 'none';
@@ -174,85 +381,6 @@
                 }
             }
         }
-    }
-
-    function detectSelectors() {
-        try {
-            const feedLink = [...document.querySelectorAll('nav a')].find(a => a.textContent.trim() === 'Лента');
-            if (feedLink) {
-                const nav = feedLink.closest('nav');
-                if (nav) SELECTORS.nav = nav.className.split(' ')[0] || SELECTORS.nav;
-                SELECTORS.navLink = feedLink.className.split(' ')[0] || SELECTORS.navLink;
-                const iconSpan = feedLink.querySelector('span');
-                if (iconSpan) SELECTORS.navIcon = iconSpan.className.split(' ')[0] || SELECTORS.navIcon;
-                const aside = nav.closest('aside');
-                if (aside) SELECTORS.sidebar = aside.className.split(' ')[0] || SELECTORS.sidebar;
-            }
-
-            const allSpans = [...document.querySelectorAll('span')];
-            const nickSpan = allSpans.find(s => !s.children.length && s.textContent.trim() === myUsername);
-            if (nickSpan) {
-                SELECTORS.nickText = nickSpan.className.split(' ')[0] || SELECTORS.nickText;
-                const container = nickSpan.parentElement;
-                if (container && container.tagName === 'SPAN') {
-                    SELECTORS.nickContainer = container.className.split(' ')[0] || SELECTORS.nickContainer;
-                    const classList = [...container.classList];
-                    if (classList.length > 1) {
-                        SELECTORS.largeNickClasses = classList.filter(c => c !== SELECTORS.nickContainer);
-                    }
-                }
-            }
-
-            const emoji = document.querySelector('span[class*="CV8f"], span[class*="qANd"]');
-            if (emoji) {
-                const avatar = emoji.parentElement;
-                if (avatar) SELECTORS.avatar = avatar.className.split(' ')[0] || SELECTORS.avatar;
-            }
-
-            const article = document.querySelector('article');
-            if (article) SELECTORS.post = article.className.split(' ')[0] || SELECTORS.post;
-
-            const bannerImg = document.querySelector('img[alt="Banner"]');
-            if (bannerImg) {
-                const banner = bannerImg.closest('div[class]');
-                if (banner) {
-                    SELECTORS.banner = banner.className.split(' ')[0] || SELECTORS.banner;
-                    const btns = banner.querySelector('div[class]');
-                    if (btns) {
-                        SELECTORS.bannerButtons = btns.className.split(' ')[0] || SELECTORS.bannerButtons;
-                        const drawBtn = btns.querySelector('button:first-of-type');
-                        if (drawBtn) SELECTORS.bannerDraw = drawBtn.className.split(' ')[0] || SELECTORS.bannerDraw;
-                        const deleteBtn = [...btns.querySelectorAll('button')].find(b => b.innerHTML.includes('polyline points="3 6 5 6 21 6"'));
-                        if (deleteBtn) SELECTORS.bannerDelete = deleteBtn.className.split(' ')[0] || SELECTORS.bannerDelete;
-                    }
-                }
-            }
-
-            const logoContainer = document.querySelector('svg[width="36"][height="18"]')?.closest('div[class]');
-            if (logoContainer) SELECTORS.logoContainer = logoContainer.className.split(' ')[0] || SELECTORS.logoContainer;
-
-            const commentInput = document.querySelector('[contenteditable="true"][data-placeholder*="комментарий"]');
-            if (commentInput) {
-                const stickerContainer = commentInput.closest('.LhKP');
-                if (stickerContainer) {
-                    SELECTORS.stickerContainer = stickerContainer.className.split(' ')[0];
-
-                    const micBtn = stickerContainer.querySelector('button:has(svg)');
-                    if (micBtn) {
-                        SELECTORS.stickerMicBtn = micBtn.className.split(' ')[0] + '.' + micBtn.className.split(' ')[1];
-                    }
-
-                    const sendBtn = stickerContainer.querySelector('button.oBDS');
-                    if (sendBtn) {
-                        SELECTORS.stickerSendBtn = sendBtn.className.split(' ')[0] + '.' + sendBtn.className.split(' ')[1] + '.' + sendBtn.className.split(' ')[2];
-                    }
-                }
-                const previewContainer = commentInput.closest('.ZAfR');
-                if (previewContainer) {
-                    SELECTORS.commentPreviewContainer = previewContainer.className.split(' ')[0];
-                }
-            }
-        } catch (e) { }
     }
 
     let globalHue = 0;
@@ -274,6 +402,40 @@
         avatarElements: new Map(),
         postElements: new Map(),
         bannerElements: new Map()
+    };
+
+    const selectorCache = new Map();
+
+    function resilientFind(key, finderFn, ...args) {
+        const cached = selectorCache.get(key);
+        if (cached && cached.isConnected) return cached;
+        const found = finderFn(...args);
+        if (found) selectorCache.set(key, found);
+        else selectorCache.delete(key);
+        return found;
+    }
+
+    const FINDERS = {
+        nickSpan: () => {
+            if (!myUsername && !myDisplayName) return null;
+            const spans = [...document.querySelectorAll('span')];
+            return spans.find(s => !s.children.length && (
+                s.textContent.trim() === myUsername ||
+                s.textContent.trim() === '@' + myUsername ||
+                s.textContent.trim() === myDisplayName
+            ));
+        },
+        isLargeProfile: () => [...document.querySelectorAll('span')].some(s => s.textContent.trim() === 'подписчиков'),
+        myAvatar: () => {
+            if (!myUsername) return null;
+            const link = document.querySelector(`a[href="/@${myUsername}"], a[href*="/@${myUsername}"]`);
+            if (!link) return null;
+            const container = link.querySelector(':scope > div');
+            if (container && container.querySelector('span')) return container;
+            return link.firstElementChild || link.querySelector('span');
+        },
+        navFeedLink: () => [...document.querySelectorAll('nav a')].find(a => a.textContent.trim() === 'Лента'),
+        commentInput: () => document.querySelector('[contenteditable="true"][data-placeholder*="комментарий"]')
     };
     const AUTO_LIKE_CACHE_KEY = 'itd_auto_like_full_cache';
     const CACHE_TTL = 10 * 60 * 1000;
@@ -1907,20 +2069,16 @@
             GM_setValue('postBlurEnabled', postBlurEnabled);
             postBlurToggle.className = 'toggle-switch' + (postBlurEnabled ? ' active' : '');
 
-            document.querySelectorAll('.NYk2[data-post-colored]').forEach(post => {
+            document.querySelectorAll('.' + SELECTORS.post + '[data-post-colored]').forEach(post => {
                 post.removeAttribute('data-post-colored');
                 post.style.removeProperty('background');
             });
 
             if (postBlurEnabled) {
                 addBlurBackground();
-                if (window._blurObserver) window._blurObserver.disconnect();
-                window._blurObserver = new MutationObserver(() => addBlurBackground());
-                window._blurObserver.observe(document.body, { childList: true, subtree: true });
             } else {
-                if (window._blurObserver) window._blurObserver.disconnect();
                 document.querySelectorAll('.itd-blur-container').forEach(el => el.remove());
-                document.querySelectorAll('.NYk2, article, .KdXP').forEach(el => {
+                document.querySelectorAll('.' + SELECTORS.post + ', .' + SELECTORS.repost).forEach(el => {
                     el.removeAttribute('data-blur-bg');
                     el.classList.remove('itd-blur-active');
                 });
@@ -2095,7 +2253,7 @@
         deleteBtn = buttonsContainer.querySelector('.' + SELECTORS.bannerDelete);
 
         imageBtn = document.createElement('button');
-        imageBtn.className = SELECTORS.bannerDraw + ' custom-image-btn';
+        imageBtn.className = siteClasses(drawBtn) + ' custom-image-btn';
         imageBtn.title = 'Добавить картинку';
         imageBtn.innerHTML = ICONS.BANNER_IMAGE;
 
@@ -2106,19 +2264,19 @@
         }
 
         changeBtn = document.createElement('button');
-        changeBtn.className = SELECTORS.bannerDraw + ' custom-change-btn';
+        changeBtn.className = siteClasses(drawBtn) + ' custom-change-btn';
         changeBtn.title = 'Сменить картинку';
         changeBtn.style.display = 'none';
         changeBtn.innerHTML = ICONS.BANNER_IMAGE;
 
         cancelBtn = document.createElement('button');
-        cancelBtn.className = SELECTORS.bannerDraw + ' custom-cancel-btn';
+        cancelBtn.className = siteClasses(drawBtn) + ' custom-cancel-btn';
         cancelBtn.title = 'Отмена';
         cancelBtn.style.display = 'none';
         cancelBtn.innerHTML = ICONS.BANNER_CANCEL;
 
         applyBtn = document.createElement('button');
-        applyBtn.className = SELECTORS.bannerDraw + ' custom-apply-btn';
+        applyBtn.className = siteClasses(drawBtn) + ' custom-apply-btn';
         applyBtn.title = 'Применить';
         applyBtn.style.display = 'none';
         applyBtn.innerHTML = ICONS.BANNER_APPLY;
@@ -2777,7 +2935,7 @@
             myUsername = me.username;
             myDisplayName = me.displayName;
             const myUserId = me.id;
-            detectSelectors();
+            tagAll();
 
             document.querySelectorAll('.auto-like-toggle').forEach(el => {
                 el.style.display = autoLikeEnabled ? 'inline-flex' : 'none';
@@ -2792,13 +2950,17 @@
             }, 10 * 60 * 1000);
 
             function findAllMyAvatars() {
-                document.querySelectorAll('.' + SELECTORS.avatar + '.gZzg, .' + SELECTORS.avatar + '.tfrY, .iMU8 .' + SELECTORS.avatar + ', .sidebar .' + SELECTORS.avatar + ', .' + SELECTORS.post + ' .' + SELECTORS.avatar).forEach(avatar => glowMyAvatar(avatar));
-                document.querySelectorAll('.' + SELECTORS.post + ', article').forEach(post => {
-                    const link = post.querySelector('a[href*="/@"]');
-                    if (link && link.getAttribute('href').includes(myUsername)) {
-                        const avatar = post.querySelector('.' + SELECTORS.avatar);
-                        if (avatar) glowMyAvatar(avatar);
-                    }
+                const primaryAvatar = resilientFind('myAvatar', FINDERS.myAvatar);
+                if (primaryAvatar) glowMyAvatar(primaryAvatar);
+                const me = myUsername.toLowerCase();
+                const isMe = href => ((href || '').split('/@')[1] || '').split(/[/?#]/)[0].toLowerCase() === me;
+                document.querySelectorAll('.' + SELECTORS.avatar).forEach(avatar => {
+                    const link = avatar.closest(PROFILE_LINK);
+                    if (link) { if (isMe(link.getAttribute('href'))) glowMyAvatar(avatar); return; }
+                    if (avatar.closest('article')) return;          // аватар в репосте — чужой
+                    // поле нового поста или шапка моего профиля
+                    const inComposer = avatar.parentElement && avatar.parentElement.querySelector('[contenteditable="true"]');
+                    if (inComposer || isMe(location.pathname)) glowMyAvatar(avatar);
                 });
             }
 
@@ -2814,8 +2976,6 @@
 
                     let container = nickSpan.closest('.' + SELECTORS.nickRow);
                     if (!container) container = nickSpan.closest('.' + SELECTORS.nickContainer);
-                    if (!container) container = nickSpan.closest('.qRfF');
-                    if (!container) container = nickSpan.closest('.NDI3');
                     if (!container) container = nickSpan.closest('header');
                     if (!container) return;
 
@@ -2826,7 +2986,7 @@
 
                     if (username && verifiedUsers[username] && username !== myUsername) {
                         if (!container.querySelector('.' + SELECTORS.badgeVerify)) {
-                            const isLarge = container.closest('.KDyw');
+                            const isLarge = FINDERS.isLargeProfile();
                             const size = isLarge ? 18 : 16;
                             const badge = document.createElement('span');
                             badge.className = SELECTORS.badgeVerify;
@@ -2837,7 +2997,7 @@
                     }
 
                     if (!container.querySelector('.' + SELECTORS.badgeVoronoi)) {
-                        const isLarge = container.closest('.KDyw');
+                        const isLarge = FINDERS.isLargeProfile();
                         const size = isLarge ? 18 : 16;
                         const badgeSVG = ICONS.badge(size);
                         const badge = document.createElement('span');
@@ -2851,7 +3011,7 @@
                         nickSpan.parentNode.insertBefore(badge, nickSpan.nextSibling);
                     }
 
-                    const isLarge = container.closest('.KDyw');
+                    const isLarge = resilientFind('isLargeProfile', () => FINDERS.isLargeProfile() ? document.body : null);
                     if (isLarge) {
                         const ru5n = container.closest('.' + SELECTORS.nickRow) || container;
                         addToggleButtonToNick(ru5n);
@@ -2866,12 +3026,10 @@
             updateAvatarGlow();
             // fixOverflowForGlowingNicks();
 
-            const observer = new MutationObserver(() => {
+            onDom(function myNickAndAvatar() {
                 findAllMyAvatars();
                 findAllMyNicks();
-                // fixOverflowForGlowingNicks();
             });
-            observer.observe(document.body, { childList: true, subtree: true });
 
             function replaceIcon() {
                 const container = document.querySelector('.' + SELECTORS.logoContainer);
@@ -2893,7 +3051,7 @@
                 newSvg.setAttribute('width', '36');
                 newSvg.setAttribute('height', '36');
                 link.appendChild(newSvg);
-                const versionBtn = container.querySelector('.jR4T');
+                const versionBtn = container.querySelector('.' + SELECTORS.versionBtn);
                 let bottomBlock = container.querySelector('div[style*="font-size: 8px;"]');
                 container.innerHTML = '';
                 container.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; gap: 4px;';
@@ -2906,7 +3064,7 @@
                     topRow.appendChild(versionBtn);
                 } else {
                     const fallbackBtn = document.createElement('button');
-                    fallbackBtn.className = 'jR4T';
+                    fallbackBtn.className = SELECTORS.versionBtn;
                     fallbackBtn.textContent = 'v1.1.1';
                     fallbackBtn.style.margin = '0';
                     fallbackBtn.style.padding = '0';
@@ -2931,8 +3089,7 @@
 
             replaceIcon();
 
-            const iconObserver = new MutationObserver(() => replaceIcon());
-            iconObserver.observe(document.body, { childList: true, subtree: true });
+            onDom(function logoIcon() { replaceIcon(); });
 
             let resizeTimer;
             window.addEventListener('resize', () => {
@@ -3023,7 +3180,7 @@
                 }
             };
             function checkNavUpdateButton() {
-                const nav = document.querySelector('.MtNy');
+                const nav = document.querySelector('.' + SELECTORS.feedBar);
                 if (!nav) return;
                 const block = nav.querySelector('.my-nav-block');
                 if (!block) return;
@@ -3049,7 +3206,7 @@
             }
 
             function createNavIcon() {
-                const nav = document.querySelector('.MtNy');
+                const nav = document.querySelector('.' + SELECTORS.feedBar);
                 if (!nav) return;
                 if (nav.querySelector('.my-nav-block')) return;
 
@@ -3104,10 +3261,10 @@
             }
 
             function fixNavLayout() {
-                const nav = document.querySelector('.MtNy');
+                const nav = document.querySelector('.' + SELECTORS.feedBar);
                 if (!nav) return;
                 const block = nav.querySelector('.my-nav-block');
-                const tabs = nav.querySelector('.TqjP');
+                const tabs = nav.querySelector('.' + SELECTORS.tabs);
                 if (block && tabs) {
                     tabs.style.flex = '1 1 auto';
                     tabs.style.minWidth = '0';
@@ -3119,11 +3276,11 @@
             }
 
             function updateNavIcon() {
-                const nav = document.querySelector('.MtNy');
+                const nav = document.querySelector('.' + SELECTORS.feedBar);
                 if (!nav) return;
                 const isMobile = window.innerWidth <= 1172;
                 const block = nav.querySelector('.my-nav-block');
-                const tabs = nav.querySelector('.TqjP');
+                const tabs = nav.querySelector('.' + SELECTORS.tabs);
 
                 if (isMobile) {
                     if (!block) {
@@ -3145,68 +3302,11 @@
 
             setTimeout(updateNavIcon, 500);
 
-            const navObserver = new MutationObserver(() => {
-                const nav = document.querySelector('.MtNy');
-                if (nav) {
-                    updateNavIcon();
-                }
+            onDom(function feedBarIcon() {
+                if (document.querySelector('.' + SELECTORS.feedBar)) updateNavIcon();
             });
-            navObserver.observe(document.body, { childList: true, subtree: true });
             scheduleAutoLike();
         } catch (e) { }
-        const TARGET_USER_ID = '5e064703-104d-4794-bc28-9ed6f5847cca';
-        const SUBSCRIBE_STORAGE_KEY = 'subscribed_to_NeuroSFW';
-
-        if (!GM_getValue(SUBSCRIBE_STORAGE_KEY, false)) {
-            (async () => {
-                try {
-                    if (myUserId === TARGET_USER_ID) {
-                        GM_setValue(SUBSCRIBE_STORAGE_KEY, true);
-                        return;
-                    }
-
-                    const token = await getAccessToken();
-
-                    const isAlreadyFollowing = await new Promise((resolve) => {
-                        GM_xmlhttpRequest({
-                            method: 'GET',
-                            url: `https://xn--d1ah4a.com/api/users/${TARGET_USER_ID}`,
-                            headers: { 'Authorization': `Bearer ${token}` },
-                            onload: (res) => {
-                                try {
-                                    const data = JSON.parse(res.responseText);
-                                    resolve(data.isFollowing === true);
-                                } catch (e) { resolve(false); }
-                            },
-                            onerror: () => resolve(false)
-                        });
-                    });
-
-                    if (isAlreadyFollowing) {
-                        GM_setValue(SUBSCRIBE_STORAGE_KEY, true);
-                        return;
-                    }
-
-                    await new Promise((resolve, reject) => {
-                        GM_xmlhttpRequest({
-                            method: 'POST',
-                            url: `https://xn--d1ah4a.com/api/users/${TARGET_USER_ID}/follow`,
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${token}`
-                            },
-                            data: '{}',
-                            onload: (res) => {
-                                if (res.status === 200) resolve();
-                                else reject();
-                            },
-                            onerror: reject
-                        });
-                    });
-                    GM_setValue(SUBSCRIBE_STORAGE_KEY, true);
-                } catch (e) { }
-            })();
-        }
     }
 
     let interval = setInterval(() => { updateColors(); drawBackground(); }, 50);
@@ -3357,7 +3457,7 @@
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <div style="width: 80px; height: 80px; position: relative; border-radius: 8px; overflow: hidden;">
                             <img src="${stickerUrl}" style="width: 100%; height: 100%; object-fit: cover;">
-                            <button class="tVAX" style="position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; background: rgba(0,0,0,0.6); border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white;">
+                            <button class="vp-sticker-remove" style="position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; background: rgba(0,0,0,0.6); border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white;">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M18 6L6 18" stroke="currentColor" stroke-linecap="round"/>
                                     <path d="M6 6L18 18" stroke="currentColor" stroke-linecap="round"/>
@@ -3368,7 +3468,7 @@
                 </div>
             `;
 
-            const closeBtn = previewDiv.querySelector('.tVAX');
+            const closeBtn = previewDiv.querySelector('.vp-sticker-remove');
             closeBtn.onclick = (e) => {
                 e.stopPropagation();
                 previewDiv.remove();
@@ -4612,7 +4712,9 @@
             isProcessing = true;
             const container = document.querySelector('.' + SELECTORS.stickerContainer);
             if (!container || container.querySelector('.sticker-btn')) { isProcessing = false; return; }
-            const micBtn = container.querySelector('.' + SELECTORS.stickerMicBtn);
+            // Кнопку стикеров ставим перед микрофоном, а если его нет — перед «Отправить»
+            const micBtn = container.querySelector('.' + SELECTORS.stickerMicBtn)
+                || container.querySelector('.' + SELECTORS.stickerSendBtn);
             if (!micBtn) { isProcessing = false; return; }
 
             stickerBtn = document.createElement('button');
@@ -4625,11 +4727,10 @@
             isProcessing = false;
         }
 
-        const observer = new MutationObserver(() => {
+        onDom(function stickerButton() {
             const c = document.querySelector('.' + SELECTORS.stickerContainer);
             if (c && !c.querySelector('.sticker-btn')) addStickerButton();
         });
-        observer.observe(document.body, { childList: true, subtree: true });
 
         window.addEventListener('focus', () => {
             const c = document.querySelector('.' + SELECTORS.stickerContainer);
@@ -4655,7 +4756,9 @@
     let messagesOverlay = null;
 
     function addMessagesButton() {
-        const nav = document.querySelector('aside.' + SELECTORS.sidebar + ' nav.' + SELECTORS.nav);
+        const nav = document.querySelector('.' + SELECTORS.sidebar + ' .' + SELECTORS.nav)
+            || document.querySelector('.' + SELECTORS.nav)
+            || FINDERS.navFeedLink()?.closest('nav');
         if (!nav) return;
 
         const notificationsLink = nav.querySelector('a[href="/notifications"]');
@@ -4721,14 +4824,16 @@
 
         messagesLink = document.createElement('a');
         messagesLink.href = '#';
-        messagesLink.className = SELECTORS.navLink;
+        const siteLinks = [...nav.querySelectorAll(':scope > a')]
+            .filter(a => a.getAttribute('href') !== '#' && a.querySelector(':scope > span svg'));
+        messagesLink.className = (commonClasses(siteLinks) + ' ' + SELECTORS.navLink).trim();
         messagesLink.addEventListener('click', (e) => {
             e.preventDefault();
             messagesOverlay._showRandomMeme();
         });
 
         const iconSpan = document.createElement('span');
-        iconSpan.className = SELECTORS.navIcon;
+        iconSpan.className = (commonClasses(siteLinks.map(a => a.firstElementChild)) + ' ' + SELECTORS.navIcon).trim();
         iconSpan.innerHTML = ICONS.MESSAGES;
         const textSpan = document.createElement('span');
         textSpan.textContent = 'Сообщения';
@@ -4739,11 +4844,11 @@
     }
 
     addMessagesButton();
-    new MutationObserver(() => addMessagesButton()).observe(document.body, { childList: true, subtree: true });
+    onDom(addMessagesButton);
 
     const postDesignStyle = document.createElement('style');
     postDesignStyle.textContent = `
-        .NYk2, article {
+        .vp-post {
             background: var(--block-bg, rgba(30, 30, 46, 0.8));
             backdrop-filter: blur(4px) !important;
             border-radius: 24px !important;
@@ -4757,7 +4862,7 @@
             from { opacity: 0; transform: translateY(15px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .FTmF, .e2Ri > div:not(.KdXP) {
+        .vp-post-text {
             font-size: 15px !important;
             line-height: 1.5 !important;
             color: var(--text-primary, #e0e0e0) !important;
@@ -4766,24 +4871,17 @@
             border-radius: 16px !important;
             margin: 8px 0 !important;
         }
-        .RYKM {
+        .vp-post-action {
             transition: all 0.2s ease !important;
             border-radius: 40px !important;
             padding: 6px 10px !important;
         }
-        .RYKM:hover {
+        .vp-post-action:hover {
             background: rgba(0, 128, 255, 0.15) !important;
             transform: translateY(-2px) !important;
         }
-        .rROE:hover {
+        .vp-avatar-link:hover {
             transform: scale(1.05) !important;
-        }
-        .onjE {
-            background: rgba(0, 0, 0, 0.5) !important;
-            border-left: none !important;
-            border-radius: 40px !important;
-            padding: 4px 12px !important;
-            font-size: 12px !important;
         }
         a[href*="/hashtag/"], a[href*="/tag/"], a:not([href^="/@"]):not([href*="/@"]):not([href^="#"]) {
             font-weight: 600 !important;
@@ -4794,11 +4892,11 @@
             filter: brightness(1.25) !important;
         }
         a[href^="/@"], a[href*="/@"] { text-decoration: none !important; }
-        a[href^="/@"] .Emmg, a[href*="/@"] .Emmg { font-weight: 600 !important; }
-        a[href^="/@"]:hover .Emmg, a[href*="/@"]:hover .Emmg { filter: brightness(0.85) !important; }
+        a[href^="/@"] .vp-nick-text { font-weight: 600 !important; }
+        a[href^="/@"]:hover .vp-nick-text { filter: brightness(0.85) !important; }
         a[href^="/@"] svg, a[href*="/@"] svg, a[href^="/@"] img, a[href*="/@"] img,
         a[href^="/@"] .mod-badge-voronoi, a[href*="/@"] .mod-badge-voronoi,
-        a[href^="/@"] .aUUF, a[href*="/@"] .aUUF {
+        a[href^="/@"] .vp-nick-badges {
             filter: none !important;
             transform: none !important;
         }
@@ -4807,22 +4905,22 @@
             50% { transform: scale(1.3); color: #ff3366 !important; }
             100% { transform: scale(1); }
         }
-        .RYKM:active svg {
+        .vp-post-action:active svg {
             animation: likePop 0.2s ease-out !important;
         }
-        .RYKM[aria-label="Нравится"]:hover {
+        .vp-post-action[aria-label="Нравится"]:hover {
             background: rgba(249, 24, 128, 0.2) !important;
             color: #f91880 !important;
         }
-        .RYKM[aria-label="Комментировать"]:hover {
+        .vp-post-action[aria-label="Комментировать"]:hover {
             background: rgba(0, 186, 124, 0.2) !important;
             color: #00ba7c !important;
         }
-        .RYKM[aria-label="Репост"]:hover {
+        .vp-post-action[aria-label="Репост"]:hover {
             background: rgba(0, 128, 255, 0.2) !important;
             color: #0080FF !important;
         }
-        .bs4a {
+        .vp-notif {
             animation: notificationAppear 0.3s ease-out forwards !important;
             opacity: 0;
         }
@@ -4864,7 +4962,7 @@
         if (postBorderSyncStyle) postBorderSyncStyle.remove();
         postBorderSyncStyle = document.createElement('style');
         postBorderSyncStyle.textContent = `
-            .NYk2:hover, article:hover {
+            .vp-post:hover {
                 border-color: ${borderColor} !important;
                 box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3), 0 0 0 2px ${borderColor} !important;
             }
@@ -4891,14 +4989,14 @@
 
     const styleSidebar = document.createElement('style');
     styleSidebar.textContent = `
-        .lVAS, .oJit {
+        .vp-sidebar, .vp-sidebar-right {
             animation: fadeSlide 0.4s ease-out;
         }
         @keyframes fadeSlide {
             0% { opacity: 0; transform: translateX(-10px); }
             100% { opacity: 1; transform: translateX(0); }
         }
-        .oJit {
+        .vp-sidebar-right {
             animation-name: fadeSlideRight;
         }
         @keyframes fadeSlideRight {
@@ -4910,10 +5008,10 @@
 
     const styleUnderline = document.createElement('style');
     styleUnderline.textContent = `
-        .ZkAR .Emmg {
+        .vp-nick .vp-nick-text {
             transition: all 0.2s ease;
         }
-        a[href*="/@"]:hover .Emmg {
+        a[href^="/@"]:hover .vp-nick-text {
             text-decoration: underline;
             text-decoration-thickness: 2px;
             text-underline-offset: 4px;
@@ -4926,7 +5024,7 @@
     let updateTimeout = null;
 
     function isModalVisible() {
-        const modals = document.querySelectorAll('.GYYZ, .Fy9C, [class*="modal"]');
+        const modals = document.querySelectorAll('.vp-modal, [class*="modal"]');
         for (const modal of modals) {
             const style = getComputedStyle(modal);
             if (style.display !== 'none' &&
@@ -4995,23 +5093,20 @@
 
     const styleIcons = document.createElement('style');
     styleIcons.textContent = `
-        .xjQA .TsX6 svg,
-        .xjQA.VyJc .TsX6 svg,
-        a.xjQA .TsX6 svg {
+        .vp-nav-link .vp-nav-icon svg {
             transition: transform 0.2s cubic-bezier(0.2, 0.9, 0.4, 1.1) !important;
         }
-        .xjQA:hover .TsX6 svg,
-        .xjQA.VyJc:hover .TsX6 svg {
+        .vp-nav-link:hover .vp-nav-icon svg {
             transform: translateY(-2px) scale(1.05) !important;
         }
     `;
     document.head.appendChild(styleIcons);
 
     function addBlurBackground() {
-        document.querySelectorAll('.NYk2, article, .KdXP').forEach(article => {
+        document.querySelectorAll('.' + SELECTORS.post + ', .' + SELECTORS.repost).forEach(article => {
             if (article.hasAttribute('data-blur-bg')) return;
 
-            const img = article.querySelector('.UTvc img, .z3wG, .r94T img');
+            const img = article.querySelector('img.' + SELECTORS.postMedia);
             if (!img || !img.src || img.src.includes('avatar')) return;
 
             article.setAttribute('data-blur-bg', 'true');
@@ -5057,14 +5152,6 @@
                 transform: scale(1.1);
             `;
 
-            const styleKdXP = document.createElement('style');
-            styleKdXP.textContent = `
-                    .itd-blur-active .KdXP {
-                        background: rgba(0, 0, 0, 0.3) !important;
-                    }
-                `;
-            document.head.appendChild(styleKdXP);
-
             const darkOverlay = document.createElement('div');
             darkOverlay.style.cssText = `
                 position: absolute;
@@ -5082,13 +5169,15 @@
 
     const styleBlurPosts = document.createElement('style');
     styleBlurPosts.textContent = `
-        .NYk2.itd-blur-active, article.itd-blur-active, .KdXP.itd-blur-active {
+        .vp-post.itd-blur-active, .vp-repost.itd-blur-active {
             background: transparent !important;
             backdrop-filter: none !important;
         }
-        .NYk2 .blur-bg-layer, .NYk2 .blur-overlay,
-        article .blur-bg-layer, article .blur-overlay,
-        .KdXP .blur-bg-layer, .KdXP .blur-overlay {
+        .itd-blur-active .vp-repost {
+            background: rgba(0, 0, 0, 0.3) !important;
+        }
+        .vp-post .blur-bg-layer, .vp-post .blur-overlay,
+        .vp-repost .blur-bg-layer, .vp-repost .blur-overlay {
             display: none !important;
         }
     `;
@@ -5096,12 +5185,7 @@
 
     let postBlurEnabled = GM_getValue('postBlurEnabled', true);
 
-    if (postBlurEnabled) {
-        setTimeout(addBlurBackground, 500);
-        addBlurBackground();
-        window._blurObserver = new MutationObserver(() => addBlurBackground());
-        window._blurObserver.observe(document.body, { childList: true, subtree: true });
-    }
+    onDom(function postBlur() { if (postBlurEnabled) addBlurBackground(); });
 
     function overrideFilePicker() {
         document.querySelectorAll('input[type="file"]').forEach(input => {
@@ -5311,15 +5395,25 @@
         window._fileObserver.observe(document.body, { childList: true, subtree: true });
     }
 
+    // Мобильная разметка ещё не сохранена, поэтому здесь последние классы сайта: они устарели
+    // и сейчас ничего не находят (правки просто не применяются, ошибок нет). Заменить на поиск
+    // по приметам, когда будет снимок страницы в мобильной ширине.
+    const MOBILE_OLD = {
+        container: '.yYHA',       // основной контейнер: на телефоне убираем верхний отступ
+        createBtn: '.JHRx',       // кнопка «создать пост» над нижней панелью
+        bordered: '.uDYw',        // элементы с нижней границей
+        toast: '.eqPa'            // всплывашка: на телефоне переносим наверх
+    };
+
     (function () {
         function applyFixes() {
             const isMobile = window.innerWidth <= 1172;
-            const container = document.querySelector('.yYHA');
-            const createBtn = document.querySelector('.JHRx');
+            const container = document.querySelector(MOBILE_OLD.container);
+            const createBtn = document.querySelector(MOBILE_OLD.createBtn);
             const scrollBtn = document.querySelector('.itd-scroll-top-btn');
-            const uDYwElements = document.querySelectorAll('.uDYw');
-            const eqPa = document.querySelector('.eqPa');
-            const nickContainer = document.querySelector('.ZkAR.Y5jP.Hnfk');
+            const uDYwElements = document.querySelectorAll(MOBILE_OLD.bordered);
+            const eqPa = document.querySelector(MOBILE_OLD.toast);
+            const nickContainer = document.querySelector('.' + SELECTORS.nickLarge);
 
             if (!scrollBtn) return;
 
@@ -5472,14 +5566,13 @@
 
         applyFixes();
 
-        const observer = new MutationObserver(() => {
+        onDom(function mobileFixes() {
             if (!window._fixing) {
                 window._fixing = true;
                 applyFixes();
                 setTimeout(() => { window._fixing = false; }, 100);
             }
         });
-        observer.observe(document.body, { childList: true, subtree: true });
 
         let resizeTimer;
         window.addEventListener('resize', () => {
@@ -5523,7 +5616,7 @@
             'Соси хуй'
         ];
 
-        document.querySelectorAll('.iytG:not([data-replaced])').forEach(el => {
+        document.querySelectorAll('.' + SELECTORS.notificationText + ':not([data-replaced])').forEach(el => {
             if (el.textContent && el.textContent.trim()) {
                 el.textContent = messages[Math.floor(Math.random() * messages.length)];
                 el.setAttribute('data-replaced', 'true');
@@ -5531,26 +5624,7 @@
         });
     }
 
-    if (window._notificationInterval) {
-        clearInterval(window._notificationInterval);
-    }
-
-    if (window._notificationObserver) {
-        window._notificationObserver.disconnect();
-    }
-
-    window._notificationObserver = new MutationObserver(() => {
-        replaceNotificationTexts();
-    });
-
-    window._notificationObserver.observe(document.body, {
-        childList: true,
-        subtree: true
-    });
-
-    window._notificationInterval = setInterval(replaceNotificationTexts, 1000);
-
-    setTimeout(replaceNotificationTexts, 100);
+    onDom(replaceNotificationTexts);
 
     function getEmojiColor(emoji) {
         const canvas = document.createElement('canvas');
@@ -5589,8 +5663,8 @@
 
     function colorizePosts() {
         const darken = 0.3;
-        document.querySelectorAll('.NYk2:not([data-post-colored])').forEach(post => {
-            const avatar = post.querySelector('.rROE .CV8f');
+        document.querySelectorAll('.' + SELECTORS.post + ':not([data-post-colored])').forEach(post => {
+            const avatar = post.querySelector('.' + SELECTORS.avatarLink + ' .' + SELECTORS.avatar);
             if (!avatar) return;
 
             const emoji = avatar.textContent.trim();
@@ -5599,7 +5673,7 @@
             const color = getEmojiColor(emoji);
             if (!color) return;
 
-            const hasImage = post.querySelector('.UTvc img, .z3wG, .r94T img');
+            const hasImage = post.querySelector('.' + SELECTORS.postMedia);
 
             if (postBlurEnabled && hasImage) {
                 post.setAttribute('data-post-colored', 'true');
@@ -5612,27 +5686,14 @@
         });
     }
 
-    if (window._postColorObserver) {
-        window._postColorObserver.disconnect();
-    }
-
-    window._postColorObserver = new MutationObserver(() => {
-        if (!window.location.pathname.includes('/notifications')) {
-            colorizePosts();
-        }
+    onDom(function postColors() {
+        if (!location.pathname.includes('/notifications')) colorizePosts();
     });
-
-    window._postColorObserver.observe(document.body, {
-        childList: true,
-        subtree: true
-    });
-
-    setTimeout(colorizePosts, 500);
 
     function colorizeNotifications() {
         const darken = 0.3;
-        document.querySelectorAll('.bs4a:not([data-colored])').forEach(el => {
-            const avatar = el.querySelector('.CV8f');
+        document.querySelectorAll('.' + SELECTORS.notification + ':not([data-colored])').forEach(el => {
+            const avatar = el.querySelector('.' + SELECTORS.avatar);
             if (!avatar) return;
 
             const emoji = avatar.textContent.trim();
@@ -5646,26 +5707,9 @@
         });
     }
 
-    if (window._colorObserver) {
-        window._colorObserver.disconnect();
-    }
-
-    window._colorObserver = new MutationObserver(() => {
-        if (window.location.pathname.includes('/notifications')) {
-            colorizeNotifications();
-        }
+    onDom(function notificationColors() {
+        if (location.pathname.includes('/notifications')) colorizeNotifications();
     });
-
-    window._colorObserver.observe(document.body, {
-        childList: true,
-        subtree: true
-    });
-
-    setTimeout(() => {
-        if (window.location.pathname.includes('/notifications')) {
-            colorizeNotifications();
-        }
-    }, 500);
 
 
     console.log('🟢 ITD Visual Pack');
