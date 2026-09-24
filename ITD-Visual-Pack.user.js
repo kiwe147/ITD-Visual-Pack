@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.2
+// @version      3.0.8
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -21,6 +21,63 @@
 
 (function () {
     'use strict';
+
+    // Ответы сайта про профили (/api/users/<ник>) подсматриваем и запоминаем: число постов,
+    // подписчиков и прочее берём из них, а не шлём свой такой же запрос второй раз.
+    const siteUsers = new Map(), siteUsersWait = new Map();
+    const USER_URL = /\/api\/users\/([\w.]+)\/?(?:[?#]|$)/;
+    function keepSiteUser(url, body) {
+        const m = String(url).match(USER_URL);
+        if (!m || m[1] === 'me') return;
+        try {
+            const j = typeof body === 'string' ? JSON.parse(body) : body;
+            const d = j && (j.data || j.user || j);
+            if (!d || !d.username) return;
+            const key = d.username.toLowerCase();
+            siteUsers.set(key, d);
+            (siteUsersWait.get(key) || []).forEach(done => done(d));
+            siteUsersWait.delete(key);
+        } catch (e) { /* не JSON — не наш ответ */ }
+    }
+    // ждать ответ сайта про ник не дольше ms; не пришёл — null
+    function siteUser(user, ms) {
+        const key = user.toLowerCase();
+        if (siteUsers.has(key)) return Promise.resolve(siteUsers.get(key));
+        if (!ms) return Promise.resolve(null);
+        return new Promise(res => {
+            const list = siteUsersWait.get(key) || [];
+            list.push(res);
+            siteUsersWait.set(key, list);
+            setTimeout(() => res(siteUsers.get(key) || null), ms);
+        });
+    }
+    (function watchSiteRequests() {
+        const w = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+        try {
+            const origFetch = w.fetch;
+            w.fetch = function (input, init) {
+                const res = origFetch.apply(this, arguments);
+                try {
+                    const url = typeof input === 'string' ? input : input && input.url;
+                    const method = (init && init.method) || (input && input.method) || 'GET';
+                    if (url && /^get$/i.test(method) && USER_URL.test(url)) {
+                        res.then(r => r.ok && r.clone().text().then(t => keepSiteUser(url, t))).catch(() => { });
+                    }
+                } catch (e) { /* подсмотр не должен ломать запрос сайта */ }
+                return res;
+            };
+            const X = w.XMLHttpRequest.prototype, origOpen = X.open;
+            X.open = function (method, url) {
+                if (/^get$/i.test(method) && USER_URL.test(String(url))) {
+                    this.addEventListener('load', () => {
+                        if (this.status !== 200) return;
+                        try { keepSiteUser(url, this.responseType === 'json' ? this.response : this.responseText); } catch (e) { }
+                    });
+                }
+                return origOpen.apply(this, arguments);
+            };
+        } catch (e) { console.warn('[ITD VP] не вышло подсмотреть запросы сайта', e); }
+    })();
 
     // ==== заставка:начало
     // Заставка при входе: белые буквы ИТД прилетают целиком, как части костюма, и с ударом
@@ -671,6 +728,8 @@
             'Стекло': svgIcon('<rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/><path d="M11.5 15.5l3-3M11.5 18.5l6-6"/>'),
             // динамик с волнами — звуки интерфейса
             'Звуки интерфейса': svgIcon('<path d="M4 9.5h3l4-3.5v12l-4-3.5H4z"/><path d="M15 9a4 4 0 0 1 0 6M17.5 6.5a7.5 7.5 0 0 1 0 11"/>'),
+            // колонка из трёх блоков справа — боковая панель
+            'Боковая панель': svgIcon('<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M15 3v18"/><path d="M17.5 7.5h1M17.5 11h1M17.5 14.5h1"/>'),
             // карточки лесенкой, верхняя тает — сцена ленты
             'Сцена ленты': svgIcon('<rect x="5" y="3" width="14" height="5" rx="1.5" stroke-dasharray="2 2"/><rect x="4" y="10" width="16" height="5" rx="1.5"/><rect x="3" y="17" width="18" height="5" rx="1.5"/>'),
             // экран с лучами вокруг — свечение видео
@@ -784,6 +843,7 @@
     let globalHue = 0;
     let colorDirection = 1;
     let myUsername = null;
+    let meData = null;                                    // ответ /api/users/me (счётчики — для статистики)
     let myDisplayName = null;
     let postBorderEnabled = GM_getValue('postBorderEnabled', true);
     let postBlurEnabled = GM_getValue('postBlurEnabled', true);
@@ -1911,7 +1971,8 @@
         { label: 'Стекло', get: () => glassEnabled, set: v => { glassEnabled = v; applyGlass(); }, key: 'glassEnabled' },
         { label: 'Звуки интерфейса', get: () => uiSoundEnabled, set: v => { uiSoundEnabled = v; if (v) uiSound('toggle'); }, key: 'uiSoundEnabled' },
         { label: 'Сцена ленты', get: () => sceneEnabled, set: v => { sceneEnabled = v; document.documentElement.classList.toggle('vp-scene', v); sceneKick(); }, key: 'sceneEnabled' },
-        { label: 'Свечение видео', get: () => ambientEnabled, set: v => { ambientEnabled = v; applyAmbient(); }, key: 'ambientEnabled' }
+        { label: 'Свечение видео', get: () => ambientEnabled, set: v => { ambientEnabled = v; applyAmbient(); }, key: 'ambientEnabled' },
+        { label: 'Боковая панель', get: () => railEnabled, set: v => { railEnabled = v; placeRail(); }, key: 'railEnabled' }
     ];
     function openSettingsMenu(btn) {
         const menu = document.createElement('div');
@@ -2616,6 +2677,7 @@
         try {
             const me = await (await api('/api/users/me')).json();
             if (!me || !me.username) return;              // не вошли или API не ответил — свои ники искать не по чему
+            meData = me;
             myUsername = me.username;
             myDisplayName = me.displayName || me.username;
             tagAll();
@@ -5838,16 +5900,17 @@
 
     // --- 27. Карточка профиля при наведении на ник или аватар: баннер, аватар, описание, счётчики
     const hcCache = new Map();
-    let hc = null, hcTimer = 0, hcHide = 0, hcUser = null, hcLink = null, hcKeysShown = false;
+    let hc = null, hcTimer = 0, hcHide = 0, hcUser = null, hcLink = null;
     const loginOf = href => ((href || '').match(/^\/@([\w.]+)/) || [])[1] || null;
-    function hcData(user) {
-        if (!hcCache.has(user)) hcCache.set(user, api('/api/users/' + encodeURIComponent(user)).then(r => r.ok ? r.json() : null)
-            .then(j => {
-                const d = j && (j.data || j.user || j);
-                if (d && !hcKeysShown) { hcKeysShown = true; console.debug('[ITD VP] карточка профиля, поля:', Object.keys(d).join(', ')); }
-                return d;
-            }).catch(() => null));
-        return hcCache.get(user);
+    // Данные профиля: сперва — что уже получил сайт (или ждём его ответ waitMs), свой запрос —
+    // только если сайт этот профиль не запрашивал (карточка при наведении на чужой ник, клуб).
+    function hcData(user, waitMs = 0) {
+        const key = user.toLowerCase();
+        if (siteUsers.has(key)) return Promise.resolve(siteUsers.get(key));
+        if (!hcCache.has(key)) hcCache.set(key, siteUser(user, waitMs).then(site => site || api('/api/users/' + encodeURIComponent(user))
+            .then(r => r.ok ? r.json() : null)
+            .then(j => j && (j.data || j.user || j))).catch(() => null));
+        return hcCache.get(key);
     }
     const pick = (...vals) => vals.find(v => v !== undefined && v !== null && v !== '');
     function hcBuild(user, d) {
@@ -5938,16 +6001,17 @@
 
     // --- 14. Счётчики профиля «накручиваются» до своего числа (один раз на профиль)
     const COUNT_LABEL = /подпис|пост|лайк|друз/i;
-    let countedPath = '';
+    const counted = new Set();                        // профили, где числа уже накручивались
+    const countKey = () => loginOf(location.pathname) || location.pathname;
     function countUp() {
-        if (countedPath === location.pathname) return;
+        if (counted.has(countKey())) return;
         const spans = [...document.querySelectorAll('span')].filter(sp => {
             const next = sp.nextElementSibling;
             return /^\d{1,7}$/.test(sp.textContent.trim()) && !sp.children.length && next && COUNT_LABEL.test(next.textContent)
-                && !sp.closest('.' + SELECTORS.post + ', .' + SELECTORS.notification + ', nav');
+                && !sp.closest('.' + SELECTORS.post + ', .' + SELECTORS.notification + ', nav, .vp-rail');   // панель — свои числа, не накручиваем
         });
         if (!spans.length) return;
-        countedPath = location.pathname;
+        counted.add(countKey());
         if (calm) return;
         spans.forEach(sp => {
             sp.style.setProperty('--vp-to', sp.textContent.trim());
@@ -5958,6 +6022,44 @@
         });
     }
     onDom(countUp);
+
+    // Посты в строке профиля: «235 подписчиков · 123 подписок · 572 поста». Число — из профиля
+    // (/api/users/<ник>, поле postsCount), пункт — копия соседнего пункта сайта, вид родной.
+    const plural = (n, one, few, many) => n % 10 === 1 && n % 100 !== 11 ? one
+        : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? few : many;
+    const postsCounted = new Set();
+    function profilePostsRow() {
+        const login = loginOf(location.pathname);
+        if (!login) return;
+        // строка счётчиков: пункт «число + подпись», где подпись — «подписчиков»/«подписок»
+        const num = [...document.querySelectorAll('span')].find(sp => /^\d[\d\s]*$/.test(sp.textContent.trim()) && !sp.children.length
+            && sp.nextElementSibling && /подпис/i.test(sp.nextElementSibling.textContent) && !sp.closest('.' + SELECTORS.post + ', nav, .vp-rail'));
+        const item = num && num.parentElement, row = item && item.parentElement;
+        if (!row || row.querySelector('.vp-posts-stat')) return;
+        if (row.dataset.vpPosts === login) return;           // уже ждём ответ для этого профиля
+        row.dataset.vpPosts = login;
+        hcData(login, 2500).then(d => {
+            const total = d && d.postsCount;
+            if (typeof total !== 'number' || !row.isConnected || row.querySelector('.vp-posts-stat') || loginOf(location.pathname) !== login) return;
+            const last = [...row.children].filter(c => c.querySelector('span')).pop() || item;
+            const mine = last.cloneNode(true);
+            mine.classList.add('vp-posts-stat');
+            // копия могла снять соседа посреди его накрутки — чистим её следы (прозрачный цвет)
+            mine.querySelectorAll('.vp-count').forEach(e => { e.classList.remove('vp-count'); ['--vp-to', '--vp-count-color'].forEach(v => e.style.removeProperty(v)); });
+            const [n, label] = mine.querySelectorAll('span');
+            n.textContent = total;
+            label.textContent = plural(total, 'пост', 'поста', 'постов');
+            row.appendChild(mine);
+            if (!calm && !postsCounted.has(login)) {            // накрутка, как у соседних счётчиков, — раз на профиль
+                postsCounted.add(login);
+                n.style.setProperty('--vp-to', String(total));
+                n.style.setProperty('--vp-count-color', getComputedStyle(n).color);
+                n.classList.add('vp-count');
+                setTimeout(() => n.classList.remove('vp-count'), 1400);
+            }
+        });
+    }
+    onDom(profilePostsRow);
 
     // --- 19. Тихие звуки интерфейса (по умолчанию выключены): синтез, без файлов
     let uiSoundEnabled = GM_getValue('uiSoundEnabled', false);
@@ -5995,6 +6097,350 @@
         else if (t.closest('.' + SELECTORS.navLink)) uiSound('nav');
         else if (t.closest('.vp-pill-btn, .nick-style-option, .vp-msg-again, button')) uiSound('click');
     }, true);
+
+    // ================= Боковая панель: статистика, клуб ИТД X, змейка =================
+    // Стоит в пустой полосе между лентой и правой колонкой сайта. Мало места — прячется.
+    let railEnabled = GM_getValue('railEnabled', true);
+    const rail = document.createElement('div');
+    rail.className = 'vp-rail';
+    rail.innerHTML = `
+        <section class="vp-rail-card" data-block="stats"><div class="vp-rail-title">${svgIcon('<path d="M4 19V10M10 19V5M16 19v-7M21 19H3"/>', 16)}<span>Статистика</span></div>
+            <div class="vp-seg"><div class="vp-seg-ind"></div><button data-p="day">День</button><button data-p="month">Месяц</button></div>
+            <div class="vp-stats"><div class="vp-menu-note">Загрузка...</div></div><div class="vp-stats-since"></div></section>
+        <section class="vp-rail-card" data-block="club"><div class="vp-rail-title">${svgIcon('<circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.5a3 3 0 0 1 0 5.5M18 14.5a5 5 0 0 1 2.5 4.5"/>', 16)}<span>Клуб ИТД X</span><b class="vp-club-count"></b></div>
+            <div class="vp-club"><div class="vp-menu-note">Загрузка...</div></div></section>
+        <section class="vp-rail-card" data-block="snake"><div class="vp-rail-title">${svgIcon('<path d="M4 17c0-3 2-4 4-4h8a3 3 0 0 0 0-6H9"/><circle cx="7" cy="7" r="1.6"/>', 16)}<span>Змейка</span><b class="vp-snake-score"></b></div>
+            <canvas class="vp-snake" width="220" height="220"></canvas>
+            <div class="vp-snake-hint">Клик — играть · стрелки или WASD · Esc — пауза</div></section>`;
+    document.body.appendChild(rail);
+
+    const railCss = document.createElement('style');
+    railCss.textContent = `
+        .vp-rail { position: fixed; top: 24px; z-index: 50; display: none; flex-direction: column; gap: 12px;
+            max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+        .vp-rail.vp-on { display: flex; animation: vpRailIn .4s ease-out; }
+        /* как блоки самого ИТД (поле «Что нового?», баннер): скругление 36px, без обводки */
+        .vp-rail-card { border-radius: 36px; padding: 20px 22px; color: var(--text-primary, #fff); background: var(--block-bg, #1c1c1c);
+            backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none); }
+        .vp-rail-title { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 16px; font-weight: 600;
+            color: var(--text-primary, #fff); }
+        .vp-rail-title svg { color: var(--text-secondary, #8a8a8a); flex-shrink: 0; }
+        .vp-rail-title b { margin-left: auto; color: var(--text-secondary, #8a8a8a); font-size: 14px; font-weight: 500; }
+        /* переключатель «День / Месяц» — как вкладки ИТД: стеклянная пилюля с бегунком */
+        .vp-seg { position: relative; display: flex; margin-bottom: 10px; padding: 3px; border-radius: 9999px; background: var(--glass-bg, rgba(35, 35, 35, .8)); }
+        .vp-seg button { position: relative; z-index: 1; flex: 1; padding: 6px 0; border: 0; background: none; cursor: pointer; font: inherit;
+            font-size: 13px; font-weight: 500; color: var(--text-secondary, #8a8a8a); transition: color .2s ease; }
+        .vp-seg button.vp-on { color: var(--text-primary, #fff); }
+        .vp-seg-ind { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 9999px;
+            background: var(--tab-active-bg, rgba(255, 255, 255, .08)); transition: transform .3s cubic-bezier(.5, 0, 0, 1); }
+        .vp-seg.vp-month .vp-seg-ind { transform: translateX(100%); }
+        .vp-stats-since { margin-top: 4px; font-size: 12px; color: var(--text-secondary, #8a8a8a); }
+        .vp-stats-since:empty { display: none; }
+        .vp-stat { display: flex; align-items: baseline; gap: 6px; padding: 5px 0; font-size: 15px; }
+        .vp-stat-val { font-weight: 700; }
+        .vp-stat-label { flex: 1; color: var(--text-secondary, #8a8a8a); }
+        .vp-stat-diff { font-size: 13px; font-weight: 600; color: var(--text-secondary, #8a8a8a); }
+        .vp-stat-diff.vp-up { color: #3ddc84; }
+        .vp-stat-diff.vp-down { color: #ff5a6a; }
+        /* отрицательный отступ строк давал горизонтальную прокрутку — строки теперь в своих границах */
+        .vp-club { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; overflow-x: hidden;
+            scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--text-secondary, #888) 45%, transparent) transparent; }
+        .vp-club-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 18px; cursor: pointer; min-width: 0;
+            transition: background-color .15s ease; }
+        .vp-club-row:hover { background: var(--bg-hover, rgba(255, 255, 255, .08)); }
+        .vp-club-ava { width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 17px; background: var(--bg-hover, rgba(255, 255, 255, .08)); overflow: hidden; }
+        .vp-club-ava img { width: 100%; height: 100%; object-fit: cover; }
+        .vp-club-names { min-width: 0; display: flex; flex-direction: column; }
+        .vp-club-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-club-login { font-size: 11px; color: var(--text-secondary, #8a8a8a); }
+        .vp-snake { display: block; width: 100%; aspect-ratio: 1; border-radius: 24px; cursor: pointer; background: var(--bg-primary, #000); outline: none; }
+        .vp-snake-hint { margin-top: 10px; font-size: 12px; text-align: center; color: var(--text-secondary, #8a8a8a); }
+        @keyframes vpRailIn { from { opacity: 0; transform: translateX(10px); } }
+        @media (prefers-reduced-motion: reduce) { .vp-rail.vp-on { animation: none; } }
+    `;
+    document.head.appendChild(railCss);
+
+    // место: от правого края ленты до левого края правой колонки сайта
+    // верх панели — постоянный, вровень с баннером и лентой сайта (у них отступ сверху 36px)
+    const RAIL_TOP = 36;
+    // Края колонки с содержимым — по её внешней обёртке: от блока ленты/поста вверх до самой широкой,
+    // где ещё нет боковых меню. Внутренние блоки у открытого поста уже карточки (у неё свои поля),
+    // и по ним меню наезжало на карточку, а панель прилипала к ней.
+    function contentBox() {
+        const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail';
+        let left = Infinity, right = 0;
+        document.querySelectorAll('.' + [SELECTORS.tabs, SELECTORS.feedBar, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .')).forEach(e => {
+            let el = e;
+            while (el.parentElement && el.parentElement !== document.body && !el.parentElement.querySelector(side)
+                && el.parentElement.getBoundingClientRect().width < innerWidth * 0.72) el = el.parentElement;
+            const r = el.getBoundingClientRect();
+            if (r.width > 300) { left = Math.min(left, r.left); right = Math.max(right, r.right); }
+        });
+        return right ? { left, right } : null;
+    }
+    function placeRail() {
+        const cb = contentBox();
+        const edge = cb ? cb.right : 0;
+        const side = document.querySelector('.' + SELECTORS.sidebarRight);
+        const right = side ? side.getBoundingClientRect().left : innerWidth;
+        const gap = right - edge;
+        let box = null;
+        if (railEnabled && edge > 0 && gap >= 240) {
+            const width = Math.min(300, gap - 48);
+            box = { left: Math.round(edge + 24), width, maxH: innerHeight - 48 };
+        } else if (railEnabled && side) {
+            // узкий экран: в верх правой колонки сайта, над её ссылками (они внизу)
+            const sr = side.getBoundingClientRect(), links = side.lastElementChild;
+            const maxH = (links ? links.getBoundingClientRect().top : sr.bottom) - 24 - 24;
+            if (sr.width >= 180 && maxH >= 220) box = { left: Math.round(sr.left), width: Math.round(sr.width), maxH };
+        }
+        rail.style.top = RAIL_TOP + 'px';
+        if (box && gap >= 240) box.maxH = innerHeight - RAIL_TOP - 24;
+        rail.classList.toggle('vp-on', !!box);
+        if (!box) { snakePause(); return; }
+        rail.style.width = box.width + 'px';
+        rail.style.left = box.left + 'px';
+        rail.style.maxHeight = box.maxH + 'px';
+    }
+    addEventListener('resize', placeRail);
+    onDom(placeRail);
+
+    // Левое меню — к ленте, симметрично правой панели (у сайта оно прижато к краю экрана).
+    // Место не позволяет — остаётся, где его ставит сайт.
+    function placeSidebar() {
+        const side = document.querySelector('.' + SELECTORS.sidebar);
+        if (!side) return;
+        side.style.left = '';                                     // сначала — как у сайта, от этого и меряем
+        const cb = contentBox();
+        const edge = cb ? cb.left : Infinity;
+        const sr = side.getBoundingClientRect();
+        const want = Math.round(edge - sr.width - 24);
+        if (edge !== Infinity && want > sr.left + 8 && getComputedStyle(side).position === 'fixed') side.style.left = want + 'px';
+    }
+    addEventListener('resize', placeSidebar);
+    onDom(placeSidebar);
+    placeSidebar();
+
+    // --- 35. Статистика: разница за день и за месяц. Снимок чисел — не чаще раза в 6 часов,
+    // история — 40 дней (GM vp_stats_hist). Истории меньше периода — считаем от первого снимка.
+    const railStats = rail.querySelector('.vp-stats'), railSince = rail.querySelector('.vp-stats-since');
+    const seg = rail.querySelector('.vp-seg');
+    const fmtNum = n => n >= 10000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1).replace('.0', '') + 'к' : String(n);
+    let statsPeriod = GM_getValue('vp_stats_tab', 'day'), statsNow = null;
+    const DAY_MS = 864e5;
+    function statsHistory() { try { return JSON.parse(GM_getValue('vp_stats_hist', '[]')); } catch (e) { return []; } }
+    async function loadStats() {
+        if (!myUsername) return setTimeout(loadStats, 1500);
+        // счётчики — из /users/me, если он их отдаёт; иначе ответ сайта про мой профиль / свой запрос
+        const d = meData && typeof meData.followersCount === 'number' ? meData : await hcData(myUsername, 2500);
+        const now = {
+            followers: pick(d && d.followersCount, d && d.followers_count, d && d.stats && d.stats.followers, d && typeof d.followers === 'number' ? d.followers : undefined),
+            following: pick(d && d.followingCount, d && d.following_count, d && d.stats && d.stats.following, d && typeof d.following === 'number' ? d.following : undefined)
+        };
+        if (d && typeof d.postsCount === 'number') now.posts = d.postsCount;
+        const hist = statsHistory().filter(h => Date.now() - h.at < 40 * DAY_MS);
+        if (!hist.length || Date.now() - hist[hist.length - 1].at > 6 * 3600e3) hist.push({ at: Date.now(), ...now });
+        GM_setValue('vp_stats_hist', JSON.stringify(hist));
+        statsNow = now;
+        renderStats();
+    }
+    function renderStats() {
+        seg.classList.toggle('vp-month', statsPeriod === 'month');
+        seg.querySelectorAll('button').forEach(b => b.classList.toggle('vp-on', b.dataset.p === statsPeriod));
+        if (!statsNow) return;
+        const span = statsPeriod === 'month' ? 30 * DAY_MS : DAY_MS;
+        const hist = statsHistory();
+        // опорный снимок — последний, которому уже есть «период»; нет такого — самый первый
+        const base = [...hist].reverse().find(h => Date.now() - h.at >= span) || hist[0] || statsNow;
+        const short = Date.now() - base.at < span * 0.9;
+        railSince.textContent = short && base.at ? 'с ' + new Date(base.at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
+            + ', ' + new Date(base.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
+        const rows = [['followers', 'подписчиков'], ['following', 'подписок'], ['posts', 'постов']].filter(([k]) => typeof statsNow[k] === 'number');
+        if (!rows.length) { railStats.innerHTML = '<div class="vp-menu-note">Сайт не отдал числа</div>'; return; }
+        railStats.innerHTML = '';
+        rows.forEach(([k, label]) => {
+            const diff = typeof base[k] === 'number' ? statsNow[k] - base[k] : 0;
+            const row = document.createElement('div');
+            row.className = 'vp-stat';
+            row.innerHTML = '<span class="vp-stat-val"></span><span class="vp-stat-label"></span><span class="vp-stat-diff"></span>';
+            row.children[0].textContent = fmtNum(statsNow[k]);
+            row.children[1].textContent = label;
+            const df = row.children[2];
+            df.textContent = diff > 0 ? '+' + fmtNum(diff) : diff < 0 ? '−' + fmtNum(-diff) : '0';
+            df.classList.add(diff > 0 ? 'vp-up' : diff < 0 ? 'vp-down' : 'vp-same');
+            railStats.appendChild(row);
+        });
+    }
+    seg.addEventListener('click', e => {
+        const b = e.target.closest('button');
+        if (!b || b.dataset.p === statsPeriod) return;
+        statsPeriod = b.dataset.p;
+        GM_setValue('vp_stats_tab', statsPeriod);
+        renderStats();
+    });
+    renderStats();
+    loadStats();
+
+    // --- 34. Клуб ИТД X: у кого стоит скрипт (по кодам под служебным постом — те же, что у вериф-бейджа)
+    const railClub = rail.querySelector('.vp-club');
+    let clubShown = '';
+    function openProfile(login) {
+        // переход внутри сайта без перезагрузки: роутер слушает popstate
+        history.pushState({}, '', '/@' + login);
+        dispatchEvent(new PopStateEvent('popstate'));
+    }
+    async function renderClub() {
+        const names = Object.keys(JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}'));
+        if (myUsername && !names.some(n => n.toLowerCase() === myUsername.toLowerCase())) names.push(myUsername);
+        const key = names.sort().join();
+        if (key === clubShown) return;
+        clubShown = key;
+        rail.querySelector('.vp-club-count').textContent = names.length || '';
+        if (!names.length) { railClub.innerHTML = '<div class="vp-menu-note">Пока никого</div>'; return; }
+        const people = await Promise.all(names.map(async n => ({ n, d: await hcData(n) })));
+        railClub.innerHTML = '';
+        people.sort((a, b) => (a.n === myUsername ? -1 : b.n === myUsername ? 1 : a.n.localeCompare(b.n))).forEach(({ n, d }) => {
+            const row = document.createElement('div');
+            row.className = 'vp-club-row';
+            row.innerHTML = '<div class="vp-club-ava"></div><div class="vp-club-names"><span class="vp-club-name"></span><span class="vp-club-login"></span></div>';
+            const ava = pick(d && d.avatar && (d.avatar.url || d.avatar), d && d.avatarUrl, '👤');
+            const av = row.firstChild;
+            if (/^https?:|^\//.test(ava)) { const img = document.createElement('img'); img.src = ava; av.appendChild(img); } else av.textContent = ava;
+            row.querySelector('.vp-club-name').textContent = pick(d && d.displayName, d && d.display_name, n) + (n === myUsername ? ' (ты)' : '');
+            row.querySelector('.vp-club-login').textContent = '@' + n;
+            row.onclick = () => openProfile(n);
+            railClub.appendChild(row);
+        });
+    }
+    setTimeout(renderClub, 2500);
+    setInterval(renderClub, 60 * 1000);
+
+    // --- 39. Змейка из символов матрицы: клик — играть, стрелки/WASD, Esc — пауза.
+    // Поле 12х12. Логика ходит шагами, а рисуем каждый кадр: змейка плавно скользит между клетками.
+    // Холст — под размер на экране и плотность пикселей, иначе картинка мылилась.
+    const sn = rail.querySelector('.vp-snake'), sg = sn.getContext('2d');
+    sn.tabIndex = 0;
+    const CELLS = 12;
+    let snake = null, prev = null, dir, nextDir, food, snakeOn = false, score = 0;
+    let stepMs = 170, lastStep = 0, snakeRaf = 0, snakeMsg = '', px = 0, cell = 0;
+    let best = GM_getValue('vp_snake_best', 0);
+    const scoreEl = rail.querySelector('.vp-snake-score');
+    const showScore = () => { scoreEl.textContent = score ? `${score} · рекорд ${best}` : best ? `рекорд ${best}` : ''; };
+    const rndCell = () => ({ x: Math.floor(Math.random() * CELLS), y: Math.floor(Math.random() * CELLS), ch: MATRIX_CHARS[Math.random() * MATRIX_CHARS.length | 0] });
+    function snakeSize() {
+        const w = sn.clientWidth || 200, dpr = devicePixelRatio || 1;
+        const want = Math.round(w * dpr);
+        if (sn.width !== want) { sn.width = sn.height = want; }
+        px = want; cell = want / CELLS;
+    }
+    function snakeReset() {
+        snake = [{ x: 6, y: 9 }, { x: 5, y: 9 }, { x: 4, y: 9 }];      // ниже середины — не под надписью «клик — играть»
+        prev = snake.map(p => ({ ...p }));
+        dir = nextDir = { x: 1, y: 0 };
+        score = 0; stepMs = 170;
+        do food = rndCell(); while (snake.some(p => p.x === food.x && p.y === food.y));
+    }
+    function snakeDraw(now = performance.now()) {
+        snakeSize();
+        const accent = getComputedStyle(document.documentElement).getPropertyValue('--vp-accent').trim() || '#00ff88';
+        const t = snakeOn ? Math.min(1, (now - lastStep) / stepMs) : 1;
+        sg.clearRect(0, 0, px, px);
+        sg.fillStyle = 'rgba(255, 255, 255, .035)';
+        for (let i = 0; i < CELLS; i++) for (let j = 0; j < CELLS; j++) if ((i + j) % 2) sg.fillRect(i * cell, j * cell, cell, cell);
+        sg.textAlign = 'center'; sg.textBaseline = 'middle';
+        // еда — символ, который мягко пульсирует
+        const pulse = 0.85 + 0.15 * Math.sin(now / 180);
+        sg.shadowColor = accent; sg.shadowBlur = cell * 0.6;
+        sg.fillStyle = '#fff';
+        sg.font = `bold ${Math.round(cell * 0.72 * pulse)}px monospace`;
+        sg.fillText(food.ch, (food.x + .5) * cell, (food.y + .5) * cell);
+        // тело: скруглённые клетки с символами; позиция — между прошлой и новой клеткой
+        sg.font = `bold ${Math.round(cell * 0.6)}px monospace`;
+        for (let i = snake.length - 1; i >= 0; i--) {
+            const a = prev[i] || snake[i], b = snake[i];
+            const wrap = Math.abs(a.x - b.x) > 1 || Math.abs(a.y - b.y) > 1;       // прошёл сквозь стену — без скольжения
+            const x = (wrap ? b.x : a.x + (b.x - a.x) * t) * cell, y = (wrap ? b.y : a.y + (b.y - a.y) * t) * cell;
+            const k = i / Math.max(1, snake.length - 1);
+            sg.globalAlpha = 1 - k * 0.55;
+            sg.shadowBlur = i ? 0 : cell * 0.5;
+            sg.fillStyle = i ? accent : '#fff';
+            const pad = cell * (i ? 0.1 + k * 0.06 : 0.06), r = cell * 0.28;
+            sg.beginPath();
+            sg.roundRect(x + pad, y + pad, cell - pad * 2, cell - pad * 2, r);
+            sg.fill();
+            if (i) {
+                sg.fillStyle = 'rgba(0, 0, 0, .55)';
+                sg.fillText(MATRIX_CHARS[(b.x * 7 + b.y * 13 + i) % MATRIX_CHARS.length], x + cell / 2, y + cell / 2);
+            }
+        }
+        sg.globalAlpha = 1; sg.shadowBlur = 0;
+        if (snakeMsg) {
+            sg.fillStyle = 'rgba(0, 0, 0, .55)'; sg.fillRect(0, 0, px, px);
+            sg.fillStyle = '#fff'; sg.font = `600 ${Math.round(px * 0.075)}px system-ui, sans-serif`;
+            snakeMsg.split('\n').forEach((line, i, all) => sg.fillText(line, px / 2, px / 2 + (i - (all.length - 1) / 2) * px * 0.11));
+        }
+    }
+    function snakeStep() {
+        dir = nextDir;
+        const head = { x: (snake[0].x + dir.x + CELLS) % CELLS, y: (snake[0].y + dir.y + CELLS) % CELLS };   // сквозь стены
+        if (snake.some(p => p.x === head.x && p.y === head.y)) {
+            snakeOn = false;
+            if (score > best) { best = score; GM_setValue('vp_snake_best', best); }
+            showScore();
+            snakeMsg = `Съел себя · ${score}\nклик — ещё раз`;
+            snakeDraw();
+            snake = null;
+            return;
+        }
+        prev = snake.map(p => ({ ...p }));            // откуда едет каждый сегмент: голова — из старой головы, сегмент i — с места старого i
+        snake.unshift(head);
+        if (head.x === food.x && head.y === food.y) {
+            score++;
+            uiSound('click');
+            stepMs = Math.max(85, 170 - score * 5);    // быстрее с каждым символом
+            do food = rndCell(); while (snake.some(p => p.x === food.x && p.y === food.y));
+        } else snake.pop();
+        showScore();
+    }
+    function snakeLoop(now) {
+        snakeRaf = 0;
+        if (!snakeOn) return;
+        while (now - lastStep >= stepMs && snakeOn) { lastStep += stepMs; snakeStep(); if (now - lastStep > stepMs * 3) lastStep = now; }
+        if (snakeOn) { snakeDraw(now); snakeRaf = requestAnimationFrame(snakeLoop); }
+    }
+    function snakeStart() {
+        if (!snake) snakeReset();
+        snakeOn = true; snakeMsg = '';
+        lastStep = performance.now();
+        sn.focus({ preventScroll: true });
+        if (!snakeRaf) snakeRaf = requestAnimationFrame(snakeLoop);
+    }
+    function snakePause() {
+        if (!snakeOn) return;
+        snakeOn = false;
+        snakeMsg = 'Пауза\nклик — дальше';
+        snakeDraw();
+    }
+    sn.addEventListener('click', () => snakeOn ? snakePause() : snakeStart());
+    sn.addEventListener('blur', snakePause);
+    sn.addEventListener('keydown', e => {
+        const k = e.key.toLowerCase();
+        const turn = { arrowup: [0, -1], w: [0, -1], ц: [0, -1], arrowdown: [0, 1], s: [0, 1], ы: [0, 1],
+            arrowleft: [-1, 0], a: [-1, 0], ф: [-1, 0], arrowright: [1, 0], d: [1, 0], в: [1, 0] }[k];
+        if (k === 'escape') { snakePause(); e.preventDefault(); return; }
+        if (!turn) return;
+        e.preventDefault();                                 // стрелки не крутят ленту, пока играешь
+        if (!snakeOn) snakeStart();
+        if (turn[0] !== -dir.x || turn[1] !== -dir.y) nextDir = { x: turn[0], y: turn[1] };   // не разворачиваемся в себя
+    });
+    new ResizeObserver(() => { if (!snakeOn) snakeDraw(); }).observe(sn);
+    snakeReset();
+    showScore();
+    snakeMsg = 'Змейка\nклик — играть';
+    snakeDraw();
+
+    placeRail();
 
     console.log('🟢 ИТД X');
     };
