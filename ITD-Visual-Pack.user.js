@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.9
+// @version      3.0.10
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6118,6 +6118,7 @@
 
     const railCss = document.createElement('style');
     railCss.textContent = `
+        html.vp-side-moved aside:has(nav), html.vp-side-moved .vp-sidebar { left: var(--vp-side-left) !important; }
         .vp-rail { position: fixed; top: 24px; z-index: 50; display: none; flex-direction: column; gap: 12px;
             max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
         .vp-rail.vp-on { display: flex; animation: vpRailIn .4s ease-out; }
@@ -6181,8 +6182,11 @@
         });
         return right ? { left, right } : null;
     }
+    let lastCb = null;
     function placeRail() {
-        const cb = contentBox();
+        // лента на миг пропала (переход страницы) — остаёмся на прежнем месте, а не прыгаем
+        const cb = contentBox() || lastCb;
+        if (cb) lastCb = cb;
         const edge = cb ? cb.right : 0;
         const side = document.querySelector('.' + SELECTORS.sidebarRight);
         const right = side ? side.getBoundingClientRect().left : innerWidth;
@@ -6210,15 +6214,17 @@
 
     // Левое меню — к ленте, симметрично правой панели (у сайта оно прижато к краю экрана).
     // Место не позволяет — остаётся, где его ставит сайт.
+    // Отступ задаём правилом стилей (переменная на <html>), а не у самого меню: сайт при смене
+    // страницы рисует меню заново, и правило действует на новое сразу — без «прыжка» на 0,2 с.
     function placeSidebar() {
         const side = document.querySelector('.' + SELECTORS.sidebar);
-        if (!side) return;
-        side.style.left = '';                                     // сначала — как у сайта, от этого и меряем
         const cb = contentBox();
-        const edge = cb ? cb.left : Infinity;
-        const sr = side.getBoundingClientRect();
-        const want = Math.round(edge - sr.width - 24);
-        if (edge !== Infinity && want > sr.left + 8 && getComputedStyle(side).position === 'fixed') side.style.left = want + 'px';
+        if (!side || !cb) return;                                   // ленты пока нет — оставляем как было
+        const siteLeft = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-gap')) || 36;
+        const want = Math.round(cb.left - side.getBoundingClientRect().width - 24);
+        const on = want > siteLeft + 8 && getComputedStyle(side).position === 'fixed';
+        document.documentElement.classList.toggle('vp-side-moved', on);
+        if (on) document.documentElement.style.setProperty('--vp-side-left', want + 'px');
     }
     addEventListener('resize', placeSidebar);
     onDom(placeSidebar);
