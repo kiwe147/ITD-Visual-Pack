@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ITD Visual Pack
 // @namespace    http://tampermonkey.net/
-// @version      2.9.6
+// @version      2.9.7
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -10,6 +10,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        unsafeWindow
+// @connect      raw.githubusercontent.com
 // @run-at       document-start
 // @downloadURL  https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js
 // @updateURL    https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js
@@ -2605,7 +2606,11 @@
             function latestVersion() {
                 let cached = null;
                 try { cached = JSON.parse(GM_getValue('vp_latest', 'null')); } catch (e) { }
-                if (cached && Date.now() - cached.at < 60 * 60 * 1000) return Promise.resolve(cached.v);
+                // запомненный ответ — только свежий (10 мин) или если он уже новее установленной:
+                // иначе после заливки на GitHub кнопка ждала бы старый ответ целый час
+                if (cached && (Date.now() - cached.at < 10 * 60 * 1000 || versionCompare(cached.v, GM_info.script.version) > 0)) {
+                    return Promise.resolve(cached.v);
+                }
                 return new Promise(resolve => GM_xmlhttpRequest({
                     method: 'GET',
                     url: updateUrl,
@@ -2615,7 +2620,7 @@
                         if (m) GM_setValue('vp_latest', JSON.stringify({ v: m[1], at: Date.now() }));
                         resolve(m ? m[1] : null);
                     },
-                    onerror: () => resolve(null)
+                    onerror: e => { console.warn('[ITD VP] обновление: GitHub не ответил', e); resolve(null); }
                 }));
             }
 
@@ -2645,7 +2650,11 @@
             }
 
             let updateAvailable = false;
-            const updateCheck = latestVersion().then(v => (updateAvailable = !!v && versionCompare(v, GM_info.script.version) > 0));
+            const updateCheck = latestVersion().then(v => {
+                updateAvailable = !!v && versionCompare(v, GM_info.script.version) > 0;
+                console.log(`[ITD VP] обновление: на GitHub ${v || '?'}, у тебя ${GM_info.script.version}${updateAvailable ? ' — есть новее' : ''}`);
+                return updateAvailable;
+            });
             updateCheck.then(yes => { if (yes) setTimeout(createUpdateButton, 1000); });
 
             const originalReplaceIcon = replaceIcon;
