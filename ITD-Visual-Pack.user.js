@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.8
+// @version      3.0.9
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -5604,15 +5604,17 @@
         .vp-tab-ind { transition: background-color .2s ease !important; }
 
         /* 27. Карточка профиля */
-        .vp-hc { position: fixed; z-index: 10005; width: 300px; border-radius: 22px; overflow: hidden; cursor: pointer;
-            background: var(--block-bg, #1c1c1c); color: var(--text-primary, #fff);
+        /* карточка лежит поверх текста поста — фон почти сплошной (стекло тут мешало читать) */
+        .vp-hc { --vp-hc-bg: rgba(22, 22, 24, .94); position: fixed; z-index: 10005; width: 300px; border-radius: 22px; overflow: hidden; cursor: pointer;
+            background: var(--vp-hc-bg); color: var(--text-primary, #fff);
             border: 1px solid color-mix(in srgb, var(--text-primary, #fff) 10%, transparent);
-            box-shadow: 0 18px 50px rgba(0, 0, 0, .45); backdrop-filter: var(--vp-glass-filter, blur(18px));
-            -webkit-backdrop-filter: var(--vp-glass-filter, blur(18px)); animation: vpHcIn .22s cubic-bezier(.2, 1.2, .4, 1); }
+            box-shadow: 0 18px 50px rgba(0, 0, 0, .5); backdrop-filter: blur(24px) saturate(1.3);
+            -webkit-backdrop-filter: blur(24px) saturate(1.3); animation: vpHcIn .22s cubic-bezier(.2, 1.2, .4, 1); }
+        html.vp-light .vp-hc { --vp-hc-bg: rgba(255, 255, 255, .95); box-shadow: 0 18px 50px rgba(0, 0, 0, .18); }
         .vp-hc-banner { height: 84px; background-size: cover; background-position: center; }
         .vp-hc-body { padding: 0 16px 14px; }
         .vp-hc-ava { width: 60px; height: 60px; margin-top: -30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-size: 30px; background: var(--block-bg, #1c1c1c); border: 3px solid var(--block-bg, #1c1c1c); overflow: hidden; position: relative; }
+            font-size: 30px; background: var(--vp-hc-bg); border: 3px solid var(--vp-hc-bg); overflow: hidden; position: relative; }
         .vp-hc-ava img { width: 100%; height: 100%; object-fit: cover; }
         .vp-hc-name { margin-top: 6px; font-weight: 700; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .vp-hc-login { font-size: 13px; color: var(--text-secondary, #8a8a8a); }
