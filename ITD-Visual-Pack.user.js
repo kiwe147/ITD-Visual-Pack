@@ -1,7 +1,9 @@
 // ==UserScript==
 // @name         ITD Visual Pack
+// @name:ru      ИТД X
+// @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      2.9.7
+// @version      3.0.0
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -14,7 +16,7 @@
 // @run-at       document-start
 // @downloadURL  https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js
 // @updateURL    https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js
-// @icon         data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><filter id='glow' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur in='SourceGraphic' stdDeviation='3' result='blur'/></filter><linearGradient id='rainbow' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' style='stop-color:%23ff0000'/><stop offset='16%' style='stop-color:%23ff8800'/><stop offset='33%' style='stop-color:%23ffff00'/><stop offset='50%' style='stop-color:%2300ff00'/><stop offset='66%' style='stop-color:%2300ffff'/><stop offset='83%' style='stop-color:%230000ff'/><stop offset='100%' style='stop-color:%23ff00ff'/></linearGradient></defs><rect width='100' height='100' rx='20' fill='%231a1a1a'/><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(%23rainbow)' filter='url(%23glow)' opacity='0.9'>N</text><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(%23rainbow)'>N</text></svg>
+// @icon         data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='n' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%2300e5ff'/><stop offset='.5' stop-color='%237c4dff'/><stop offset='1' stop-color='%23ff3d9a'/></linearGradient><linearGradient id='d' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%230a3d62'/><stop offset='.5' stop-color='%233b1a7a'/><stop offset='1' stop-color='%237a1450'/></linearGradient><linearGradient id='m' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%231565c0'/><stop offset='.5' stop-color='%235e35b1'/><stop offset='1' stop-color='%23ad1457'/></linearGradient><filter id='b' x='-50%' y='-50%' width='200%' height='200%'><feGaussianBlur stdDeviation='2.2'/></filter><filter id='s' x='-20%' y='-20%' width='140%' height='140%'><feDropShadow dx='0' dy='1.5' stdDeviation='1.5' flood-opacity='.5'/></filter></defs><rect width='64' height='64' rx='16' fill='%230b0d13'/><g fill='none'><path d='M12 12L52 52M52 12L12 52' stroke='url(%23n)' stroke-opacity='1' stroke-width='12' stroke-linecap='round'/><path d='M12 12L52 52M52 12L12 52' stroke='%230b0d13' stroke-opacity='1' stroke-width='7' stroke-linecap='round'/></g><text x='32' y='40' font-family='Arial Black, Arial, sans-serif' font-weight='900' text-anchor='middle' font-size='21' fill='%23fff' filter='url(%23s)'>ИТД</text></svg>
 // ==/UserScript==
 
 (function () {
@@ -29,11 +31,16 @@
         FLY: 520,                            // полёт до касания
         SETTLE: 170,                         // дожим после касания
         SHAKE: [4, 6, 9],                    // сила тряски, px
-        VOLUME: 0.28,                        // общая громкость звука (было 0.55 — громко)
+        VOLUME: 0.22,                        // общая громкость звука (0.55 → 0.28 → 0.22: владелец просил тише)
         // откуда летит: угол (0 — справа, 90 — снизу), разворот, масштаб «из камеры»
-        FROM: [{ ang: 200, rot: -110, sc: 1.8 }, { ang: 272, rot: 80, sc: 2.4 }, { ang: -12, rot: 130, sc: 1.6 }]
+        FROM: [{ ang: 200, rot: -110, sc: 1.8 }, { ang: 272, rot: 80, sc: 2.4 }, { ang: -12, rot: 130, sc: 1.6 }],
+        // X за словом (как на иконке «ИТД X»): два росчерка крест-накрест после последнего удара
+        X_DRAW: 170,                         // один росчерк, мс
+        X_GAP: 150,                          // между росчерками
+        SPLIT: 380                           // уход: экран делится пополам и разъезжается
     };
-    INTRO.EXIT = INTRO.LOCK[2] + 700;
+    INTRO.X = INTRO.LOCK[2] + 220;           // первый росчерк
+    INTRO.EXIT = INTRO.X + INTRO.X_GAP + INTRO.X_DRAW + 380;
 
     // Звук синтезом, без файлов: свист полёта, металлический лязг стыковки, в конце — тяжёлый удар.
     // at(мс от начала ролика) → время звуковой карты.
@@ -137,25 +144,62 @@
             click.start(t, Math.random() * 0.5);
             click.stop(t + 0.1);
         }
+        // росчерк X: короткий свист клинка — шум, фильтр взлетает вверх, и тонкий «дзынь» без хвоста
+        function slash(t, dur) {
+            const src = ctx.createBufferSource();
+            src.buffer = noise;
+            const bp = ctx.createBiquadFilter();
+            bp.type = 'bandpass';
+            bp.Q.value = 2.5;
+            bp.frequency.setValueAtTime(1200, t);
+            bp.frequency.exponentialRampToValueAtTime(7000, t + dur);
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.exponentialRampToValueAtTime(0.55, t + dur * 0.7);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.08);
+            src.connect(bp).connect(g).connect(master);
+            src.start(t, Math.random() * 0.5);
+            src.stop(t + dur + 0.1);
+            const zing = ctx.createOscillator();
+            zing.type = 'sine';
+            zing.frequency.setValueAtTime(900, t + dur * 0.5);
+            zing.frequency.exponentialRampToValueAtTime(2600, t + dur);
+            const zg = ctx.createGain();
+            env(zg.gain, t + dur * 0.5, 0.07, 0.01, 0.16);
+            zing.connect(zg).connect(master);
+            zg.connect(echo);
+            zing.start(t + dur * 0.5);
+            zing.stop(t + dur + 0.3);
+        }
         INTRO.LOCK.forEach((lock, i) => {
             whoosh(at(lock - INTRO.FLY), INTRO.FLY / 1000);
             clank(at(lock), i === 2);
         });
+        [0, INTRO.X_GAP].forEach(d => slash(at(INTRO.X + d), INTRO.X_DRAW / 1000));
+        whoosh(at(INTRO.EXIT - 200), 0.26);                  // створки разъезжаются
     }
 
     function playIntro() {
         const root = document.documentElement;
         const css = document.createElement('style');
         css.textContent = `
-            .vpi-overlay { position: fixed; inset: 0; z-index: 2147483647; background: #000; overflow: hidden; cursor: pointer; }
+            .vpi-overlay { position: fixed; inset: 0; z-index: 2147483647; overflow: hidden; cursor: pointer; }
+            /* две одинаковые половины: каждая — весь кадр, обрезанный по своей стороне; в конце разъезжаются */
+            .vpi-half { position: absolute; inset: 0; background: #000; overflow: hidden; will-change: transform; }
+            .vpi-half-0 { clip-path: inset(0 50% 0 0); }
+            .vpi-half-1 { clip-path: inset(0 0 0 50%); }
             .vpi-world { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
-            .vpi-word { display: flex; gap: .05em; color: #fff; user-select: none; line-height: 1;
+            .vpi-word { position: relative; display: flex; gap: .05em; color: #fff; user-select: none; line-height: 1;
                 font: 900 min(24vw, 36vh)/1 "Arial Black", "Segoe UI Black", "Helvetica Neue", Arial, sans-serif; }
             .vpi-letter { display: inline-block; will-change: transform, opacity, filter; }
             .vpi-fx { position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; }
             .vpi-spark { width: 2px; height: 16px; margin: -8px 0 0 -1px; border-radius: 1px;
                 background: linear-gradient(#fff, rgba(255,255,255,0)); }
             .vpi-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+            .vpi-x { position: absolute; left: 50%; top: 50%; width: min(46vw, 70vh); height: min(46vw, 70vh);
+                transform: translate(-50%, -50%); overflow: visible; pointer-events: none; will-change: filter; }
+            .vpi-seam { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; opacity: 0; pointer-events: none;
+                background: linear-gradient(transparent, #fff 30%, #fff 70%, transparent); box-shadow: 0 0 18px 2px #7c4dff; }
         `;
         const el = (cls, parent, text) => {
             const e = document.createElement('div');
@@ -165,18 +209,36 @@
             return e;
         };
         const ov = el('vpi-overlay', root);
-        const world = el('vpi-world', ov);
-        const word = el('vpi-word', world);
+        const halves = [0, 1].map(i => el('vpi-half vpi-half-' + i, ov));
+        const worlds = halves.map(h => el('vpi-world', h));
+        // X — за словом: неоновый контур (цветная линия, внутри чёрная), как на иконке
+        const xMarks = worlds.map((w, n) => {
+            w.insertAdjacentHTML('beforeend', `<svg class="vpi-x" viewBox="0 0 100 100">
+                <defs><linearGradient id="vpiX${n}" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#00e5ff"/><stop offset=".5" stop-color="#7c4dff"/><stop offset="1" stop-color="#ff3d9a"/>
+                </linearGradient></defs>
+                <g fill="none" stroke-linecap="round">
+                    <path class="vpi-x1" d="M14 14L86 86" pathLength="1" stroke="url(#vpiX${n})" stroke-width="12"/>
+                    <path class="vpi-x1" d="M14 14L86 86" pathLength="1" stroke="#000" stroke-width="7"/>
+                    <path class="vpi-x2" d="M86 14L14 86" pathLength="1" stroke="url(#vpiX${n})" stroke-width="12"/>
+                    <path class="vpi-x2" d="M86 14L14 86" pathLength="1" stroke="#000" stroke-width="7"/>
+                </g></svg>`);
+            return w.lastElementChild;
+        });
+        const words = worlds.map(w => el('vpi-word', w));
         const flash = el('vpi-flash', ov);
+        const seam = el('vpi-seam', ov);
         root.appendChild(css);
         const prevOverflow = root.style.overflow;
         root.style.overflow = 'hidden';
 
-        const { LOCK, FLY, SETTLE, SHAKE, FROM, EXIT } = INTRO;
+        const { LOCK, FLY, SETTLE, SHAKE, FROM, EXIT, X, X_DRAW, X_GAP, SPLIT } = INTRO;
         const vmax = Math.max(innerWidth, innerHeight);
         const rnd = (a, b) => a + Math.random() * (b - a);
         const anims = [];
         const play = (target, frames, opts) => { const a = target.animate(frames, { fill: 'both', ...opts }); anims.push(a); return a; };
+        // обе половины играют одно и то же (со своими случайностями они бы разошлись на стыке)
+        const playBoth = (targets, frames, opts) => targets.map(t => play(t, frames, opts));
 
         function shake(at, amp) {
             const frames = [];
@@ -184,15 +246,14 @@
                 const k = i === n ? 0 : amp * Math.pow(1 - i / n, 1.5) * (i % 2 ? -1 : 1);
                 frames.push({ transform: `translate(${k * rnd(.6, 1)}px, ${k * rnd(-.8, .8)}px)` });
             }
-            play(world, frames, { delay: at, duration: 340, fill: 'none', composite: 'add' });
+            playBoth(worlds, frames, { delay: at, duration: 340, fill: 'none', composite: 'add' });
         }
         function burst(at, x, y, size, strong) {
             // искры — от края буквы наружу; до удара их нет
             for (let i = 0, n = strong ? 20 : 10; i < n; i++) {
-                const s = el('vpi-fx vpi-spark', world);
                 const ang = rnd(0, Math.PI * 2), r0 = size * .22, dist = size * rnd(.3, strong ? .75 : .55);
                 const rot = ang * 180 / Math.PI + 90, c = Math.cos(ang), sn = Math.sin(ang);
-                play(s, [
+                playBoth(worlds.map(w => el('vpi-fx vpi-spark', w)), [
                     { transform: `translate(${x + c * r0}px, ${y + sn * r0}px) rotate(${rot}deg)`, opacity: 1 },
                     { transform: `translate(${x + c * (r0 + dist)}px, ${y + sn * (r0 + dist)}px) rotate(${rot}deg) scaleY(.2)`, opacity: 0 }
                 ], { delay: at, duration: rnd(300, 560), easing: 'cubic-bezier(.1,.8,.3,1)', fill: 'forwards' });
@@ -201,9 +262,9 @@
                 { delay: at, duration: strong ? 380 : 220, fill: 'none' });
         }
 
-        const letters = [...'ИТД'].map(ch => el('vpi-letter', word, ch));
-        const wr = world.getBoundingClientRect();
-        letters.forEach((box, i) => {
+        const letters = words.map(w => [...'ИТД'].map(ch => el('vpi-letter', w, ch)));
+        const wr = worlds[0].getBoundingClientRect();
+        letters[0].forEach((box, i) => {
             const lock = LOCK[i], f = FROM[i];
             const lr = box.getBoundingClientRect();
             const cx = lr.left - wr.left + lr.width / 2, cy = lr.top - wr.top + lr.height / 2;
@@ -211,7 +272,7 @@
             const dx = Math.cos(a) * dist, dy = Math.sin(a) * dist;
             const hit = FLY / (FLY + SETTLE);
             // разгон до самого касания, затем проскок чуть дальше и сжатие от удара
-            play(box, [
+            playBoth([letters[0][i], letters[1][i]], [
                 { transform: `translate(${dx}px, ${dy}px) rotate(${f.rot}deg) scale(${f.sc})`, opacity: 0, filter: 'blur(10px) drop-shadow(0 0 0 rgba(255,255,255,0))', easing: 'cubic-bezier(.6,0,.9,.35)' },
                 { opacity: 1, offset: hit * .25 },
                 { transform: `translate(${-dx * .012}px, ${-dy * .012}px) scale(1.07, .93)`, opacity: 1, filter: 'blur(0px) drop-shadow(0 0 30px rgba(255,255,255,.9))', offset: hit, easing: 'cubic-bezier(.2,.9,.3,1)' },
@@ -221,12 +282,33 @@
             burst(lock, cx, cy, lr.height * (i === 2 ? 2.2 : 1.5), i === 2);
         });
 
-        // собралось — пауза, наезд камеры и растворение
-        play(world, [
-            { transform: 'scale(1)', opacity: 1, filter: 'blur(0px)' },
-            { transform: 'scale(1.12)', opacity: 0, filter: 'blur(10px)' }
-        ], { delay: EXIT, duration: 520, easing: 'cubic-bezier(.5,0,.75,0)', fill: 'forwards' });
-        const out = play(ov, [{ opacity: 1 }, { opacity: 0 }], { delay: EXIT + 140, duration: 480, fill: 'forwards' });
+        // X: два росчерка крест-накрест за буквами, потом вспышка свечения
+        ['.vpi-x1', '.vpi-x2'].forEach((sel, i) => {
+            xMarks.forEach(xm => xm.querySelectorAll(sel).forEach(path => play(path, [
+                { strokeDasharray: '1 1', strokeDashoffset: 1 },
+                { strokeDasharray: '1 1', strokeDashoffset: 0 }
+            ], { delay: X + i * X_GAP, duration: X_DRAW, easing: 'cubic-bezier(.7,0,.3,1)' })));
+            play(flash, [{ opacity: 0 }, { opacity: .05, offset: .5 }, { opacity: 0 }], { delay: X + i * X_GAP + X_DRAW * .6, duration: 160, fill: 'none' });
+        });
+        shake(X + X_GAP + X_DRAW * .8, 3);
+        playBoth(xMarks, [
+            { filter: 'drop-shadow(0 0 0 rgba(124,77,255,0))' },
+            { filter: 'drop-shadow(0 0 26px rgba(124,77,255,.95))', offset: .35 },
+            { filter: 'drop-shadow(0 0 12px rgba(124,77,255,.55))' }
+        ], { delay: X + X_GAP + X_DRAW, duration: 520 });
+
+        // Уход: по центру вспыхивает щель, экран делится ровно пополам — левая половина
+        // уезжает влево, правая вправо, под ними уже сайт.
+        play(seam, [
+            { opacity: 0, transform: 'scaleY(0)' },
+            { opacity: 1, transform: 'scaleY(1)', offset: .55 },
+            { opacity: 0, transform: 'scaleY(1)' }
+        ], { delay: EXIT - 140, duration: 260, easing: 'ease-out', fill: 'none' });
+        const doors = [-1, 1].map((dir, i) => play(halves[i], [
+            { transform: 'translateX(0)' },
+            { transform: `translateX(${dir * 52}%)` }
+        ], { delay: EXIT, duration: SPLIT, easing: 'cubic-bezier(.7,0,.3,1)', fill: 'forwards' }));
+        const out = doors[1];
 
         // Звук: браузер пускает его без клика, только если разрешает сайту автозвук.
         // Не пустил сразу — молчим: запоздалый лязг после заставки хуже тишины.
@@ -252,7 +334,7 @@
             if (ctx) setTimeout(() => ctx.close().catch(() => {}), 3500);   // дать дотаять хвосту последнего удара
         };
         out.finished.then(cleanup, cleanup);
-        setTimeout(cleanup, EXIT + 3000);           // если анимации не доиграют (вкладка в фоне)
+        setTimeout(cleanup, EXIT + SPLIT + 2500);           // если анимации не доиграют (вкладка в фоне)
         // клик или клавиша — пропустить
         const skip = () => {
             if (done) return;
@@ -529,6 +611,20 @@
 
     // Иконки мода — один стиль: контур 1.8 px, скруглённые концы, сетка 24×24, цвет — currentColor.
     // Каждая рисует свою функцию: по ней должно быть понятно, что делает кнопка.
+    // Логотип скрипта задаётся в ОДНОМ месте — строкой @icon в шапке. Tampermonkey показывает
+    // его в своём списке, а мы берём его оттуда же (GM_info) для логотипа в углу сайта.
+    // Нет картинки — логотип сайта остаётся свой.
+    function scriptLogo(size) {
+        const meta = (GM_info.scriptMetaStr || '').match(/^\/\/ @icon\s+(.+?)\s*$/m);
+        const src = (GM_info.script && GM_info.script.icon) || (meta && meta[1]);
+        if (!src) return null;
+        const img = document.createElement('img');
+        img.src = src;
+        img.alt = 'ИТД';
+        img.width = img.height = size;
+        img.style.cssText = `width:${size}px;height:${size}px;display:block;border-radius:${Math.round(size * 0.25)}px;`;
+        return img;
+    }
     const svgIcon = (body, size = 20, stroke = 'currentColor') =>
         `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
     // фон: рамка с искрой — «живой фон»
@@ -548,6 +644,10 @@
             // перечёркнутый щит — без цензуры
             'Анти цензура': svgIcon('<path d="M12 3 5 6v5.2c0 4.3 2.9 7.9 7 9.8 1.6-.7 3-1.7 4.1-3M19 13.5c.1-.8.2-1.5.2-2.3V6L12 3"/><path d="m3 3 18 18"/>'),
             'Стиль фона': svgIcon(I_BG),
+            // два стекла внахлёст с бликом — стеклянные блоки
+            'Стекло': svgIcon('<rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/><path d="M11.5 15.5l3-3M11.5 18.5l6-6"/>'),
+            // динамик с волнами — звуки интерфейса
+            'Звуки интерфейса': svgIcon('<path d="M4 9.5h3l4-3.5v12l-4-3.5H4z"/><path d="M15 9a4 4 0 0 1 0 6M17.5 6.5a7.5 7.5 0 0 1 0 11"/>'),
             // кадр с кнопкой воспроизведения — заставка при входе
             'Заставка при входе': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><path d="m10 9 5 3-5 3z"/>'),
             // сердце со стрелкой повтора — лайки сами
@@ -567,7 +667,6 @@
         BANNER_CHANGE: svgIcon('<path d="M20 11.5V17a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17V7a2.5 2.5 0 0 1 2.5-2.5h5"/><circle cx="9" cy="9.5" r="1.5"/><path d="m20 15.5-3.5-3.5L8 19.5"/><path d="M15 6.5a3 3 0 0 1 5.2-1.8M21 3v2.4h-2.4"/>'),
         BANNER_CANCEL: svgIcon('<path d="M18 6 6 18M6 6l12 12"/>'),
         BANNER_APPLY: svgIcon('<path d="m5 12.5 4.5 4.5L19 7.5"/>'),
-        YOUR_LOGO: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='36' height='36'><defs><filter id='glow' x='-20%' y='-20%' width='140%' height='140%'><feGaussianBlur in='SourceGraphic' stdDeviation='3' result='blur'/></filter><linearGradient id='rainbow' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' style='stop-color:#ff0000'/><stop offset='16%' style='stop-color:#ff8800'/><stop offset='33%' style='stop-color:#ffff00'/><stop offset='50%' style='stop-color:#00ff00'/><stop offset='66%' style='stop-color:#00ffff'/><stop offset='83%' style='stop-color:#0000ff'/><stop offset='100%' style='stop-color:#ff00ff'/></linearGradient></defs><rect width='100' height='100' rx='20' fill='#1a1a1a'/><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(#rainbow)' filter='url(#glow)' opacity='0.9'>N</text><text x='50' y='72' font-family='Arial, sans-serif' font-size='60' font-weight='bold' text-anchor='middle' fill='url(#rainbow)'>N</text></svg>`,
         // наклейка с загнутым углом — стикеры
         STICKER_BUTTON: svgIcon('<path d="M15 21H8a5 5 0 0 1-5-5V8a5 5 0 0 1 5-5h8a5 5 0 0 1 5 5v7z"/><path d="M15 21v-2.5a3.5 3.5 0 0 1 3.5-3.5H21"/><path d="M8.5 13.5a4.5 4.5 0 0 0 6 .5"/><path d="M9 9h.01M15 9h.01" stroke-width="2.6"/>'),
         // дуга, крутится — загрузка
@@ -821,6 +920,32 @@
             matrixSat: 15,
             avatarSat: 15
         },
+        // «Перелив» — по буквам пробегает блик; «Глитч» — цифровые помехи. Вид задаёт nickCss(dark).
+        shimmer: {
+            name: 'Перелив',
+            color: '#b388ff',
+            nickCss: dark => `background: linear-gradient(100deg, ${dark ? '#a78bfa 0%, #a78bfa 38%, #ffffff 50%, #f0abfc 58%, #a78bfa 72%, #a78bfa 100%'
+                : '#5b21b6 0%, #5b21b6 38%, #c084fc 50%, #db2777 58%, #5b21b6 72%, #5b21b6 100%'}) 0 0 / 250% 100% !important;
+                -webkit-background-clip: text !important; background-clip: text !important; -webkit-text-fill-color: transparent !important;
+                animation: vpShimmer 3.2s ease-in-out infinite !important;`,
+            glow: 'drop-shadow(0 0 10px rgba(179, 136, 255, 0.75)) drop-shadow(0 0 22px rgba(179, 136, 255, 0.4))',
+            matrixHue: 265,
+            avatarHue: 265,
+            matrixSat: 90,
+            avatarSat: 90
+        },
+        glitch: {
+            name: 'Глитч',
+            color: '#00fff0',
+            nickCss: dark => `color: ${dark ? '#eafffd' : '#111'} !important; -webkit-text-fill-color: currentColor !important; background: none !important;
+                display: inline-block; text-shadow: 1.5px 0 rgba(255, 0, 200, .75), -1.5px 0 rgba(0, 255, 240, .75) !important;
+                animation: vpGlitch 3.6s steps(1, end) infinite !important;`,
+            glow: 'drop-shadow(0 0 8px rgba(0, 255, 240, 0.55))',
+            matrixHue: 180,
+            avatarHue: 180,
+            matrixSat: 100,
+            avatarSat: 100
+        },
         rainbow: {
             name: 'Радужный',
             color: 'rainbow',
@@ -835,7 +960,20 @@
         }
     };
 
-    const styleKeys = Object.keys(nickStyles);
+    // В меню — по кругу цветов, от красного: красные к красным, синие к синим; белый и радуга — в конце
+    const hueOf = hex => {
+        const h = hex.length === 4 ? hex.replace(/#(.)(.)(.)/, '#$1$1$2$2$3$3') : hex;
+        const [r, g, b] = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+        const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+        if (d < 0.15) return null;                                   // серые и белый — без оттенка
+        const hue = max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+        return (hue * 60 + 30) % 360;                                // сдвиг: розово-красные (330°+) идут первыми
+    };
+    const styleKeys = Object.keys(nickStyles).sort((a, b) => {
+        const rank = k => { const c = nickStyles[k].color; const h = c && c.startsWith('#') ? hueOf(c) : null;
+            return h !== null ? h : c === 'rainbow' ? 1001 : 1000; };
+        return rank(a) - rank(b);
+    });
 
     const globalStyles = document.createElement('style');
     globalStyles.textContent = `
@@ -932,6 +1070,16 @@
             0% { background-position: 0% 50%; }
             100% { background-position: 200% 50%; }
         }
+        .nick-style-option.vp-active {
+            background: color-mix(in srgb, var(--vp-accent, #0080ff) 16%, transparent) !important;
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 45%, transparent) !important;
+            font-weight: 600 !important;
+        }
+        .vp-opt-check { margin-left: auto; display: flex; color: var(--vp-accent, #0080ff); }
+        /* светлая тема сайта: светлые фоны (звёзды, снег, матрица) выворачиваем по яркости —
+           белое станет тёмным, оттенки останутся свои */
+        html.vp-light .vp-bg-canvas { filter: invert(1) hue-rotate(180deg); }
+        html.vp-light .nick-style-dropdown, html.vp-light .settings-dropdown { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important; }
         .nick-style-option:not(:last-child) {
             margin-bottom: 2px !important;
         }
@@ -1002,6 +1150,7 @@
     // Кадр ~30 раз в секунду, скорости заданы на 50 мс (dt), от частоты кадров не зависят.
     // Свечение — заранее нарисованные спрайты, а не shadowBlur: тот считался бы каждый кадр.
     const canvas = document.createElement('canvas');
+    canvas.className = 'vp-bg-canvas';
     canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;opacity:0.2;pointer-events:none;transition:opacity .4s ease;';
     document.body.appendChild(canvas);
     const ctx = canvas.getContext('2d');
@@ -1412,7 +1561,7 @@
     // Меняются только правила: новые элементы красятся сами, радуга трогает четыре правила,
     // а не каждый ник на странице.
     const paintStyle = document.createElement('style');
-    paintStyle.textContent = '.vp-my-nick {} .vp-my-nick-box {} .my-avatar-glow {} .vp-post:hover {} '
+    paintStyle.textContent = '.vp-my-nick {} .vp-my-nick-box {} .my-avatar-glow {} article.vp-post:hover {} '
         + '.vp-nav-link.vp-active .vp-nav-icon {} .vp-tabs > div:empty {} :root {} ::selection {}';
     document.head.appendChild(paintStyle);
     let paintKey = '', paintRootKey = '';
@@ -1430,20 +1579,30 @@
     function paint() {
         const style = nickStyles[currentStyle];
         const rainbow = currentStyle === 'rainbow';
-        const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const dark = isDarkTheme();
         const h = Math.round(globalHue * 10) / 10;
         const key = [currentStyle, rainbow ? h : '', dark, nickGlowEnabled, avatarGlowEnabled, postBorderEnabled].join();
         if (key === paintKey) return;
         paintKey = key;
         const [nick, nickBox, avatar, post, navIcon, tab, root, selection] = [...paintStyle.sheet.cssRules].map(r => r.style);
-        const hsl = `hsl(${h}, 100%, 55%)`;
+        const hsl = `hsl(${h}, 100%, ${dark ? 55 : 42}%)`;
         if (rainbow) {
             nick.cssText = `color: ${hsl} !important; text-shadow: 0 0 5px ${hsl} !important;`;
+        } else if (style.nickCss) {
+            nick.cssText = style.nickCss(dark);
         } else {
-            const gradient = dark && style.gradientDark ? style.gradientDark : style.gradientLight;
+            // светлая тема сайта: белый ник — графитовым, иначе его не видно
+            const gradient = dark ? style.gradientDark || style.gradientLight
+                : currentStyle === 'white' ? 'linear-gradient(270deg, #1a1a1a, #4a4a4a, #262626)' : style.gradientLight;
             nick.cssText = `background: ${gradient} !important; -webkit-background-clip: text !important; background-clip: text !important; -webkit-text-fill-color: transparent !important;`;
         }
-        nickBox.cssText = !nickGlowEnabled ? '' : `filter: ${rainbow ? `drop-shadow(0 0 6px ${hsl}) drop-shadow(0 0 12px ${hsl})` : style.glow} !important;`;
+        // на светлом фоне яркие цвета темнее, а свечение мягче — иначе ник расплывается пятном
+        const glow = rainbow ? `drop-shadow(0 0 6px ${hsl}) drop-shadow(0 0 12px ${hsl})`
+            : dark ? style.glow
+            : currentStyle === 'white' ? 'drop-shadow(0 0 5px rgba(0, 0, 0, 0.25))'
+            : `brightness(0.8) saturate(1.3) drop-shadow(0 0 5px color-mix(in srgb, ${accentOf(style)} 55%, transparent))`;
+        nickBox.cssText = !nickGlowEnabled ? (dark || rainbow ? '' : 'filter: brightness(0.8) saturate(1.3) !important;')
+            : `filter: ${glow} !important;`;
         const ah = style.avatarHue || 210, as = style.avatarSat ?? 100;
         avatar.cssText = !avatarGlowEnabled ? '' : `filter: ${rainbow
             ? `drop-shadow(0 0 5px ${hsl}) drop-shadow(0 0 12px ${hsl})`
@@ -1452,15 +1611,17 @@
         post.cssText = !postBorderEnabled ? '' : `border-color: ${border} !important; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3), 0 0 0 2px ${border} !important;`;
 
         // цвет стиля — по интерфейсу: иконка активного пункта меню, бегунок вкладок
-        const accent = rainbow ? `hsl(${h}, 100%, 62%)` : accentOf(style);
+        const accent = rainbow ? `hsl(${h}, 100%, ${dark ? 62 : 45}%)`
+            : dark ? accentOf(style)
+            : currentStyle === 'white' ? '#1a1a1a' : `color-mix(in srgb, ${accentOf(style)} 78%, #000)`;
         navIcon.cssText = `color: ${accent} !important; filter: drop-shadow(0 0 6px ${accent}) !important;`;
         tab.cssText = `box-shadow: inset 0 0 0 1px ${accent}, 0 0 14px -4px ${accent} !important;`;
         // прокрутка, выделение и фокус висят на корне — их меняем редко (у радуги шагом 30°),
         // иначе каждый кадр пересчитывалась бы вся страница
-        const rootKey = rainbow ? 'r' + Math.round(h / 30) : accent;
+        const rootKey = (rainbow ? 'r' + Math.round(h / 30) : accent) + dark;
         if (rootKey !== paintRootKey) {
             paintRootKey = rootKey;
-            const slow = rainbow ? `hsl(${Math.round(h / 30) * 30}, 100%, 62%)` : accent;
+            const slow = rainbow ? `hsl(${Math.round(h / 30) * 30}, 100%, ${dark ? 62 : 45}%)` : accent;
             root.cssText = `--vp-accent: ${slow}; scrollbar-color: color-mix(in srgb, ${slow} 55%, transparent) transparent;`;
             selection.cssText = `background: color-mix(in srgb, ${slow} 45%, transparent) !important;`;
         }
@@ -1470,7 +1631,15 @@
         if (style.color && style.color.startsWith('#')) return style.color;
         return `hsl(${style.avatarHue || 210}, ${style.avatarSat ?? 100}%, 62%)`;
     }
-    new MutationObserver(paint).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    // Тема сайта: «Настройки → Оформление» ставит <html data-theme="dark">, у светлой атрибута
+    // «dark» нет. Меняют тему — перекрашиваемся сразу, без перезагрузки.
+    function isDarkTheme() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
+    function applySiteTheme() {
+        document.documentElement.classList.toggle('vp-light', !isDarkTheme());
+        paint();
+    }
+    document.documentElement.classList.toggle('vp-light', !isDarkTheme());   // первая покраска — ниже, paint()
+    new MutationObserver(applySiteTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
     // радуга: оттенок ходит туда-обратно 0 → 360 → 0
     function stepHue(dt = 1) {
@@ -1532,12 +1701,20 @@
         return true;
     }
 
-    function menuOption(icon, label, onPick) {
+    // active — выбранный сейчас пункт: подсветка и галочка справа
+    function menuOption(icon, label, onPick, active) {
         const option = document.createElement('div');
-        option.className = 'nick-style-option';
+        option.className = 'nick-style-option' + (active ? ' vp-active' : '');
         const text = document.createElement('span');
         text.textContent = label;
         option.append(icon, text);
+        if (active) {
+            option.setAttribute('aria-checked', 'true');
+            const mark = document.createElement('span');
+            mark.className = 'vp-opt-check';
+            mark.innerHTML = svgIcon('<path d="m5 12.5 4.5 4.5L19 7.5"/>', 16);
+            option.appendChild(mark);
+        }
         option.onclick = (e) => { e.stopPropagation(); onPick(); closePopup(); };
         return option;
     }
@@ -1567,7 +1744,7 @@
             GM_setValue('nickStyle', key);
             paint();
             btn.title = `Стиль: ${nickStyles[key].name}`;
-        })));
+        }, key === currentStyle)));
         openPopup(btn, menu);
     }
 
@@ -1592,7 +1769,7 @@
                 backgroundStyle = key;
                 GM_setValue('backgroundStyle', key);
                 btn.title = 'Стиль фона: ' + bg.name;
-            }));
+            }, key === backgroundStyle));
         });
         openPopup(btn, menu);
     }
@@ -1701,7 +1878,9 @@
         {
             label: 'Автолайки', get: () => autoLikeEnabled, key: 'autoLikeEnabled',
             set: v => { autoLikeEnabled = v; updateAutoLikeButtons(); }
-        }
+        },
+        { label: 'Стекло', get: () => glassEnabled, set: v => { glassEnabled = v; applyGlass(); }, key: 'glassEnabled' },
+        { label: 'Звуки интерфейса', get: () => uiSoundEnabled, set: v => { uiSoundEnabled = v; if (v) uiSound('toggle'); }, key: 'uiSoundEnabled' }
     ];
     function openSettingsMenu(btn) {
         const menu = document.createElement('div');
@@ -2537,19 +2716,15 @@
                 if (customLink) return;
                 const oldSvg = container.querySelector('svg');
                 if (!oldSvg) return;
-                const YOUR_ICON = ICONS.YOUR_LOGO;
+                const logo = scriptLogo(36);
+                if (!logo) return;
                 const link = document.createElement('a');
                 link.href = 'https://t.me/NeuroSFW';
                 link.target = '_blank';
                 link.style.cursor = 'pointer';
                 link.style.display = 'inline-flex';
                 link.style.alignItems = 'center';
-                const temp = document.createElement('div');
-                temp.innerHTML = YOUR_ICON;
-                const newSvg = temp.firstElementChild;
-                newSvg.setAttribute('width', '36');
-                newSvg.setAttribute('height', '36');
-                link.appendChild(newSvg);
+                link.appendChild(logo);
                 const versionBtn = container.querySelector('.' + SELECTORS.versionBtn);
                 let bottomBlock = container.querySelector('.vp-version-row');
                 container.innerHTML = '';
@@ -2579,7 +2754,7 @@
                     newBottom.className = 'vp-version-row';
                     const versionSpan = document.createElement('span');
                     versionSpan.className = 'vp-version-chip';
-                    versionSpan.title = 'ITD Visual Pack';
+                    versionSpan.title = 'ИТД X';
                     versionSpan.textContent = 'v' + GM_info.script.version;
                     newBottom.appendChild(versionSpan);
                     container.appendChild(newBottom);
@@ -2675,19 +2850,15 @@
                 const wrapper = document.createElement('div');
                 wrapper.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 2px;';
 
-                const YOUR_ICON = ICONS.YOUR_LOGO;
+                const logo = scriptLogo(28);
+                if (!logo) return;
                 const link = document.createElement('a');
                 link.href = 'https://t.me/NeuroSFW';
                 link.target = '_blank';
                 link.style.cursor = 'pointer';
                 link.style.display = 'inline-flex';
                 link.style.alignItems = 'center';
-                const temp = document.createElement('div');
-                temp.innerHTML = YOUR_ICON;
-                const newSvg = temp.firstElementChild;
-                newSvg.setAttribute('width', '28');
-                newSvg.setAttribute('height', '28');
-                link.appendChild(newSvg);
+                link.appendChild(logo);
                 wrapper.appendChild(link);
 
                 const bottomRow = document.createElement('div');
@@ -2781,7 +2952,7 @@
             const base = halfRate ? gap / 2 : gap;
             bestGap = Math.min(bestGap, base);          // родной интервал экрана
             slow = base > bestGap * 1.7 ? slow + 1 : Math.max(0, slow - 2);
-            if (!halfRate && slow > 45) halfRate = true;
+            if (!halfRate && slow > 45) { halfRate = true; document.documentElement.classList.add('vp-glass-lite'); }
         }
         const dt = Math.min(3, gap / 50);                // доля от 50 мс: скорости не зависят от частоты кадров
         if (currentStyle === 'rainbow') { stepHue(dt); paint(); }
@@ -3242,7 +3413,7 @@
 
                 const title = document.createElement('h3');
                 title.textContent = 'Обрежьте стикер';
-                title.style.cssText = 'margin:0;color:white;font-size:18px;font-weight:600;';
+                title.style.cssText = 'margin:0;color:var(--text-primary,#fff);font-size:18px;font-weight:600;';
 
                 const previewContainer = document.createElement('div');
                 previewContainer.style.cssText = 'position:relative;width:100%;aspect-ratio:1;overflow:hidden;border-radius:12px;background:#000;';
@@ -3329,10 +3500,10 @@
                 ratios.forEach(ratio => {
                     const btn = document.createElement('button');
                     btn.textContent = ratio.label;
-                    btn.style.cssText = 'background:rgba(255,255,255,0.1);border:none;color:white;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;';
+                    btn.style.cssText = 'background:var(--bg-hover,rgba(255,255,255,0.1));border:none;color:var(--text-primary,#fff);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;';
                     btn.onclick = () => {
                         currentAspectRatio = ratio.value;
-                        document.querySelectorAll('.aspect-ratio-btn').forEach(b => b.style.background = 'rgba(255,255,255,0.1)');
+                        document.querySelectorAll('.aspect-ratio-btn').forEach(b => b.style.background = 'var(--bg-hover,rgba(255,255,255,0.1))');
                         btn.style.background = '#0080FF';
                         activeRatioBtn = btn;
 
@@ -3354,7 +3525,7 @@
 
                 const cancelBtn = document.createElement('button');
                 cancelBtn.textContent = 'Отмена';
-                cancelBtn.style.cssText = 'background:transparent;border:1px solid rgba(255,255,255,0.3);color:white;padding:8px 16px;border-radius:8px;cursor:pointer;';
+                cancelBtn.style.cssText = 'background:transparent;border:1px solid var(--border-color,rgba(255,255,255,0.3));color:var(--text-primary,#fff);padding:8px 16px;border-radius:8px;cursor:pointer;';
                 cancelBtn.onclick = () => {
                     document.body.removeChild(modal);
                     resolve(null);
@@ -3528,7 +3699,7 @@
                     constrainCropArea();
 
                     if (activeRatioBtn) {
-                        document.querySelectorAll('.aspect-ratio-btn').forEach(b => b.style.background = 'rgba(255,255,255,0.1)');
+                        document.querySelectorAll('.aspect-ratio-btn').forEach(b => b.style.background = 'var(--bg-hover,rgba(255,255,255,0.1))');
                         activeRatioBtn.style.background = '#0080FF';
                     }
                 }
@@ -4177,6 +4348,133 @@
 
     let messagesOverlay = null;
 
+    // Сообщений на ИТД нет — кнопка открывает «чат», где сервер сначала печатает,
+    // а потом отвечает шуткой. «Ещё раз» — новая шутка, Esc или клик мимо — закрыть.
+    const MESSAGE_JOKES = [
+        ['🖤', 'But nobody came...'],
+        ['😔', 'Ошибка загрузки'],
+        ['💀', 'Загрузка... шучу, ошибка'],
+        ['🐎', 'Твои сообщения украли цыгане'],
+        ['😈', 'Загрузка... нет'],
+        ['🤝', 'Ты им не нужен, брат'],
+        ['⏳', 'Сообщения загружены на 99%... 99%... 99%...'],
+        ['🎂', 'Сообщения — это ложь'],
+        ['🖕', 'Иди ка ты на хуй'],
+        ['🤖', 'Сервер ответил: пошёл нахуй'],
+        ['🚫', 'Связь заблокирована Роскомнадзором'],
+        ['📭', 'Пусто. Как в холодильнике в конце месяца'],
+        ['🕊️', 'Сообщение отправлено голубем. Голубь не вернулся'],
+        ['🔒', 'Чат зашифрован так надёжно, что даже ты его не прочитаешь'],
+        ['👀', 'Все прочитали. Никто не ответил'],
+        ['📡', 'Ищем сигнал... Попробуй встать на табуретку'],
+        ['🐈', 'Тут были сообщения, но их съел кот'],
+        ['💌', 'Тебе пишут... пишут... передумали'],
+        ['📵', 'Абонент временно недоступен. И постоянно тоже'],
+        ['🗿', 'Сообщений: 0. Друзей: загрузка...'],
+        ['🧾', 'Первое сообщение платное: 99 999 ₽'],
+        ['🛠️', 'Сообщения появятся в следующем обновлении. В каком — не скажем'],
+    ];
+
+    function buildMessagesOverlay() {
+        const style = document.createElement('style');
+        style.textContent = `
+        .vp-msg-backdrop { position: fixed; inset: 0; z-index: 99999; display: none; align-items: center; justify-content: center;
+            padding: 16px; background: rgba(0, 0, 0, .6); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+        .vp-msg-backdrop.vp-open { display: flex; animation: vpMsgFade .18s ease-out; }
+        .vp-msg-card { width: min(400px, 100%); box-sizing: border-box; padding: 18px; border-radius: 28px; cursor: default;
+            background: var(--block-bg, #1c1c22); color: var(--text-primary, #fff); font-family: inherit;
+            border: 1px solid color-mix(in srgb, var(--text-primary, #fff) 10%, transparent);
+            box-shadow: 0 24px 60px rgba(0, 0, 0, .45); animation: vpMsgPop .28s cubic-bezier(.2, 1.3, .4, 1); }
+        .vp-msg-head { display: flex; align-items: center; gap: 12px; padding-bottom: 14px;
+            border-bottom: 1px solid color-mix(in srgb, var(--text-primary, #fff) 8%, transparent); }
+        .vp-msg-ava { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+            color: #fff; background: var(--vp-accent, #0080ff); }
+        .vp-msg-who { display: flex; flex-direction: column; min-width: 0; }
+        .vp-msg-name { font-weight: 700; font-size: 15px; }
+        .vp-msg-status { font-size: 12px; color: var(--text-secondary, #8a8a99); }
+        .vp-msg-close { margin-left: auto; width: 32px; height: 32px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; display: flex;
+            align-items: center; justify-content: center; background: transparent; color: var(--text-secondary, #8a8a99); }
+        .vp-msg-close:hover { background: var(--bg-hover, rgba(255, 255, 255, .08)); color: var(--text-primary, #fff); }
+        .vp-msg-body { min-height: 96px; padding: 18px 2px; display: flex; align-items: flex-end; }
+        .vp-msg-bubble { max-width: 88%; padding: 12px 16px; border-radius: 20px 20px 20px 6px; font-size: 16px; line-height: 1.4;
+            background: var(--bg-hover, rgba(255, 255, 255, .07)); animation: vpMsgIn .25s ease-out; overflow-wrap: anywhere; }
+        .vp-msg-emoji { display: block; font-size: 38px; line-height: 1; margin-bottom: 8px; }
+        .vp-msg-typing { display: flex; gap: 5px; padding: 16px 18px; }
+        .vp-msg-typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary, #8a8a99); animation: vpMsgDot 1s infinite; }
+        .vp-msg-typing i:nth-child(2) { animation-delay: .15s; }
+        .vp-msg-typing i:nth-child(3) { animation-delay: .3s; }
+        .vp-msg-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px;
+            color: var(--text-secondary, #8a8a99); }
+        .vp-msg-again { border: 0; border-radius: 999px; padding: 9px 16px; cursor: pointer; font: inherit; font-size: 14px; font-weight: 600;
+            color: #fff; background: var(--vp-accent, #0080ff); transition: filter .15s, transform .15s; }
+        .vp-msg-again:hover { filter: brightness(1.12); }
+        .vp-msg-again:active { transform: scale(.96); }
+        .vp-msg-again:disabled { opacity: .5; cursor: default; }
+        @keyframes vpMsgFade { from { opacity: 0; } }
+        @keyframes vpMsgPop { from { opacity: 0; transform: translateY(12px) scale(.96); } }
+        @keyframes vpMsgIn { from { opacity: 0; transform: translateY(6px); } }
+        @keyframes vpMsgDot { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
+        @media (prefers-reduced-motion: reduce) { .vp-msg-backdrop, .vp-msg-backdrop * { animation: none !important; } }`;
+        document.head.appendChild(style);
+
+        const root = document.createElement('div');
+        root.className = 'vp-msg-backdrop';
+        root.innerHTML = `
+            <div class="vp-msg-card" role="dialog" aria-modal="true" aria-label="Сообщения">
+                <div class="vp-msg-head">
+                    <div class="vp-msg-ava">${ICONS.MESSAGES}</div>
+                    <div class="vp-msg-who"><span class="vp-msg-name">Сервер ИТД</span><span class="vp-msg-status"></span></div>
+                    <button class="vp-msg-close" title="Закрыть (Esc)">${svgIcon('<path d="M6 6l12 12M18 6 6 18"/>', 18)}</button>
+                </div>
+                <div class="vp-msg-body" aria-live="polite"></div>
+                <div class="vp-msg-foot"><span>Esc — закрыть</span><button class="vp-msg-again">Ещё раз</button></div>
+            </div>`;
+        document.body.appendChild(root);
+        const body = root.querySelector('.vp-msg-body');
+        const status = root.querySelector('.vp-msg-status');
+        const again = root.querySelector('.vp-msg-again');
+        let last = -1, timer = 0;
+
+        function say() {
+            clearTimeout(timer);
+            let i;
+            do i = Math.floor(Math.random() * MESSAGE_JOKES.length); while (i === last && MESSAGE_JOKES.length > 1);
+            last = i;
+            status.textContent = 'печатает...';
+            again.disabled = true;
+            body.innerHTML = '<div class="vp-msg-bubble vp-msg-typing"><i></i><i></i><i></i></div>';
+            timer = setTimeout(() => {
+                const [emoji, text] = MESSAGE_JOKES[i];
+                const bubble = document.createElement('div');
+                bubble.className = 'vp-msg-bubble';
+                const e = document.createElement('span');
+                e.className = 'vp-msg-emoji';
+                e.textContent = emoji;
+                bubble.append(e, text);
+                body.replaceChildren(bubble);
+                status.textContent = 'был(а) в сети никогда';
+                again.disabled = false;
+                again.focus({ preventScroll: true });
+            }, 650 + Math.random() * 500);
+        }
+        function close() {
+            clearTimeout(timer);
+            root.classList.remove('vp-open');
+            document.removeEventListener('keydown', onKey, true);
+        }
+        function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
+
+        root.addEventListener('click', (e) => { if (e.target === root) close(); });
+        root.querySelector('.vp-msg-close').onclick = close;
+        again.onclick = say;
+        root.open = () => {
+            root.classList.add('vp-open');
+            document.addEventListener('keydown', onKey, true);
+            say();
+        };
+        return root;
+    }
+
     function addMessagesButton() {
         const nav = document.querySelector('.' + SELECTORS.sidebar + ' .' + SELECTORS.nav)
             || document.querySelector('.' + SELECTORS.nav)
@@ -4194,55 +4492,7 @@
             return;
         }
 
-        if (!messagesOverlay) {
-            const memes = [
-                'But nobody came... 🖤',
-                'Ошибка загрузки 😔',
-                'Загрузка... шучу, ошибка 💀',
-                'Твои сообщения украли цыгане 🐎',
-                'Загрузка... нет 😈',
-                'Ты им не нужен, брат 🤝😞',
-                'Сообщения загружены на 99%... 99%... ⏳',
-                'Сообщения — это ложь 🎂',
-                'Иди ка ты на хуй',
-                'Сервер ответил: пошёл нахуй 🖕🤖',
-                'Связь заблокирована Роскомнадзором 🇷🇺🚫',
-            ];
-
-            messagesOverlay = document.createElement('div');
-            messagesOverlay.style.cssText = `
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.85);
-            z-index: 99999;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            color: #fff;
-            font-size: 28px;
-            font-family: sans-serif;
-            text-align: center;
-            padding: 40px;
-            user-select: none;
-        `;
-            messagesOverlay.addEventListener('click', () => {
-                messagesOverlay.style.display = 'none';
-            });
-            document.body.appendChild(messagesOverlay);
-
-            messagesOverlay._memes = memes;
-            messagesOverlay._lastMemeIndex = -1;
-            messagesOverlay._showRandomMeme = function () {
-                let idx;
-                do {
-                    idx = Math.floor(Math.random() * this._memes.length);
-                } while (idx === this._lastMemeIndex && this._memes.length > 1);
-                this._lastMemeIndex = idx;
-                this.textContent = this._memes[idx];
-                this.style.display = 'flex';
-            };
-        }
+        if (!messagesOverlay) messagesOverlay = buildMessagesOverlay();
 
         messagesLink = document.createElement('a');
         messagesLink.href = '#';
@@ -4251,7 +4501,7 @@
         messagesLink.className = (commonClasses(siteLinks) + ' ' + SELECTORS.navLink).trim();
         messagesLink.addEventListener('click', (e) => {
             e.preventDefault();
-            messagesOverlay._showRandomMeme();
+            messagesOverlay.open();
         });
 
         const iconSpan = document.createElement('span');
@@ -4269,10 +4519,12 @@
     onDom(addMessagesButton);
 
     const postDesignStyle = document.createElement('style');
+    // Оформление карточки — только постам ленты (article). Открытый пост собран иначе:
+    // рамка, отступ и размытый фон на нём съезжали с настоящих краёв блока.
     postDesignStyle.textContent = `
-        .vp-post {
+        article.vp-post {
             background: var(--block-bg, rgba(30, 30, 46, 0.8));
-            backdrop-filter: blur(4px) !important;
+            backdrop-filter: var(--vp-glass-filter, blur(4px)) !important;
             border-radius: 24px !important;
             margin-bottom: 16px !important;
             transition: all 0.25s ease !important;
@@ -4473,7 +4725,7 @@
     document.head.appendChild(styleIcons);
 
     function addBlurBackground() {
-        document.querySelectorAll('.' + SELECTORS.post + ', .' + SELECTORS.repost).forEach(article => {
+        document.querySelectorAll('article.' + SELECTORS.post + ', .' + SELECTORS.repost).forEach(article => {
             if (article.hasAttribute('data-blur-bg')) return;
 
             const img = article.querySelector('img.' + SELECTORS.postMedia);
@@ -4984,13 +5236,19 @@
             'Соси хуй'
         ];
 
-        document.querySelectorAll('.' + SELECTORS.notificationText + ':not([data-replaced])').forEach(el => {
-            if (el.textContent && el.textContent.trim()) {
+        // Только сообщения об ошибках — всплывашки сайта (role=alert/status, aria-live) с текстом
+        // про ошибку. В 2.9.x подмена ошибочно шла по тексту уведомлений — маты стояли у всех у ника.
+        document.querySelectorAll('[role="alert"], [role="status"], [aria-live]').forEach(box => {
+            if (box.closest('.vp-msg-backdrop, .vpi-overlay')) return;
+            [box, ...box.querySelectorAll('*')].forEach(el => {
+                if (el.childElementCount || el.hasAttribute('data-replaced')) return;
+                if (!ERROR_TEXT.test(el.textContent)) return;
                 el.textContent = messages[Math.floor(Math.random() * messages.length)];
                 el.setAttribute('data-replaced', 'true');
-            }
+            });
         });
     }
+    const ERROR_TEXT = /ошибк|не удалось|не получилось|попробуйте|что-то пошло не так|error|failed/i;
 
     onDom(replaceNotificationTexts);
 
@@ -5063,7 +5321,7 @@
     }
 
     function colorizePosts() {
-        document.querySelectorAll('.' + SELECTORS.post + ':not([data-post-colored])').forEach(post => {
+        document.querySelectorAll('article.' + SELECTORS.post + ':not([data-post-colored])').forEach(post => {
             const avatar = post.querySelector('.' + SELECTORS.avatarLink + ' .' + SELECTORS.avatar);
             if (!avatar) return;
 
@@ -5180,7 +5438,289 @@
     onDom(markActiveNav);
     addEventListener('popstate', markActiveNav);
 
-    console.log('🟢 ITD Visual Pack');
+    // ================= 3.0: стекло, переходы, меню, баннер, счётчики, звуки =================
+    const fx = document.createElement('style');
+    fx.textContent = `
+        /* Стекло: блоки сайта полупрозрачные и размывают то, что под ними, — живой фон виден
+           сквозь интерфейс. Прозрачность — через переменные сайта, размытие — правилами ниже. */
+        html.vp-glass { --vp-glass-filter: blur(18px) saturate(1.5); }
+        html.vp-glass[data-theme="dark"] {
+            --block-bg: rgba(28, 28, 28, .52); --block-bg-secondary: rgba(42, 42, 44, .55); --block-hover-bg: rgba(44, 44, 47, .6);
+            --modal-bg: rgba(17, 17, 17, .8); --glass-bg: rgba(35, 35, 35, .5);
+        }
+        html.vp-glass.vp-light {
+            --block-bg: rgba(255, 255, 255, .6); --block-bg-secondary: rgba(240, 240, 240, .6); --block-hover-bg: rgba(245, 245, 245, .65);
+            --modal-bg: rgba(255, 255, 255, .82); --glass-bg: rgba(255, 255, 255, .55);
+        }
+        /* слабый компьютер: без размытия (его пришлось бы пересчитывать каждый кадр фона), зато плотнее */
+        html.vp-glass.vp-glass-lite { --vp-glass-filter: none; }
+        html.vp-glass.vp-glass-lite[data-theme="dark"] { --block-bg: rgba(28, 28, 28, .82); --block-bg-secondary: rgba(42, 42, 44, .85); }
+        html.vp-glass.vp-glass-lite.vp-light { --block-bg: rgba(255, 255, 255, .85); }
+        html.vp-glass .nick-style-dropdown, html.vp-glass .settings-dropdown, html.vp-glass .vp-msg-card {
+            backdrop-filter: var(--vp-glass-filter) !important; -webkit-backdrop-filter: var(--vp-glass-filter) !important;
+        }
+
+        /* «Жидкая» подложка активного пункта меню: перетекает к новому пункту */
+        .vp-nav-has-blob { position: relative; }
+        .vp-nav-has-blob > .vp-nav-link { position: relative; z-index: 1; transition: background-color .2s ease, opacity .2s ease !important; }
+        .vp-nav-has-blob > .vp-nav-link .vp-nav-icon { transition: none; }
+        .vp-nav-has-blob > .vp-nav-link.vp-active { background: transparent !important; }
+        .vp-nav-blob { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; opacity: 0;
+            background: color-mix(in srgb, var(--vp-accent, #0080ff) 14%, var(--block-bg, #1c1c1c));
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 32%, transparent),
+                0 8px 24px -10px color-mix(in srgb, var(--vp-accent, #0080ff) 70%, transparent);
+            transition: opacity .25s ease, background-color .4s ease; }
+
+        /* Баннер с глубиной: низ растворяется в фон, при прокрутке картинка отстаёт */
+        .vp-banner.vp-depth { background: transparent !important; }
+        /* маска — только на картинку: кнопки баннера (палитра, загрузка, удаление) остаются яркими */
+        .vp-banner.vp-depth > img[alt="Banner"] { will-change: transform; transform-origin: 50% 50%;
+            -webkit-mask-image: linear-gradient(to bottom, #000 58%, transparent); mask-image: linear-gradient(to bottom, #000 58%, transparent); }
+
+        /* Счётчики профиля «накручиваются»: число рисует ::after, свой текст сайта не трогаем */
+        @property --vp-n { syntax: '<integer>'; inherits: false; initial-value: 0; }
+        .vp-count { position: relative; color: transparent !important; }
+        .vp-count::after { content: counter(vpn); counter-reset: vpn var(--vp-n); position: absolute; left: 0; top: 0;
+            color: var(--vp-count-color); animation: vpCount .9s cubic-bezier(.2, .8, .2, 1) forwards; }
+        @keyframes vpCount { from { --vp-n: 0; } to { --vp-n: var(--vp-to); } }
+
+        /* Стили ника «Перелив» и «Глитч» */
+        @keyframes vpShimmer { 0% { background-position: 100% 0; } 55%, 100% { background-position: 0% 0; } }
+        @keyframes vpGlitch {
+            0%, 100% { text-shadow: 1.5px 0 rgba(255, 0, 200, .75), -1.5px 0 rgba(0, 255, 240, .75); clip-path: none; transform: none; }
+            60% { text-shadow: 3px 0 rgba(255, 0, 200, .9), -3px 0 rgba(0, 255, 240, .9); transform: translateX(1px) skewX(-8deg); }
+            62% { text-shadow: -3px 1px rgba(255, 0, 200, .9), 3px -1px rgba(0, 255, 240, .9); clip-path: inset(38% 0 28% 0); transform: translateX(-2px); }
+            64% { text-shadow: 2px 0 rgba(255, 0, 200, .9), -2px 0 rgba(0, 255, 240, .9); clip-path: inset(0 0 55% 0); transform: translateX(2px); }
+            66% { text-shadow: 1.5px 0 rgba(255, 0, 200, .75), -1.5px 0 rgba(0, 255, 240, .75); clip-path: none; transform: none; }
+            88% { text-shadow: -2px 0 rgba(255, 0, 200, .85), 2px 0 rgba(0, 255, 240, .85); transform: translateX(-1px); }
+            89% { text-shadow: 1.5px 0 rgba(255, 0, 200, .75), -1.5px 0 rgba(0, 255, 240, .75); transform: none; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .vp-count::after { animation: none; counter-reset: vpn var(--vp-to); }
+            .vp-nav-blob { transition: none; }
+        }
+    `;
+    document.head.appendChild(fx);
+    const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // --- 1. Стекло
+    let glassEnabled = GM_getValue('glassEnabled', true);
+    // Какие блоки сайта стеклянные — берём из его же стилей: правила с фоном var(--block-bg…).
+    // Классы сайта — хеши, а так их знать не нужно. Новые таблицы (подгрузка) — дописываем.
+    const glassCss = document.createElement('style');
+    document.head.appendChild(glassCss);
+    let glassSheets = -1;
+    function collectGlass() {
+        if (document.styleSheets.length === glassSheets) return;
+        glassSheets = document.styleSheets.length;
+        const sels = new Set();
+        const walk = rules => {
+            for (const r of rules) {
+                if (r.cssRules && !r.selectorText) { walk(r.cssRules); continue; }
+                if (!r.selectorText || r.selectorText.includes('::')) continue;
+                if (/var\(--(block-bg|modal-bg|block-bg-secondary|glass-bg)/.test(r.style.background + r.style.backgroundColor)) sels.add(r.selectorText);
+            }
+        };
+        for (const sh of document.styleSheets) {
+            if (sh.ownerNode === glassCss || sh.ownerNode === fx) continue;
+            try { walk(sh.cssRules); } catch (e) { /* чужой домен — пропускаем */ }
+        }
+        glassCss.textContent = [...sels].map(sel => `html.vp-glass :is(${sel}) { backdrop-filter: var(--vp-glass-filter); -webkit-backdrop-filter: var(--vp-glass-filter); }`).join('\n');
+    }
+    function applyGlass() {
+        document.documentElement.classList.toggle('vp-glass', glassEnabled);
+        if (glassEnabled) collectGlass();
+    }
+    applyGlass();
+    onDom(function glassSheetsCheck() { if (glassEnabled) collectGlass(); });
+
+    // --- 3. Переходы между страницами: сменился адрес — колонка с содержимым мягко въезжает
+    let lastPath = location.pathname;
+    function pageColumn() {
+        let el = document.querySelector('.' + [SELECTORS.feedBar, SELECTORS.tabs, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .'));
+        if (!el) return null;
+        // вверх до колонки, но не до общего контейнера с боковыми меню: сдвиг/размытие предка
+        // уводит их закреплённые (fixed) блоки вместе с ним — меню «уезжало» и размывалось
+        const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .' + SELECTORS.nav;
+        while (el.parentElement && el.parentElement !== document.body && el.parentElement.getBoundingClientRect().width < 760
+            && !el.parentElement.querySelector(side)) el = el.parentElement;
+        return el.querySelector(side) ? null : el;
+    }
+    onDom(function pageTransition() {
+        if (location.pathname === lastPath) return;
+        lastPath = location.pathname;
+        if (calm) return;
+        const col = pageColumn();
+        if (!col) return;
+        const lite = document.documentElement.classList.contains('vp-glass-lite');
+        col.animate([
+            { opacity: 0, transform: 'translateY(14px)', filter: lite ? 'none' : 'blur(5px)' },
+            { opacity: 1, transform: 'none', filter: 'none' }
+        ], { duration: 340, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+    });
+
+    // --- 10. «Жидкая» подложка меню: при смене пункта растягивается от старого к новому и стягивается
+    let blob = null, blobAt = null;
+    function moveNavBlob() {
+        const nav = document.querySelector('.' + SELECTORS.nav);
+        const active = nav && nav.querySelector(':scope > .' + SELECTORS.navLink + '.vp-active');
+        if (!nav) return;
+        if (!blob || !nav.contains(blob)) {
+            blob = document.createElement('div');
+            blob.className = 'vp-nav-blob';
+            nav.classList.add('vp-nav-has-blob');
+            nav.prepend(blob);
+            blobAt = null;
+        }
+        if (!active) { blob.style.opacity = '0'; return; }
+        const to = { top: active.offsetTop, left: active.offsetLeft, width: active.offsetWidth, height: active.offsetHeight };
+        if (blobAt && to.top === blobAt.top && to.left === blobAt.left && to.width === blobAt.width && to.height === blobAt.height) return;
+        blob.style.borderRadius = getComputedStyle(active).borderRadius;
+        const px = r => ({ top: r.top + 'px', left: r.left + 'px', width: r.width + 'px', height: r.height + 'px' });
+        if (blobAt && !calm && blob.style.opacity === '1') {
+            const lo = Math.min(blobAt.top, to.top), hi = Math.max(blobAt.top + blobAt.height, to.top + to.height);
+            blob.animate([
+                px(blobAt),
+                { ...px({ top: lo, left: to.left + to.width * .04, width: to.width * .92, height: hi - lo }), offset: .45 },
+                px(to)
+            ], { duration: 460, easing: 'cubic-bezier(.65, 0, .25, 1)' });
+        }
+        Object.assign(blob.style, px(to));
+        blob.style.opacity = '1';
+        blobAt = to;
+        proxKick();                                  // сдвиг подложки — догнать сдвиг новой кнопки
+    }
+    onDom(moveNavBlob);
+    addEventListener('resize', () => { blobAt = null; moveNavBlob(); });
+
+    // Кнопки меню выдвигаются к курсору, как док: сдвиг зависит от того, насколько курсор близко
+    // (колокол по расстоянию до центра кнопки). Ближние ярче, их иконка чуть крупнее.
+    const PROX_MAX = 14, PROX_SIGMA = 46;
+    let proxY = null, proxRaf = 0, blobK = 0;
+    const proxNow = new WeakMap();
+    function proxFrame() {
+        proxRaf = 0;
+        const nav = document.querySelector('.' + SELECTORS.nav);
+        if (!nav) return;
+        let moving = false, activeK = 0;
+        nav.querySelectorAll(':scope > .' + SELECTORS.navLink).forEach(a => {
+            const r = a.getBoundingClientRect();
+            const d = proxY === null ? Infinity : proxY - (r.top + r.height / 2);
+            const want = proxY === null ? 0 : Math.exp(-(d * d) / (2 * PROX_SIGMA * PROX_SIGMA));
+            const was = proxNow.get(a) || 0;
+            const k = Math.abs(want - was) < 0.004 ? want : was + (want - was) * 0.22;   // плавно догоняет
+            if (k !== want) moving = true;
+            proxNow.set(a, k);
+            const x = (k * PROX_MAX).toFixed(2);
+            a.style.transform = k ? `translateX(${x}px)` : '';
+            a.style.opacity = k && !a.classList.contains('vp-active') ? String((0.5 + 0.5 * k).toFixed(3)) : '';
+            const icon = a.querySelector('.' + SELECTORS.navIcon);
+            if (icon) icon.style.transform = k ? `scale(${(1 + 0.12 * k).toFixed(3)})` : '';
+            if (a.classList.contains('vp-active')) activeK = k;
+        });
+        // подложка едет за своей кнопкой отдельно и плавно: после смены пункта она догоняет
+        // сдвиг новой кнопки, а не остаётся со сдвигом старой
+        if (blob) {
+            blobK = Math.abs(activeK - blobK) < 0.004 ? activeK : blobK + (activeK - blobK) * 0.22;
+            if (blobK !== activeK) moving = true;
+            blob.style.transform = blobK ? `translateX(${(blobK * PROX_MAX).toFixed(2)}px)` : '';
+        }
+        if (moving) proxRaf = requestAnimationFrame(proxFrame);
+    }
+    function proxKick() { if (!proxRaf) proxRaf = requestAnimationFrame(proxFrame); }
+    if (!calm) {
+        document.addEventListener('pointermove', e => {
+            const nav = document.querySelector('.' + SELECTORS.nav);
+            if (!nav) return;
+            const r = nav.getBoundingClientRect();
+            // зона — меню и немного вокруг, чтобы кнопки начинали выезжать ещё на подходе
+            const inside = e.clientX >= r.left - 24 && e.clientX <= r.right + 40 && e.clientY >= r.top - 60 && e.clientY <= r.bottom + 60;
+            const y = inside ? e.clientY : null;
+            if (y !== proxY) { proxY = y; proxKick(); }
+        }, { passive: true });
+        document.addEventListener('pointerleave', () => { proxY = null; proxKick(); });
+    }
+
+    // --- 13. Баннер с глубиной
+    let bannerTop0 = null, bannerQueued = false;
+    function bannerDepth() {
+        bannerQueued = false;
+        const banner = document.querySelector('.' + SELECTORS.banner);
+        const img = banner && banner.querySelector(':scope > img[alt="Banner"]');
+        if (!img || draggableImg) { bannerTop0 = null; return; }       // пока баннер двигают в редакторе — не мешаем
+        banner.classList.add('vp-depth');
+        const r = banner.getBoundingClientRect();
+        if (bannerTop0 === null) bannerTop0 = r.top;
+        const past = Math.max(0, bannerTop0 - r.top);                 // на сколько баннер уехал вверх
+        if (past > r.height + bannerTop0) return;                    // давно за экраном
+        img.style.transform = calm ? '' : `translateY(${(past * .35).toFixed(1)}px) scale(1.15)`;
+        img.style.opacity = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(3));
+    }
+    addEventListener('scroll', () => { if (!bannerQueued) { bannerQueued = true; requestAnimationFrame(bannerDepth); } }, { capture: true, passive: true });
+    onDom(function bannerDepthDom() { bannerDepth(); });
+    addEventListener('popstate', () => { bannerTop0 = null; });
+
+    // --- 14. Счётчики профиля «накручиваются» до своего числа (один раз на профиль)
+    const COUNT_LABEL = /подпис|пост|лайк|друз/i;
+    let countedPath = '';
+    function countUp() {
+        if (countedPath === location.pathname) return;
+        const spans = [...document.querySelectorAll('span')].filter(sp => {
+            const next = sp.nextElementSibling;
+            return /^\d{1,7}$/.test(sp.textContent.trim()) && !sp.children.length && next && COUNT_LABEL.test(next.textContent)
+                && !sp.closest('.' + SELECTORS.post + ', .' + SELECTORS.notification + ', nav');
+        });
+        if (!spans.length) return;
+        countedPath = location.pathname;
+        if (calm) return;
+        spans.forEach(sp => {
+            sp.style.setProperty('--vp-to', sp.textContent.trim());
+            sp.style.setProperty('--vp-count-color', getComputedStyle(sp).color);
+            sp.classList.add('vp-count');
+            sp.addEventListener('animationend', () => sp.classList.remove('vp-count'), { once: true });
+            setTimeout(() => sp.classList.remove('vp-count'), 1400);     // запас, если анимация не доиграет
+        });
+    }
+    onDom(countUp);
+
+    // --- 19. Тихие звуки интерфейса (по умолчанию выключены): синтез, без файлов
+    let uiSoundEnabled = GM_getValue('uiSoundEnabled', false);
+    let uiCtx = null;
+    function uiSound(kind) {
+        if (!uiSoundEnabled) return;
+        try {
+            uiCtx = uiCtx || new (window.AudioContext || window.webkitAudioContext)();
+            if (uiCtx.state === 'suspended') uiCtx.resume();
+            const t = uiCtx.currentTime;
+            const tone = (f0, f1, dur, vol, type = 'sine', at = 0) => {
+                const o = uiCtx.createOscillator(), g = uiCtx.createGain();
+                o.type = type;
+                o.frequency.setValueAtTime(f0, t + at);
+                o.frequency.exponentialRampToValueAtTime(f1, t + at + dur);
+                g.gain.setValueAtTime(0.0001, t + at);
+                g.gain.exponentialRampToValueAtTime(vol, t + at + 0.006);
+                g.gain.exponentialRampToValueAtTime(0.0001, t + at + dur);
+                o.connect(g).connect(uiCtx.destination);
+                o.start(t + at);
+                o.stop(t + at + dur + 0.02);
+            };
+            // громкости уже в 2 раза тише первой версии (владелец просил)
+            if (kind === 'like') { tone(520, 880, 0.09, 0.03); tone(880, 1320, 0.12, 0.0225, 'sine', 0.06); }  // «пи-пинь»
+            else if (kind === 'toggle') tone(1400, 900, 0.05, 0.02, 'triangle');                               // щелчок
+            else if (kind === 'nav') tone(300, 220, 0.07, 0.025);                                               // мягкий «тук»
+            else tone(900, 700, 0.04, 0.015, 'triangle');                                                       // клик
+        } catch (e) { /* звук не главное */ }
+    }
+    document.addEventListener('click', e => {
+        if (!uiSoundEnabled || !e.isTrusted) return;
+        const t = e.target;
+        if (t.closest('button[aria-label="Нравится"]')) uiSound('like');
+        else if (t.closest('.settings-option, .toggle-switch')) uiSound('toggle');
+        else if (t.closest('.' + SELECTORS.navLink)) uiSound('nav');
+        else if (t.closest('.vp-pill-btn, .nick-style-option, .vp-msg-again, button')) uiSound('click');
+    }, true);
+
+    console.log('🟢 ИТД X');
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
     else start();
