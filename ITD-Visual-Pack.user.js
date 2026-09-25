@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.24
+// @version      3.0.25
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1705,15 +1705,6 @@
     document.head.appendChild(paintStyle);
     let paintKey = '', paintRootKey = '';
 
-    function borderColorOf(style) {
-        // как было: цвет стиля с прозрачностью 0.6 (hex) или 0.3 (hsl)
-        if (style.color && style.color !== 'rainbow' && style.color.startsWith('#')) {
-            const hex = style.color.length === 4 ? style.color.replace(/#(.)(.)(.)/, '#$1$1$2$2$3$3') : style.color;
-            const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
-            return `rgba(${r}, ${g}, ${b}, 0.6)`;
-        }
-        return `hsla(${style.avatarHue || 210}, ${style.avatarSat ?? 100}%, 60%, 0.3)`;
-    }
 
     function paint() {
         const style = nickStyles[currentStyle];
@@ -1748,8 +1739,9 @@
         avatar.cssText = !avatarGlowEnabled ? '' : `filter: ${rainbow
             ? `drop-shadow(0 0 5px ${hsl}) drop-shadow(0 0 12px ${hsl})`
             : `drop-shadow(0 0 3px hsl(${ah}, ${as}%, 60%)) drop-shadow(0 0 6px hsl(${ah}, ${as}%, 60%))`} !important;`;
-        const border = rainbow ? `hsla(${h}, 100%, 55%, 0.3)` : borderColorOf(style);
-        post.cssText = !postBorderEnabled ? '' : `border-color: ${border} !important; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3), 0 0 0 2px ${border} !important;`;
+        // подсветка поста при наведении — та же обводка ярче (в postDesignStyle), цвет стиля не нужен
+        post.cssText = '';
+        document.documentElement.classList.toggle('vp-post-hl', postBorderEnabled);
 
         // цвет стиля — по интерфейсу: иконка активного пункта меню, бегунок вкладок
         const accent = rainbow ? `hsl(${h}, 100%, ${dark ? 62 : 45}%)`
@@ -5069,9 +5061,27 @@
             border-radius: 24px !important;
             margin-bottom: 16px !important;
             transition: all 0.25s ease !important;
-            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            position: relative;
+            border: none !important;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2) !important;
             animation: postAppear 0.3s ease-out forwards !important;
+            --vp-edge-a: rgba(255, 255, 255, .08); --vp-edge-b: rgba(255, 255, 255, .08);   /* без наведения — как было: ровная 1px */
+        }
+        /* Обводка — линия в 1 px слоем поверх края (маска оставляет только кромку), а не border: так ей можно
+           дать градиент при наведении (сверху светлее, книзу тает — как у стекла ИТД), и ничего не сдвигается */
+        article.vp-post::before {
+            content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; z-index: 1;
+            background: linear-gradient(to bottom, var(--vp-edge-a), var(--vp-edge-b));
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+            mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+            transition: opacity .25s ease;
+        }
+
+        /* наведение — только где есть мышь (на телефоне :hover «залипает» после касания): та же обводка, того же
+           цвета, что у поста уже есть, только ярче сверху (книзу — как обычно), та же толщина; цвет стиля не берём.
+           Включается переключателем «Подсветка постов» (класс vp-post-hl на <html>, ставит paint) */
+        @media (hover: hover) {
+            html.vp-post-hl article.vp-post:hover { --vp-edge-a: rgba(255, 255, 255, .24); box-shadow: 0 12px 32px rgba(0, 0, 0, .32) !important; }
         }
         @keyframes postAppear {
             from { opacity: 0; transform: translateY(15px); }
@@ -5950,10 +5960,15 @@
                 rgba(var(--vp-emoji), var(--vp-tint)) 0%,
                 rgba(var(--vp-emoji), calc(var(--vp-tint) * 0.4)) 45%,
                 rgba(var(--vp-emoji), calc(var(--vp-tint) * 0.1)) 100%) !important;
-            border: 1px solid rgba(var(--vp-emoji), 0.22) !important;
-            transition: --vp-tint 0.25s ease, border-color 0.25s ease !important;
+            --vp-edge-a: rgba(var(--vp-emoji), .22); --vp-edge-b: rgba(var(--vp-emoji), .22);   /* как было */
+            transition: --vp-tint 0.25s ease !important;
         }
-        .vp-emoji-tint:hover { --vp-tint: 0.42; border-color: rgba(var(--vp-emoji), 0.4) !important; }
+        .vp-emoji-tint:not(article) { border: 1px solid rgba(var(--vp-emoji), 0.22) !important; }   /* уведомления — не article, у них своя рамка */
+        @media (hover: hover) {
+            .vp-emoji-tint:hover { --vp-tint: 0.42; }
+            .vp-emoji-tint:not(article):hover { border-color: rgba(var(--vp-emoji), 0.4) !important; }
+            html.vp-post-hl article.vp-emoji-tint:hover { --vp-edge-a: rgba(var(--vp-emoji), .55); --vp-edge-b: rgba(var(--vp-emoji), .22); }
+        }
         /* Телефон: уведомления — скруглённые карточки с зазором, как посты, а не полосы во всю ширину */
         @media (max-width: 1172px) {
             .vp-notif { border-radius: 24px !important; margin: 6px 10px !important; }
@@ -6051,6 +6066,8 @@
         .vp-nav-has-blob > .vp-nav-link.vp-active { background: transparent !important; }
         /* своя подложка сайта (нижняя панель телефона) — прячем: вместо неё наша, той же формы */
         .vp-nav-has-blob > div:not(.vp-nav-blob) { opacity: 0 !important; }
+        /* между постами у сайта полоса (нижняя граница обёртки в ленте) — у карточек свои края, она лишняя */
+        .vp-post-slot { border-bottom: none !important; }
         /* «+» (Создать пост) — бугорок по центру нижней панели (newPostBump) */
         .vp-new-post { position: absolute !important; width: ${BUMP}px !important; height: ${BUMP}px !important; z-index: 2; margin: 0 !important;
             background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; }
@@ -6422,7 +6439,12 @@
     addEventListener('scroll', sceneKick, { capture: true, passive: true });
     addEventListener('resize', sceneKick);
     onDom(function sceneWatch() {
-        document.querySelectorAll('article.' + SELECTORS.post).forEach(a => { if (!a._vpScene) { a._vpScene = true; sceneIO.observe(a); } });
+        document.querySelectorAll('article.' + SELECTORS.post).forEach(a => {
+            if (!a._vpScene) { a._vpScene = true; sceneIO.observe(a); }
+            // обёртка поста в ленте (у сайта — полоса-граница снизу, на телефоне видна между карточками)
+            const slot = a.parentElement;
+            if (slot && !slot.classList.contains('vp-post-slot')) slot.classList.add('vp-post-slot');
+        });
         sceneKick();
     });
 
