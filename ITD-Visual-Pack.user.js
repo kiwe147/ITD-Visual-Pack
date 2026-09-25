@@ -1416,8 +1416,16 @@
             margin: 12px 12px 6px; }
         .vp-like-inline { max-height: none !important; }
         /* настройки по вкладкам */
-        .vp-settings-tabs { width: 300px !important; max-width: calc(100vw - 16px) !important; box-sizing: border-box !important;
-            max-height: calc(100vh - 16px) !important; overflow-y: auto !important; overscroll-behavior: contain; scrollbar-width: none; }
+        .vp-settings-tabs { width: 320px !important; max-width: calc(100vw - 16px) !important; box-sizing: border-box !important;
+            max-height: calc(100dvh - 16px); overflow-y: auto !important; overscroll-behavior: contain; scrollbar-width: none;
+            touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+        /* стили ника и фона — сеткой в два столбца */
+        .vp-pick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 4px; }
+        .vp-pick-grid .nick-style-option { padding: 8px 8px !important; gap: 8px !important; font-size: 13px !important; min-width: 0; margin: 0 !important; }
+        .vp-pick-grid .nick-style-option:hover { transform: none !important; }
+        .vp-pick-grid .nick-style-option > span:not(.vp-opt-check) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-pick-grid .vp-opt-check { display: none; }
+        .vp-pick-grid .style-color-dot { width: 18px !important; height: 18px !important; }
         .vp-settings-tabs::-webkit-scrollbar { display: none; }
         .vp-tabs { display: flex; gap: 4px; padding: 3px; margin-bottom: 8px; border-radius: 16px;
             background: color-mix(in srgb, var(--text-primary, #fff) 7%, transparent); }
@@ -2024,7 +2032,10 @@
         if (popup.el.classList.contains('vp-settings-tabs')) {
             const cx = innerWidth < 600 ? innerWidth / 2 : r.left + r.width / 2;          // на телефоне — по центру экрана
             popup.el.style.left = Math.max(8, Math.min(cx - w / 2, innerWidth - w - 8)) + 'px';
-            popup.el.style.top = Math.max(8, Math.min(r.bottom + 8, innerHeight - h - 8)) + 'px';
+            // видимая высота: на телефоне панель браузера перекрывает низ окна, innerHeight её не учитывает
+            const vh = window.visualViewport ? Math.min(innerHeight, visualViewport.height) : innerHeight;
+            popup.el.style.maxHeight = (vh - 16) + 'px';
+            popup.el.style.top = Math.max(8, Math.min(r.bottom + 8, vh - popup.el.offsetHeight - 8)) + 'px';
             return;
         }
         let left = r.right + 8;
@@ -2257,23 +2268,29 @@
             else for (const label of tab.items) body.appendChild(settingRow(SETTINGS.find(o => o.label === label), id === 'bg' ? redraw : null));
             if (id === 'nick') {
                 body.appendChild(secTitle('Стиль ника'));
-                styleKeys.forEach(key => body.appendChild(pickRow(getColorDot(key), nickStyles[key].name, key === currentStyle, () => {
+                const grid = document.createElement('div');
+                grid.className = 'vp-pick-grid';
+                styleKeys.forEach(key => grid.appendChild(pickRow(getColorDot(key), nickStyles[key].name, key === currentStyle, () => {
                     currentStyle = key;
                     GM_setValue('nickStyle', key);
                     paint();
                 }, redraw)));
+                body.appendChild(grid);
             }
             if (id === 'bg' && backgroundEnabled) {
                 body.appendChild(secTitle('Стиль фона'));
+                const grid = document.createElement('div');
+                grid.className = 'vp-pick-grid';
                 Object.entries(BG_STYLES).forEach(([key, bg]) => {
                     const icon = document.createElement('div');
                     icon.className = 'vp-menu-icon';
                     icon.innerHTML = bg.icon;
-                    body.appendChild(pickRow(icon, bg.name, key === backgroundStyle, () => {
+                    grid.appendChild(pickRow(icon, bg.name, key === backgroundStyle, () => {
                         backgroundStyle = key;
                         GM_setValue('backgroundStyle', key);
                     }, redraw));
                 });
+                body.appendChild(grid);
             }
             if (id === 'likes') {
                 body.appendChild(secTitle('Кого лайкать'));
@@ -2302,6 +2319,8 @@
             b.onclick = (e) => { e.stopPropagation(); if (current !== t.id) show(t.id); };
             tabs.appendChild(b);
         }
+        // палец внутри окна крутит окно: не отдаём касания сайту (он может гасить прокрутку)
+        for (const t of ['touchstart', 'touchmove']) menu.addEventListener(t, e => e.stopPropagation(), { passive: true });
         show(current);
         openPopup(btn, menu);
     }
