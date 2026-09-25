@@ -607,7 +607,7 @@
         versionBtn: () => F('logoContainer').flatMap(c => $$('button', c))
             .filter(b => /^v\d/.test(b.textContent.trim()) && !b.classList.contains('itd-update-sidebar-btn')),
         tabs: () => [...new Set($$('button')
-            .filter(b => ['Для вас', 'Подписки', 'Лента кланов', 'Посты', 'Лайки'].includes(b.textContent.trim()))
+            .filter(b => ['Для вас', 'Подписки', 'Лента кланов', 'Кланы', 'Посты', 'Лайки'].includes(b.textContent.trim()))
             .map(b => b.parentElement))],
         feedBar: () => F('tabs').filter(t => /Для вас/.test(t.textContent)).map(t => t.parentElement).filter(Boolean),
         stickerContainer: () => commentInputs().map(commentRow).filter(Boolean),
@@ -3637,6 +3637,15 @@
             }
 
             setTimeout(updateNavIcon, 500);
+
+            // «Лента кланов» → «Кланы»: короче, вкладки ленты помещаются в строку. Меняем сам текстовый
+            // узел (не пересоздаём) — сайт продолжит им управлять как своим.
+            onDom(function clanTabName() {
+                document.querySelectorAll('.' + SELECTORS.feedBar + ' button').forEach(b => {
+                    const walker = document.createTreeWalker(b, NodeFilter.SHOW_TEXT);
+                    for (let t; (t = walker.nextNode());) if (t.nodeValue.trim() === 'Лента кланов') t.nodeValue = t.nodeValue.replace('Лента кланов', 'Кланы');
+                });
+            });
 
             onDom(function feedBarIcon() {
                 if (document.querySelector('.' + SELECTORS.feedBar)) updateNavIcon();
