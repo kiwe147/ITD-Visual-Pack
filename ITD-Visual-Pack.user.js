@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.23
+// @version      3.0.24
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4590,108 +4590,278 @@
         ['🛠️', 'Сообщения появятся в следующем обновлении. В каком — не скажем'],
     ];
 
+    // ================= Личка: прототип сообщений =================
+    // Пока не рабочий: диалоги и переписка — примеры, отправленное видно только тебе. Открывается как
+    // страница, но это окно поверх: на телефоне — весь экран над нижней панелью (панель остаётся сверху,
+    // активный пункт — «Личка»), на компьютере — на месте ленты, меню и правая панель на месте.
+    // «Назад» (кнопка браузера или телефона) закрывает, как при обычном переходе.
+    const MSG_DIALOGS = [
+        { id: 'bot', ava: '🤖', name: 'Сервер ИТД', last: 'Сообщения загружены на 99%... 99%...', time: 'сейчас', unread: 1, online: true, bot: true,
+          msgs: [['in', 'Привет! Я — Сервер ИТД. Личка пока в разработке 🛠️'], ['in', 'Напиши что-нибудь — я отвечу. Честно-честно.']] },
+        { id: 'club', ava: '🧩', name: 'Клуб ИТД X', last: 'Raduz1232: кто уже обновился до 3.0.23?', time: '12:40', unread: 3, group: true,
+          msgs: [['in', 'Helios: бугорок с плюсом — топ'], ['in', 'Пётр I: а где тёмная тема для лички?'], ['in', 'Raduz1232: кто уже обновился до 3.0.23?']] },
+        { id: 'raduz', ava: '🤡', name: 'Raduz1232', last: 'а чё за название у ТГК', time: '11:02', unread: 0, online: true,
+          msgs: [['in', 'а чё за название у ТГК'], ['out', 'Neurosfw 😎']] },
+        { id: 'helios', ava: '🦎', name: 'Helios', last: 'Хаха роза среди навоза', time: 'вчера', unread: 0,
+          msgs: [['out', 'зацени новую панель'], ['in', 'Хаха роза среди навоза']] },
+        { id: 'petr', ava: '🫡', name: 'Пётр I (бебебе BVC)', last: 'когда говорят про песню «зомби»...', time: 'вчера', unread: 2,
+          msgs: [['in', 'когда говорят про песню «зомби»'], ['in', 'я вспоминаю не новки, а «ин ер хеееееед»']] },
+        { id: 'virtual', ava: '🎮', name: 'ツFrom the virtual world', last: 'Ути путиии 🥹', time: 'пн', unread: 0,
+          msgs: [['in', 'Ути путиии 🥹']] },
+        { id: 'saved', ava: '🔖', name: 'Избранное', last: 'Заметка: доделать личку', time: 'вс', unread: 0, saved: true,
+          msgs: [['out', 'Заметка: доделать личку']] }
+    ];
+    const MSG_ICON = {
+        back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+        edit: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16Z"/><path d="M13.5 6.5l4 4"/></svg>',
+        search: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>',
+        more: '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+        clip: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5 12.5 19a5 5 0 0 1-7-7L13 4.5a3.3 3.3 0 0 1 4.7 4.7l-7.4 7.4a1.7 1.7 0 0 1-2.4-2.4l6.7-6.7"/></svg>',
+        smile: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01" stroke-width="2.6"/></svg>',
+        send: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg>',
+        pin: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M15 3l6 6-3 1-4 4 .5 4.5-1.5 1.5-4-4-5 5-1-1 5-5-4-4L5.5 9.5 10 10l4-4Z"/></svg>'
+    };
+
     function buildMessagesOverlay() {
         const style = document.createElement('style');
         style.textContent = `
-        .vp-msg-backdrop { position: fixed; inset: 0; z-index: 99999; display: none; align-items: center; justify-content: center;
-            padding: 16px; background: rgba(0, 0, 0, .6); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-        .vp-msg-backdrop.vp-open { display: flex; animation: vpMsgFade .18s ease-out; }
-        .vp-msg-card { width: min(400px, 100%); box-sizing: border-box; padding: 18px; border-radius: 28px; cursor: default;
-            background: var(--block-bg, #1c1c22); color: var(--text-primary, #fff); font-family: inherit;
-            border: 1px solid color-mix(in srgb, var(--text-primary, #fff) 10%, transparent);
-            box-shadow: 0 24px 60px rgba(0, 0, 0, .45); animation: vpMsgPop .28s cubic-bezier(.2, 1.3, .4, 1); }
-        .vp-msg-head { display: flex; align-items: center; gap: 12px; padding-bottom: 14px;
+        .vp-msgs { position: fixed; z-index: 5; display: none; flex-direction: column; box-sizing: border-box; overflow: hidden;
+            background: var(--bg-primary, #000); color: var(--text-primary, #fff); font-family: inherit; }
+        .vp-msgs.vp-open { display: flex; animation: vpMsgsIn .22s cubic-bezier(.2, .8, .2, 1); }
+        html.vp-msgs-open .vp-msgs-navwrap { z-index: 10 !important; }
+        html.vp-msgs-open .itd-scroll-top-btn { opacity: 0 !important; visibility: hidden !important; }
+        /* сайт всё ещё считает текущим свой пункт (профиль, ленту) — пока открыта личка, он как обычный */
+        html.vp-msgs-open nav .vp-nav-link:not(.vp-active) { color: var(--text-secondary) !important; }
+        html.vp-msgs-open nav .vp-nav-link.vp-active { color: var(--text-primary) !important; }
+        .vp-msgs-view { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+        .vp-msgs-view[hidden] { display: none; }
+        .vp-msgs-top { display: flex; align-items: center; gap: 10px; padding: 18px 16px 10px; }
+        .vp-msgs-title { font-size: 24px; font-weight: 700; margin-right: auto; }
+        .vp-msgs-ib { width: 40px; height: 40px; border-radius: 50%; border: 0; padding: 0; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; background: var(--block-bg, #1c1c1c); color: var(--text-primary, #fff); flex-shrink: 0; }
+        .vp-msgs-ib:active { transform: scale(.94); }
+        .vp-msgs-search { margin: 0 16px 10px; display: flex; align-items: center; gap: 8px; padding: 0 14px; height: 42px; border-radius: 999px;
+            background: var(--block-bg, #1c1c1c); color: var(--text-secondary, #8a8a8a); }
+        .vp-msgs-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
+        .vp-msgs-tabs { display: flex; gap: 8px; padding: 0 16px 10px; }
+        .vp-msgs-tab { border: 0; border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+            background: var(--block-bg, #1c1c1c); color: var(--text-secondary, #8a8a8a); }
+        .vp-msgs-tab.vp-on { background: var(--text-primary, #fff); color: var(--bg-primary, #000); }
+        .vp-msgs-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; overscroll-behavior: contain; }
+        .vp-msgs-row { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 18px; cursor: pointer; }
+        .vp-msgs-row:hover, .vp-msgs-row:active { background: var(--block-bg, #1c1c1c); }
+        .vp-msgs-ava { position: relative; width: 50px; height: 50px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+            font-size: 26px; background: var(--block-bg, #1c1c1c); }
+        .vp-msgs-ava.vp-sm { width: 38px; height: 38px; font-size: 20px; }
+        .vp-msgs-ava.vp-online::after { content: ""; position: absolute; right: 1px; bottom: 1px; width: 11px; height: 11px; border-radius: 50%;
+            background: #22c55e; box-shadow: 0 0 0 2.5px var(--bg-primary, #000); }
+        .vp-msgs-mid { flex: 1; min-width: 0; }
+        .vp-msgs-name { display: flex; align-items: center; gap: 5px; font-weight: 600; font-size: 15px; }
+        .vp-msgs-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msgs-last { margin-top: 3px; font-size: 14px; color: var(--text-secondary, #8a8a8a); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msgs-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; font-size: 12px; color: var(--text-secondary, #8a8a8a); }
+        .vp-msgs-badge { min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: 700; background: var(--vp-accent, #0080ff); color: var(--vp-on-accent, #fff); }
+        .vp-msgs-empty { padding: 40px 16px; text-align: center; color: var(--text-secondary, #8a8a8a); font-size: 14px; }
+        .vp-msgs-chead { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px;
             border-bottom: 1px solid color-mix(in srgb, var(--text-primary, #fff) 8%, transparent); }
-        .vp-msg-ava { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-            color: var(--vp-on-accent, #fff); background: var(--vp-accent, #0080ff); }
-        .vp-msg-who { display: flex; flex-direction: column; min-width: 0; }
-        .vp-msg-name { font-weight: 700; font-size: 15px; }
-        .vp-msg-status { font-size: 12px; color: var(--text-secondary, #8a8a99); }
-        .vp-msg-close { margin-left: auto; width: 32px; height: 32px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; display: flex;
-            align-items: center; justify-content: center; background: transparent; color: var(--text-secondary, #8a8a99); }
-        .vp-msg-close:hover { background: var(--bg-hover, rgba(255, 255, 255, .08)); color: var(--text-primary, #fff); }
-        .vp-msg-body { min-height: 96px; padding: 18px 2px; display: flex; align-items: flex-end; }
-        .vp-msg-bubble { max-width: 88%; padding: 12px 16px; border-radius: 20px 20px 20px 6px; font-size: 16px; line-height: 1.4;
-            background: var(--bg-hover, rgba(255, 255, 255, .07)); animation: vpMsgIn .25s ease-out; overflow-wrap: anywhere; }
-        .vp-msg-emoji { display: block; font-size: 38px; line-height: 1; margin-bottom: 8px; }
-        .vp-msg-typing { display: flex; gap: 5px; padding: 16px 18px; }
-        .vp-msg-typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary, #8a8a99); animation: vpMsgDot 1s infinite; }
-        .vp-msg-typing i:nth-child(2) { animation-delay: .15s; }
-        .vp-msg-typing i:nth-child(3) { animation-delay: .3s; }
-        .vp-msg-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px;
-            color: var(--text-secondary, #8a8a99); }
-        .vp-msg-again { border: 0; border-radius: 999px; padding: 9px 16px; cursor: pointer; font: inherit; font-size: 14px; font-weight: 600;
-            color: var(--vp-on-accent, #fff); background: var(--vp-accent, #0080ff); transition: filter .15s, transform .15s; }
-        .vp-msg-again:hover { filter: brightness(1.12); }
-        .vp-msg-again:active { transform: scale(.96); }
-        .vp-msg-again:disabled { opacity: .5; cursor: default; }
-        @keyframes vpMsgFade { from { opacity: 0; } }
-        @keyframes vpMsgPop { from { opacity: 0; transform: translateY(12px) scale(.96); } }
-        @keyframes vpMsgIn { from { opacity: 0; transform: translateY(6px); } }
-        @keyframes vpMsgDot { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
-        @media (prefers-reduced-motion: reduce) { .vp-msg-backdrop, .vp-msg-backdrop * { animation: none !important; } }
-        /* пока окно открыто, видео под ним прячем: Яндекс.Браузер видит курсор над видео сквозь окно
-           и выкладывает свою панель («Субтитры», картинка в картинке) поверх наших кнопок */
-        html.vp-msg-shown video { visibility: hidden !important; }`;
+        .vp-msgs-who { display: flex; flex-direction: column; min-width: 0; margin-right: auto; }
+        .vp-msgs-who b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msgs-who small { font-size: 12px; color: var(--text-secondary, #8a8a8a); }
+        .vp-msgs-feed { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; overscroll-behavior: contain; }
+        .vp-msgs-note { align-self: center; margin: 2px 0 8px; padding: 6px 12px; border-radius: 999px; font-size: 12px;
+            background: var(--block-bg, #1c1c1c); color: var(--text-secondary, #8a8a8a); text-align: center; }
+        .vp-msgs-b { max-width: 78%; padding: 9px 13px 7px; border-radius: 20px; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere;
+            animation: vpMsgsPop .2s ease-out; }
+        .vp-msgs-b.vp-in { align-self: flex-start; background: var(--block-bg, #1c1c1c); border-bottom-left-radius: 6px; }
+        .vp-msgs-b.vp-out { align-self: flex-end; background: var(--vp-accent, #0080ff); color: var(--vp-on-accent, #fff); border-bottom-right-radius: 6px; }
+        .vp-msgs-b i { display: block; margin-top: 2px; font-style: normal; font-size: 11px; opacity: .6; text-align: right; }
+        .vp-msgs-b.vp-fail i { opacity: .85; }
+        .vp-msgs-typing { display: flex; gap: 5px; padding: 14px 16px; }
+        .vp-msgs-typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary, #8a8a8a); animation: vpMsgsDot 1s infinite; }
+        .vp-msgs-typing span:nth-child(2) { animation-delay: .15s; } .vp-msgs-typing span:nth-child(3) { animation-delay: .3s; }
+        .vp-msgs-bar { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px 12px; }
+        .vp-msgs-field { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 14px; min-height: 44px; border-radius: 22px;
+            background: var(--block-bg, #1c1c1c); }
+        .vp-msgs-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
+        .vp-msgs-ghost { width: 36px; height: 36px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            background: transparent; color: var(--text-secondary, #8a8a8a); cursor: pointer; flex-shrink: 0; }
+        .vp-msgs-send { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;
+            flex-shrink: 0; background: var(--vp-accent, #0080ff); color: var(--vp-on-accent, #fff); transition: opacity .15s, transform .15s; }
+        .vp-msgs-send:disabled { opacity: .4; cursor: default; }
+        .vp-msgs-send:not(:disabled):active { transform: scale(.92); }
+        @keyframes vpMsgsIn { from { opacity: 0; transform: translateY(10px); } }
+        @keyframes vpMsgsPop { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+        @keyframes vpMsgsDot { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
+        @media (prefers-reduced-motion: reduce) { .vp-msgs, .vp-msgs * { animation: none !important; } }
+        /* пока открыто, видео под ним прячем: Яндекс.Браузер видит палец/курсор над видео сквозь окно
+           и выкладывает свою панель («Субтитры», картинка в картинке) поверх */
+        html.vp-msgs-open video { visibility: hidden !important; }`;
         document.head.appendChild(style);
 
+        const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
         const root = document.createElement('div');
-        root.className = 'vp-msg-backdrop';
+        root.className = 'vp-msgs';
+        root.setAttribute('role', 'region');          // это «страница», не всплывающее окно: без затемнения сайта под окнами
+        root.setAttribute('aria-label', 'Сообщения');
         root.innerHTML = `
-            <div class="vp-msg-card" role="dialog" aria-modal="true" aria-label="Сообщения">
-                <div class="vp-msg-head">
-                    <div class="vp-msg-ava">${ICONS.MESSAGES}</div>
-                    <div class="vp-msg-who"><span class="vp-msg-name">Сервер ИТД</span><span class="vp-msg-status"></span></div>
-                    <button class="vp-msg-close" title="Закрыть (Esc)">${svgIcon('<path d="M6 6l12 12M18 6 6 18"/>', 18)}</button>
-                </div>
-                <div class="vp-msg-body" aria-live="polite"></div>
-                <div class="vp-msg-foot"><span>Esc — закрыть</span><button class="vp-msg-again">Ещё раз</button></div>
-            </div>`;
+            <section class="vp-msgs-view vp-msgs-home">
+                <div class="vp-msgs-top"><div class="vp-msgs-title">Сообщения</div>
+                    <button class="vp-msgs-ib vp-msgs-new" title="Новый чат (пока не работает)">${MSG_ICON.edit}</button></div>
+                <label class="vp-msgs-search">${MSG_ICON.search}<input type="search" placeholder="Поиск"></label>
+                <div class="vp-msgs-tabs"><button class="vp-msgs-tab vp-on" data-f="all">Все</button><button class="vp-msgs-tab" data-f="unread">Непрочитанные</button><button class="vp-msgs-tab" data-f="group">Группы</button></div>
+                <div class="vp-msgs-list"></div>
+            </section>
+            <section class="vp-msgs-view vp-msgs-chat" hidden>
+                <div class="vp-msgs-chead"><button class="vp-msgs-ib vp-msgs-back" title="Назад">${MSG_ICON.back}</button>
+                    <div class="vp-msgs-ava vp-sm"></div><div class="vp-msgs-who"><b></b><small></small></div>
+                    <button class="vp-msgs-ib" title="Ещё (пока не работает)">${MSG_ICON.more}</button></div>
+                <div class="vp-msgs-feed" aria-live="polite"></div>
+                <form class="vp-msgs-bar"><div class="vp-msgs-field"><button type="button" class="vp-msgs-ghost" title="Вложение (пока не работает)">${MSG_ICON.clip}</button>
+                    <input type="text" placeholder="Сообщение" enterkeyhint="send" autocomplete="off">
+                    <button type="button" class="vp-msgs-ghost" title="Эмодзи (пока не работает)">${MSG_ICON.smile}</button></div>
+                    <button type="submit" class="vp-msgs-send" title="Отправить" disabled>${MSG_ICON.send}</button></form>
+            </section>`;
         document.body.appendChild(root);
-        const body = root.querySelector('.vp-msg-body');
-        const status = root.querySelector('.vp-msg-status');
-        const again = root.querySelector('.vp-msg-again');
-        let last = -1, timer = 0;
 
-        function say() {
-            clearTimeout(timer);
-            let i;
-            do i = Math.floor(Math.random() * MESSAGE_JOKES.length); while (i === last && MESSAGE_JOKES.length > 1);
-            last = i;
-            status.textContent = 'печатает...';
-            again.disabled = true;
-            body.innerHTML = '<div class="vp-msg-bubble vp-msg-typing"><i></i><i></i><i></i></div>';
-            timer = setTimeout(() => {
-                const [emoji, text] = MESSAGE_JOKES[i];
-                const bubble = document.createElement('div');
-                bubble.className = 'vp-msg-bubble';
-                const e = document.createElement('span');
-                e.className = 'vp-msg-emoji';
-                e.textContent = emoji;
-                bubble.append(e, text);
-                body.replaceChildren(bubble);
-                status.textContent = 'был(а) в сети никогда';
-                again.disabled = false;
-                again.focus({ preventScroll: true });
-            }, 650 + Math.random() * 500);
+        const $ = s => root.querySelector(s);
+        const list = $('.vp-msgs-list'), home = $('.vp-msgs-home'), chat = $('.vp-msgs-chat'), feed = $('.vp-msgs-feed');
+        const input = $('.vp-msgs-bar input'), send = $('.vp-msgs-send'), search = $('.vp-msgs-search input');
+        let filter = 'all', current = null, botTimer = 0, lastJoke = -1;
+
+        function renderList() {
+            const q = search.value.trim().toLowerCase();
+            const rows = MSG_DIALOGS.filter(d => (filter === 'all' || (filter === 'unread' ? d.unread : d.group))
+                && (!q || (d.name + ' ' + d.last).toLowerCase().includes(q)));
+            list.innerHTML = rows.length ? rows.map(d => `
+                <div class="vp-msgs-row" data-id="${d.id}">
+                    <div class="vp-msgs-ava${d.online ? ' vp-online' : ''}">${d.ava}</div>
+                    <div class="vp-msgs-mid"><div class="vp-msgs-name"><span>${esc(d.name)}</span>${d.saved ? MSG_ICON.pin : ''}</div>
+                        <div class="vp-msgs-last">${esc(d.last)}</div></div>
+                    <div class="vp-msgs-side"><span>${esc(d.time)}</span>${d.unread ? `<span class="vp-msgs-badge">${d.unread}</span>` : ''}</div>
+                </div>`).join('') : '<div class="vp-msgs-empty">Ничего не нашлось</div>';
         }
-        function close() {
-            clearTimeout(timer);
+        const now = () => new Date().toTimeString().slice(0, 5);
+        function bubble(dir, text, meta) {
+            const b = document.createElement('div');
+            b.className = 'vp-msgs-b vp-' + dir;
+            b.textContent = text;
+            const i = document.createElement('i');
+            i.textContent = meta || now();
+            b.appendChild(i);
+            feed.appendChild(b);
+            feed.scrollTop = feed.scrollHeight;
+            return b;
+        }
+        function openChat(d) {
+            current = d;
+            d.unread = 0;
+            $('.vp-msgs-chead .vp-msgs-ava').textContent = d.ava;
+            $('.vp-msgs-chead .vp-msgs-ava').classList.toggle('vp-online', !!d.online);
+            $('.vp-msgs-who b').textContent = d.name;
+            $('.vp-msgs-who small').textContent = d.bot ? 'бот · всегда в сети' : d.group ? '4 участника' : d.saved ? 'только ты' : d.online ? 'в сети' : 'был(а) недавно';
+            feed.innerHTML = '<div class="vp-msgs-note">🧪 Прототип: сообщения пока никуда не отправляются</div><div class="vp-msgs-note">Сегодня</div>';
+            d.msgs.forEach(([dir, text]) => bubble(dir, text, dir === 'out' ? now() + ' ✓✓' : now()));
+            home.hidden = true; chat.hidden = false;
+            input.value = ''; send.disabled = true;
+        }
+        function closeChat() {
+            clearTimeout(botTimer);
+            current = null;
+            chat.hidden = true; home.hidden = false;
+            renderList();
+        }
+        function botReply() {
+            const typing = document.createElement('div');
+            typing.className = 'vp-msgs-b vp-in vp-msgs-typing';
+            typing.innerHTML = '<span></span><span></span><span></span>';
+            feed.appendChild(typing);
+            feed.scrollTop = feed.scrollHeight;
+            botTimer = setTimeout(() => {
+                typing.remove();
+                let i; do i = Math.floor(Math.random() * MESSAGE_JOKES.length); while (i === lastJoke && MESSAGE_JOKES.length > 1);
+                lastJoke = i;
+                const [e, t] = MESSAGE_JOKES[i];
+                bubble('in', e + ' ' + t);
+            }, 700 + Math.random() * 600);
+        }
+
+        list.addEventListener('click', e => { const r = e.target.closest('.vp-msgs-row'); if (r) openChat(MSG_DIALOGS.find(d => d.id === r.dataset.id)); });
+        root.querySelectorAll('.vp-msgs-tab').forEach(t => t.onclick = () => {
+            filter = t.dataset.f;
+            root.querySelectorAll('.vp-msgs-tab').forEach(x => x.classList.toggle('vp-on', x === t));
+            renderList();
+        });
+        search.addEventListener('input', renderList);
+        $('.vp-msgs-back').onclick = closeChat;
+        input.addEventListener('input', () => { send.disabled = !input.value.trim(); });
+        $('.vp-msgs-bar').addEventListener('submit', e => {
+            e.preventDefault();
+            const text = input.value.trim();
+            if (!text || !current) return;
+            input.value = ''; send.disabled = true;
+            current.msgs.push(['out', text]);
+            current.last = 'Ты: ' + text; current.time = now();
+            if (current.bot || current.saved) { bubble('out', text, now() + ' ✓'); if (current.bot) botReply(); }
+            else bubble('out', text, now() + ' · не отправлено (прототип)').classList.add('vp-fail');
+        });
+
+        // место окна: телефон — весь экран, панель поднимаем над окном; компьютер — колонка ленты
+        function place() {
+            const nav = document.querySelector('.' + SELECTORS.nav);
+            // нижняя панель телефона — меню в строку внизу экрана (не левое меню компьютера)
+            const row = nav && navIsRow(nav) && nav.getBoundingClientRect().top > innerHeight / 2;
+            document.querySelectorAll('.vp-msgs-navwrap').forEach(w => w.classList.remove('vp-msgs-navwrap'));
+            if (row) {
+                if (nav.parentElement) nav.parentElement.classList.add('vp-msgs-navwrap');
+                const bottom = innerHeight - nav.getBoundingClientRect().top + BUMP_H + 8;
+                Object.assign(root.style, { left: '0px', right: '0px', top: '0px', bottom: '0px', width: '', borderRadius: '', paddingBottom: bottom + 'px' });
+            } else {
+                const cb = contentBox() || lastCb;
+                const left = cb ? cb.left : Math.max(0, innerWidth / 2 - 300), width = cb ? cb.right - cb.left : Math.min(600, innerWidth);
+                Object.assign(root.style, { left: left + 'px', width: width + 'px', right: '', top: '0px', bottom: '0px', borderRadius: '', paddingBottom: '0px' });
+            }
+        }
+        let pushed = false, openPath = '';
+        function onKey(e) { if (e.key === 'Escape' && root.classList.contains('vp-open')) { e.stopPropagation(); current ? closeChat() : close(); } }
+        function close(fromHistory) {
+            if (!root.classList.contains('vp-open')) return;
+            clearTimeout(botTimer);
             root.classList.remove('vp-open');
-            document.documentElement.classList.remove('vp-msg-shown');
+            document.documentElement.classList.remove('vp-msgs-open');
+            document.querySelectorAll('.vp-msgs-navwrap').forEach(w => w.classList.remove('vp-msgs-navwrap'));
             document.removeEventListener('keydown', onKey, true);
+            removeEventListener('resize', place);
+            msgsOpen = false;
+            markActiveNav(); moveNavBlob();
+            if (pushed && !fromHistory) { pushed = false; history.back(); }
+            pushed = false;
         }
-        function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
-
-        root.addEventListener('click', (e) => { if (e.target === root) close(); });
-        root.querySelector('.vp-msg-close').onclick = close;
-        again.onclick = say;
+        addEventListener('popstate', () => { if (root.classList.contains('vp-open')) close(true); });
+        // нажали другой пункт меню той же страницы (открыли личку на ленте и жмут «Ленту») — сайт никуда
+        // не переходит, а личку закрыть надо; на другую страницу — закроет msgsLeft ниже
+        document.addEventListener('click', e => {
+            if (!root.classList.contains('vp-open')) return;
+            const a = e.target.closest && e.target.closest('a.' + SELECTORS.navLink);
+            if (a && a.getAttribute('href') !== '#' && a.getAttribute('href') === location.pathname) close();
+        }, true);
+        // перешли на другую страницу (пункт меню, ссылка) — «страница» лички закрывается
+        onDom(function msgsLeft() { if (root.classList.contains('vp-open') && location.pathname !== openPath) close(true); });
         root.open = () => {
+            if (root.classList.contains('vp-open')) { if (current) closeChat(); return; }
+            openPath = location.pathname;
+            msgsOpen = true;
+            closeChat();
+            place();
             root.classList.add('vp-open');
-            document.documentElement.classList.add('vp-msg-shown');
+            document.documentElement.classList.add('vp-msgs-open');
             document.addEventListener('keydown', onKey, true);
-            say();
+            addEventListener('resize', place);
+            history.pushState({ vpMsgs: 1 }, '', location.href);
+            pushed = true;
+            markActiveNav(); moveNavBlob();
         };
+        root.close = close;
         return root;
     }
 
@@ -4718,17 +4888,11 @@
             return;
         }
 
-        if (!messagesOverlay) messagesOverlay = buildMessagesOverlay();
-
         messagesLink = document.createElement('a');
         messagesLink.href = '#';
         const siteLinks = [...nav.querySelectorAll(':scope > a')]
             .filter(a => a.getAttribute('href') !== '#' && a.querySelector(':scope > span svg'));
         messagesLink.className = (commonClasses(siteLinks) + ' ' + SELECTORS.navLink).trim();
-        messagesLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            messagesOverlay.open();
-        });
 
         const iconSpan = document.createElement('span');
         iconSpan.className = (commonClasses(siteLinks.map(a => a.firstElementChild)) + ' ' + SELECTORS.navIcon).trim();
@@ -4745,6 +4909,15 @@
 
     addMessagesButton();
     onDom(addMessagesButton);
+    // Нажатие на «Личку» — один обработчик на всю страницу: кнопку сайт перерисовывает вместе с меню
+    // (и она может остаться от прошлой копии скрипта), а окно создаём при первом открытии
+    document.addEventListener('click', e => {
+        const a = e.target.closest && e.target.closest('nav a[href="#"]');
+        if (!a || !a.closest('.' + SELECTORS.nav)) return;
+        e.preventDefault();
+        if (!messagesOverlay) messagesOverlay = buildMessagesOverlay();
+        messagesOverlay.open();
+    }, true);
     // Нижняя панель телефона: у сайта подписи короткие («Магаз», «Уведы»), а «Профиль» — длинная и у самого
     // края: задевала обводку. Там — «Акк», в тон остальным. На компьютере (полные подписи: «Уведомления») — как у сайта.
     const PROFILE_SHORT = 'Акк';
@@ -5607,7 +5780,7 @@
         // Только сообщения об ошибках — всплывашки сайта (role=alert/status, aria-live) с текстом
         // про ошибку. В 2.9.x подмена ошибочно шла по тексту уведомлений — маты стояли у всех у ника.
         document.querySelectorAll('[role="alert"], [role="status"], [aria-live]').forEach(box => {
-            if (box.closest('.vp-msg-backdrop, .vpi-overlay')) return;
+            if (box.closest('.vp-msgs, .vpi-overlay')) return;
             [box, ...box.querySelectorAll('*')].forEach(el => {
                 if (el.childElementCount || el.hasAttribute('data-replaced')) return;
                 if (!ERROR_TEXT.test(el.textContent)) return;
@@ -5798,11 +5971,13 @@
     document.head.appendChild(designStyle);
 
     // Активный пункт меню — по адресу страницы (у сайта это хеш-класс, он меняется)
+    let msgsOpen = false;                               // открыта «страница» лички — активный пункт «Личка»
     function markActiveNav() {
         const path = location.pathname;
         document.querySelectorAll('.' + SELECTORS.navLink).forEach(a => {
             const href = a.getAttribute('href') || '';
-            const active = href.startsWith('/') && (href === path || (href !== '/' && path.startsWith(href + '/')));
+            const active = msgsOpen ? href === '#'
+                : href.startsWith('/') && (href === path || (href !== '/' && path.startsWith(href + '/')));
             a.classList.toggle('vp-active', active);
         });
     }
@@ -5837,7 +6012,7 @@
             --block-bg: rgba(255, 255, 255, .92); --block-bg-secondary: rgba(240, 240, 240, .92); --block-hover-bg: rgba(245, 245, 245, .94);
             --modal-bg: rgba(255, 255, 255, .95); --glass-bg: rgba(255, 255, 255, .9);
         }
-        html.vp-glass .nick-style-dropdown, html.vp-glass .settings-dropdown, html.vp-glass .vp-msg-card {
+        html.vp-glass .nick-style-dropdown, html.vp-glass .settings-dropdown {
             backdrop-filter: var(--vp-glass-filter) !important; -webkit-backdrop-filter: var(--vp-glass-filter) !important;
         }
 
@@ -6613,7 +6788,7 @@
             if (frame) return { left: 0, right: 0 };
             // страница без ленты, вкладок и постов: колонка — то, что лежит в середине
             // экрана, поднятое до обёртки без боковых колонок. Иначе меню и панель стояли по прошлой странице
-            const skip = side + ', nav, .vp-hc, .vp-msg-backdrop, .vpi-overlay';
+            const skip = side + ', nav, .vp-hc, .vp-msgs, .vpi-overlay';
             for (const y of [0.35, 0.6]) {
                 const hit = document.elementsFromPoint(innerWidth / 2, innerHeight * y).find(e => e !== document.body
                     && e !== document.documentElement && !e.closest(skip) && e.getBoundingClientRect().width < innerWidth * 0.72);
