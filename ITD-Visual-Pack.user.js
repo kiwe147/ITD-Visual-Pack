@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.16
+// @version      3.1.17
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3936,6 +3936,9 @@
         requestAnimationFrame(frame);
         // экраны 120–144 Гц (многие телефоны): фон — не чаще ~60 кадров, вдвое меньше работы, скорость та же (dt)
         if (lastFrame && t - lastFrame < 10) return;
+        // телефон: фон — ~30 кадров в секунду. Каждый кадр фона заставляет заново размывать всё стекло
+        // над ним (на профиле его много), а на глаз фон при 30 кадрах такой же. Скорость та же (dt).
+        if (IS_PHONE && lastFrame && t - lastFrame < 28) return;
         if (halfRate && (odd = !odd)) return;
         const gap = lastFrame ? t - lastFrame : 16.7;
         lastFrame = t;
@@ -6152,11 +6155,14 @@
         // Идём от картинок, а не от всех постов: посты без картинки иначе перебирались на каждую правку страницы
         const cards = new Set();
         // метка — адрес картинки: сайт переиспользует карточки и картинки, и фон от прошлого поста оставался
+        // (фон карточки берётся с её ПЕРВОЙ картинки — с ней и сравниваем: в посте с несколькими картинками
+        // сравнение с каждой давало вечную пересборку фона)
         document.querySelectorAll('img.' + SELECTORS.postMedia).forEach(img => {
             if (img._vpBlurDone === img.src) return;      // её карточки уже с фоном от неё
             let pending = false;
             for (const card of [img.closest('.' + SELECTORS.repost), img.closest('article.' + SELECTORS.post)]) {
-                if (card && card.getAttribute('data-blur-bg') !== img.src) { cards.add(card); pending = true; }
+                const first = card && card.querySelector('img.' + SELECTORS.postMedia);
+                if (card && first && card.getAttribute('data-blur-bg') !== first.src) { cards.add(card); pending = true; }
             }
             if (!pending) img._vpBlurDone = img.src;
         });
@@ -7633,16 +7639,21 @@
     addEventListener('scroll', () => { clearTimeout(hcTimer); hcClose(); }, { capture: true, passive: true });
 
     // --- 13. Баннер с глубиной
-    let bannerTop0 = null, bannerQueued = false;
+    let bannerTop0 = null, bannerQueued = false, bannerSc = null, bannerH = 0;
     function bannerDepth() {
         bannerQueued = false;
         const banner = document.querySelector('.' + SELECTORS.banner);
         const img = banner && banner.querySelector(':scope > img[alt="Banner"]');
         if (!img || draggableImg) { bannerTop0 = null; return; }       // пока баннер двигают в редакторе — не мешаем
         banner.classList.add('vp-depth');
-        const r = banner.getBoundingClientRect();
-        if (bannerTop0 === null) bannerTop0 = r.top;
-        const past = Math.max(0, bannerTop0 - r.top);                 // на сколько баннер уехал вверх
+        // замер раскладки — только раз; дальше — по прокрутке (сайт крутит #root, а не окно), без замеров
+        if (bannerTop0 === null || !bannerSc || !bannerSc.isConnected) {
+            bannerSc = [document.getElementById('root'), document.scrollingElement].find(e => e && e.scrollHeight > e.clientHeight + 1) || document.scrollingElement;
+            const r0 = banner.getBoundingClientRect(); bannerTop0 = r0.top + bannerSc.scrollTop; bannerH = r0.height;
+        }
+        const sc = bannerSc;
+        const r = { height: bannerH };
+        const past = Math.max(0, sc.scrollTop);                       // на сколько баннер уехал вверх (он в самом верху страницы)
         if (past > r.height + bannerTop0) return;                    // давно за экраном
         // пишем стиль, только если сдвиг заметно изменился: на прокрутке это каждый кадр
         const y = Math.round(past * .35);
