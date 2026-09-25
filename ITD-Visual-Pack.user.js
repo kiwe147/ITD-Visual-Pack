@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.21
+// @version      3.0.22
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -907,7 +907,8 @@
     // Мой аватар — в первой ссылке на мой профиль
     function myAvatarEl() {
         if (!myUsername) return null;
-        const link = document.querySelector(`a[href="/@${myUsername}" i]`);
+        // первая ссылка на мой профиль — но не пункт «Профиль» в меню: у него иконка, а не моя аватарка
+        const link = [...document.querySelectorAll(`a[href="/@${myUsername}" i]`)].find(a => !a.closest('nav'));
         if (!link) return null;
         const container = link.querySelector(':scope > div');
         if (container && container.querySelector('span')) return container;
@@ -5736,6 +5737,8 @@
         .vp-nav-has-blob > .vp-nav-link { position: relative; z-index: 1; transition: background-color .2s ease, opacity .2s ease !important; }
         .vp-nav-has-blob > .vp-nav-link .vp-nav-icon { transition: none; }
         .vp-nav-has-blob > .vp-nav-link.vp-active { background: transparent !important; }
+        /* своя подложка сайта (нижняя панель телефона) — прячем: вместо неё наша, той же формы */
+        .vp-nav-has-blob > div:not(.vp-nav-blob) { opacity: 0 !important; }
         .vp-nav-blob { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; opacity: 0;
             background: color-mix(in srgb, var(--vp-accent, #0080ff) 14%, var(--block-bg, #1c1c1c));
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 32%, transparent),
@@ -5915,13 +5918,20 @@
         if (!active) { blob.style.opacity = '0'; return; }
         const row = navIsRow(nav);
         let to = { top: active.offsetTop, left: active.offsetLeft, width: active.offsetWidth, height: active.offsetHeight };
-        // нижняя панель телефона: подложка — овал чуть шире кнопки (подпись под иконкой шире круга)
-        if (row) { const extra = Math.round(to.width * .18); to = { ...to, left: to.left - extra / 2, width: to.width + extra }; }
+        // Нижняя панель телефона: у сайта своя подложка (div в панели, 58 px, по 6 px от краёв панели,
+        // скругление 32px). Наша встаёт ровно её размера и формы — по центру активной кнопки, а свою
+        // сайт прячет (стиль .vp-nav-has-blob > div). Нет её — овал чуть шире кнопки.
+        const siteInd = row && [...nav.children].find(c => c.tagName === 'DIV' && c !== blob);
+        if (siteInd && siteInd.offsetHeight) {
+            const w = parseFloat(siteInd.style.width) || siteInd.offsetWidth;
+            to = { top: siteInd.offsetTop, height: siteInd.offsetHeight, width: w, left: to.left + (to.width - w) / 2 };
+        } else if (row) { const extra = Math.round(to.width * .18); to = { ...to, left: to.left - extra / 2, width: to.width + extra }; }
         if (blobAt && to.top === blobAt.top && to.left === blobAt.left && to.width === blobAt.width && to.height === blobAt.height) return;
         // У пунктов нижней панели своего скругления нет. Скругление — в px от овала на месте: при растяжке
         // края остаются теми же полуовалами (выходит капля-пилюля), а не растягиваются сами
         const rad = getComputedStyle(active).borderRadius;
-        blob.style.borderRadius = blobRadius = row || !parseFloat(rad) ? `${to.width / 2}px / ${to.height / 2}px` : rad;
+        blob.style.borderRadius = blobRadius = siteInd && parseFloat(getComputedStyle(siteInd).borderRadius) ? getComputedStyle(siteInd).borderRadius
+            : row || !parseFloat(rad) ? `${to.width / 2}px / ${to.height / 2}px` : rad;
         const from = blobAt && !calm && blob.style.opacity === '1' ? blobAt : null;
         if (from && row) {
             // Нижняя панель телефона: перетекание — анимация браузера, без кода на каждый кадр и без замеров
