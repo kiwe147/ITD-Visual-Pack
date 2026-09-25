@@ -5072,12 +5072,12 @@
             transition: all 0.25s ease !important;
             position: relative;
             border: none !important;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22) !important;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2) !important;
             animation: postAppear 0.3s ease-out forwards !important;
-            --vp-edge-a: rgba(255, 255, 255, .16); --vp-edge-b: rgba(255, 255, 255, .035);
+            --vp-edge-a: rgba(255, 255, 255, .08); --vp-edge-b: rgba(255, 255, 255, .08);   /* без наведения — как было: ровная 1px */
         }
-        /* Обводка — тонкая линия в 1 px, как у стекла ИТД (панель, кнопки): сверху светлее, книзу тает.
-           Рисуем слоем поверх края (маска оставляет только кромку), а не border: так и градиент, и без сдвига */
+        /* Обводка — линия в 1 px слоем поверх края (маска оставляет только кромку), а не border: так ей можно
+           дать градиент при наведении (сверху светлее, книзу тает — как у стекла ИТД), и ничего не сдвигается */
         article.vp-post::before {
             content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; z-index: 1;
             background: linear-gradient(to bottom, var(--vp-edge-a), var(--vp-edge-b));
@@ -5085,7 +5085,7 @@
             mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
             transition: opacity .25s ease;
         }
-        html.vp-light article.vp-post { --vp-edge-a: rgba(0, 0, 0, .1); --vp-edge-b: rgba(0, 0, 0, .04); }
+
         /* наведение — только где есть мышь (на телефоне :hover «залипает» после касания): линия в цвет стиля,
            та же толщина; цвет даёт paint() через --vp-post-edge */
         @media (hover: hover) {
@@ -5970,14 +5970,14 @@
                 rgba(var(--vp-emoji), var(--vp-tint)) 0%,
                 rgba(var(--vp-emoji), calc(var(--vp-tint) * 0.4)) 45%,
                 rgba(var(--vp-emoji), calc(var(--vp-tint) * 0.1)) 100%) !important;
-            --vp-edge-a: rgba(var(--vp-emoji), .34); --vp-edge-b: rgba(var(--vp-emoji), .07);
+            --vp-edge-a: rgba(var(--vp-emoji), .22); --vp-edge-b: rgba(var(--vp-emoji), .22);   /* как было */
             transition: --vp-tint 0.25s ease !important;
         }
         .vp-emoji-tint:not(article) { border: 1px solid rgba(var(--vp-emoji), 0.22) !important; }   /* уведомления — не article, у них своя рамка */
         @media (hover: hover) {
             .vp-emoji-tint:hover { --vp-tint: 0.42; }
             .vp-emoji-tint:not(article):hover { border-color: rgba(var(--vp-emoji), 0.4) !important; }
-            article.vp-emoji-tint:hover { --vp-edge-a: rgba(var(--vp-emoji), .55); }
+            article.vp-emoji-tint:hover { --vp-edge-a: rgba(var(--vp-emoji), .55); --vp-edge-b: rgba(var(--vp-emoji), .1); }
         }
         /* Телефон: уведомления — скруглённые карточки с зазором, как посты, а не полосы во всю ширину */
         @media (max-width: 1172px) {
