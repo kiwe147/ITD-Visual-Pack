@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.8
+// @version      3.1.9
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -436,8 +436,10 @@
                     queued = true;
                     const lead = 0.05, at = ctx.currentTime + lead;
                     introSound(ctx, ms => at + ms / 1000);
-                    // некоторые браузеры отдают странную задержку — больше 0,35 с не ждём
-                    const lat = Math.min(0.35, Math.max(0, (ctx.outputLatency || 0) + (ctx.baseLatency || 0)) || 0);
+                    // Задержку браузер завышает (в Bluetooth-наушниках на телефоне звук с полной поправкой
+                    // шёл заметно раньше картинки, без поправки — чуть позже), поэтому берём половину
+                    // заявленной и не больше 0,15 с. Плюс lead: звук стоит в очереди на 50 мс вперёд.
+                    const lat = Math.min(0.15, 0.5 * (Math.max(0, (ctx.outputLatency || 0) + (ctx.baseLatency || 0)) || 0));
                     setTimeout(fire, (lead + lat) * 1000);
                 }, fire);
             } catch (e) { ctx = null; }
