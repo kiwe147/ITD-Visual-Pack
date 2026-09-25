@@ -755,6 +755,8 @@
         { id: 'blue', name: 'Голубое свечение', c: ['#29b6f6', '#90e0ef', '#caf0f8'] },
         { id: 'purple', name: 'Фиолетовый мистик', c: ['#7c3aed', '#bb66ff', '#dd88ff'] },
         { id: 'rainbow', name: 'Радужный', c: ['#ff3b3b', '#ffb000', '#3ddc84', '#29b6f6', '#b04dff'] },
+        { id: 'orange', name: 'Оранжевый', c: ['#ff7a00', '#ffa040'] },
+        { id: 'gray', name: 'Серый', c: ['#8e8e96', '#5a5a62'] },
         { id: 'white', name: 'Белый', c: ['#ffffff', '#e2e2e6'] },
         { id: 'black', name: 'Чёрный', c: ['#26262c', '#050507'] }
     ];
@@ -1955,14 +1957,26 @@
     // а не окно) и закрывается кликом мимо или когда кнопка ушла с экрана.
     let popup = null;                                   // { el, btn }
 
-    function closePopup() {
+    // Кнопка «назад» на телефоне закрывает открытое меню, а не уводит со страницы: при открытии
+    // кладём в историю запись с тем же адресом, «назад» снимает её. Закрыли меню сами — снимаем её тоже.
+    let popupHist = false;
+    function closePopup(keepHist) {
         if (!popup) return;
         popup.el.remove();
         window.removeEventListener('scroll', placePopup, true);
         window.removeEventListener('resize', placePopup);
         document.removeEventListener('click', clickOutsidePopup, true);
         popup = null;
+        if (popupHist && !keepHist) {
+            popupHist = false;
+            if (history.state && history.state.vpPopup) history.back();
+        }
     }
+    window.addEventListener('popstate', () => {
+        if (!popupHist) return;
+        popupHist = false;
+        closePopup();
+    });
     function placePopup() {
         if (!popup) return;
         const r = popup.btn.getBoundingClientRect();
@@ -1988,9 +2002,13 @@
     }
     function openPopup(btn, el) {
         const same = popup && popup.btn === btn;
-        closePopup();
+        closePopup(!same);                              // меню сменилось на другое — запись в истории та же
         if (same) return false;
         popup = { el, btn };
+        if (!popupHist) {
+            history.pushState(Object.assign({}, history.state, { vpPopup: true }), '', location.href);
+            popupHist = true;
+        }
         el.style.position = 'fixed';
         document.body.appendChild(el);
         placePopup();
