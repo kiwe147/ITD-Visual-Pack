@@ -1468,13 +1468,24 @@
         /* заставка на телефоне: три варианта */
         .vp-intro-mode { padding: 10px 12px; }
         .vp-intro-mode .vp-setting-label { color: var(--text-primary, #fff); font-size: 14px; }
-        .vp-seg { display: flex; gap: 3px; padding: 3px; margin-top: 10px; border-radius: 14px;
-            background: color-mix(in srgb, var(--text-primary, #fff) 7%, transparent); }
-        .vp-seg button { flex: 1; border: 0; background: none; cursor: pointer; font: inherit; font-size: 13px; padding: 7px 4px; border-radius: 11px;
-            color: var(--text-secondary, rgba(255, 255, 255, .6)); white-space: nowrap; }
-        .vp-seg button.vp-active { color: var(--text-primary, #fff); font-weight: 600;
-            background: color-mix(in srgb, var(--vp-accent, #0080ff) 22%, transparent);
-            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 45%, transparent); }
+        .vp-eff { --p: 0; margin: 14px 4px 0; touch-action: none; user-select: none; cursor: pointer; }
+        .vp-eff-track { position: relative; height: 6px; margin: 0 9px; border-radius: 3px;
+            background: color-mix(in srgb, var(--text-primary, #fff) 12%, transparent); }
+        .vp-eff-fill { position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--p) * 100%); border-radius: 3px;
+            background: var(--vp-accent, #0080ff); transition: width .25s cubic-bezier(.3, .7, .3, 1); }
+        .vp-eff-track i { position: absolute; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%;
+            background: color-mix(in srgb, var(--text-primary, #fff) 35%, transparent); transition: background .2s; }
+        .vp-eff-track i:nth-of-type(1) { left: 0; } .vp-eff-track i:nth-of-type(2) { left: 50%; } .vp-eff-track i:nth-of-type(3) { left: 100%; }
+        .vp-eff-track i.vp-on { background: #fff; }
+        .vp-eff-thumb { position: absolute; top: 50%; left: calc(var(--p) * 100%); width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
+            background: #fff; box-shadow: 0 0 0 4px color-mix(in srgb, var(--vp-accent, #0080ff) 35%, transparent), 0 2px 6px rgba(0, 0, 0, .4);
+            transition: left .25s cubic-bezier(.3, .7, .3, 1), transform .15s; }
+        .vp-eff.vp-drag .vp-eff-thumb { transform: scale(1.15); }
+        .vp-eff-labels { display: flex; justify-content: space-between; margin-top: 10px; font-size: 12px;
+            color: var(--text-secondary, rgba(255, 255, 255, .5)); }
+        .vp-eff-labels span { flex: 1; text-align: center; transition: color .2s; }
+        .vp-eff-labels span:first-child { text-align: left; } .vp-eff-labels span:last-child { text-align: right; }
+        .vp-eff-labels span.vp-active { color: var(--text-primary, #fff); font-weight: 600; }
         .vp-intro-note { font-size: 11.5px; margin-top: 6px; color: var(--text-secondary, rgba(255, 255, 255, .5)); }
         /* кнопка «ИТД X» вместо «ИТД НУКСТА» */
         .vp-nuksta-hidden { display: none !important; }
@@ -2308,30 +2319,37 @@
         };
         return row;
     }
+    // Заставка на телефоне — ползунок на три ступени (как выбор «effort»): Выкл → Без звука → Со звуком.
+    // Тап по ступени или перетаскивание.
     function introModeRow() {
+        const STEPS = [['off', 'Выкл', 'Заставки не будет.'], ['silent', 'Без звука', 'Ролик сразу, без звука.'],
+            ['tap', 'Со звуком', 'Коснись экрана при входе — ролик пойдёт со звуком.']];
         const row = document.createElement('div');
         row.className = 'vp-intro-mode';
-        row.innerHTML = `<span class="vp-setting-label">${ICONS.settings['Заставка при входе'] || ''}<span>Заставка при входе</span></span><div class="vp-seg"></div>`;
-        const seg = row.querySelector('.vp-seg');
-        const cur = introMode();
-        for (const [v, name] of [['tap', 'Со звуком'], ['silent', 'Без звука'], ['off', 'Выкл']]) {
-            const b = document.createElement('button');
-            b.type = 'button';
-            b.textContent = name;
-            b.className = v === cur ? 'vp-active' : '';
-            b.onclick = (e) => {
-                e.stopPropagation();
-                GM_setValue('introMobile', v);
-                seg.querySelectorAll('button').forEach(x => x.classList.toggle('vp-active', x === b));
-                note.textContent = NOTES[v];
-            };
-            seg.appendChild(b);
-        }
-        const NOTES = { tap: 'Коснись экрана при входе — ролик пойдёт со звуком.', silent: 'Ролик сразу, без звука.', off: 'Заставки не будет.' };
-        const note = document.createElement('div');
-        note.className = 'vp-intro-note';
-        note.textContent = NOTES[cur];
-        row.appendChild(note);
+        row.innerHTML = `<span class="vp-setting-label">${ICONS.settings['Заставка при входе'] || ''}<span>Заставка при входе</span></span>
+            <div class="vp-eff"><div class="vp-eff-track"><div class="vp-eff-fill"></div>${STEPS.map(() => '<i></i>').join('')}<div class="vp-eff-thumb"></div></div>
+            <div class="vp-eff-labels">${STEPS.map(st => `<span>${st[1]}</span>`).join('')}</div></div><div class="vp-intro-note"></div>`;
+        const eff = row.querySelector('.vp-eff'), track = row.querySelector('.vp-eff-track');
+        const note = row.querySelector('.vp-intro-note');
+        let idx = Math.max(0, STEPS.findIndex(st => st[0] === introMode()));
+        const set = (n, save) => {
+            idx = n;
+            eff.style.setProperty('--p', n / (STEPS.length - 1));
+            track.querySelectorAll('i').forEach((d, k) => d.classList.toggle('vp-on', k <= n));
+            row.querySelectorAll('.vp-eff-labels span').forEach((l, k) => l.classList.toggle('vp-active', k === n));
+            note.textContent = STEPS[n][2];
+            if (save) GM_setValue('introMobile', STEPS[n][0]);
+        };
+        set(idx, false);
+        const at = (x) => { const r = track.getBoundingClientRect(); return Math.round(Math.max(0, Math.min(1, (x - r.left) / r.width)) * (STEPS.length - 1)); };
+        let drag = false;
+        eff.addEventListener('pointerdown', e => { e.stopPropagation(); drag = true; eff.classList.add('vp-drag'); eff.setPointerCapture(e.pointerId); set(at(e.clientX), false); });
+        eff.addEventListener('pointermove', e => { if (drag) set(at(e.clientX), false); });
+        const end = () => { if (!drag) return; drag = false; eff.classList.remove('vp-drag'); set(idx, true); };
+        eff.addEventListener('pointerup', end);
+        eff.addEventListener('pointercancel', end);
+        eff.addEventListener('click', e => e.stopPropagation());
+        row.querySelectorAll('.vp-eff-labels span').forEach((l, k) => l.addEventListener('pointerdown', e => { e.stopPropagation(); set(k, true); }));
         return row;
     }
     const secTitle = (text) => {
