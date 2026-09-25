@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.22
+// @version      3.0.23
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -794,7 +794,8 @@
         GEAR: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
         MESSAGES: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M5 3a3 3 0 00-3 3v10a3 3 0 003 3h1v2.47a.5.5 0 00.85.36L11.12 19H19a3 3 0 003-3V6a3 3 0 00-3-3H5zm2 5a1 1 0 000 2h10a1 1 0 100-2H7zm0 4a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>`,
         // стрелка к черте — наверх ленты
-        SCROLL_TOP: svgIcon('<path d="M5 4.5h14"/><path d="M12 20V9M7 13.5l5-5 5 5"/>', 22),
+        // как «+» у ИТД (кнопка «Создать пост»): 24 px, линия 2
+        SCROLL_TOP: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 4.5h14M12 20V9M7 13.5l5-5 5 5"/></svg>',
         // картинка с плюсом — поставить свою картинку в баннер
         BANNER_IMAGE: svgIcon('<path d="M20 12.5V17a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17V7a2.5 2.5 0 0 1 2.5-2.5H12"/><circle cx="9" cy="9.5" r="1.5"/><path d="m20 15.5-3.5-3.5L8 19.5"/><path d="M18 2.5v6M15 5.5h6"/>'),
         // картинка со стрелками по кругу — сменить картинку
@@ -2692,7 +2693,7 @@
         pointer-events: auto;
         color: var(--text-primary);
         box-shadow: var(--shadow-elevated);
-        transition: all 0.2s ease;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
         z-index: 99999;
         margin: 0;
         padding: 0;
@@ -2716,10 +2717,6 @@
                 -webkit-mask-composite: xor;
                 mask-composite: exclude;
                 pointer-events: none;
-            }
-            .itd-scroll-top-btn:hover {
-                transform: scale(1.05);
-                opacity: 0.9;
             }
         `;
             document.head.appendChild(style);
@@ -4771,6 +4768,65 @@
         idle: { mask: '<path d="M12 4.17L14.35 9.82L20.45 10.31L15.8 14.28L17.22 20.23L12 17.05L6.78 20.23L8.2 14.28L3.55 10.31L9.65 9.82Z" stroke="currentColor" stroke-width="4.4" stroke-linejoin="round"/>', hole: '<path d="M12 11.13L12.59 12.54L14.11 12.66L12.95 13.66L13.3 15.15L12 14.35L10.7 15.15L11.05 13.66L9.89 12.66L11.41 12.54Z" stroke="currentColor" stroke-width="1.9800000000000002" stroke-linejoin="round"/>' },
         live: { mask: '<path d="M12 4.17L14.35 9.82L20.45 10.31L15.8 14.28L17.22 20.23L12 17.05L6.78 20.23L8.2 14.28L3.55 10.31L9.65 9.82Z" stroke="currentColor" stroke-width="4.4" stroke-linejoin="round"/><path d="M20.5 0.8C21.2 2.6 21.2 2.6 23 3.3C21.2 4 21.2 4 20.5 5.8C19.8 4 19.8 4 18 3.3C19.8 2.6 19.8 2.6 20.5 0.8Z"/><path d="M21.7 15C22.09 16.01 22.09 16.01 23.1 16.4C22.09 16.79 22.09 16.79 21.7 17.8C21.31 16.79 21.31 16.79 20.3 16.4C21.31 16.01 21.31 16.01 21.7 15Z"/><path d="M15.9 0.2C16.26 1.14 16.26 1.14 17.2 1.5C16.26 1.86 16.26 1.86 15.9 2.8C15.54 1.86 15.54 1.86 14.6 1.5C15.54 1.14 15.54 1.14 15.9 0.2Z"/>', over: '<path d="M12 9.18L13.1 11.83L15.97 12.06L13.79 13.93L14.45 16.73L12 15.23L9.55 16.73L10.21 13.93L8.03 12.06L10.9 11.83Z" fill="#5cc8ff" stroke="#5cc8ff" stroke-width="2.64" stroke-linejoin="round"/>' }
     };
+    // Нижняя панель телефона: кнопка сайта «Создать пост» (+) — на «бугорке» по центру панели: верхний
+    // край панели плавно поднимается дугой вокруг «+» (раньше «+» стоял справа над панелью, и на него
+    // ложилась наша «наверх»). Фон, размытие и обводка панели рисуются одной фигурой «панель + бугорок»
+    // (SVG под пунктами) — без шва и двойного затемнения; у самой «+» свой круг убран, она лежит на бугорке.
+    // Кнопка та же, сайтовая, — только место: она в том же закреплённом блоке, что и панель, и прячется
+    // вместе с ней. Между 3-м и 4-м пунктом — место под бугорок. Наша «наверх» — на своём месте, а вид
+    // берёт у «+» (классы сайта), чтобы совпадал до пикселя.
+    const BUMP = 60, BUMP_R = 32, BUMP_LIFT = 28, BUMP_FILLET = 10;   // кнопка, радиус дуги, насколько выше края, скругление стыков
+    // контур «скруглённая панель + бугорок»: w×h панели, её верх — на y = top
+    function bumpPath(w, h, top) {
+        const r = h / 2, cx = w / 2, cy = top + BUMP_R - BUMP_LIFT, f = BUMP_FILLET;
+        const dy = cy - (top - f), d = Math.sqrt((BUMP_R + f) ** 2 - dy ** 2);
+        const k = f / (BUMP_R + f);                                    // точка касания скругления и дуги
+        const tx = d * (1 - k), ty = (top - f) + dy * k;
+        const n = v => +v.toFixed(2);
+        return `M${r} ${top}H${n(cx - d)}A${f} ${f} 0 0 0 ${n(cx - tx)} ${n(ty)}A${BUMP_R} ${BUMP_R} 0 0 1 ${n(cx + tx)} ${n(ty)}`
+            + `A${f} ${f} 0 0 0 ${n(cx + d)} ${top}H${w - r}A${r} ${r} 0 0 1 ${w - r} ${top + h}H${r}A${r} ${r} 0 0 1 ${r} ${top}Z`;
+    }
+    onDom(function newPostBump() {
+        const nav = document.querySelector('.' + SELECTORS.nav);
+        const plus = document.querySelector('button[aria-label="Создать пост"]');
+        const up = document.querySelector('.itd-scroll-top-btn');
+        if (plus && up) {
+            const cls = siteClasses(plus);
+            if (cls && !cls.split(' ').every(c => up.classList.contains(c))) cls.split(' ').forEach(c => up.classList.add(c));
+        }
+        const row = !!(nav && navIsRow(nav) && plus && plus.parentElement === nav.parentElement);
+        if (nav) nav.classList.toggle('vp-has-bump', row);
+        let bg = nav && nav.querySelector(':scope > svg.vp-bump-bg');
+        if (!row) {
+            if (bg) bg.remove();
+            if (plus) { plus.classList.remove('vp-new-post'); plus.style.removeProperty('top'); plus.style.removeProperty('left'); }
+            return;
+        }
+        plus.classList.add('vp-new-post');
+        const w = nav.offsetWidth, h = nav.offsetHeight, key = w + 'x' + h;
+        if (!bg) {
+            bg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            bg.setAttribute('class', 'vp-bump-bg');
+            bg.innerHTML = '<defs><linearGradient id="vp-bump-edge" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="1">'
+                + '<stop offset="0" stop-color="rgba(255,255,255,.25)"/><stop offset="1" stop-color="rgba(255,255,255,.05)"/></linearGradient></defs>'
+                // обводка — той же фигурой в 2 px: внешнюю половину срезает обрезка по контуру, остаётся 1 px внутри
+                + '<path class="vp-bump-fill"/><path class="vp-bump-edge" fill="none" stroke="url(#vp-bump-edge)" stroke-width="2"/>';
+            nav.prepend(bg);
+        }
+        if (bg.dataset.key !== key) {
+            bg.dataset.key = key;
+            const top = BUMP_LIFT + 2, H = h + top, d = bumpPath(w, h, top);
+            bg.setAttribute('width', w); bg.setAttribute('height', H); bg.setAttribute('viewBox', `0 0 ${w} ${H}`);
+            bg.style.top = -top + 'px';
+            bg.style.clipPath = `path('${d}')`;
+            bg.querySelector('.vp-bump-fill').setAttribute('d', d);
+            bg.querySelector('.vp-bump-edge').setAttribute('d', d);
+            bg.querySelector('linearGradient').setAttribute('y2', H);
+        }
+        const top = Math.round(nav.offsetTop + BUMP_R - BUMP_LIFT - BUMP / 2) + 'px', left = Math.round(nav.offsetLeft + nav.offsetWidth / 2 - BUMP / 2) + 'px';
+        if (plus.style.top !== top) plus.style.top = top;
+        if (plus.style.left !== left) plus.style.left = left;
+    });
     let eventMaskN = 0;
     onDom(function eventIcon() {
         document.querySelectorAll('a[href="/event"] img').forEach(img => {
@@ -5791,6 +5847,17 @@
         .vp-nav-has-blob > .vp-nav-link.vp-active { background: transparent !important; }
         /* своя подложка сайта (нижняя панель телефона) — прячем: вместо неё наша, той же формы */
         .vp-nav-has-blob > div:not(.vp-nav-blob) { opacity: 0 !important; }
+        /* «+» (Создать пост) — бугорок по центру нижней панели (newPostBump) */
+        .vp-new-post { position: absolute !important; width: ${BUMP}px !important; height: ${BUMP}px !important; z-index: 2; margin: 0 !important;
+            background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; }
+        .vp-new-post::before { display: none !important; }
+        nav.vp-has-bump > a:nth-of-type(3) { margin-right: ${BUMP + 8}px !important; }
+        /* фон, размытие и обводка панели — у фигуры «панель + бугорок», у самой панели — выключены */
+        nav.vp-has-bump { background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; }
+        nav.vp-has-bump::before { display: none !important; }
+        .vp-bump-bg { position: absolute; left: 0; z-index: -1; pointer-events: none; overflow: visible;
+            backdrop-filter: var(--vp-glass-filter, blur(16px)); -webkit-backdrop-filter: var(--vp-glass-filter, blur(16px)); }
+        .vp-bump-bg .vp-bump-fill { fill: var(--glass-bg); }
         /* Ивент: вместо картинки-портала сайта — свой значок (eventIcon) */
         a[href="/event"] img[src*="/portal/"], img.vp-portal-img { display: none !important; }
         @media (prefers-reduced-motion: reduce) { .vp-portal { animation: none !important; } }
