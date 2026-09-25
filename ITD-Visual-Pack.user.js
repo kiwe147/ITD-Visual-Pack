@@ -1373,6 +1373,11 @@
         .toggle-switch.active::after {
             left: 20px !important;
         }
+        /* кнопка «ИТД X» вместо «ИТД НУКСТА» */
+        .vp-nuksta-hidden { display: none !important; }
+        .vp-sec-title { font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--text-secondary, rgba(255, 255, 255, .55));
+            margin: 12px 12px 6px; }
+        .vp-like-inline { max-height: none !important; }
         /* настройки по вкладкам */
         .vp-settings-tabs { width: 300px !important; max-width: calc(100vw - 16px) !important; box-sizing: border-box !important;
             max-height: calc(100vh - 16px) !important; overflow-y: auto !important; overscroll-behavior: contain; scrollbar-width: none; }
@@ -1380,7 +1385,7 @@
         .vp-tabs { display: flex; gap: 4px; padding: 3px; margin-bottom: 8px; border-radius: 16px;
             background: color-mix(in srgb, var(--text-primary, #fff) 7%, transparent); }
         .vp-tab { flex: 1 1 auto; min-width: 0; border: 0; background: none; cursor: pointer; font: inherit; font-size: 13px;
-            padding: 7px 4px; border-radius: 13px; color: var(--text-secondary, rgba(255, 255, 255, .6)); transition: background .15s ease, color .15s ease; }
+            padding: 7px 2px; white-space: nowrap; border-radius: 13px; color: var(--text-secondary, rgba(255, 255, 255, .6)); transition: background .15s ease, color .15s ease; }
         .vp-tab:hover { color: var(--text-primary, #fff); }
         .vp-tab.vp-active { color: var(--text-primary, #fff); font-weight: 600;
             background: color-mix(in srgb, var(--vp-accent, #0080ff) 22%, transparent);
@@ -1966,6 +1971,13 @@
             return;
         }
         const w = popup.el.offsetWidth, h = popup.el.offsetHeight;
+        // окно настроек ИТД X — под кнопкой по центру; не влезает вниз — прижимаем к низу экрана
+        if (popup.el.classList.contains('vp-settings-tabs')) {
+            const cx = innerWidth < 600 ? innerWidth / 2 : r.left + r.width / 2;          // на телефоне — по центру экрана
+            popup.el.style.left = Math.max(8, Math.min(cx - w / 2, innerWidth - w - 8)) + 'px';
+            popup.el.style.top = Math.max(8, Math.min(r.bottom + 8, innerHeight - h - 8)) + 'px';
+            return;
+        }
         let left = r.right + 8;
         if (left + w > innerWidth) left = r.left - w - 8;
         popup.el.style.left = Math.max(8, left) + 'px';
@@ -2024,17 +2036,6 @@
         }
         return dot;
     }
-    function openStyleMenu(btn) {
-        const menu = menuBox();
-        styleKeys.forEach(key => menu.appendChild(menuOption(getColorDot(key), nickStyles[key].name, () => {
-            currentStyle = key;
-            GM_setValue('nickStyle', key);
-            paint();
-            btn.title = `Стиль: ${nickStyles[key].name}`;
-        }, key === currentStyle)));
-        openPopup(btn, menu);
-    }
-
     // --- стиль фона
     const BG_STYLES = {
         matrix: { name: 'Матрица', icon: svgIcon('<path d="M6 3v3M6 9.5v5M6 18v3M12 3v6M12 12.5v2M12 18v3M18 3v2M18 8.5v6M18 18v3"/>') },
@@ -2046,21 +2047,6 @@
         grid: { name: 'Неон-сетка', icon: svgIcon('<path d="M8 8a4 4 0 0 1 8 0"/><path d="M2 12h20"/><path d="M12 12v9M12 12l-8 9M12 12l8 9M5 17h14"/>') },
         snow: { name: 'Снегопад', icon: svgIcon('<path d="M12 2v20M3.3 7l17.4 10M3.3 17 20.7 7"/><path d="m9 4 3 2 3-2M9 20l3-2 3 2"/>') }
     };
-    function openBgMenu(btn) {
-        const menu = menuBox();
-        Object.entries(BG_STYLES).forEach(([key, bg]) => {
-            const icon = document.createElement('div');
-            icon.className = 'vp-menu-icon';
-            icon.innerHTML = bg.icon;
-            menu.appendChild(menuOption(icon, bg.name, () => {
-                backgroundStyle = key;
-                GM_setValue('backgroundStyle', key);
-                btn.title = 'Стиль фона: ' + bg.name;
-            }, key === backgroundStyle));
-        });
-        openPopup(btn, menu);
-    }
-
     // --- автолайки: список тех, кого лайкать
     function updateAutoLikeButtons() {
         const active = Object.keys(autoLikeUsers).length > 0;
@@ -2100,20 +2086,6 @@
             list.appendChild(row);
         }
     }
-    function openAutoLikeMenu(btn) {
-        const menu = menuBox();
-        menu.classList.add('vp-like-menu');
-        menu.innerHTML = '<div class="vp-like-list"><div class="vp-menu-note">Загрузка...</div></div><div class="vp-like-footer">Активно: 0</div>';
-        const list = menu.firstElementChild, footer = menu.lastElementChild;
-        if (!openPopup(btn, menu)) return;
-        fetchAutoLikeUsers().then(usersData => {
-            renderAutoLikeUsers(list, footer, usersData);
-            placePopup();
-        }).catch(() => {
-            list.innerHTML = '<div class="vp-menu-note">Ошибка загрузки</div>';
-        });
-    }
-
     // --- настройки: список переключателей
     function applyPostBlurSetting() {
         document.querySelectorAll('.' + SELECTORS.post + '[data-post-colored]').forEach(post => {
@@ -2172,14 +2144,17 @@
         { label: 'Свечение видео', get: () => ambientEnabled, set: v => { ambientEnabled = v; applyAmbient(); }, key: 'ambientEnabled' },
         { label: 'Боковая панель', get: () => railEnabled, set: v => { railEnabled = v; placeRail(); }, key: 'railEnabled' }
     ];
-    // Настройки разбиты по вкладкам. Последняя открытая вкладка запоминается.
+    // Все настройки ИТД X — одно окно по вкладкам (кнопка «ИТД X» в шапке профиля).
+    // Последняя открытая вкладка запоминается.
     const SETTINGS_TABS = [
-        { id: 'look', name: 'Вид', items: ['Фон', 'Стекло', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель'] },
-        { id: 'glow', name: 'Подсветка', items: ['Подсветка ника', 'Подсветка аватарок', 'Подсветка постов'] },
-        { id: 'misc', name: 'Удобство', items: ['Автолайки', 'Анти цензура', 'Звуки интерфейса', 'Заставка при входе'] },
+        { id: 'nick', name: 'Ник', items: ['Подсветка ника', 'Подсветка аватарок', 'Подсветка постов'] },
+        { id: 'bg', name: 'Фон', items: ['Фон'] },
+        { id: 'look', name: 'Вид', items: ['Стекло', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель'] },
+        { id: 'likes', name: 'Лайки', items: ['Автолайки'] },
+        { id: 'misc', name: 'Ещё', items: ['Анти цензура', 'Звуки интерфейса', 'Заставка при входе'] },
         { id: 'icon', name: 'Иконка' }
     ];
-    function settingRow(opt) {
+    function settingRow(opt, after) {
         const row = document.createElement('div');
         row.className = 'settings-option';
         row.innerHTML = `<span class="vp-setting-label">${ICONS.settings[opt.label] || ''}<span></span></span><div class="toggle-switch"></div>`;
@@ -2192,8 +2167,21 @@
             GM_setValue(opt.key, v);
             opt.set(v);
             toggle.classList.toggle('active', v);
+            if (after) after();
         };
         return row;
+    }
+    const secTitle = (text) => {
+        const t = document.createElement('div');
+        t.className = 'vp-sec-title';
+        t.textContent = text;
+        return t;
+    };
+    // пункт списка (стиль ника, фон): выбор не закрывает окно — вкладка перерисовывается с новой галочкой
+    function pickRow(icon, label, active, onPick, redraw) {
+        const o = menuOption(icon, label, onPick, active);
+        o.onclick = (e) => { e.stopPropagation(); onPick(); redraw(); };
+        return o;
     }
     function openSettingsMenu(btn) {
         const menu = document.createElement('div');
@@ -2203,16 +2191,50 @@
         const body = document.createElement('div');
         body.className = 'vp-tab-body';
         menu.append(tabs, body);
-        let current = GM_getValue('settingsTab', 'look');
-        if (!SETTINGS_TABS.some(t => t.id === current)) current = 'look';
+        let current = GM_getValue('settingsTab', 'nick');
+        if (!SETTINGS_TABS.some(t => t.id === current)) current = 'nick';
         const show = (id) => {
             current = id;
             GM_setValue('settingsTab', id);
             tabs.querySelectorAll('.vp-tab').forEach(t => t.classList.toggle('vp-active', t.dataset.tab === id));
             body.textContent = '';
+            const redraw = () => show(id);
             const tab = SETTINGS_TABS.find(t => t.id === id);
             if (id === 'icon') body.appendChild(iconPicker());
-            else for (const label of tab.items) body.appendChild(settingRow(SETTINGS.find(o => o.label === label)));
+            else for (const label of tab.items) body.appendChild(settingRow(SETTINGS.find(o => o.label === label), id === 'bg' ? redraw : null));
+            if (id === 'nick') {
+                body.appendChild(secTitle('Стиль ника'));
+                styleKeys.forEach(key => body.appendChild(pickRow(getColorDot(key), nickStyles[key].name, key === currentStyle, () => {
+                    currentStyle = key;
+                    GM_setValue('nickStyle', key);
+                    paint();
+                }, redraw)));
+            }
+            if (id === 'bg' && backgroundEnabled) {
+                body.appendChild(secTitle('Стиль фона'));
+                Object.entries(BG_STYLES).forEach(([key, bg]) => {
+                    const icon = document.createElement('div');
+                    icon.className = 'vp-menu-icon';
+                    icon.innerHTML = bg.icon;
+                    body.appendChild(pickRow(icon, bg.name, key === backgroundStyle, () => {
+                        backgroundStyle = key;
+                        GM_setValue('backgroundStyle', key);
+                    }, redraw));
+                });
+            }
+            if (id === 'likes') {
+                body.appendChild(secTitle('Кого лайкать'));
+                const box = document.createElement('div');
+                box.className = 'vp-like-menu vp-like-inline';
+                box.innerHTML = '<div class="vp-like-list"><div class="vp-menu-note">Загрузка...</div></div><div class="vp-like-footer">Активно: 0</div>';
+                body.appendChild(box);
+                const list = box.firstElementChild, footer = box.lastElementChild;
+                fetchAutoLikeUsers().then(usersData => {
+                    if (!list.isConnected) return;
+                    renderAutoLikeUsers(list, footer, usersData);
+                    if (popup && popup.el === menu) placePopup();
+                }).catch(() => { list.innerHTML = '<div class="vp-menu-note">Ошибка загрузки</div>'; });
+            }
             // не переключатель, а действие: файл со страницей — присылать разработчику, чтобы править по настоящей разметке.
             // Только у админа (по логину): остальным пункт ни к чему
             if (id === 'misc' && myUsername && ADMINS.includes(myUsername.toLowerCase())) body.appendChild(snapshotRow());
@@ -2387,26 +2409,44 @@
         });
         return b;
     }
+    // Кнопка «ИТД X» — на месте кнопки сайта «ИТД НУКСТА» в шапке своего профиля, тем же видом
+    // (берём её классы). Открывает все настройки мода. Кнопку сайта только прячем: её рисует сайт.
+    // Если такой кнопки нет (сайт поменялся) — у ника остаётся круглая кнопка настроек.
+    function findNukstaButton(from) {
+        for (let el = from, i = 0; el && i < 6; el = el.parentElement, i++) {
+            const b = [...el.querySelectorAll('button')].find(x => !x.classList.contains('vp-itdx-btn') && /нукста/i.test(x.textContent));
+            if (b) return b;
+        }
+        return null;
+    }
     function addToggleButtonToNick(ru5n) {
         const nickSpan = ru5n.querySelector('.' + SELECTORS.nickText);
         if (!nickSpan) return;
         const nickText = nickSpan.textContent.trim();
         if (nickText !== myUsername && nickText !== myDisplayName) return;
-        if (ru5n.querySelector('.nick-controls-panel')) return;
 
+        const nuksta = findNukstaButton(ru5n);
+        if (nuksta) {
+            nuksta.classList.add('vp-nuksta-hidden');
+            const next = nuksta.nextElementSibling;
+            if (!next || !next.classList.contains('vp-itdx-btn')) {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = nuksta.className.replace('vp-nuksta-hidden', '').trim() + ' vp-itdx-btn';
+                b.textContent = 'ИТД X';
+                b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openSettingsMenu(b); });
+                nuksta.after(b);
+            }
+            document.querySelectorAll('.nick-controls-panel').forEach(p => p.remove());
+            return;
+        }
+        if (document.querySelector('.vp-itdx-btn') || ru5n.querySelector('.nick-controls-panel')) return;
         const panel = document.createElement('div');
         panel.className = 'nick-controls-panel';
-        panel.append(
-            pillButton('nick-style-toggle', `Стиль: ${nickStyles[currentStyle].name}`, ICONS.PALETTE, openStyleMenu),
-            pillButton('auto-like-toggle', 'Автолайки', ICONS.settings['Автолайки'], openAutoLikeMenu),
-            pillButton('bg-style-toggle', 'Стиль фона', ICONS.settings['Фон'], openBgMenu),
-            pillButton('settings-toggle', 'Настройки', ICONS.GEAR, openSettingsMenu)
-        );
+        panel.append(pillButton('settings-toggle', 'ИТД X', ICONS.GEAR, openSettingsMenu));
         const nick = ru5n.querySelector('.' + SELECTORS.nickContainer);
         if (nick) nick.after(panel);
         else ru5n.appendChild(panel);
-        updateAutoLikeButtons();
-        updateBackgroundToggleButtons();
     }
 
     function updateBackgroundToggleButtons() {
