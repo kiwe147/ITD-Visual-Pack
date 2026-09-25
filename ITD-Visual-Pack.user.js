@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.1
+// @version      3.1.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1417,8 +1417,12 @@
         .vp-like-inline { max-height: none !important; }
         /* настройки по вкладкам */
         .vp-settings-tabs { width: 320px !important; max-width: calc(100vw - 16px) !important; box-sizing: border-box !important;
-            max-height: calc(100dvh - 16px); overflow-y: auto !important; overscroll-behavior: contain; scrollbar-width: none;
-            touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+            max-height: calc(100dvh - 16px); display: flex !important; flex-direction: column; overflow: hidden !important; }
+        /* вкладки стоят на месте, прокручивается только содержимое */
+        .vp-settings-tabs .vp-tabs { flex: 0 0 auto; }
+        .vp-tab-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
+            touch-action: pan-y; -webkit-overflow-scrolling: touch; margin: 0 -12px -12px; padding: 0 12px 12px; }
+        .vp-tab-body::-webkit-scrollbar { display: none; }
         /* стили ника и фона — сеткой в два столбца */
         /* заполняется по столбцам: сверху вниз, потом следующий — соседние цвета стоят друг под другом */
         .vp-pick-grid { display: grid; grid-template-columns: 1fr 1fr; grid-auto-flow: column; gap: 2px 4px; }
@@ -2035,8 +2039,10 @@
             popup.el.style.left = Math.max(8, Math.min(cx - w / 2, innerWidth - w - 8)) + 'px';
             // видимая высота: на телефоне панель браузера перекрывает низ окна, innerHeight её не учитывает
             const vh = window.visualViewport ? Math.min(innerHeight, visualViewport.height) : innerHeight;
-            popup.el.style.maxHeight = (vh - 16) + 'px';
-            popup.el.style.top = Math.max(8, Math.min(r.bottom + 8, vh - popup.el.offsetHeight - 8)) + 'px';
+            // высота окна одна на все вкладки — при переключении окно не прыгает; лишнее прокручивается внутри
+            const fixedH = Math.min(vh - 16, 580);
+            popup.el.style.height = popup.el.style.maxHeight = fixedH + 'px';
+            popup.el.style.top = Math.max(8, Math.min(r.bottom + 8, vh - fixedH - 8)) + 'px';
             return;
         }
         let left = r.right + 8;
@@ -2262,6 +2268,8 @@
             current = id;
             GM_setValue('settingsTab', id);
             tabs.querySelectorAll('.vp-tab').forEach(t => t.classList.toggle('vp-active', t.dataset.tab === id));
+            const keep = body.dataset.tab === id ? body.scrollTop : 0;   // перерисовка той же вкладки — прокрутка на месте
+            body.dataset.tab = id;
             body.textContent = '';
             const redraw = () => show(id);
             const tab = SETTINGS_TABS.find(t => t.id === id);
@@ -2312,6 +2320,7 @@
             // Только у админа (по логину): остальным пункт ни к чему
             if (id === 'misc' && myUsername && ADMINS.includes(myUsername.toLowerCase())) body.appendChild(snapshotRow());
             if (popup && popup.el === menu) placePopup();
+            body.scrollTop = keep;
         };
         for (const t of SETTINGS_TABS) {
             const b = document.createElement('button');
