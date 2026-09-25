@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.20
+// @version      3.0.21
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1795,6 +1795,31 @@
         nickSpan.classList.add('vp-my-nick');
         const box = nickSpan.closest('.' + SELECTORS.nickContainer);
         if (box) box.classList.add('vp-my-nick-box');
+        glowRoom(box || nickSpan);
+    }
+    // Свечение ника (drop-shadow) обрезалось резким прямоугольником: блок вокруг ника (в комментариях —
+    // строка с многоточием для длинных имён) не показывает ничего за своими краями. Такому блоку
+    // оставляем обрезку (многоточие работает), но разрешаем рисовать на GLOW_ROOM px за краями
+    // (overflow-clip-margin): раскладка и нажатия не меняются. Где этого нет (старый Safari) —
+    // запас полями: поля внутрь и столько же отрицательного отступа наружу.
+    const GLOW_ROOM = 60, CLIP_MARGIN = typeof CSS !== 'undefined' && CSS.supports('overflow-clip-margin', '1px');
+    function glowRoom(el) {
+        for (let p = el, i = 0; p && i < 4 && p !== document.body; p = p.parentElement, i++) {
+            if (p.matches('article, .' + SELECTORS.post)) return;
+            if (p._vpGlowRoom) continue;
+            const cs = getComputedStyle(p);
+            if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+            if (cs.overflowX === 'auto' || cs.overflowX === 'scroll' || cs.overflowY === 'auto' || cs.overflowY === 'scroll') continue;   // прокрутку не трогаем
+            p._vpGlowRoom = true;
+            if (CLIP_MARGIN) {
+                p.style.setProperty('overflow', 'clip', 'important');
+                p.style.setProperty('overflow-clip-margin', GLOW_ROOM + 'px', 'important');
+                continue;
+            }
+            const px = v => parseFloat(v) || 0, r = 8;
+            p.style.setProperty('padding', `${px(cs.paddingTop) + r}px ${px(cs.paddingRight) + r}px ${px(cs.paddingBottom) + r}px ${px(cs.paddingLeft) + r}px`, 'important');
+            p.style.setProperty('margin', `${px(cs.marginTop) - r}px ${px(cs.marginRight) - r}px ${px(cs.marginBottom) - r}px ${px(cs.marginLeft) - r}px`, 'important');
+        }
     }
 
     // ================= Таблетка у ника и её меню =================
@@ -2044,7 +2069,41 @@
             };
             menu.appendChild(row);
         }
+        // не переключатель, а действие: файл со страницей — присылать разработчику, чтобы править по настоящей разметке
+        const snap = document.createElement('div');
+        snap.className = 'settings-option';
+        snap.innerHTML = `<span class="vp-setting-label"><span>📸 Снимок страницы для Claude</span></span>`;
+        snap.onclick = e => { e.stopPropagation(); closePopup(); setTimeout(pageSnapshot, 300); };
+        menu.appendChild(snap);
         openPopup(btn, menu);
+    }
+
+    // Снимок страницы: разметка как она есть сейчас (с метками vp-* и классами сайта) + все стили сайта
+    // и мода + размер экрана. Без скриптов. Сохраняется файлом — его и присылать.
+    function pageSnapshot() {
+        const css = [];
+        for (const sh of document.styleSheets) {
+            try { css.push(`/* ${sh.href || (sh.ownerNode && sh.ownerNode.id) || 'inline'} */\n` + [...sh.cssRules].map(r => r.cssText).join('\n')); }
+            catch (e) { css.push(`/* ${sh.href} — чужой домен, не читается */`); }
+        }
+        const doc = document.documentElement.cloneNode(true);
+        doc.querySelectorAll('script, style, link[rel="stylesheet"], canvas').forEach(el => el.remove());
+        const info = { url: location.href, width: innerWidth, height: innerHeight, dpr: devicePixelRatio,
+            ua: navigator.userAgent, version: GM_info.script.version, theme: document.documentElement.getAttribute('data-theme'), at: new Date().toISOString() };
+        const head = doc.querySelector('head') || doc.insertBefore(document.createElement('head'), doc.firstChild);
+        const meta = document.createElement('script');
+        meta.type = 'application/json'; meta.id = 'vp-snapshot-info';
+        meta.textContent = JSON.stringify(info, null, 1);
+        const style = document.createElement('style');
+        style.textContent = css.join('\n\n');
+        head.prepend(meta, style);
+        const blob = new Blob(['<!doctype html>\n' + doc.outerHTML], { type: 'text/html' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `itd-snapshot-${(location.pathname.replace(/\W+/g, '-').replace(/^-|-$/g, '') || 'feed')}-${innerWidth}px.html`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
     }
 
     // --- сама таблетка: четыре круглые кнопки справа от крупного ника в шапке профиля
@@ -4929,26 +4988,44 @@
                     overflow: hidden;
                     z-index: -1;
                     pointer-events: none;
+                    background: var(--block-bg, #1c1c1c);
                 `;
                 article.insertBefore(bgContainer, article.firstChild);
             } else {
                 bgContainer.innerHTML = '';
             }
 
+            // Свечение — ровно там, где картинка, и её размера: раньше размытая картинка растягивалась
+            // на всю карточку от центра, и пятно цвета оказывалось далеко от самой картинки
+            // (на широком экране — ещё дальше). Место пересчитываем, когда меняется картинка или карточка.
             const blurLayer = document.createElement('div');
             blurLayer.style.cssText = `
                 position: absolute;
                 top: 0;
                 left: 0;
-                width: 100%;
-                height: 100%;
+                width: 0;
+                height: 0;
                 background-image: url(${img.src});
                 background-size: cover;
                 background-position: center;
                 background-repeat: no-repeat;
-                filter: blur(20px) brightness(1.2) saturate(1.3);
-                transform: scale(1.1);
+                filter: blur(34px) brightness(1.3) saturate(1.6);
+                transform: scale(1.3);
             `;
+            const place = () => {
+                if (!img.isConnected || !article.isConnected) return;
+                const ar = article.getBoundingClientRect(), ir = img.getBoundingClientRect();
+                if (!ar.width || !ir.width) return;
+                const k = article.offsetWidth / ar.width;          // сцена ленты чуть масштабирует пост
+                Object.assign(blurLayer.style, {
+                    left: ((ir.left - ar.left) * k - article.clientLeft) + 'px', top: ((ir.top - ar.top) * k - article.clientTop) + 'px',
+                    width: ir.width * k + 'px', height: ir.height * k + 'px'
+                });
+            };
+            const ro = new ResizeObserver(place);
+            ro.observe(img);
+            ro.observe(article);
+            place();
 
             const darkOverlay = document.createElement('div');
             darkOverlay.style.cssText = `
@@ -5636,6 +5713,15 @@
         html.vp-glass.vp-glass-lite { --vp-glass-filter: none; }
         html.vp-glass.vp-glass-lite[data-theme="dark"] { --block-bg: rgba(28, 28, 28, .82); --block-bg-secondary: rgba(42, 42, 44, .85); }
         html.vp-glass.vp-glass-lite.vp-light { --block-bg: rgba(255, 255, 255, .85); }
+        /* шторка комментариев на телефоне: стекло плотнее — сквозь неё просвечивала лента и мешала читать */
+        html.vp-glass[data-theme="dark"] .vp-comments-sheet {
+            --block-bg: rgba(24, 24, 24, .9); --block-bg-secondary: rgba(38, 38, 40, .9); --block-hover-bg: rgba(44, 44, 47, .92);
+            --modal-bg: rgba(17, 17, 17, .94); --glass-bg: rgba(30, 30, 30, .9);
+        }
+        html.vp-glass.vp-light .vp-comments-sheet {
+            --block-bg: rgba(255, 255, 255, .92); --block-bg-secondary: rgba(240, 240, 240, .92); --block-hover-bg: rgba(245, 245, 245, .94);
+            --modal-bg: rgba(255, 255, 255, .95); --glass-bg: rgba(255, 255, 255, .9);
+        }
         html.vp-glass .nick-style-dropdown, html.vp-glass .settings-dropdown, html.vp-glass .vp-msg-card {
             backdrop-filter: var(--vp-glass-filter) !important; -webkit-backdrop-filter: var(--vp-glass-filter) !important;
         }
@@ -5755,6 +5841,16 @@
     }
     applyGlass();
     onDom(function glassSheetsCheck() { if (glassEnabled) collectGlass(); });
+    // Шторка комментариев (телефон): самый внешний закреплённый на экране блок вокруг поля комментария
+    onDom(function commentsSheet() {
+        for (const input of commentInputs()) {
+            let sheet = null;
+            for (let p = input.parentElement; p && p !== document.body; p = p.parentElement) {
+                if (getComputedStyle(p).position === 'fixed') sheet = p;
+            }
+            if (sheet && !sheet.classList.contains('vp-comments-sheet')) sheet.classList.add('vp-comments-sheet');
+        }
+    });
 
     // --- 3. Переходы между страницами: сменился адрес — колонка с содержимым мягко въезжает
     let lastPath = location.pathname;
