@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.16
+// @version      3.0.17
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -17,7 +17,7 @@
 // @noframes
 // @downloadURL  https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js
 // @updateURL    https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js
-// @icon         data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='n' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%2300e5ff'/><stop offset='.5' stop-color='%237c4dff'/><stop offset='1' stop-color='%23ff3d9a'/></linearGradient><linearGradient id='d' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%230a3d62'/><stop offset='.5' stop-color='%233b1a7a'/><stop offset='1' stop-color='%237a1450'/></linearGradient><linearGradient id='m' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%231565c0'/><stop offset='.5' stop-color='%235e35b1'/><stop offset='1' stop-color='%23ad1457'/></linearGradient><filter id='b' x='-50%' y='-50%' width='200%' height='200%'><feGaussianBlur stdDeviation='2.2'/></filter><filter id='s' x='-20%' y='-20%' width='140%' height='140%'><feDropShadow dx='0' dy='1.5' stdDeviation='1.5' flood-opacity='.5'/></filter></defs><rect width='64' height='64' rx='16' fill='%230b0d13'/><g fill='none'><path d='M12 12L52 52M52 12L12 52' stroke='url(%23n)' stroke-opacity='1' stroke-width='12' stroke-linecap='round'/><path d='M12 12L52 52M52 12L12 52' stroke='%230b0d13' stroke-opacity='1' stroke-width='7' stroke-linecap='round'/></g><text x='32' y='40' font-family='Arial Black, Arial, sans-serif' font-weight='900' text-anchor='middle' font-size='21' fill='%23fff' filter='url(%23s)'>ИТД</text></svg>
+// @icon         data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='n' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%2300e5ff'/><stop offset='.5' stop-color='%237c4dff'/><stop offset='1' stop-color='%23ff3d9a'/></linearGradient><linearGradient id='d' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%230a3d62'/><stop offset='.5' stop-color='%233b1a7a'/><stop offset='1' stop-color='%237a1450'/></linearGradient><linearGradient id='m' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%231565c0'/><stop offset='.5' stop-color='%235e35b1'/><stop offset='1' stop-color='%23ad1457'/></linearGradient><filter id='b' x='-50%' y='-50%' width='200%' height='200%'><feGaussianBlur stdDeviation='2.2'/></filter><filter id='s' x='-20%' y='-20%' width='140%' height='140%'><feDropShadow dx='0' dy='1.5' stdDeviation='1.5' flood-opacity='.5'/></filter></defs><rect width='64' height='64' rx='16' fill='%230b0d13'/><g fill='none'><path d='M17 17L47 47M47 17L17 47' stroke='url(%23n)' stroke-opacity='1' stroke-width='12' stroke-linecap='round'/><path d='M17 17L47 47M47 17L17 47' stroke='%230b0d13' stroke-opacity='1' stroke-width='7' stroke-linecap='round'/></g><text x='32' y='40' font-family='Arial Black, Arial, sans-serif' font-weight='900' text-anchor='middle' font-size='21' fill='%23fff' filter='url(%23s)'>ИТД</text></svg>
 // ==/UserScript==
 
 (function () {
@@ -4579,6 +4579,10 @@
         return root;
     }
 
+    // На телефоне у сайта короткие подписи («Магаз», «Уведы») — и у нас короткая
+    function messagesLabel(notificationsLink) {
+        return /уведомления/i.test(notificationsLink.textContent) ? 'Сообщения' : 'Личка';
+    }
     function addMessagesButton() {
         const nav = document.querySelector('.' + SELECTORS.sidebar + ' .' + SELECTORS.nav)
             || document.querySelector('.' + SELECTORS.nav)
@@ -4593,6 +4597,8 @@
             if (messagesLink.nextElementSibling !== notificationsLink) {
                 nav.insertBefore(messagesLink, notificationsLink);
             }
+            const label = messagesLink.children[1], text = messagesLabel(notificationsLink);
+            if (label && label.textContent !== text) label.textContent = text;     // сменилась ширина экрана
             return;
         }
 
@@ -4612,7 +4618,9 @@
         iconSpan.className = (commonClasses(siteLinks.map(a => a.firstElementChild)) + ' ' + SELECTORS.navIcon).trim();
         iconSpan.innerHTML = ICONS.MESSAGES;
         const textSpan = document.createElement('span');
-        textSpan.textContent = 'Сообщения';
+        // классы подписи — как у подписей сайта: на телефоне у них свой (мелкий) шрифт
+        textSpan.className = commonClasses(siteLinks.map(a => a.children[1]).filter(Boolean));
+        textSpan.textContent = messagesLabel(notificationsLink);
         messagesLink.appendChild(iconSpan);
         messagesLink.appendChild(textSpan);
 
@@ -5489,6 +5497,10 @@
             transition: --vp-tint 0.25s ease, border-color 0.25s ease !important;
         }
         .vp-emoji-tint:hover { --vp-tint: 0.42; border-color: rgba(var(--vp-emoji), 0.4) !important; }
+        /* Телефон: уведомления — скруглённые карточки с зазором, как посты, а не полосы во всю ширину */
+        @media (max-width: 1172px) {
+            .vp-notif { border-radius: 24px !important; margin: 6px 10px !important; }
+        }
 
         /* Версия мода под логотипом: чип и кнопка обновления вместо надписи в 8px */
         .vp-version-row { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; }
@@ -5702,26 +5714,43 @@
     });
 
     // --- 10. «Жидкая» подложка меню: при смене пункта растягивается от старого к новому и стягивается
+    // меню в строку — нижняя панель телефона; в колонку — левое меню компьютера
+    function navIsRow(nav) {
+        const links = nav.querySelectorAll(':scope > .' + SELECTORS.navLink);
+        return links.length > 1 && Math.abs(links[0].offsetTop - links[1].offsetTop) < 4;
+    }
     let blob = null, blobAt = null;
     function moveNavBlob() {
         const nav = document.querySelector('.' + SELECTORS.nav);
         const active = nav && nav.querySelector(':scope > .' + SELECTORS.navLink + '.vp-active');
         if (!nav) return;
         if (!blob || !nav.contains(blob)) {
+            // Сайт нарисовал меню заново (на телефоне нижняя панель перерисовывается при каждом переходе):
+            // новая подложка встаёт туда, где была старая, — и дальше перетекает к новому пункту
+            const was = blob && blobAt && blob.style.opacity === '1' ? blobAt : null;
             blob = document.createElement('div');
             blob.className = 'vp-nav-blob';
             nav.classList.add('vp-nav-has-blob');
             nav.prepend(blob);
             blobAt = null;
+            if (was && !calm) {
+                blob.style.transition = 'none';
+                Object.assign(blob.style, { top: was.top + 'px', left: was.left + 'px', width: was.width + 'px', height: was.height + 'px', opacity: '1' });
+                blob.offsetWidth;                          // применить без перехода прозрачности
+                blob.style.transition = '';
+                blobAt = was;
+            }
         }
         if (!active) { blob.style.opacity = '0'; return; }
         const to = { top: active.offsetTop, left: active.offsetLeft, width: active.offsetWidth, height: active.offsetHeight };
         if (blobAt && to.top === blobAt.top && to.left === blobAt.left && to.width === blobAt.width && to.height === blobAt.height) return;
-        blob.style.borderRadius = getComputedStyle(active).borderRadius;
+        // у пунктов нижней панели телефона своего скругления нет — там подложка круглая, а не квадрат
+        const rad = getComputedStyle(active).borderRadius;
+        blob.style.borderRadius = parseFloat(rad) ? rad : Math.min(to.width, to.height) / 2 + 'px';
         const px = r => ({ top: r.top + 'px', left: r.left + 'px', width: r.width + 'px', height: r.height + 'px' });
         // Перетекание считаем по кадрам (proxFrame): подложка растягивается к новому пункту,
         // стягивается на нём, а по пути сдвигается так же, как кнопки, мимо которых идёт.
-        if (blobAt && !calm && blob.style.opacity === '1') blobAnim = { from: blobAt, to, t0: performance.now() };
+        if (blobAt && !calm && blob.style.opacity === '1') blobAnim = { from: blobAt, to, t0: performance.now(), row: navIsRow(nav) };
         else { blobAnim = null; Object.assign(blob.style, px(to)); }
         blob.style.opacity = '1';
         blobAt = to;
@@ -5734,8 +5763,14 @@
     // геометрия подложки в момент перетекания: 0–45% — растяжение от старого до нового, дальше — стяжка
     function blobGeom(an, now) {
         const p = Math.min(1, (now - an.t0) / BLOB_MS), f = an.from, t = an.to;
-        const lo = Math.min(f.top, t.top), hi = Math.max(f.top + f.height, t.top + t.height);
-        const mid = { top: lo, left: t.left + t.width * .04, width: t.width * .92, height: hi - lo };
+        let mid;
+        if (an.row) {                                      // меню в строку (телефон): растягивается вбок
+            const lo = Math.min(f.left, t.left), hi = Math.max(f.left + f.width, t.left + t.width);
+            mid = { left: lo, top: t.top + t.height * .04, height: t.height * .92, width: hi - lo };
+        } else {
+            const lo = Math.min(f.top, t.top), hi = Math.max(f.top + f.height, t.top + t.height);
+            mid = { top: lo, left: t.left + t.width * .04, width: t.width * .92, height: hi - lo };
+        }
         const [a, b, q] = p < .45 ? [f, mid, easeIO(p / .45)] : [mid, t, easeIO((p - .45) / .55)];
         return { g: { top: lerp(a.top, b.top, q), left: lerp(a.left, b.left, q), width: lerp(a.width, b.width, q), height: lerp(a.height, b.height, q) }, done: p >= 1 };
     }
@@ -5795,8 +5830,9 @@
     function proxKick() { if (!proxRaf) proxRaf = requestAnimationFrame(proxFrame); }
     if (!calm) {
         document.addEventListener('pointermove', e => {
+            if (e.pointerType !== 'mouse') return;        // палец по экрану — не «док»
             const nav = document.querySelector('.' + SELECTORS.nav);
-            if (!nav) return;
+            if (!nav || navIsRow(nav)) return;
             const r = nav.getBoundingClientRect();
             // зона — меню и немного вокруг, чтобы кнопки начинали выезжать ещё на подходе
             const inside = e.clientX >= r.left - 24 && e.clientX <= r.right + 40 && e.clientY >= r.top - 60 && e.clientY <= r.bottom + 60;
@@ -6077,11 +6113,28 @@
     // --- 19. Тихие звуки интерфейса (по умолчанию выключены): синтез, без файлов
     let uiSoundEnabled = GM_getValue('uiSoundEnabled', false);
     let uiCtx = null;
+    // Телефон: динамик маленький — там те же звуки в 5 раз громче. И мобильный браузер не даёт
+    // играть звук, пока не было касания: на первом касании «разблокируем» звук пустым сэмплом.
+    const UI_GAIN = matchMedia('(pointer: coarse)').matches ? 5 : 1;
+    function uiAudio() {
+        uiCtx = uiCtx || new (window.AudioContext || window.webkitAudioContext)();
+        if (uiCtx.state !== 'running') uiCtx.resume().catch(() => { });
+        return uiCtx;
+    }
+    function uiUnlock() {
+        if (!uiSoundEnabled || (uiCtx && uiCtx.state === 'running')) return;
+        try {
+            const c = uiAudio(), b = c.createBufferSource();
+            b.buffer = c.createBuffer(1, 1, c.sampleRate);
+            b.connect(c.destination);
+            b.start(0);
+        } catch (e) { }
+    }
+    ['pointerdown', 'touchend', 'keydown'].forEach(ev => addEventListener(ev, uiUnlock, { capture: true, passive: true }));
     function uiSound(kind) {
         if (!uiSoundEnabled) return;
         try {
-            uiCtx = uiCtx || new (window.AudioContext || window.webkitAudioContext)();
-            if (uiCtx.state === 'suspended') uiCtx.resume();
+            uiAudio();
             const t = uiCtx.currentTime;
             const tone = (f0, f1, dur, vol, type = 'sine', at = 0) => {
                 const o = uiCtx.createOscillator(), g = uiCtx.createGain();
@@ -6089,7 +6142,7 @@
                 o.frequency.setValueAtTime(f0, t + at);
                 o.frequency.exponentialRampToValueAtTime(f1, t + at + dur);
                 g.gain.setValueAtTime(0.0001, t + at);
-                g.gain.exponentialRampToValueAtTime(vol, t + at + 0.006);
+                g.gain.exponentialRampToValueAtTime(vol * UI_GAIN, t + at + 0.006);
                 g.gain.exponentialRampToValueAtTime(0.0001, t + at + dur);
                 o.connect(g).connect(uiCtx.destination);
                 o.start(t + at);
