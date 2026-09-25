@@ -741,7 +741,7 @@
     const domHandlers = [];
     function onDom(fn) { domHandlers.push(fn); }
     let domQueued = false;
-    const DOM_WATCH = { childList: true, subtree: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true };
+    const DOM_WATCH = { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true };
     function domTick() {
         domQueued = false;
         domRecords(domObserver.takeRecords());
@@ -765,6 +765,9 @@
         let any = false;
         for (const m of muts) {
             if (m.type === 'attributes' && !lostVp(m)) continue;
+            // сайт сменил текст на месте: важно, только если это эмодзи-аватарка (карточку отдали другому
+            // человеку — перекрасить); часы «5 мин.», счётчики и т.п. — не повод всё перебирать
+            if (m.type === 'characterData' && !/\p{Extended_Pictographic}/u.test(m.target.nodeValue || '')) continue;
             any = true;
             const el = m.target.nodeType === 1 ? m.target : m.target.parentElement;
             const p = el && el.closest('.' + SELECTORS.post);
@@ -5902,19 +5905,28 @@
     function addBlurBackground() {
         // Идём от картинок, а не от всех постов: посты без картинки иначе перебирались на каждую правку страницы
         const cards = new Set();
+        // метка — адрес картинки: сайт переиспользует карточки и картинки, и фон от прошлого поста оставался
         document.querySelectorAll('img.' + SELECTORS.postMedia).forEach(img => {
-            if (img._vpBlurDone) return;                  // её карточки уже с фоном
+            if (img._vpBlurDone === img.src) return;      // её карточки уже с фоном от неё
             let pending = false;
             for (const card of [img.closest('.' + SELECTORS.repost), img.closest('article.' + SELECTORS.post)]) {
-                if (card && !card.hasAttribute('data-blur-bg')) { cards.add(card); pending = true; }
+                if (card && card.getAttribute('data-blur-bg') !== img.src) { cards.add(card); pending = true; }
             }
-            if (!pending) img._vpBlurDone = true;
+            if (!pending) img._vpBlurDone = img.src;
+        });
+        // в карточку пришёл пост без картинки — старое размытие убираем
+        document.querySelectorAll('[data-blur-bg]').forEach(card => {
+            if (card.querySelector('img.' + SELECTORS.postMedia)) return;
+            card.removeAttribute('data-blur-bg');
+            card.classList.remove('itd-blur-active');
+            const c = card.querySelector(':scope > .itd-blur-container');
+            if (c) c.remove();
         });
         cards.forEach(article => {
             const img = article.querySelector('img.' + SELECTORS.postMedia);
             if (!img || !img.src || img.src.includes('avatar')) return;
 
-            article.setAttribute('data-blur-bg', 'true');
+            article.setAttribute('data-blur-bg', img.src);
 
             if (getComputedStyle(article).position === 'static') {
                 article.style.position = 'relative';
@@ -6521,23 +6533,23 @@
         return true;
     }
 
+    function untintCard(el) {
+        el.classList.remove('vp-emoji-tint');
+        el.style.removeProperty('--vp-emoji');
+    }
+    // Сайт переиспользует карточки: в тот же элемент приходит другой пост (новые сверху, подгрузка,
+    // пришли уведомления). Поэтому метка — не «покрашено», а чем покрашено; сменилось — красим заново.
     function colorizePosts() {
-        document.querySelectorAll('article.' + SELECTORS.post + ':not([data-post-colored])').forEach(post => {
+        document.querySelectorAll('article.' + SELECTORS.post).forEach(post => {
             const avatar = post.querySelector('.' + SELECTORS.avatarLink + ' .' + SELECTORS.avatar);
-            if (!avatar) return;
-
-            const emoji = avatar.textContent.trim();
-            if (!emoji) return;
-
-            const hasImage = post.querySelector('.' + SELECTORS.postMedia);
-
-            if (postBlurEnabled && hasImage) {
-                post.setAttribute('data-post-colored', 'true');
-                return;
-            }
-
-            tintCard(post, emoji);
-            post.setAttribute('data-post-colored', 'true');
+            const emoji = avatar ? avatar.textContent.trim() : '';
+            const withBlur = postBlurEnabled && !!post.querySelector('.' + SELECTORS.postMedia);
+            const key = emoji ? emoji + (withBlur ? '|blur' : '') : '';
+            if ((post.getAttribute('data-post-colored') || '') === key) return;
+            untintCard(post);
+            if (!key) { post.removeAttribute('data-post-colored'); return; }
+            post.setAttribute('data-post-colored', key);
+            if (!withBlur) tintCard(post, emoji);                // с картинкой фон даёт её размытие
         });
     }
 
@@ -6558,10 +6570,13 @@
 
     function colorizeNotifications() {
         document.querySelectorAll('.' + SELECTORS.notification).forEach(el => {
-            const emoji = emojiAvatarOf(el);
-            // сайт переиспользует пункты списка — перекрашиваем, если эмодзи сменилась
-            if (!emoji || el.getAttribute('data-colored') === emoji) return;
-            if (tintCard(el, emoji)) el.setAttribute('data-colored', emoji);
+            const emoji = emojiAvatarOf(el) || '';
+            // сайт переиспользует пункты списка — перекрашиваем, если эмодзи сменилась (или пропала:
+            // тогда снимаем старый цвет, а не оставляем чужой)
+            if ((el.getAttribute('data-colored') || '') === emoji) return;
+            untintCard(el);
+            if (emoji) el.setAttribute('data-colored', emoji); else el.removeAttribute('data-colored');
+            if (emoji) tintCard(el, emoji);
         });
     }
 
