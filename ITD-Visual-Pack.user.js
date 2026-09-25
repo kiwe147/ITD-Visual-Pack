@@ -746,20 +746,24 @@
         { id: "paw", name: "Лапка", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><clipPath id=\"c\"><rect width=\"64\" height=\"64\" rx=\"16\"/></clipPath><linearGradient id=\"db\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#6d28d9\"/><stop offset=\"1\" stop-color=\"#4c1d95\"/></linearGradient></defs><g clip-path=\"url(#c)\"><rect width=\"64\" height=\"64\" fill=\"url(#db)\"/><g fill=\"#ede4ff\"><ellipse cx=\"20\" cy=\"30\" rx=\"3.7\" ry=\"4.7\" transform=\"rotate(-22 20 30)\"/><ellipse cx=\"27.3\" cy=\"22.3\" rx=\"3.9\" ry=\"5.1\" transform=\"rotate(-6 27.3 22.3)\"/><ellipse cx=\"36.7\" cy=\"22.3\" rx=\"3.9\" ry=\"5.1\" transform=\"rotate(6 36.7 22.3)\"/><ellipse cx=\"44\" cy=\"30\" rx=\"3.7\" ry=\"4.7\" transform=\"rotate(22 44 30)\"/></g><path d=\"M32 34c-5.6 0-10.4 4.6-11.5 9-.9 3.6 1.5 6.6 4.9 6.6 2.6 0 4.4-1.3 6.6-1.3s4 1.3 6.6 1.3c3.4 0 5.8-3 4.9-6.6C42.4 38.6 37.6 34 32 34Z\" fill=\"#ede4ff\"/></g></svg>" },
         { id: "itdchan", name: "ИТД-чан", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><clipPath id=\"c\"><rect width=\"64\" height=\"64\" rx=\"16\"/></clipPath><linearGradient id=\"bg\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#1a0d10\"/><stop offset=\"1\" stop-color=\"#0b0708\"/></linearGradient><linearGradient id=\"red\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e2233b\"/><stop offset=\"1\" stop-color=\"#8e0f22\"/></linearGradient><radialGradient id=\"bell\" cx=\".38\" cy=\".32\" r=\".75\"><stop offset=\"0\" stop-color=\"#ffffff\"/><stop offset=\".45\" stop-color=\"#c9c9d1\"/><stop offset=\"1\" stop-color=\"#6d6d78\"/></radialGradient></defs><g clip-path=\"url(#c)\"><rect width=\"64\" height=\"64\" fill=\"url(#bg)\"/><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"url(#red)\" stroke-width=\"9\" stroke-linecap=\"round\" fill=\"none\"/></g></svg>" },
     ];
-    // своя иконка: фон — цвета стилей ника, сверху любой эмодзи
-    const ICON_BGS = [
-        { id: 'fire', name: 'Огненный', c: ['#ff4400', '#ff8800', '#ffcc22'] },
-        { id: 'pink', name: 'Розовый неон', c: ['#ff2d75', '#ff77cc', '#ff99dd'] },
-        { id: 'gold', name: 'Золотой', c: ['#ffea00', '#ffcc44', '#ffaa33'] },
-        { id: 'neon', name: 'Неон-пульс', c: ['#00e676', '#44ffdd'] },
-        { id: 'blue', name: 'Голубое свечение', c: ['#29b6f6', '#90e0ef', '#caf0f8'] },
-        { id: 'purple', name: 'Фиолетовый мистик', c: ['#7c3aed', '#bb66ff', '#dd88ff'] },
-        { id: 'rainbow', name: 'Радужный', c: ['#ff3b3b', '#ffb000', '#3ddc84', '#29b6f6', '#b04dff'] },
-        { id: 'orange', name: 'Оранжевый', c: ['#ff7a00', '#ffa040'] },
-        { id: 'gray', name: 'Серый', c: ['#8e8e96', '#5a5a62'] },
-        { id: 'white', name: 'Белый', c: ['#ffffff', '#e2e2e6'] },
-        { id: 'black', name: 'Чёрный', c: ['#26262c', '#050507'] }
-    ];
+    // своя иконка: фон — любой из стилей ника (их цвета) или чёрный, сверху любой эмодзи.
+    // Список собирается при первом обращении: стили ника объявлены ниже по файлу.
+    const ICON_BG_EXTRA = {
+        shimmer: ['#7c3aed', '#a78bfa', '#f0abfc'],
+        glitch: ['#00fff0', '#7c4dff', '#ff00c8'],
+        rainbow: ['#ff3b3b', '#ffb000', '#3ddc84', '#29b6f6', '#b04dff']
+    };
+    let iconBgList = null;
+    function iconBgs() {
+        if (iconBgList) return iconBgList;
+        iconBgList = styleKeys.map(k => {
+            const st = nickStyles[k];
+            const c = ICON_BG_EXTRA[k] || ((st.gradientDark || '').match(/#[0-9a-f]{3,6}\b/gi)) || [st.color];
+            return { id: k, name: st.name, c };
+        });
+        iconBgList.push({ id: 'black', name: 'Чёрный', c: ['#26262c', '#050507'] });
+        return iconBgList;
+    }
     const svgUrl = svg => 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
     const xmlText = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     // первый символ так, как его видит человек: эмодзи с оттенком кожи или флаг — это несколько кодов
@@ -770,13 +774,13 @@
         return Array.from(s)[0];
     }
     function customIconSvg({ bg, emoji }) {
-        const b = ICON_BGS.find(x => x.id === bg) || ICON_BGS[0];
+        const b = iconBgs().find(x => x.id === bg) || iconBgs().find(x => x.id === 'purpleMystic');
         const stops = b.c.map((c, i) => `<stop offset="${b.c.length > 1 ? i / (b.c.length - 1) : 0}" stop-color="${c}"/>`).join('');
         return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">${stops}</linearGradient></defs>` +
             `<rect width="64" height="64" rx="16" fill="url(#g)"/><text x="32" y="34" text-anchor="middle" dominant-baseline="central" font-size="36">${xmlText(emoji || '🦊')}</text></svg>`;
     }
     let appIcon = GM_getValue('appIcon', 'classic');
-    const iconCustom = () => GM_getValue('appIconCustom', { bg: 'purple', emoji: '🦊' });
+    const iconCustom = () => GM_getValue('appIconCustom', { bg: 'purpleMystic', emoji: '🦊' });
     function iconSrcById(id) {
         if (id === 'image') return GM_getValue('appIconImage', '') || scriptIconSrc();
         if (id === 'custom') return svgUrl(customIconSvg(iconCustom()));
@@ -845,8 +849,6 @@
         document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"]').forEach(l => { if (!l.id.startsWith('vp-')) l.remove(); });
         applyAppIcon();
     }
-    brandTab();
-    new MutationObserver(brandTab).observe(document.head, { childList: true, subtree: true, characterData: true });
     const svgIcon = (body, size = 20, stroke = 'currentColor') =>
         `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
     // фон: рамка с искрой — «живой фон»
@@ -1227,6 +1229,9 @@
             return h !== null ? h : c === 'rainbow' ? 1001 : 1000; };
         return rank(a) - rank(b);
     });
+    // вкладка браузера и иконка — здесь, после стилей ника: своя иконка берёт фон из них
+    brandTab();
+    new MutationObserver(brandTab).observe(document.head, { childList: true, subtree: true, characterData: true });
 
     const globalStyles = document.createElement('style');
     globalStyles.textContent = `
@@ -1430,8 +1435,8 @@
             border-radius: 12px; border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15)); outline: none;
             background: color-mix(in srgb, var(--text-primary, #fff) 6%, transparent); color: var(--text-primary, #fff); }
         .vp-icon-emoji:focus { border-color: var(--vp-accent, #0080ff); }
-        .vp-icon-bgs { display: flex; flex-wrap: wrap; gap: 6px; }
-        .vp-icon-bg { width: 22px; height: 22px; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
+        .vp-icon-bgs { display: flex; flex-wrap: wrap; gap: 5px; }
+        .vp-icon-bg { width: 20px; height: 20px; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
             box-shadow: inset 0 0 0 1px rgba(127, 127, 127, .35); }
         .vp-icon-bg.vp-active { box-shadow: 0 0 0 2px var(--block-bg, #1e1e2e), 0 0 0 4px var(--vp-accent, #0080ff); }
         .vp-icon-upload { width: 100%; margin-top: 12px; padding: 10px 12px; border-radius: 16px; cursor: pointer; font: inherit; font-size: 14px;
@@ -2342,7 +2347,7 @@
             bgs.querySelectorAll('.vp-icon-bg').forEach(d => d.classList.toggle('vp-active', d.dataset.bg === c.bg));
             pick('custom');
         };
-        for (const b of ICON_BGS) {
+        for (const b of iconBgs()) {
             const d = document.createElement('button');
             d.type = 'button';
             d.className = 'vp-icon-bg' + (cur.bg === b.id ? ' vp-active' : '');
