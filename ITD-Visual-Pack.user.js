@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.6
+// @version      3.1.7
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -421,7 +421,7 @@
         function beginSynced() {
             if (started) return;
             started = true;
-            let fired = false;
+            let fired = false, queued = false;
             const fire = () => {
                 if (fired) return;
                 fired = true;
@@ -433,14 +433,18 @@
                 ctx = new (window.AudioContext || window.webkitAudioContext)();
                 ctx.resume().then(() => {
                     if (fired || !ctx) return;
+                    queued = true;
                     const lead = 0.05, at = ctx.currentTime + lead;
                     introSound(ctx, ms => at + ms / 1000);
-                    const lat = Math.min(0.5, (ctx.outputLatency || 0) + (ctx.baseLatency || 0));
+                    // некоторые браузеры отдают странную задержку — больше 0,35 с не ждём
+                    const lat = Math.min(0.35, Math.max(0, (ctx.outputLatency || 0) + (ctx.baseLatency || 0)) || 0);
                     setTimeout(fire, (lead + lat) * 1000);
                 }, fire);
             } catch (e) { ctx = null; }
             // звук так и не завёлся — картинка идёт без него
-            setTimeout(() => { if (!fired) { if (ctx) ctx.close().catch(() => {}); ctx = null; fire(); } }, 450);
+            // (если звук уже в очереди — не трогаем: раньше этот запасной таймер при большой задержке
+            // успевал первым и глушил уже запущенный звук)
+            setTimeout(() => { if (!fired && !queued) { if (ctx) ctx.close().catch(() => {}); ctx = null; fire(); } }, 450);
         }
         function afterStart() {
             setTimeout(cleanup, EXIT + SPLIT + 2500);       // если анимации не доиграют (вкладка в фоне)
@@ -1518,6 +1522,9 @@
         .vp-fab-menu button:active { background: rgba(255, 255, 255, .1); }
         .vp-fab svg { flex: 0 0 auto; width: 20px !important; height: 20px !important; }
         .vp-fab-a { font: 800 21px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: -.02em; }
+        /* свёрнутый длинный пост: низ текста тает сам, без полосы цвета обычной карточки */
+        .vp-clamp::after { display: none !important; }
+        .vp-clamp { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); }
         /* кнопки на баннере — к верхнему краю: снизу их закрывает аватарка */
         .vp-banner-buttons { top: 12px !important; bottom: auto !important; }
         /* заставка на телефоне: три варианта */
@@ -6932,6 +6939,21 @@
             }
             if (sheet && !sheet.classList.contains('vp-comments-sheet')) sheet.classList.add('vp-comments-sheet');
         }
+    });
+
+    // Длинный пост, свёрнутый под «Читать далее»: сайт гасит низ текста полосой цвета обычной карточки
+    // (::after с градиентом в --block-bg). На карточке, подкрашенной под эмодзи или картинку, это тёмная
+    // плашка поверх текста. Вместо полосы — прозрачность самого текста (mask): низ тает в любой фон.
+    onDom(function clampFade() {
+        document.querySelectorAll('.vp-clamp').forEach(el => {
+            const b = el.nextElementSibling;
+            if (!b || b.tagName !== 'BUTTON' || !/Читать далее/i.test(b.textContent)) el.classList.remove('vp-clamp');
+        });
+        document.querySelectorAll('.' + SELECTORS.post + ' button').forEach(b => {
+            if (!/^\s*Читать далее\s*$/i.test(b.textContent)) return;
+            const box = b.previousElementSibling;
+            if (box && !box.classList.contains('vp-clamp')) box.classList.add('vp-clamp');
+        });
     });
 
     // Кнопка «назад» на телефоне закрывает окна сайта (комментарии, создание поста и т.п.), а не уводит
