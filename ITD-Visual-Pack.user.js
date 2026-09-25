@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.24
+// @version      3.0.25
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6051,6 +6051,8 @@
         .vp-nav-has-blob > .vp-nav-link.vp-active { background: transparent !important; }
         /* своя подложка сайта (нижняя панель телефона) — прячем: вместо неё наша, той же формы */
         .vp-nav-has-blob > div:not(.vp-nav-blob) { opacity: 0 !important; }
+        /* между постами у сайта полоса (нижняя граница обёртки в ленте) — у карточек свои края, она лишняя */
+        .vp-post-slot { border-bottom: none !important; }
         /* «+» (Создать пост) — бугорок по центру нижней панели (newPostBump) */
         .vp-new-post { position: absolute !important; width: ${BUMP}px !important; height: ${BUMP}px !important; z-index: 2; margin: 0 !important;
             background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; }
@@ -6422,7 +6424,12 @@
     addEventListener('scroll', sceneKick, { capture: true, passive: true });
     addEventListener('resize', sceneKick);
     onDom(function sceneWatch() {
-        document.querySelectorAll('article.' + SELECTORS.post).forEach(a => { if (!a._vpScene) { a._vpScene = true; sceneIO.observe(a); } });
+        document.querySelectorAll('article.' + SELECTORS.post).forEach(a => {
+            if (!a._vpScene) { a._vpScene = true; sceneIO.observe(a); }
+            // обёртка поста в ленте (у сайта — полоса-граница снизу, на телефоне видна между карточками)
+            const slot = a.parentElement;
+            if (slot && !slot.classList.contains('vp-post-slot')) slot.classList.add('vp-post-slot');
+        });
         sceneKick();
     });
 
