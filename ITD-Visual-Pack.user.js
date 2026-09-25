@@ -5852,6 +5852,9 @@
         .vp-new-post { position: absolute !important; width: ${BUMP}px !important; height: ${BUMP}px !important; z-index: 2; margin: 0 !important;
             background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; }
         .vp-new-post::before { display: none !important; }
+        /* цвет — как у неактивных пунктов панели (у сайта «+» был белым); нажали — белый, как выбранный пункт */
+        .vp-new-post { color: var(--text-secondary) !important; transition: color .2s; }
+        .vp-new-post:active { color: var(--text-primary) !important; }
         /* фон, размытие и обводка панели — у фигуры «панель + бугорок», у самой панели — выключены */
         nav.vp-has-bump { background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; }
         nav.vp-has-bump::before { display: none !important; }
