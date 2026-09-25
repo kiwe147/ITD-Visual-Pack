@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.14
+// @version      3.1.15
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -7628,8 +7628,12 @@
         if (bannerTop0 === null) bannerTop0 = r.top;
         const past = Math.max(0, bannerTop0 - r.top);                 // на сколько баннер уехал вверх
         if (past > r.height + bannerTop0) return;                    // давно за экраном
-        img.style.transform = calm ? '' : `translateY(${(past * .35).toFixed(1)}px) scale(1.15)`;
-        img.style.opacity = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(3));
+        // пишем стиль, только если сдвиг заметно изменился: на прокрутке это каждый кадр
+        const y = Math.round(past * .35);
+        if (img._vpY === y && !calm) return;
+        img._vpY = y;
+        img.style.transform = calm ? '' : `translateY(${y}px) scale(1.15)`;
+        img.style.opacity = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
     }
     addEventListener('scroll', () => { if (!bannerQueued) { bannerQueued = true; requestAnimationFrame(bannerDepth); } }, { capture: true, passive: true });
     onDom(function bannerDepthDom() { bannerDepth(); });
@@ -7667,6 +7671,9 @@
     function profilePostsRow() {
         const login = loginOf(location.pathname);
         if (!login) return;
+        // уже есть на этой странице — не перебираем все span-ы заново на каждом проходе
+        const done = document.querySelector('.vp-posts-stat');
+        if (done && done.isConnected && done.parentElement && done.parentElement.dataset.vpPosts === login) return;
         // строка счётчиков: пункт «число + подпись», где подпись — «подписчиков»/«подписок»
         const num = [...document.querySelectorAll('span')].find(sp => sp.nextElementSibling && !sp.children.length && /^\d[\d\s]*$/.test(sp.textContent.trim())
             && /подпис/i.test(sp.nextElementSibling.textContent) && !sp.closest('.' + SELECTORS.post + ', nav, .vp-rail'));
