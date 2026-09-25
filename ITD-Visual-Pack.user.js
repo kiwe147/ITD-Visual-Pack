@@ -5923,14 +5923,33 @@
         // сайт прячет (стиль .vp-nav-has-blob > div). Нет её — овал чуть шире кнопки.
         const siteInd = row && [...nav.children].find(c => c.tagName === 'DIV' && c !== blob);
         if (siteInd && siteInd.offsetHeight) {
-            const w = parseFloat(siteInd.style.width) || siteInd.offsetWidth;
-            to = { top: siteInd.offsetTop, height: siteInd.offsetHeight, width: w, left: to.left + (to.width - w) / 2 };
+            // У сайта подпись («Профиль») лежит низко и задевает закругление обводки. Форма та же, но
+            // по месту: для иконки и подписи считаем, насколько закругление на их высоте уходит внутрь,
+            // и расширяем ровно настолько, чтобы они целиком были внутри (+3 px воздуха). От краёв панели —
+            // тот же отступ, что сверху и снизу; у крайней кнопки места вбок нет — там чуть меньше скругление.
+            const H = siteInd.offsetHeight, top = siteInd.offsetTop;
+            const nr = nav.getBoundingClientRect(), ox = nr.left + nav.clientLeft, oy = nr.top + nav.clientTop;
+            const boxes = [...active.children].map(c => c.getBoundingClientRect()).filter(b => b.width)
+                .map(b => ({ l: b.left - ox, r: b.right - ox, t: b.top - oy - top, b: top + H - (b.bottom - oy) }));
+            const inset = (d, r) => d >= r ? 0 : r - Math.sqrt(r * r - (r - Math.max(0, d)) ** 2);
+            const fits = (L, W, r, air = 3) => boxes.every(b => {
+                const need = Math.max(inset(b.t, r), inset(b.b, r)) + air;
+                return b.l - L >= need && L + W - b.r >= need;
+            });
+            let rad = Math.min(parseFloat(getComputedStyle(siteInd).borderRadius) || H / 2, H / 2);
+            const cx = to.left + to.width / 2;
+            let W = parseFloat(siteInd.style.width) || siteInd.offsetWidth;
+            while (W < to.width + 40 && !fits(cx - W / 2, W, rad)) W++;
+            const gap = top, L = Math.max(gap, Math.min(cx - W / 2, nav.clientWidth - gap - W));
+            // у края места вбок нет: сначала отдаём воздух вокруг текста, и лишь потом — немного скругления
+            while (rad > 10 && !fits(L, W, rad, 0)) rad--;
+            to = { top, height: H, width: W, left: Math.round(L), rad };
         } else if (row) { const extra = Math.round(to.width * .18); to = { ...to, left: to.left - extra / 2, width: to.width + extra }; }
-        if (blobAt && to.top === blobAt.top && to.left === blobAt.left && to.width === blobAt.width && to.height === blobAt.height) return;
+        if (blobAt && to.top === blobAt.top && to.left === blobAt.left && to.width === blobAt.width && to.height === blobAt.height && to.rad === blobAt.rad) return;
         // У пунктов нижней панели своего скругления нет. Скругление — в px от овала на месте: при растяжке
         // края остаются теми же полуовалами (выходит капля-пилюля), а не растягиваются сами
         const rad = getComputedStyle(active).borderRadius;
-        blob.style.borderRadius = blobRadius = siteInd && parseFloat(getComputedStyle(siteInd).borderRadius) ? getComputedStyle(siteInd).borderRadius
+        blob.style.borderRadius = blobRadius = to.rad ? to.rad + 'px'
             : row || !parseFloat(rad) ? `${to.width / 2}px / ${to.height / 2}px` : rad;
         const from = blobAt && !calm && blob.style.opacity === '1' ? blobAt : null;
         if (from && row) {
@@ -5974,10 +5993,12 @@
     function blobFlow(f, t, t0 = performance.now()) {
         flow = { f, t, t0 };
         const e = 'cubic-bezier(.65, 0, .35, 1)';
+        // скругление тоже перетекает (у крайних кнопок оно чуть меньше)
+        const rr = r => r.rad ? { borderRadius: r.rad + 'px' } : {};
         const an = blob.animate([
-            { ...blobBox(f), easing: e },
-            { ...blobBox(blobMid(f, t, true)), offset: .45, easing: e },
-            blobBox(t)
+            { ...blobBox(f), ...rr(f), easing: e },
+            { ...blobBox(blobMid(f, t, true)), ...rr(t), offset: .45, easing: e },
+            { ...blobBox(t), ...rr(t) }
         ], { duration: BLOB_MS });
         an.currentTime = Math.max(0, performance.now() - t0);
     }
