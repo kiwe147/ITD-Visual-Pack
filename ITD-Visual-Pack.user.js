@@ -1705,15 +1705,6 @@
     document.head.appendChild(paintStyle);
     let paintKey = '', paintRootKey = '';
 
-    function borderColorOf(style) {
-        // как было: цвет стиля с прозрачностью 0.6 (hex) или 0.3 (hsl)
-        if (style.color && style.color !== 'rainbow' && style.color.startsWith('#')) {
-            const hex = style.color.length === 4 ? style.color.replace(/#(.)(.)(.)/, '#$1$1$2$2$3$3') : style.color;
-            const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
-            return `rgba(${r}, ${g}, ${b}, 0.6)`;
-        }
-        return `hsla(${style.avatarHue || 210}, ${style.avatarSat ?? 100}%, 60%, 0.3)`;
-    }
 
     function paint() {
         const style = nickStyles[currentStyle];
@@ -1748,9 +1739,9 @@
         avatar.cssText = !avatarGlowEnabled ? '' : `filter: ${rainbow
             ? `drop-shadow(0 0 5px ${hsl}) drop-shadow(0 0 12px ${hsl})`
             : `drop-shadow(0 0 3px hsl(${ah}, ${as}%, 60%)) drop-shadow(0 0 6px hsl(${ah}, ${as}%, 60%))`} !important;`;
-        const border = rainbow ? `hsla(${h}, 100%, 55%, 0.3)` : borderColorOf(style);
-        // подсветка поста при наведении — цвет тонкой линии обводки (сама линия — в postDesignStyle)
-        post.cssText = !postBorderEnabled ? '' : `--vp-post-edge: ${border};`;
+        // подсветка поста при наведении — та же обводка ярче (в postDesignStyle), цвет стиля не нужен
+        post.cssText = '';
+        document.documentElement.classList.toggle('vp-post-hl', postBorderEnabled);
 
         // цвет стиля — по интерфейсу: иконка активного пункта меню, бегунок вкладок
         const accent = rainbow ? `hsl(${h}, 100%, ${dark ? 62 : 45}%)`
@@ -5086,12 +5077,11 @@
             transition: opacity .25s ease;
         }
 
-        /* наведение — только где есть мышь (на телефоне :hover «залипает» после касания): линия в цвет стиля,
-           та же толщина; цвет даёт paint() через --vp-post-edge */
+        /* наведение — только где есть мышь (на телефоне :hover «залипает» после касания): та же обводка, того же
+           цвета, что у поста уже есть, только ярче сверху (книзу — как обычно), та же толщина; цвет стиля не берём.
+           Включается переключателем «Подсветка постов» (класс vp-post-hl на <html>, ставит paint) */
         @media (hover: hover) {
-            article.vp-post:hover { --vp-edge-a: color-mix(in srgb, var(--vp-post-edge, rgba(255, 255, 255, .45)) 65%, transparent); --vp-edge-b: rgba(255, 255, 255, .06);
-                box-shadow: 0 12px 32px rgba(0, 0, 0, .32) !important; }
-            html.vp-light article.vp-post:hover { --vp-edge-b: rgba(0, 0, 0, .06); }
+            html.vp-post-hl article.vp-post:hover { --vp-edge-a: rgba(255, 255, 255, .24); box-shadow: 0 12px 32px rgba(0, 0, 0, .32) !important; }
         }
         @keyframes postAppear {
             from { opacity: 0; transform: translateY(15px); }
@@ -5977,7 +5967,7 @@
         @media (hover: hover) {
             .vp-emoji-tint:hover { --vp-tint: 0.42; }
             .vp-emoji-tint:not(article):hover { border-color: rgba(var(--vp-emoji), 0.4) !important; }
-            article.vp-emoji-tint:hover { --vp-edge-a: rgba(var(--vp-emoji), .55); --vp-edge-b: rgba(var(--vp-emoji), .1); }
+            html.vp-post-hl article.vp-emoji-tint:hover { --vp-edge-a: rgba(var(--vp-emoji), .55); --vp-edge-b: rgba(var(--vp-emoji), .22); }
         }
         /* Телефон: уведомления — скруглённые карточки с зазором, как посты, а не полосы во всю ширину */
         @media (max-width: 1172px) {
