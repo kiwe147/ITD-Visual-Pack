@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.2
+// @version      3.1.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1410,6 +1410,8 @@
         .toggle-switch.active::after {
             left: 20px !important;
         }
+        /* кнопки на баннере — к верхнему краю: снизу их закрывает аватарка */
+        .vp-banner-buttons { top: 12px !important; bottom: auto !important; }
         /* кнопка «ИТД X» вместо «ИТД НУКСТА» */
         .vp-nuksta-hidden { display: none !important; }
         .vp-sec-title { font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--text-secondary, rgba(255, 255, 255, .55));
@@ -1419,7 +1421,7 @@
         .vp-settings-tabs { width: 320px !important; max-width: calc(100vw - 16px) !important; box-sizing: border-box !important;
             max-height: calc(100dvh - 16px); display: flex !important; flex-direction: column; overflow: hidden !important; }
         /* вкладки стоят на месте, прокручивается только содержимое */
-        .vp-settings-tabs .vp-tabs { flex: 0 0 auto; }
+        .vp-settings-tabs .vp-stabs { flex: 0 0 auto; }
         .vp-tab-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
             touch-action: pan-y; -webkit-overflow-scrolling: touch; margin: 0 -12px -12px; padding: 0 12px 12px; }
         .vp-tab-body::-webkit-scrollbar { display: none; }
@@ -1432,12 +1434,12 @@
         .vp-pick-grid .vp-opt-check { display: none; }
         .vp-pick-grid .style-color-dot { width: 18px !important; height: 18px !important; }
         .vp-settings-tabs::-webkit-scrollbar { display: none; }
-        .vp-tabs { display: flex; gap: 4px; padding: 3px; margin-bottom: 8px; border-radius: 16px;
+        .vp-stabs { display: flex; gap: 4px; padding: 3px; margin-bottom: 8px; border-radius: 16px;
             background: color-mix(in srgb, var(--text-primary, #fff) 7%, transparent); }
-        .vp-tab { flex: 1 1 auto; min-width: 0; border: 0; background: none; cursor: pointer; font: inherit; font-size: 13px;
+        .vp-stab { flex: 1 1 auto; min-width: 0; border: 0; background: none; cursor: pointer; font: inherit; font-size: 13px;
             padding: 7px 2px; white-space: nowrap; border-radius: 13px; color: var(--text-secondary, rgba(255, 255, 255, .6)); transition: background .15s ease, color .15s ease; }
-        .vp-tab:hover { color: var(--text-primary, #fff); }
-        .vp-tab.vp-active { color: var(--text-primary, #fff); font-weight: 600;
+        .vp-stab:hover { color: var(--text-primary, #fff); }
+        .vp-stab.vp-active { color: var(--text-primary, #fff); font-weight: 600;
             background: color-mix(in srgb, var(--vp-accent, #0080ff) 22%, transparent);
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 45%, transparent); }
         .vp-icon-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
@@ -2258,7 +2260,7 @@
         const menu = document.createElement('div');
         menu.className = 'settings-dropdown vp-settings-tabs';
         const tabs = document.createElement('div');
-        tabs.className = 'vp-tabs';
+        tabs.className = 'vp-stabs';
         const body = document.createElement('div');
         body.className = 'vp-tab-body';
         menu.append(tabs, body);
@@ -2267,7 +2269,7 @@
         const show = (id) => {
             current = id;
             GM_setValue('settingsTab', id);
-            tabs.querySelectorAll('.vp-tab').forEach(t => t.classList.toggle('vp-active', t.dataset.tab === id));
+            tabs.querySelectorAll('.vp-stab').forEach(t => t.classList.toggle('vp-active', t.dataset.tab === id));
             const keep = body.dataset.tab === id ? body.scrollTop : 0;   // перерисовка той же вкладки — прокрутка на месте
             body.dataset.tab = id;
             body.textContent = '';
@@ -2325,7 +2327,7 @@
         for (const t of SETTINGS_TABS) {
             const b = document.createElement('button');
             b.type = 'button';
-            b.className = 'vp-tab';
+            b.className = 'vp-stab';
             b.dataset.tab = t.id;
             b.textContent = t.name;
             b.onclick = (e) => { e.stopPropagation(); if (current !== t.id) show(t.id); };
@@ -6600,6 +6602,88 @@
                 if (getComputedStyle(p).position === 'fixed') sheet = p;
             }
             if (sheet && !sheet.classList.contains('vp-comments-sheet')) sheet.classList.add('vp-comments-sheet');
+        }
+    });
+
+    // Кнопка «назад» на телефоне закрывает окна сайта (комментарии, создание поста и т.п.), а не уводит
+    // на прошлую страницу. Сайт сам таких записей в историю не кладёт: открылось окно — кладём запись
+    // с тем же адресом, «назад» снимает её, а мы закрываем окно (Escape → клик по затемнению → кнопка
+    // «Закрыть»). Окно закрыли сами — снимаем запись, чтобы лишнего шага «назад» не осталось.
+    // Затемнения сайта узнаём по его же стилям: fixed на весь экран, z-index от 1000, тёмный фон.
+    // Стили сайта подгружаются кусками (просмотр картинок — отдельный кусок), поэтому список
+    // пересобираем, когда число таблиц стилей меняется.
+    let backdropSel = '', backdropSheets = -1;
+    function siteBackdropSelector() {
+        if (document.styleSheets.length === backdropSheets) return backdropSel;
+        backdropSheets = document.styleSheets.length;
+        const found = new Set();
+        const zero = v => v === '0px' || v === '0';
+        for (const sh of document.styleSheets) {
+            let rules;
+            try { rules = sh.cssRules; } catch (e) { continue; }
+            for (const r of rules || []) {
+                const st = r.style;
+                if (!st || !r.selectorText || /vp-/.test(r.selectorText)) continue;
+                if (st.position !== 'fixed' || !(parseInt(st.zIndex) >= 100)) continue;
+                const full = zero(st.inset) || (zero(st.top) && zero(st.left) && (zero(st.right) || /^100(%|vw)$/.test(st.width))
+                    && (zero(st.bottom) || /^100(%|vh|dvh)$/.test(st.height)));
+                if (full) r.selectorText.split(',').forEach(x => { if (/^\.[\w-]+$/.test(x.trim())) found.add(x.trim()); });
+            }
+        }
+        backdropSel = [...found].join(', ');
+        return backdropSel;
+    }
+    const shown = el => { if (!el.isConnected || !el.getClientRects().length) return false; const cs = getComputedStyle(el); return cs.visibility !== 'hidden' && cs.pointerEvents !== 'none'; };
+    function siteOverlay() {
+        const sel = siteBackdropSelector();
+        const list = [...document.querySelectorAll(['[data-comments-modal]', '.vp-comments-sheet', '[role="dialog"]:not(.vp-modal)',
+            '[aria-modal="true"]:not(.vp-modal)', sel].filter(Boolean).join(', '))].filter(e => !e.closest('.vp-msg-backdrop, .settings-dropdown'));
+        // верхнее окно — последнее в разметке
+        // окно — только крупное (больше полэкрана): закреплённое поле комментария внизу страницы — не окно
+        for (let i = list.length - 1; i >= 0; i--) if (shown(list[i]) && list[i].getBoundingClientRect().height > innerHeight * 0.5) return list[i];
+        return null;
+    }
+    let overlayEl = null, overlayHist = false;
+    function closeSiteOverlay(el) {
+        const gone = () => !shown(el) || siteOverlay() !== el;
+        const esc = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true, cancelable: true });
+        (document.activeElement || document.body).dispatchEvent(esc);
+        setTimeout(() => {
+            if (gone()) return;
+            // клик по самому затемнению (мимо окна)
+            const back = (sel => sel && el.matches(sel) ? el : el.closest(sel || 'body'))(siteBackdropSelector()) || el;
+            for (const t of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'])
+                back.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window }));
+            setTimeout(() => {
+                if (gone()) return;
+                const x = el.querySelector('button[aria-label*="акры" i], button[aria-label*="close" i], [aria-label*="Назад" i], button[title*="акры" i]');
+                if (x) x.click();
+            }, 90);
+        }, 90);
+    }
+    window.addEventListener('popstate', () => {
+        if (!overlayHist) return;
+        if (history.state && history.state.vpOverlay) return;          // сняли запись нашего меню поверх окна — окно не трогаем
+        overlayHist = false;
+        const el = overlayEl;
+        overlayEl = null;
+        if (el && shown(el)) closeSiteOverlay(el);
+    });
+    onDom(function overlayBack() {
+        const el = siteOverlay();
+        if (el && el !== overlayEl) {
+            overlayEl = el;
+            if (!overlayHist) {
+                history.pushState(Object.assign({}, history.state, { vpOverlay: true }), '', location.href);
+                overlayHist = true;
+            }
+        } else if (!el && overlayEl) {
+            overlayEl = null;
+            if (overlayHist) {
+                overlayHist = false;
+                // запись наша и сверху (сайт никуда не перешёл) — снимаем
+                if (history.state && history.state.vpOverlay) history.back();
+            }
         }
     });
 
