@@ -413,6 +413,36 @@
             t0 = performance.now();
             for (const a of anims) { a.currentTime = 0; a.play(); }
             if (withSound) startSound();
+            afterStart();
+        }
+        // Телефон, по касанию: звук выходит из динамика с задержкой (буфер вывода; в Bluetooth-наушниках
+        // — до ~0,3 с), и если пустить картинку сразу, удары слышны позже, чем видны. Поэтому сначала
+        // ставим звук в очередь, а картинку запускаем ровно на эту задержку позже — совпадают.
+        function beginSynced() {
+            if (started) return;
+            started = true;
+            let fired = false;
+            const fire = () => {
+                if (fired) return;
+                fired = true;
+                t0 = performance.now();
+                for (const a of anims) { a.currentTime = 0; a.play(); }
+                afterStart();
+            };
+            try {
+                ctx = new (window.AudioContext || window.webkitAudioContext)();
+                ctx.resume().then(() => {
+                    if (fired || !ctx) return;
+                    const lead = 0.05, at = ctx.currentTime + lead;
+                    introSound(ctx, ms => at + ms / 1000);
+                    const lat = Math.min(0.5, (ctx.outputLatency || 0) + (ctx.baseLatency || 0));
+                    setTimeout(fire, (lead + lat) * 1000);
+                }, fire);
+            } catch (e) { ctx = null; }
+            // звук так и не завёлся — картинка идёт без него
+            setTimeout(() => { if (!fired) { if (ctx) ctx.close().catch(() => {}); ctx = null; fire(); } }, 450);
+        }
+        function afterStart() {
             setTimeout(cleanup, EXIT + SPLIT + 2500);       // если анимации не доиграют (вкладка в фоне)
             // пропуск — не тем же касанием, что запустило ролик
             setTimeout(() => { if (done) return; ov.addEventListener('click', skip); addEventListener('keydown', skip, true); }, 400);
@@ -448,7 +478,7 @@
             ov.removeEventListener('click', tap, true);
             idle.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.9)' }], { duration: 220, fill: 'forwards' })
                 .finished.then(() => idle.remove(), () => idle.remove());
-            begin(withSound);
+            if (withSound) beginSynced(); else begin(false);
         }
         // звук включается только в обработчике самого касания (pointerup/click — они дают разрешение)
         function tap(e) { e.stopPropagation(); go(true); }
