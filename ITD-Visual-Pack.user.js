@@ -898,18 +898,29 @@
         img.style.cssText = `width:${size}px;height:${size}px;display:block;border-radius:${Math.round(size * 0.25)}px;`;
         return img;
     }
-    // PNG нужного размера из любой картинки (SVG или загруженной)
+    // PNG нужного размера из любой картинки (SVG или загруженной). SVG без width/height браузер
+    // растрирует в своём размере по умолчанию (300×150) и потом растягивает — ярлык выходил мыльным.
+    // Поэтому SVG перед отрисовкой получает ровно нужный размер и рисуется сразу в нём.
+    function sizedSvg(src, size) {
+        const m = src.match(/^data:image\/svg\+xml(;[^,]*)?,(.*)$/s);
+        if (!m) return src;
+        let svg = (m[1] || '').includes('base64') ? atob(m[2]) : decodeURIComponent(m[2].replace(/%(?![0-9a-f]{2})/gi, '%25'));
+        svg = svg.replace(/<svg\b([^>]*)>/, (all, attrs) => '<svg' + attrs.replace(/\s(width|height)=(["'])[^"']*\2/g, '') + ` width="${size}" height="${size}">`);
+        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
     function iconPng(src, size) {
         return new Promise(resolve => {
             const img = new Image();
             img.onload = () => {
                 const c = document.createElement('canvas');
                 c.width = c.height = size;
-                c.getContext('2d').drawImage(img, 0, 0, size, size);
+                const g = c.getContext('2d');
+                g.imageSmoothingQuality = 'high';
+                g.drawImage(img, 0, 0, size, size);
                 try { resolve(c.toDataURL('image/png')); } catch (e) { resolve(null); }
             };
             img.onerror = () => resolve(null);
-            img.src = src;
+            img.src = sizedSvg(src, size);
         });
     }
     function headLink(id, rel, attrs) {
@@ -931,6 +942,8 @@
         document.querySelectorAll('img.vp-app-logo').forEach(img => { if (img.src !== src) img.src = src; });
         if (pngFor === src) return;
         pngFor = src;
+        // ярлык: телефон берёт самую крупную — 512 px хватает и на 2K-экранах (иконка ~200 px)
+        iconPng(src, 512).then(png => { if (png && pngFor === src) headLink('vp-icon-512', 'icon', { type: 'image/png', sizes: '512x512', href: png }); });
         iconPng(src, 192).then(png => { if (png && pngFor === src) headLink('vp-icon-192', 'icon', { type: 'image/png', sizes: '192x192', href: png }); });
         iconPng(src, 180).then(png => { if (png && pngFor === src) headLink('vp-touch-icon', 'apple-touch-icon', { sizes: '180x180', href: png }); });
     }
@@ -2559,7 +2572,7 @@
         input.addEventListener('blur', () => { input.value = iconCustom().emoji; });
         wrap.appendChild(own);
 
-        // своя картинка: обрезаем по центру в квадрат 256 px и храним у себя (в настройках скрипта)
+        // своя картинка: обрезаем по центру в квадрат 512 px и храним у себя (в настройках скрипта)
         const up = document.createElement('button');
         up.type = 'button';
         up.className = 'vp-icon-upload';
@@ -2577,8 +2590,9 @@
                 img.onload = () => {
                     const s = Math.min(img.naturalWidth, img.naturalHeight);
                     const c = document.createElement('canvas');
-                    c.width = c.height = 256;
-                    c.getContext('2d').drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, 256, 256);
+                    const side = Math.min(512, s);                   // мелкую не раздуваем
+                    c.width = c.height = side;
+                    c.getContext('2d').drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, side, side);
                     URL.revokeObjectURL(url);
                     GM_setValue('appIconImage', c.toDataURL('image/png'));
                     pngFor = null;
