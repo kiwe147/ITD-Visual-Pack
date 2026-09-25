@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.4
+// @version      3.1.5
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -607,7 +607,7 @@
         versionBtn: () => F('logoContainer').flatMap(c => $$('button', c))
             .filter(b => /^v\d/.test(b.textContent.trim()) && !b.classList.contains('itd-update-sidebar-btn')),
         tabs: () => [...new Set($$('button')
-            .filter(b => ['Для вас', 'Подписки', 'Лента кланов', 'Посты', 'Лайки'].includes(b.textContent.trim()))
+            .filter(b => ['Для вас', 'Подписки', 'Лента кланов', 'Кланы', 'Посты', 'Лайки'].includes(b.textContent.trim()))
             .map(b => b.parentElement))],
         feedBar: () => F('tabs').filter(t => /Для вас/.test(t.textContent)).map(t => t.parentElement).filter(Boolean),
         stickerContainer: () => commentInputs().map(commentRow).filter(Boolean),
@@ -1463,6 +1463,28 @@
         .toggle-switch.active::after {
             left: 20px !important;
         }
+        /* вкладки ленты рядом с логотипом: в одну строку, «Лента кланов» не переносится (иначе капсула толстеет) */
+        .vp-feed-bar .vp-tabs button { white-space: nowrap !important; }
+        /* админ-островок */
+        .vp-fab { position: fixed; z-index: 2147483000; width: 48px; height: 48px; touch-action: none; }
+        .vp-fab.vp-snap { transition: left .28s cubic-bezier(.3, .8, .3, 1), top .28s cubic-bezier(.3, .8, .3, 1); }
+        .vp-fab-btn { width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .16); padding: 0; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; color: #fff; touch-action: none;
+            background: rgba(24, 24, 28, .72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, .45); transition: opacity .3s, transform .15s; }
+        .vp-fab-btn:active { transform: scale(.92); }
+        .vp-fab.vp-idle:not(.vp-open) .vp-fab-btn { opacity: .45; }
+        .vp-fab-menu { position: absolute; top: 50%; right: 56px; transform: translateY(-50%) scale(.9); transform-origin: right center;
+            opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; padding: 6px; border-radius: 20px;
+            background: rgba(24, 24, 28, .86); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, .12); box-shadow: 0 8px 24px rgba(0, 0, 0, .45); }
+        .vp-fab.vp-left .vp-fab-menu { right: auto; left: 56px; transform-origin: left center; }
+        .vp-fab.vp-open .vp-fab-menu { opacity: 1; pointer-events: auto; transform: translateY(-50%) scale(1); }
+        .vp-fab-menu button { display: flex; align-items: center; gap: 10px; white-space: nowrap; border: 0; background: none; color: #fff;
+            font: inherit; font-size: 14px; padding: 10px 14px; border-radius: 14px; cursor: pointer; }
+        .vp-fab-menu button:active { background: rgba(255, 255, 255, .1); }
+        .vp-fab svg { flex: 0 0 auto; width: 20px !important; height: 20px !important; }
+        .vp-fab-a { font: 800 21px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: -.02em; }
         /* кнопки на баннере — к верхнему краю: снизу их закрывает аватарка */
         .vp-banner-buttons { top: 12px !important; bottom: auto !important; }
         /* заставка на телефоне: три варианта */
@@ -2544,6 +2566,67 @@
         return snap;
     }
 
+    // Админ-островок (телефон, только у админа): круглая кнопка поверх всего, её можно таскать пальцем —
+    // отпустил, она прилипает к ближайшему краю (как плавающая кнопка на Samsung). Тап — меню.
+    // Пока в меню одно — снимок страницы. Место запоминается.
+    function adminFab() {
+        if (document.querySelector('.vp-fab') || !IS_PHONE || !myUsername || !ADMINS.includes(myUsername.toLowerCase())) return;
+        const fab = document.createElement('div');
+        fab.className = 'vp-fab';
+        fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка"><span class="vp-fab-a">A</span></button>
+            <div class="vp-fab-menu"><button type="button" data-act="snap">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 18)}<span>Снимок для Claude</span></button></div>`;
+        document.body.appendChild(fab);
+        const btn = fab.firstElementChild, SIZE = 48, M = 8;
+        const pos = GM_getValue('adminFabPos', { side: 'right', y: 0.6 });
+        const place = (x, y) => { fab.style.left = x + 'px'; fab.style.top = y + 'px'; };
+        const snap = () => {
+            const y = Math.max(M, Math.min(innerHeight - SIZE - M, pos.y * innerHeight));
+            fab.classList.toggle('vp-left', pos.side === 'left');
+            fab.classList.add('vp-snap');
+            place(pos.side === 'left' ? M : innerWidth - SIZE - M, y);
+        };
+        snap();
+        addEventListener('resize', snap);
+        let start = null, moved = false, idleT = 0;
+        const wake = () => { fab.classList.remove('vp-idle'); clearTimeout(idleT); idleT = setTimeout(() => fab.classList.add('vp-idle'), 2500); };
+        wake();
+        btn.addEventListener('pointerdown', e => {
+            start = { x: e.clientX, y: e.clientY, l: fab.offsetLeft, t: fab.offsetTop };
+            moved = false;
+            btn.setPointerCapture(e.pointerId);
+            wake();
+        });
+        btn.addEventListener('pointermove', e => {
+            if (!start) return;
+            const dx = e.clientX - start.x, dy = e.clientY - start.y;
+            if (!moved && Math.hypot(dx, dy) < 6) return;
+            if (!moved) { moved = true; fab.classList.remove('vp-snap', 'vp-open'); }
+            place(Math.max(0, Math.min(innerWidth - SIZE, start.l + dx)), Math.max(0, Math.min(innerHeight - SIZE, start.t + dy)));
+        });
+        const up = () => {
+            if (!start) return;
+            start = null;
+            if (moved) {
+                pos.side = fab.offsetLeft + SIZE / 2 < innerWidth / 2 ? 'left' : 'right';
+                pos.y = fab.offsetTop / innerHeight;
+                GM_setValue('adminFabPos', { side: pos.side, y: pos.y });
+                snap();
+            } else fab.classList.toggle('vp-open');
+            wake();
+        };
+        btn.addEventListener('pointerup', up);
+        btn.addEventListener('pointercancel', up);
+        btn.addEventListener('click', e => e.stopPropagation());
+        fab.querySelector('[data-act="snap"]').addEventListener('click', e => {
+            e.stopPropagation();
+            fab.classList.remove('vp-open');
+            setTimeout(pageSnapshot, 200);
+        });
+        // тап мимо — меню закрывается
+        document.addEventListener('pointerdown', e => { if (!fab.contains(e.target)) fab.classList.remove('vp-open'); }, true);
+    }
+    onDom(adminFab);
+
     // Снимок страницы: разметка как она есть сейчас (с метками vp-* и классами сайта) + все стили сайта
     // и мода + размер экрана. Без скриптов. Сохраняется файлом — его и присылать.
     function pageSnapshot() {
@@ -2553,7 +2636,7 @@
             catch (e) { css.push(`/* ${sh.href} — чужой домен, не читается */`); }
         }
         const doc = document.documentElement.cloneNode(true);
-        doc.querySelectorAll('script, style, link[rel="stylesheet"], canvas').forEach(el => el.remove());
+        doc.querySelectorAll('script, style, link[rel="stylesheet"], canvas, .vp-fab').forEach(el => el.remove());
         const info = { url: location.href, width: innerWidth, height: innerHeight, dpr: devicePixelRatio,
             ua: navigator.userAgent, version: GM_info.script.version, theme: document.documentElement.getAttribute('data-theme'), at: new Date().toISOString() };
         const head = doc.querySelector('head') || doc.insertBefore(document.createElement('head'), doc.firstChild);
@@ -3591,6 +3674,21 @@
                     block.style.flex = '0 0 auto';
                     nav.style.display = 'flex';
                     nav.style.width = '100%';
+                    // логотип с версией — ровно на высоту вкладок и по центру своего места
+                    const logo = block.querySelector('img.vp-app-logo'), chip = block.querySelector('.vp-version-row');
+                    const h = tabs.getBoundingClientRect().height;
+                    if (logo && chip && h) {
+                        const size = Math.round(Math.max(28, Math.min(48, h - chip.offsetHeight - 4)));
+                        if (logo.width !== size) {
+                            logo.width = logo.height = size;
+                            logo.style.width = logo.style.height = size + 'px';
+                            logo.style.borderRadius = Math.round(size * 0.25) + 'px';
+                        }
+                        block.style.alignSelf = 'center';
+                        block.style.height = h + 'px';
+                        block.firstElementChild.style.justifyContent = 'space-between';
+                        block.firstElementChild.style.height = '100%';
+                    }
                 }
             }
 
@@ -3620,6 +3718,15 @@
             }
 
             setTimeout(updateNavIcon, 500);
+
+            // «Лента кланов» → «Кланы»: короче, вкладки ленты помещаются в строку. Меняем сам текстовый
+            // узел (не пересоздаём) — сайт продолжит им управлять как своим.
+            onDom(function clanTabName() {
+                document.querySelectorAll('.' + SELECTORS.feedBar + ' button').forEach(b => {
+                    const walker = document.createTreeWalker(b, NodeFilter.SHOW_TEXT);
+                    for (let t; (t = walker.nextNode());) if (t.nodeValue.trim() === 'Лента кланов') t.nodeValue = t.nodeValue.replace('Лента кланов', 'Кланы');
+                });
+            });
 
             onDom(function feedBarIcon() {
                 if (document.querySelector('.' + SELECTORS.feedBar)) updateNavIcon();
