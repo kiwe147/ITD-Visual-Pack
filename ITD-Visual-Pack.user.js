@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.9
+// @version      3.1.10
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -419,34 +419,33 @@
         // — до ~0,3 с), и если пустить картинку сразу, удары слышны позже, чем видны. Поэтому сначала
         // ставим звук в очередь, а картинку запускаем ровно на эту задержку позже — совпадают.
         function beginSynced() {
+            // Звук подстраиваем под картинку, а не наоборот. Картинка стартует сразу; когда анимации
+            // реально пошли (ready → startTime), каждый удар ставим на то время звуковой карты, которое
+            // прозвучит из наушников ровно в момент кадра. Сопоставление времён даёт сам браузер
+            // (getOutputTimestamp — с учётом задержки вывода, и Bluetooth тоже). Так не важно, что
+            // картинка на старте может запоздать (сайт в этот момент грузится) — звук ждёт её.
             if (started) return;
             started = true;
-            let fired = false, queued = false;
-            const fire = () => {
-                if (fired) return;
-                fired = true;
-                t0 = performance.now();
-                for (const a of anims) { a.currentTime = 0; a.play(); }
-                afterStart();
-            };
+            t0 = performance.now();
+            for (const a of anims) { a.currentTime = 0; a.play(); }
+            afterStart();
+            let queued = false;
             try {
                 ctx = new (window.AudioContext || window.webkitAudioContext)();
-                ctx.resume().then(() => {
-                    if (fired || !ctx) return;
+                Promise.all([ctx.resume(), anims[0].ready]).then(() => {
+                    if (!ctx || done) return;
                     queued = true;
-                    const lead = 0.05, at = ctx.currentTime + lead;
-                    introSound(ctx, ms => at + ms / 1000);
-                    // Задержку браузер завышает (в Bluetooth-наушниках на телефоне звук с полной поправкой
-                    // шёл заметно раньше картинки, без поправки — чуть позже), поэтому берём половину
-                    // заявленной и не больше 0,15 с. Плюс lead: звук стоит в очереди на 50 мс вперёд.
-                    const lat = Math.min(0.15, 0.5 * (Math.max(0, (ctx.outputLatency || 0) + (ctx.baseLatency || 0)) || 0));
-                    setTimeout(fire, (lead + lat) * 1000);
-                }, fire);
+                    const start = anims[0].startTime;            // мс, та же шкала, что performance.now()
+                    const toCtx = perf => {
+                        const ts = ctx.getOutputTimestamp ? ctx.getOutputTimestamp() : null;
+                        if (ts && ts.performanceTime > 0) return ts.contextTime + (perf - ts.performanceTime) / 1000;
+                        return ctx.currentTime + (perf - performance.now()) / 1000 - (ctx.outputLatency || 0);
+                    };
+                    introSound(ctx, ms => Math.max(ctx.currentTime + 0.01, toCtx(start + ms)));
+                }, () => {});
             } catch (e) { ctx = null; }
-            // звук так и не завёлся — картинка идёт без него
-            // (если звук уже в очереди — не трогаем: раньше этот запасной таймер при большой задержке
-            // успевал первым и глушил уже запущенный звук)
-            setTimeout(() => { if (!fired && !queued) { if (ctx) ctx.close().catch(() => {}); ctx = null; fire(); } }, 450);
+            // звук так и не завёлся — картинка уже идёт, просто без него
+            setTimeout(() => { if (!queued && ctx) { ctx.close().catch(() => {}); ctx = null; } }, 600);
         }
         function afterStart() {
             setTimeout(cleanup, EXIT + SPLIT + 2500);       // если анимации не доиграют (вкладка в фоне)
@@ -899,18 +898,29 @@
         img.style.cssText = `width:${size}px;height:${size}px;display:block;border-radius:${Math.round(size * 0.25)}px;`;
         return img;
     }
-    // PNG нужного размера из любой картинки (SVG или загруженной)
+    // PNG нужного размера из любой картинки (SVG или загруженной). SVG без width/height браузер
+    // растрирует в своём размере по умолчанию (300×150) и потом растягивает — ярлык выходил мыльным.
+    // Поэтому SVG перед отрисовкой получает ровно нужный размер и рисуется сразу в нём.
+    function sizedSvg(src, size) {
+        const m = src.match(/^data:image\/svg\+xml(;[^,]*)?,(.*)$/s);
+        if (!m) return src;
+        let svg = (m[1] || '').includes('base64') ? atob(m[2]) : decodeURIComponent(m[2].replace(/%(?![0-9a-f]{2})/gi, '%25'));
+        svg = svg.replace(/<svg\b([^>]*)>/, (all, attrs) => '<svg' + attrs.replace(/\s(width|height)=(["'])[^"']*\2/g, '') + ` width="${size}" height="${size}">`);
+        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
     function iconPng(src, size) {
         return new Promise(resolve => {
             const img = new Image();
             img.onload = () => {
                 const c = document.createElement('canvas');
                 c.width = c.height = size;
-                c.getContext('2d').drawImage(img, 0, 0, size, size);
+                const g = c.getContext('2d');
+                g.imageSmoothingQuality = 'high';
+                g.drawImage(img, 0, 0, size, size);
                 try { resolve(c.toDataURL('image/png')); } catch (e) { resolve(null); }
             };
             img.onerror = () => resolve(null);
-            img.src = src;
+            img.src = sizedSvg(src, size);
         });
     }
     function headLink(id, rel, attrs) {
@@ -932,6 +942,8 @@
         document.querySelectorAll('img.vp-app-logo').forEach(img => { if (img.src !== src) img.src = src; });
         if (pngFor === src) return;
         pngFor = src;
+        // ярлык: телефон берёт самую крупную — 512 px хватает и на 2K-экранах (иконка ~200 px)
+        iconPng(src, 512).then(png => { if (png && pngFor === src) headLink('vp-icon-512', 'icon', { type: 'image/png', sizes: '512x512', href: png }); });
         iconPng(src, 192).then(png => { if (png && pngFor === src) headLink('vp-icon-192', 'icon', { type: 'image/png', sizes: '192x192', href: png }); });
         iconPng(src, 180).then(png => { if (png && pngFor === src) headLink('vp-touch-icon', 'apple-touch-icon', { sizes: '180x180', href: png }); });
     }
@@ -2474,9 +2486,6 @@
                     if (popup && popup.el === menu) placePopup();
                 }).catch(() => { list.innerHTML = '<div class="vp-menu-note">Ошибка загрузки</div>'; });
             }
-            // не переключатель, а действие: файл со страницей — присылать разработчику, чтобы править по настоящей разметке.
-            // Только у админа (по логину): остальным пункт ни к чему
-            if (id === 'misc' && myUsername && ADMINS.includes(myUsername.toLowerCase())) body.appendChild(snapshotRow());
             if (popup && popup.el === menu) placePopup();
             body.scrollTop = keep;
         };
@@ -2563,7 +2572,7 @@
         input.addEventListener('blur', () => { input.value = iconCustom().emoji; });
         wrap.appendChild(own);
 
-        // своя картинка: обрезаем по центру в квадрат 256 px и храним у себя (в настройках скрипта)
+        // своя картинка: обрезаем по центру в квадрат 512 px и храним у себя (в настройках скрипта)
         const up = document.createElement('button');
         up.type = 'button';
         up.className = 'vp-icon-upload';
@@ -2581,8 +2590,9 @@
                 img.onload = () => {
                     const s = Math.min(img.naturalWidth, img.naturalHeight);
                     const c = document.createElement('canvas');
-                    c.width = c.height = 256;
-                    c.getContext('2d').drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, 256, 256);
+                    const side = Math.min(512, s);                   // мелкую не раздуваем
+                    c.width = c.height = side;
+                    c.getContext('2d').drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, side, side);
                     URL.revokeObjectURL(url);
                     GM_setValue('appIconImage', c.toDataURL('image/png'));
                     pngFor = null;
@@ -2602,19 +2612,11 @@
         return wrap;
     }
     const ADMINS = ['neurosfw'];
-    function snapshotRow() {
-        const snap = document.createElement('div');
-        snap.className = 'settings-option';
-        snap.innerHTML = `<span class="vp-setting-label"><span>📸 Снимок страницы для Claude</span></span>`;
-        snap.onclick = e => { e.stopPropagation(); closePopup(); setTimeout(pageSnapshot, 300); };
-        return snap;
-    }
-
-    // Админ-островок (телефон, только у админа): круглая кнопка поверх всего, её можно таскать пальцем —
+    // Админ-островок (только у админа, и на телефоне, и на компьютере): круглая кнопка поверх всего, её можно таскать —
     // отпустил, она прилипает к ближайшему краю (как плавающая кнопка на Samsung). Тап — меню.
     // Пока в меню одно — снимок страницы. Место запоминается.
     function adminFab() {
-        if (document.querySelector('.vp-fab') || !IS_PHONE || !myUsername || !ADMINS.includes(myUsername.toLowerCase())) return;
+        if (document.querySelector('.vp-fab') || !myUsername || !ADMINS.includes(myUsername.toLowerCase())) return;
         const fab = document.createElement('div');
         fab.className = 'vp-fab';
         fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка"><span class="vp-fab-a">A</span></button>
