@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.13
+// @version      3.1.14
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -25,6 +25,24 @@
     // Только в самой вкладке: магазин ИТД — страница в рамке (iframe) с того же адреса, и в ней вторая
     // копия скрипта рисовала свою панель и фон поверх товаров. @noframes в шапке — то же для Tampermonkey.
     if (window.top !== window.self) return;
+    // Админка → «Мод выкл»: до закрытия вкладки скрипт не запускается вовсе, сайт — как без мода.
+    // Вернуть — кнопка «Включить ИТД X» внизу страницы.
+    try {
+        if (sessionStorage.getItem('vp-off') === '1') {
+            const back = () => {
+                const b = document.createElement('button');
+                b.textContent = 'Включить ИТД X';
+                b.style.cssText = 'position:fixed;left:50%;bottom:110px;transform:translateX(-50%);z-index:2147483000;padding:10px 18px;border-radius:999px;border:1px solid rgba(255,255,255,.2);background:rgba(20,20,24,.9);color:#fff;font:600 14px system-ui,sans-serif;cursor:pointer';
+                b.onclick = () => { sessionStorage.removeItem('vp-off'); location.reload(); };
+                document.body.appendChild(b);
+            };
+            if (document.body) back(); else addEventListener('DOMContentLoaded', back);
+            return;
+        }
+    } catch (e) { }
+    // Ошибки скрипта — в журнал для отчёта из админки (последние 30)
+    const vpErrors = [];
+    const logErr = (where, e) => { vpErrors.push(new Date().toTimeString().slice(0, 8) + ' ' + where + ': ' + (e && (e.message || e))); if (vpErrors.length > 30) vpErrors.shift(); };
 
     // Ответы сайта про профили (/api/users/<ник>) подсматриваем и запоминаем: число постов,
     // подписчиков и прочее берём из них, а не шлём свой такой же запрос второй раз.
@@ -755,7 +773,7 @@
         domObserver.disconnect();                 // свои правки не должны будить наблюдателя
         try {
             tagAll(false);
-            for (const fn of domHandlers) { try { fn(); } catch (e) { console.warn('[ITD VP]', fn.name || 'обработчик', e); } }
+            for (const fn of domHandlers) { try { fn(); } catch (e) { console.warn('[ITD VP]', fn.name || 'обработчик', e); logErr(fn.name || 'обработчик', e); } }
         } finally {
             domObserver.observe(document.body, DOM_WATCH);
         }
@@ -1543,6 +1561,20 @@
             font: inherit; font-size: 14px; padding: 10px 14px; border-radius: 14px; cursor: pointer; }
         .vp-fab-menu button:active { background: rgba(255, 255, 255, .1); }
         .vp-fab svg { flex: 0 0 auto; width: 20px !important; height: 20px !important; }
+        .vp-admin-toast { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 2147483001; padding: 10px 16px; border-radius: 999px;
+            background: rgba(20, 20, 24, .92); color: #fff; font: 500 14px system-ui, sans-serif; border: 1px solid rgba(255, 255, 255, .14); pointer-events: none; }
+        .vp-fps { position: fixed; left: 8px; top: 8px; z-index: 2147483001; padding: 4px 8px; border-radius: 8px; pointer-events: none;
+            background: rgba(0, 0, 0, .75); color: #6f6; font: 600 12px ui-monospace, monospace; }
+        .vp-fps[data-bad="1"] { color: #ff6b6b; }
+        .vp-admin-panel { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2147483001; width: min(340px, calc(100vw - 24px));
+            max-height: 70vh; display: flex; flex-direction: column; border-radius: 20px; overflow: hidden; color: #fff; font: 13px system-ui, sans-serif;
+            background: rgba(20, 20, 24, .96); border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 16px 40px rgba(0, 0, 0, .5); }
+        .vp-admin-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid rgba(255, 255, 255, .1); }
+        .vp-admin-head b { font-size: 15px; } .vp-admin-head span { color: rgba(255, 255, 255, .5); margin-right: auto; }
+        .vp-admin-head button { border: 0; background: none; color: #fff; font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px; }
+        .vp-admin-list { overflow-y: auto; padding: 6px 14px 10px; }
+        .vp-admin-list div { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255, 255, 255, .05); }
+        .vp-admin-list .vp-miss { color: #ff8a8a; }
         .vp-fab-a { font: 800 21px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: -.02em; }
         /* профиль на телефоне: без палочки между «подписчиков» и «подписок» */
         @media (max-width: 1172px) { [data-vp-posts] > hr { display: none !important; } }
@@ -2620,6 +2652,85 @@
         return wrap;
     }
     const ADMINS = ['neurosfw'];
+    function adminToast(text) {
+        const t = document.createElement('div');
+        t.className = 'vp-admin-toast';
+        t.textContent = text;
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 2600);
+    }
+    function copyText(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(() => true, () => fallback());
+        return Promise.resolve(fallback());
+        function fallback() {
+            const ta = document.createElement('textarea');
+            ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+            document.body.appendChild(ta); ta.select();
+            let ok = false; try { ok = document.execCommand('copy'); } catch (e) { }
+            ta.remove(); return ok;
+        }
+    }
+    function diagRows() {
+        tagAll();
+        return ROLE_ORDER.map(r => [r, roleCount[r] || 0]);
+    }
+    // Отчёт: версия, браузер, экран, страница, настройки мода, что нашлось на странице и ошибки
+    function adminReport() {
+        const found = diagRows(), missing = found.filter(([, n]) => !n).map(([r]) => r);
+        const opts = SETTINGS.map(o => (o.get() ? '+' : '-') + o.label).join(', ');
+        return [
+            `ИТД X ${GM_info.script.version} · ${new Date().toISOString()}`,
+            `Страница: ${location.pathname} · тема ${document.documentElement.getAttribute('data-theme') || '?'}`,
+            `Экран: ${innerWidth}×${innerHeight} @${devicePixelRatio} · ${IS_PHONE ? 'телефон' : 'компьютер'}`,
+            `Браузер: ${navigator.userAgent}`,
+            `Стиль ника: ${currentStyle} · фон: ${backgroundStyle} · иконка: ${appIcon}`,
+            `Настройки: ${opts}`,
+            `Не нашлось на странице: ${missing.join(', ') || '—'}`,
+            `Найдено: ${found.filter(([, n]) => n).map(([r, n]) => r + ' ' + n).join(', ')}`,
+            `Ошибки (${vpErrors.length}):` + (vpErrors.length ? '\n' + vpErrors.join('\n') : ' нет')
+        ].join('\n');
+    }
+    // Диагностика: какие части сайта скрипт узнал на этой странице, а какие — нет
+    function adminDiag() {
+        document.querySelectorAll('.vp-admin-panel').forEach(p => p.remove());
+        const rows = diagRows();
+        const box = document.createElement('div');
+        box.className = 'vp-admin-panel';
+        const miss = rows.filter(([, n]) => !n).length;
+        box.innerHTML = `<div class="vp-admin-head"><b>Диагностика</b><span>${miss ? 'не нашлось: ' + miss : 'всё на месте'}</span><button type="button" aria-label="Закрыть">×</button></div><div class="vp-admin-list"></div>`;
+        const list = box.querySelector('.vp-admin-list');
+        rows.sort((a, b) => (a[1] ? 1 : 0) - (b[1] ? 1 : 0)).forEach(([r, n]) => {
+            const d = document.createElement('div');
+            d.className = n ? '' : 'vp-miss';
+            d.innerHTML = '<span></span><b></b>';
+            d.firstChild.textContent = r; d.lastChild.textContent = n || '—';
+            list.appendChild(d);
+        });
+        box.querySelector('button').onclick = () => box.remove();
+        document.body.appendChild(box);
+    }
+    // Счётчик FPS: кадры в секунду и самый долгий кадр за секунду (рывок)
+    let fpsBox = null;
+    function toggleFps() {
+        if (fpsBox) { fpsBox.remove(); fpsBox = null; return; }
+        fpsBox = document.createElement('div');
+        fpsBox.className = 'vp-fps';
+        document.body.appendChild(fpsBox);
+        let n = 0, t0 = performance.now(), last = t0, worst = 0;
+        const box = fpsBox;
+        (function tick(t) {
+            if (!box.isConnected) return;
+            n++; worst = Math.max(worst, t - last); last = t;
+            if (t - t0 >= 1000) {
+                const fps = Math.round(n * 1000 / (t - t0));
+                box.textContent = `${fps} FPS · рывок ${Math.round(worst)} мс`;
+                box.dataset.bad = fps < 45 || worst > 50 ? '1' : '';
+                n = 0; t0 = t; worst = 0;
+            }
+            requestAnimationFrame(tick);
+        })(t0);
+    }
+
     // Админ-островок (только у админа, и на телефоне, и на компьютере): круглая кнопка поверх всего, её можно таскать —
     // отпустил, она прилипает к ближайшему краю (как плавающая кнопка на Samsung). Тап — меню.
     // Пока в меню одно — снимок страницы. Место запоминается.
@@ -2628,7 +2739,11 @@
         const fab = document.createElement('div');
         fab.className = 'vp-fab';
         fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка"><span class="vp-fab-a">A</span></button>
-            <div class="vp-fab-menu"><button type="button" data-act="snap">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 18)}<span>Снимок для Claude</span></button></div>`;
+            <div class="vp-fab-menu"><button type="button" data-act="snap">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 18)}<span>Снимок для Claude</span></button>
+                <button type="button" data-act="report">${svgIcon('<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h4"/>', 18)}<span>Скопировать отчёт</span></button>
+                <button type="button" data-act="diag">${svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4M8.5 11l1.8 1.8 3.4-3.6"/>', 18)}<span>Диагностика</span></button>
+                <button type="button" data-act="fps">${svgIcon('<path d="M3 17l5-6 4 3 5-7 4 4"/>', 18)}<span>Счётчик FPS</span></button>
+                <button type="button" data-act="off">${svgIcon('<path d="M12 3v8"/><path d="M6.3 7a8 8 0 1 0 11.4 0"/>', 18)}<span>Мод выкл (до закрытия вкладки)</span></button></div>`;
         document.body.appendChild(fab);
         const btn = fab.firstElementChild, SIZE = 48, M = 8;
         const pos = GM_getValue('adminFabPos', { side: 'right', y: 0.6 });
@@ -2665,17 +2780,24 @@
                 pos.y = fab.offsetTop / innerHeight;
                 GM_setValue('adminFabPos', { side: pos.side, y: pos.y });
                 snap();
-            } else fab.classList.toggle('vp-open');
+            } else {
+                fab.classList.toggle('vp-open');
+                // меню по центру кнопки, но не за краем экрана (кнопка у верха или низа)
+                const menu = fab.querySelector('.vp-fab-menu'), h = menu.offsetHeight, c = fab.offsetTop + SIZE / 2;
+                const shift = Math.max(8 - (c - h / 2), Math.min(0, innerHeight - 8 - (c + h / 2)));
+                menu.style.marginTop = shift + 'px';
+            }
             wake();
         };
         btn.addEventListener('pointerup', up);
         btn.addEventListener('pointercancel', up);
         btn.addEventListener('click', e => e.stopPropagation());
-        fab.querySelector('[data-act="snap"]').addEventListener('click', e => {
-            e.stopPropagation();
-            fab.classList.remove('vp-open');
-            setTimeout(pageSnapshot, 200);
-        });
+        const act = (name, fn) => fab.querySelector(`[data-act="${name}"]`).addEventListener('click', e => { e.stopPropagation(); fab.classList.remove('vp-open'); fn(); });
+        act('snap', () => setTimeout(pageSnapshot, 200));
+        act('report', () => copyText(adminReport()).then(ok => adminToast(ok ? 'Отчёт скопирован — вставь его Claude' : 'Не вышло скопировать')));
+        act('diag', adminDiag);
+        act('fps', toggleFps);
+        act('off', () => { if (!confirm('Выключить ИТД X до закрытия вкладки? Вернуть — кнопкой внизу страницы.')) return; try { sessionStorage.setItem('vp-off', '1'); } catch (e) { } location.reload(); });
         // тап мимо — меню закрывается
         document.addEventListener('pointerdown', e => { if (!fab.contains(e.target)) fab.classList.remove('vp-open'); }, true);
     }
