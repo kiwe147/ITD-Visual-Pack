@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.12
+// @version      3.1.13
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6838,8 +6838,10 @@
         .vp-nav-blob > i { display: none; }
         .vp-nav-blob.vp-blob-row { width: 0 !important; height: 0 !important; background: none !important; box-shadow: none !important; }
         .vp-nav-blob.vp-blob-row > i { display: block; position: absolute; left: 0; top: 0; box-sizing: border-box; transform-origin: 0 50%; will-change: transform;
-            background: color-mix(in srgb, var(--vp-accent, #0080ff) 14%, var(--block-bg, #1c1c1c));
-            border: 1px solid color-mix(in srgb, var(--vp-accent, #0080ff) 32%, transparent); transition: background-color .4s ease; }
+            background: color-mix(in srgb, var(--vp-accent, #0080ff) 14%, #242426);
+            border: 1px solid color-mix(in srgb, var(--vp-accent, #0080ff) 32%, #3c3c40); transition: background-color .4s ease; }
+        html.vp-light .vp-nav-blob.vp-blob-row > i { background: color-mix(in srgb, var(--vp-accent, #0080ff) 14%, #f0f0f2);
+            border-color: color-mix(in srgb, var(--vp-accent, #0080ff) 32%, #d6d6da); }
         .vp-nav-blob .vp-bl { border-right: 0 !important; border-radius: 999px 0 0 999px; }
         .vp-nav-blob .vp-bm { border-left: 0 !important; border-right: 0 !important; }
         .vp-nav-blob .vp-br { border-left: 0 !important; border-radius: 0 999px 999px 0; }
@@ -7180,20 +7182,25 @@
     // на каждом кадре. Раньше анимировались left/width: кадры считал процессор, а он в этот момент
     // занят — сайт рисует новую страницу, — отсюда рывки.
     function blobParts() {
-        if (!blob.firstElementChild) blob.innerHTML = '<i class="vp-bl"></i><i class="vp-bm"></i><i class="vp-br"></i>';
-        return [...blob.children];
+        // порядок: середина снизу, полукруги поверх — стыки прячутся под полукругами. Цвета сплошные,
+        // поэтому там, где части заходят друг на друга, ничего не темнеет и не светлеет.
+        if (!blob.firstElementChild) blob.innerHTML = '<i class="vp-bm"></i><i class="vp-bl"></i><i class="vp-br"></i>';
+        const [m, l, r] = blob.children;
+        return [l, m, r];
     }
+    const BM_W = 100;                                     // ширина середины до растяжки: крупная — края не мылятся
     function rowTransforms(r, sy = 1) {
-        const R = r.height / 2, mid = Math.max(0.01, r.width - 2 * R);
+        // середина: от полукруга до полукруга и на 1,5 px под каждый — стык закрыт, а за скругление не вылезает
+        const R = r.height / 2, mid = Math.max(1, r.width - 2 * R + 3);
         return [`translate(${r.left}px, ${r.top}px) scale(1, ${sy})`,
-            `translate(${r.left + R}px, ${r.top}px) scale(${mid}, ${sy})`,
+            `translate(${r.left + R - 1.5}px, ${r.top}px) scale(${mid / BM_W}, ${sy})`,
             `translate(${r.left + r.width - R}px, ${r.top}px) scale(1, ${sy})`];
     }
     function rowPlace(r) {
         blob.classList.add('vp-blob-row');
         const tr = rowTransforms(r);
         blobParts().forEach((el, i) => {
-            el.style.width = i === 1 ? '1px' : r.height / 2 + 'px';
+            el.style.width = i === 1 ? BM_W + 'px' : r.height / 2 + 'px';
             el.style.height = r.height + 'px';
             el.style.transform = tr[i];
         });
