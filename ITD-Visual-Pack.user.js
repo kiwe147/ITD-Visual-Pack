@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.6
+// @version      3.1.7
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -421,7 +421,7 @@
         function beginSynced() {
             if (started) return;
             started = true;
-            let fired = false;
+            let fired = false, queued = false;
             const fire = () => {
                 if (fired) return;
                 fired = true;
@@ -433,14 +433,18 @@
                 ctx = new (window.AudioContext || window.webkitAudioContext)();
                 ctx.resume().then(() => {
                     if (fired || !ctx) return;
+                    queued = true;
                     const lead = 0.05, at = ctx.currentTime + lead;
                     introSound(ctx, ms => at + ms / 1000);
-                    const lat = Math.min(0.5, (ctx.outputLatency || 0) + (ctx.baseLatency || 0));
+                    // некоторые браузеры отдают странную задержку — больше 0,35 с не ждём
+                    const lat = Math.min(0.35, Math.max(0, (ctx.outputLatency || 0) + (ctx.baseLatency || 0)) || 0);
                     setTimeout(fire, (lead + lat) * 1000);
                 }, fire);
             } catch (e) { ctx = null; }
             // звук так и не завёлся — картинка идёт без него
-            setTimeout(() => { if (!fired) { if (ctx) ctx.close().catch(() => {}); ctx = null; fire(); } }, 450);
+            // (если звук уже в очереди — не трогаем: раньше этот запасной таймер при большой задержке
+            // успевал первым и глушил уже запущенный звук)
+            setTimeout(() => { if (!fired && !queued) { if (ctx) ctx.close().catch(() => {}); ctx = null; fire(); } }, 450);
         }
         function afterStart() {
             setTimeout(cleanup, EXIT + SPLIT + 2500);       // если анимации не доиграют (вкладка в фоне)
