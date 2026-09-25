@@ -4761,6 +4761,34 @@
         });
     });
 
+    // Ивент: у сайта иконка — картинка-портал (portal-inactive.png), а не значок как у остальных пунктов,
+    // поэтому ни цвет стиля, ни свечение активного пункта на неё не ложились. Рисуем свой значок в стиле
+    // иконок ИТД (24×24, цвет текста, та же толщина): портал-воронка. «Пассив» — одна воронка; «актив»
+    // (сайт вешает на картинку второй класс — пульсацию, или меняет файл) — с искрами и пульсирует, как у сайта.
+    const PORTAL_SPIRAL = '<path d="M12 11.06a1.875 1.875 0 0 1 3.75 0a3.75 3.75 0 0 1 -7.5 0a5.625 5.625 0 0 1 11.25 0a7.5 7.5 0 0 1 -15 0" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>';
+    const PORTAL_ICON = {
+        idle: PORTAL_SPIRAL,
+        live: PORTAL_SPIRAL
+            + '<path d="M20.4 1.5c.25 1.6.8 2.15 2.4 2.4-1.6.25-2.15.8-2.4 2.4-.25-1.6-.8-2.15-2.4-2.4 1.6-.25 2.15-.8 2.4-2.4Z"/>'
+            + '<path d="M3.7 17.8c.19 1.2.6 1.61 1.8 1.8-1.2.19-1.61.6-1.8 1.8-.19-1.2-.6-1.61-1.8-1.8 1.2-.19 1.61-.6 1.8-1.8Z"/>'
+    };
+    onDom(function eventIcon() {
+        document.querySelectorAll('a[href="/event"] img').forEach(img => {
+            const own = [...img.classList].filter(c => !c.startsWith('vp-'));
+            const state = own.length > 1 || (/portal/.test(img.src) && !/inactive/.test(img.src)) ? 'live' : 'idle';
+            if (!img.classList.contains('vp-portal-img')) img.classList.add('vp-portal-img');   // сайт перерисует — заметим
+            let svg = img.parentElement.querySelector(':scope > svg.vp-portal');
+            if (!svg) {
+                svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                svg.setAttribute('class', 'vp-portal');
+                svg.setAttribute('width', '24'); svg.setAttribute('height', '24');
+                svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'currentColor');
+                img.after(svg);
+            }
+            if (svg.dataset.state !== state) { svg.dataset.state = state; svg.innerHTML = PORTAL_ICON[state]; }
+        });
+    });
+
     const postDesignStyle = document.createElement('style');
     // Оформление карточки — только постам ленты (article). Открытый пост собран иначе:
     // рамка, отступ и размытый фон на нём съезжали с настоящих краёв блока.
@@ -5751,6 +5779,14 @@
         .vp-nav-has-blob > .vp-nav-link.vp-active { background: transparent !important; }
         /* своя подложка сайта (нижняя панель телефона) — прячем: вместо неё наша, той же формы */
         .vp-nav-has-blob > div:not(.vp-nav-blob) { opacity: 0 !important; }
+        /* Ивент: вместо картинки-портала сайта — свой значок (eventIcon) */
+        a[href="/event"] img[src*="/portal/"], img.vp-portal-img { display: none !important; }
+        @media (prefers-reduced-motion: reduce) { .vp-portal { animation: none !important; } }
+        .vp-portal[data-state="live"] { animation: vpPortalPulse 2s ease-in-out infinite; }
+        @keyframes vpPortalPulse {
+            0%, 100% { filter: drop-shadow(0 0 4px rgba(144, 162, 255, .2)); }
+            50% { filter: drop-shadow(0 0 16px rgb(144, 162, 255)); }
+        }
         .vp-nav-blob { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; opacity: 0;
             background: color-mix(in srgb, var(--vp-accent, #0080ff) 14%, var(--block-bg, #1c1c1c));
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 32%, transparent),
