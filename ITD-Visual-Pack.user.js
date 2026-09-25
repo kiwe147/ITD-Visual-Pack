@@ -1484,7 +1484,7 @@
             font: inherit; font-size: 14px; padding: 10px 14px; border-radius: 14px; cursor: pointer; }
         .vp-fab-menu button:active { background: rgba(255, 255, 255, .1); }
         .vp-fab svg { flex: 0 0 auto; width: 20px !important; height: 20px !important; }
-        .vp-fab-btn svg { width: 22px !important; height: 22px !important; }
+        .vp-fab-a { font: 800 21px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: -.02em; }
         /* кнопки на баннере — к верхнему краю: снизу их закрывает аватарка */
         .vp-banner-buttons { top: 12px !important; bottom: auto !important; }
         /* заставка на телефоне: три варианта */
@@ -2573,7 +2573,7 @@
         if (document.querySelector('.vp-fab') || !IS_PHONE || !myUsername || !ADMINS.includes(myUsername.toLowerCase())) return;
         const fab = document.createElement('div');
         fab.className = 'vp-fab';
-        fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка">${svgIcon('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>', 22)}</button>
+        fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка"><span class="vp-fab-a">A</span></button>
             <div class="vp-fab-menu"><button type="button" data-act="snap">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 18)}<span>Снимок для Claude</span></button></div>`;
         document.body.appendChild(fab);
         const btn = fab.firstElementChild, SIZE = 48, M = 8;
