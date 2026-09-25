@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.19
+// @version      3.0.20
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -5645,7 +5645,7 @@
         .vp-nav-has-blob > .vp-nav-link { position: relative; z-index: 1; transition: background-color .2s ease, opacity .2s ease !important; }
         .vp-nav-has-blob > .vp-nav-link .vp-nav-icon { transition: none; }
         .vp-nav-has-blob > .vp-nav-link.vp-active { background: transparent !important; }
-        .vp-nav-blob { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; opacity: 0; transform-origin: 0 0;
+        .vp-nav-blob { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; opacity: 0;
             background: color-mix(in srgb, var(--vp-accent, #0080ff) 14%, var(--block-bg, #1c1c1c));
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 32%, transparent),
                 0 8px 24px -10px color-mix(in srgb, var(--vp-accent, #0080ff) 70%, transparent);
@@ -5812,17 +5812,21 @@
             }
         }
         if (!active) { blob.style.opacity = '0'; return; }
-        const to = { top: active.offsetTop, left: active.offsetLeft, width: active.offsetWidth, height: active.offsetHeight };
+        const row = navIsRow(nav);
+        let to = { top: active.offsetTop, left: active.offsetLeft, width: active.offsetWidth, height: active.offsetHeight };
+        // нижняя панель телефона: подложка — овал чуть шире кнопки (подпись под иконкой шире круга)
+        if (row) { const extra = Math.round(to.width * .18); to = { ...to, left: to.left - extra / 2, width: to.width + extra }; }
         if (blobAt && to.top === blobAt.top && to.left === blobAt.left && to.width === blobAt.width && to.height === blobAt.height) return;
-        // у пунктов нижней панели телефона своего скругления нет — там подложка круглая, а не квадрат
+        // У пунктов нижней панели своего скругления нет. Скругление — в px от овала на месте: при растяжке
+        // края остаются теми же полуовалами (выходит капля-пилюля), а не растягиваются сами
         const rad = getComputedStyle(active).borderRadius;
-        blob.style.borderRadius = blobRadius = parseFloat(rad) ? rad : Math.min(to.width, to.height) / 2 + 'px';
+        blob.style.borderRadius = blobRadius = row || !parseFloat(rad) ? `${to.width / 2}px / ${to.height / 2}px` : rad;
         const from = blobAt && !calm && blob.style.opacity === '1' ? blobAt : null;
-        if (from && navIsRow(nav)) {
-            // Нижняя панель телефона: перетекание — анимация браузера по transform. Её ведёт видеокарта,
-            // и она идёт ровно, даже пока сайт занят отрисовкой новой страницы (а это ровно момент перехода).
+        if (from && row) {
+            // Нижняя панель телефона: перетекание — анимация браузера, без кода на каждый кадр и без замеров
+            // по пути (они и тормозили: сайт в этот момент рисует новую страницу)
             blobAnim = null;
-            Object.assign(blob.style, blobBox(to), { transform: '' });
+            Object.assign(blob.style, blobBox(to));
             blobFlow(from, to);
         } else if (from) {
             // Левое меню компьютера: считаем по кадрам (proxFrame) — подложка по пути сдвигается так же,
@@ -5831,7 +5835,7 @@
         } else { blobAnim = null; Object.assign(blob.style, blobBox(to)); }
         blob.style.opacity = '1';
         blobAt = to;
-        proxKick();
+        if (!row) proxKick();                             // «док» и покадровое перетекание — только у левого меню
     }
     let blobAnim = null, flow = null, blobRadius = '';
     const BLOB_MS = 460;
@@ -5853,16 +5857,16 @@
         const [a, b, q] = p < .45 ? [f, mid, easeIO(p / .45)] : [mid, t, easeIO((p - .45) / .55)];
         return { g: { top: lerp(a.top, b.top, q), left: lerp(a.left, b.left, q), width: lerp(a.width, b.width, q), height: lerp(a.height, b.height, q) }, done: p >= 1 };
     }
-    // То же перетекание, но без кода на кадр: подложка стоит на новом пункте, а transform ведёт её
-    // от старого через растяжку. Кривая на каждом отрезке — та же easeIO (cubic-bezier(.65, 0, .35, 1)).
+    // То же перетекание, но без кода на кадр: анимация браузера по положению и размеру, от старого пункта
+    // через растяжку к новому. Не масштабом (transform: scale): тот растягивал и скругления, и обводку —
+    // подложка по пути становилась ромбом. Кривая на каждом отрезке — та же easeIO (cubic-bezier(.65, 0, .35, 1)).
     function blobFlow(f, t, t0 = performance.now()) {
         flow = { f, t, t0 };
-        const at = r => `translate(${(r.left - t.left).toFixed(1)}px, ${(r.top - t.top).toFixed(1)}px) scale(${(r.width / t.width).toFixed(4)}, ${(r.height / t.height).toFixed(4)})`;
         const e = 'cubic-bezier(.65, 0, .35, 1)';
         const an = blob.animate([
-            { transform: at(f), easing: e },
-            { transform: at(blobMid(f, t, true)), offset: .45, easing: e },
-            { transform: 'none' }
+            { ...blobBox(f), easing: e },
+            { ...blobBox(blobMid(f, t, true)), offset: .45, easing: e },
+            blobBox(t)
         ], { duration: BLOB_MS });
         an.currentTime = Math.max(0, performance.now() - t0);
     }
