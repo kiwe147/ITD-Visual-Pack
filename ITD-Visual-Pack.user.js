@@ -762,6 +762,14 @@
             return { id: k, name: st.name, c };
         });
         iconBgList.push({ id: 'black', name: 'Чёрный', c: ['#26262c', '#050507'] });
+        // по кругу цветов от красного до розового, потом многоцветные, потом белый → серый → чёрный
+        const MULTI = ['glitch', 'rainbow'], NEUTRAL = ['white', 'gray', 'black'];
+        const rank = b => {
+            if (MULTI.includes(b.id)) return 1000 + MULTI.indexOf(b.id);
+            const h = hueOf(b.c[0]);
+            return h === null ? 2000 + Math.max(0, NEUTRAL.indexOf(b.id)) : (h + 330) % 360;
+        };
+        iconBgList.sort((a, b) => rank(a) - rank(b));
         return iconBgList;
     }
     const svgUrl = svg => 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
