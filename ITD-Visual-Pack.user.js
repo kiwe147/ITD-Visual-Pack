@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.19
+// @version      3.1.20
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -56,6 +56,25 @@
             return;
         }
     } catch (e) { }
+    // Планшет в горизонтальном положении: сайт считает телефоном всё уже 1173 px и растягивает мобильную
+    // вёрстку на весь экран. Если экран от 1024 до 1172 px — говорим браузеру, что ширина 1180: сайт
+    // показывает компьютерную версию, браузер чуть уменьшает её под экран. Телефоны и вертикальный
+    // планшет — как было. Отключается в настройках («Вид» → «Версия для ПК на планшете»).
+    function tabletViewport() {
+        const meta = document.querySelector('meta[name="viewport"]');
+        if (!meta) return;
+        if (!meta.dataset.vpOrig) meta.dataset.vpOrig = meta.getAttribute('content') || 'width=device-width, initial-scale=1.0';
+        const landscape = matchMedia('(orientation: landscape)').matches;
+        const w = landscape ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
+        const on = GM_getValue('tabletDesktop', true) && w >= 1024 && w < 1173;
+        const want = on ? 'width=1180' : meta.dataset.vpOrig;
+        if (meta.getAttribute('content') !== want) meta.setAttribute('content', want);
+    }
+    if (document.querySelector('meta[name="viewport"]')) tabletViewport();
+    else document.addEventListener('DOMContentLoaded', tabletViewport);
+    addEventListener('orientationchange', () => setTimeout(tabletViewport, 50));
+    matchMedia('(orientation: landscape)').addEventListener('change', tabletViewport);
+
     // Ошибки скрипта — в журнал для отчёта из админки (последние 30)
     const vpErrors = [];
     const logErr = (where, e) => { vpErrors.push(new Date().toTimeString().slice(0, 8) + ' ' + where + ': ' + (e && (e.message || e))); if (vpErrors.length > 30) vpErrors.shift(); };
@@ -1030,6 +1049,8 @@
             'Звуки интерфейса': svgIcon('<path d="M4 9.5h3l4-3.5v12l-4-3.5H4z"/><path d="M15 9a4 4 0 0 1 0 6M17.5 6.5a7.5 7.5 0 0 1 0 11"/>'),
             // колонка из трёх блоков справа — боковая панель
             'Боковая панель': svgIcon('<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M15 3v18"/><path d="M17.5 7.5h1M17.5 11h1M17.5 14.5h1"/>'),
+            // планшет боком с монитором — версия для ПК на планшете
+            'Версия для ПК на планшете': svgIcon('<rect x="2.5" y="5" width="19" height="13" rx="2"/><path d="M9 21h6"/><path d="M6 9h6M6 12h4"/>'),
             // карточки лесенкой, верхняя тает — сцена ленты
             'Сцена ленты': svgIcon('<rect x="5" y="3" width="14" height="5" rx="1.5" stroke-dasharray="2 2"/><rect x="4" y="10" width="16" height="5" rx="1.5"/><rect x="3" y="17" width="18" height="5" rx="1.5"/>'),
             // экран с лучами вокруг — свечение видео
@@ -2427,14 +2448,15 @@
         { label: 'Звуки интерфейса', get: () => uiSoundEnabled, set: v => { uiSoundEnabled = v; if (v) uiSound('toggle'); }, key: 'uiSoundEnabled' },
         { label: 'Сцена ленты', get: () => sceneEnabled, set: v => { sceneEnabled = v; document.documentElement.classList.toggle('vp-scene', v); sceneKick(); }, key: 'sceneEnabled' },
         { label: 'Свечение видео', get: () => ambientEnabled, set: v => { ambientEnabled = v; applyAmbient(); }, key: 'ambientEnabled' },
-        { label: 'Боковая панель', get: () => railEnabled, set: v => { railEnabled = v; placeRail(); }, key: 'railEnabled' }
+        { label: 'Боковая панель', get: () => railEnabled, set: v => { railEnabled = v; placeRail(); }, key: 'railEnabled' },
+        { label: 'Версия для ПК на планшете', get: () => GM_getValue('tabletDesktop', true), set: () => tabletViewport(), key: 'tabletDesktop' }
     ];
     // Все настройки ИТД X — одно окно по вкладкам (кнопка «ИТД X» в шапке профиля).
     // Последняя открытая вкладка запоминается.
     const SETTINGS_TABS = [
         { id: 'nick', name: 'Ник', items: ['Подсветка ника', 'Подсветка аватарок', 'Подсветка постов'] },
         { id: 'bg', name: 'Фон', items: ['Фон'] },
-        { id: 'look', name: 'Вид', items: ['Стекло', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель'] },
+        { id: 'look', name: 'Вид', items: ['Стекло', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Версия для ПК на планшете'] },
         { id: 'likes', name: 'Лайки', items: ['Автолайки'] },
         { id: 'misc', name: 'Ещё', items: ['Анти цензура', 'Звуки интерфейса', 'Заставка при входе'] },
         { id: 'icon', name: 'Иконка' }
