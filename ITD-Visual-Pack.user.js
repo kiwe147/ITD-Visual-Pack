@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.12
+// @version      3.0.13
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6186,6 +6186,20 @@
             const r = el.getBoundingClientRect();
             if (r.width > 300) { left = Math.min(left, r.left); right = Math.max(right, r.right); }
         });
+        if (!right) {
+            // страница без ленты, вкладок и постов (магазин и т. п.): колонка — то, что лежит в середине
+            // экрана, поднятое до обёртки без боковых колонок. Иначе меню и панель стояли по прошлой странице
+            const skip = side + ', nav, .vp-hc, .vp-msg-backdrop, .vpi-overlay';
+            for (const y of [0.35, 0.6]) {
+                const hit = document.elementsFromPoint(innerWidth / 2, innerHeight * y).find(e => e !== document.body
+                    && e !== document.documentElement && !e.closest(skip) && e.getBoundingClientRect().width < innerWidth * 0.72);
+                let el = hit;
+                while (el && el.parentElement && el.parentElement !== document.body && !el.parentElement.querySelector(side)
+                    && el.parentElement.getBoundingClientRect().width < innerWidth * 0.72) el = el.parentElement;
+                const r = el && el.getBoundingClientRect();
+                if (r && r.width > 300) { left = Math.min(left, r.left); right = Math.max(right, r.right); }
+            }
+        }
         return right ? { left, right } : null;
     }
     let lastCb = null;
