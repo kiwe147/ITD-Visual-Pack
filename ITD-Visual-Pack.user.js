@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.18
+// @version      3.1.19
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -5983,12 +5983,20 @@
             border-radius: 40px !important;
             padding: 6px 10px !important;
         }
+        /* наведение — только там, где есть мышь: на телефоне касание «залипало» подсветкой кнопки */
+        @media (hover: hover) {
         .vp-post-action:hover {
             background: rgba(0, 128, 255, 0.15) !important;
             transform: translateY(-2px) !important;
         }
         .vp-avatar-link:hover {
             transform: scale(1.05) !important;
+        }
+        }
+        /* телефон: подсветку наведения сайта у лайка/коммента/репоста тоже снимаем, отклик — только при нажатии */
+        @media (hover: none) {
+            .vp-post-action:hover { background: transparent !important; transform: none !important; }
+            .vp-post-action:active { background: var(--bg-hover, rgba(255, 255, 255, .08)) !important; }
         }
         a[href*="/hashtag/"], a[href*="/tag/"], a:not([href^="/@"]):not([href*="/@"]):not([href^="#"]) {
             font-weight: 600 !important;
@@ -6015,6 +6023,7 @@
         .vp-post-action:active svg {
             animation: likePop 0.2s ease-out !important;
         }
+        @media (hover: hover) {
         .vp-post-action[aria-label="Нравится"]:hover {
             background: rgba(249, 24, 128, 0.2) !important;
             color: #f91880 !important;
@@ -6026,6 +6035,7 @@
         .vp-post-action[aria-label="Репост"]:hover {
             background: rgba(0, 128, 255, 0.2) !important;
             color: #0080FF !important;
+        }
         }
         .vp-notif {
             animation: notificationAppear 0.3s ease-out forwards !important;
