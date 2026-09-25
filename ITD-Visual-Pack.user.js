@@ -4775,18 +4775,17 @@
     // Кнопка та же, сайтовая, — только место: она в том же закреплённом блоке, что и панель, и прячется
     // вместе с ней. Пункты панели не сдвигаются: купол — над краем панели. Наша «наверх» — на своём месте, а вид
     // берёт у «+» (классы сайта), чтобы совпадал до пикселя.
-    // кнопка; радиус купола; центр купола выше края панели на BUMP_UP (пункты под ним не задеваются);
-    // широкие плавные переходы от края к куполу — бугорок выглядит частью панели, как выпуклость
-    const BUMP = 40, BUMP_R = 19, BUMP_UP = 2, BUMP_FILLET = 146, BUMP_LIFT = BUMP_R + BUMP_UP;
+    // Бугорок — одна плавная кривая-«колокол» шириной BUMP_W и высотой BUMP_H над краем панели:
+    // касательные горизонтальны у краёв и на вершине, без стыков разных дуг — без резкого пика.
+    // «+» (BUMP px) — по центру, чуть над краем панели (BUMP_UP): пункты панели не задевает.
+    const BUMP = 40, BUMP_UP = 2, BUMP_W = 160, BUMP_H = 21, BUMP_LIFT = BUMP_H;
     // контур «скруглённая панель + бугорок»: w×h панели, её верх — на y = top
     function bumpPath(w, h, top) {
-        const r = h / 2, cx = w / 2, cy = top - BUMP_UP, f = BUMP_FILLET;
-        const dy = cy - (top - f), d = Math.sqrt((BUMP_R + f) ** 2 - dy ** 2);
-        const k = f / (BUMP_R + f);                                    // точка касания скругления и дуги
-        const tx = d * (1 - k), ty = (top - f) + dy * k;
-        const n = v => +v.toFixed(2);
-        return `M${r} ${top}H${n(cx - d)}A${f} ${f} 0 0 0 ${n(cx - tx)} ${n(ty)}A${BUMP_R} ${BUMP_R} 0 0 1 ${n(cx + tx)} ${n(ty)}`
-            + `A${f} ${f} 0 0 0 ${n(cx + d)} ${top}H${w - r}A${r} ${r} 0 0 1 ${w - r} ${top + h}H${r}A${r} ${r} 0 0 1 ${r} ${top}Z`;
+        const r = h / 2, cx = w / 2, half = BUMP_W / 2, peak = top - BUMP_H, n = v => +v.toFixed(2);
+        return `M${r} ${top}H${n(cx - half)}`
+            + `C${n(cx - half * .45)} ${top} ${n(cx - half * .42)} ${peak} ${cx} ${peak}`
+            + `C${n(cx + half * .42)} ${peak} ${n(cx + half * .45)} ${top} ${n(cx + half)} ${top}`
+            + `H${w - r}A${r} ${r} 0 0 1 ${w - r} ${top + h}H${r}A${r} ${r} 0 0 1 ${r} ${top}Z`;
     }
     onDom(function newPostBump() {
         const nav = document.querySelector('.' + SELECTORS.nav);
