@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.9
+// @version      3.1.10
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -419,34 +419,33 @@
         // — до ~0,3 с), и если пустить картинку сразу, удары слышны позже, чем видны. Поэтому сначала
         // ставим звук в очередь, а картинку запускаем ровно на эту задержку позже — совпадают.
         function beginSynced() {
+            // Звук подстраиваем под картинку, а не наоборот. Картинка стартует сразу; когда анимации
+            // реально пошли (ready → startTime), каждый удар ставим на то время звуковой карты, которое
+            // прозвучит из наушников ровно в момент кадра. Сопоставление времён даёт сам браузер
+            // (getOutputTimestamp — с учётом задержки вывода, и Bluetooth тоже). Так не важно, что
+            // картинка на старте может запоздать (сайт в этот момент грузится) — звук ждёт её.
             if (started) return;
             started = true;
-            let fired = false, queued = false;
-            const fire = () => {
-                if (fired) return;
-                fired = true;
-                t0 = performance.now();
-                for (const a of anims) { a.currentTime = 0; a.play(); }
-                afterStart();
-            };
+            t0 = performance.now();
+            for (const a of anims) { a.currentTime = 0; a.play(); }
+            afterStart();
+            let queued = false;
             try {
                 ctx = new (window.AudioContext || window.webkitAudioContext)();
-                ctx.resume().then(() => {
-                    if (fired || !ctx) return;
+                Promise.all([ctx.resume(), anims[0].ready]).then(() => {
+                    if (!ctx || done) return;
                     queued = true;
-                    const lead = 0.05, at = ctx.currentTime + lead;
-                    introSound(ctx, ms => at + ms / 1000);
-                    // Задержку браузер завышает (в Bluetooth-наушниках на телефоне звук с полной поправкой
-                    // шёл заметно раньше картинки, без поправки — чуть позже), поэтому берём половину
-                    // заявленной и не больше 0,15 с. Плюс lead: звук стоит в очереди на 50 мс вперёд.
-                    const lat = Math.min(0.15, 0.5 * (Math.max(0, (ctx.outputLatency || 0) + (ctx.baseLatency || 0)) || 0));
-                    setTimeout(fire, (lead + lat) * 1000);
-                }, fire);
+                    const start = anims[0].startTime;            // мс, та же шкала, что performance.now()
+                    const toCtx = perf => {
+                        const ts = ctx.getOutputTimestamp ? ctx.getOutputTimestamp() : null;
+                        if (ts && ts.performanceTime > 0) return ts.contextTime + (perf - ts.performanceTime) / 1000;
+                        return ctx.currentTime + (perf - performance.now()) / 1000 - (ctx.outputLatency || 0);
+                    };
+                    introSound(ctx, ms => Math.max(ctx.currentTime + 0.01, toCtx(start + ms)));
+                }, () => {});
             } catch (e) { ctx = null; }
-            // звук так и не завёлся — картинка идёт без него
-            // (если звук уже в очереди — не трогаем: раньше этот запасной таймер при большой задержке
-            // успевал первым и глушил уже запущенный звук)
-            setTimeout(() => { if (!fired && !queued) { if (ctx) ctx.close().catch(() => {}); ctx = null; fire(); } }, 450);
+            // звук так и не завёлся — картинка уже идёт, просто без него
+            setTimeout(() => { if (!queued && ctx) { ctx.close().catch(() => {}); ctx = null; } }, 600);
         }
         function afterStart() {
             setTimeout(cleanup, EXIT + SPLIT + 2500);       // если анимации не доиграют (вкладка в фоне)
@@ -2474,9 +2473,6 @@
                     if (popup && popup.el === menu) placePopup();
                 }).catch(() => { list.innerHTML = '<div class="vp-menu-note">Ошибка загрузки</div>'; });
             }
-            // не переключатель, а действие: файл со страницей — присылать разработчику, чтобы править по настоящей разметке.
-            // Только у админа (по логину): остальным пункт ни к чему
-            if (id === 'misc' && myUsername && ADMINS.includes(myUsername.toLowerCase())) body.appendChild(snapshotRow());
             if (popup && popup.el === menu) placePopup();
             body.scrollTop = keep;
         };
@@ -2602,19 +2598,11 @@
         return wrap;
     }
     const ADMINS = ['neurosfw'];
-    function snapshotRow() {
-        const snap = document.createElement('div');
-        snap.className = 'settings-option';
-        snap.innerHTML = `<span class="vp-setting-label"><span>📸 Снимок страницы для Claude</span></span>`;
-        snap.onclick = e => { e.stopPropagation(); closePopup(); setTimeout(pageSnapshot, 300); };
-        return snap;
-    }
-
-    // Админ-островок (телефон, только у админа): круглая кнопка поверх всего, её можно таскать пальцем —
+    // Админ-островок (только у админа, и на телефоне, и на компьютере): круглая кнопка поверх всего, её можно таскать —
     // отпустил, она прилипает к ближайшему краю (как плавающая кнопка на Samsung). Тап — меню.
     // Пока в меню одно — снимок страницы. Место запоминается.
     function adminFab() {
-        if (document.querySelector('.vp-fab') || !IS_PHONE || !myUsername || !ADMINS.includes(myUsername.toLowerCase())) return;
+        if (document.querySelector('.vp-fab') || !myUsername || !ADMINS.includes(myUsername.toLowerCase())) return;
         const fab = document.createElement('div');
         fab.className = 'vp-fab';
         fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка"><span class="vp-fab-a">A</span></button>
