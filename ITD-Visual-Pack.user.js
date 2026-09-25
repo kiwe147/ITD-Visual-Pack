@@ -4773,12 +4773,14 @@
     // ложилась наша «наверх»). Фон, размытие и обводка панели рисуются одной фигурой «панель + бугорок»
     // (SVG под пунктами) — без шва и двойного затемнения; у самой «+» свой круг убран, она лежит на бугорке.
     // Кнопка та же, сайтовая, — только место: она в том же закреплённом блоке, что и панель, и прячется
-    // вместе с ней. Между 3-м и 4-м пунктом — место под бугорок. Наша «наверх» — на своём месте, а вид
+    // вместе с ней. Пункты панели не сдвигаются: купол — над краем панели. Наша «наверх» — на своём месте, а вид
     // берёт у «+» (классы сайта), чтобы совпадал до пикселя.
-    const BUMP = 60, BUMP_R = 32, BUMP_LIFT = 28, BUMP_FILLET = 10;   // кнопка, радиус дуги, насколько выше края, скругление стыков
+    // кнопка; радиус купола; центр купола выше края панели на BUMP_UP (пункты под ним не задеваются);
+    // широкие плавные переходы от края к куполу — бугорок выглядит частью панели, как выпуклость
+    const BUMP = 48, BUMP_R = 25, BUMP_UP = 11, BUMP_FILLET = 22, BUMP_LIFT = BUMP_R + BUMP_UP;
     // контур «скруглённая панель + бугорок»: w×h панели, её верх — на y = top
     function bumpPath(w, h, top) {
-        const r = h / 2, cx = w / 2, cy = top + BUMP_R - BUMP_LIFT, f = BUMP_FILLET;
+        const r = h / 2, cx = w / 2, cy = top - BUMP_UP, f = BUMP_FILLET;
         const dy = cy - (top - f), d = Math.sqrt((BUMP_R + f) ** 2 - dy ** 2);
         const k = f / (BUMP_R + f);                                    // точка касания скругления и дуги
         const tx = d * (1 - k), ty = (top - f) + dy * k;
@@ -4823,7 +4825,7 @@
             bg.querySelector('.vp-bump-edge').setAttribute('d', d);
             bg.querySelector('linearGradient').setAttribute('y2', H);
         }
-        const top = Math.round(nav.offsetTop + BUMP_R - BUMP_LIFT - BUMP / 2) + 'px', left = Math.round(nav.offsetLeft + nav.offsetWidth / 2 - BUMP / 2) + 'px';
+        const top = Math.round(nav.offsetTop - BUMP_UP - BUMP / 2) + 'px', left = Math.round(nav.offsetLeft + nav.offsetWidth / 2 - BUMP / 2) + 'px';
         if (plus.style.top !== top) plus.style.top = top;
         if (plus.style.left !== left) plus.style.left = left;
     });
@@ -5851,7 +5853,6 @@
         .vp-new-post { position: absolute !important; width: ${BUMP}px !important; height: ${BUMP}px !important; z-index: 2; margin: 0 !important;
             background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; }
         .vp-new-post::before { display: none !important; }
-        nav.vp-has-bump > a:nth-of-type(3) { margin-right: ${BUMP + 8}px !important; }
         /* фон, размытие и обводка панели — у фигуры «панель + бугорок», у самой панели — выключены */
         nav.vp-has-bump { background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; }
         nav.vp-has-bump::before { display: none !important; }
