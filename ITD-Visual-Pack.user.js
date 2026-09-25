@@ -3938,9 +3938,6 @@
         requestAnimationFrame(frame);
         // экраны 120–144 Гц (многие телефоны): фон — не чаще ~60 кадров, вдвое меньше работы, скорость та же (dt)
         if (lastFrame && t - lastFrame < 10) return;
-        // телефон: фон — ~30 кадров в секунду. Каждый кадр фона заставляет заново размывать всё стекло
-        // над ним (на профиле его много), а на глаз фон при 30 кадрах такой же. Скорость та же (dt).
-        if (IS_PHONE && lastFrame && t - lastFrame < 28) return;
         if (halfRate && (odd = !odd)) return;
         const gap = lastFrame ? t - lastFrame : 16.7;
         lastFrame = t;
