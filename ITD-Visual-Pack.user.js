@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.10
+// @version      3.0.12
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1711,7 +1711,8 @@
         if (rootKey !== paintRootKey) {
             paintRootKey = rootKey;
             const slow = rainbow ? `hsl(${Math.round(h / 30) * 30}, 100%, ${dark ? 62 : 45}%)` : accent;
-            root.cssText = `--vp-accent: ${slow}; scrollbar-color: color-mix(in srgb, ${slow} 55%, transparent) transparent;`;
+            // надписи поверх акцента: на тёмной теме он светлый (у «Белого» — белый), на светлой — затемнён
+            root.cssText = `--vp-accent: ${slow}; --vp-on-accent: ${dark ? '#0b0b0f' : '#fff'}; scrollbar-color: color-mix(in srgb, ${slow} 55%, transparent) transparent;`;
             selection.cssText = `background: color-mix(in srgb, ${slow} 45%, transparent) !important;`;
         }
     }
@@ -4481,7 +4482,7 @@
         .vp-msg-head { display: flex; align-items: center; gap: 12px; padding-bottom: 14px;
             border-bottom: 1px solid color-mix(in srgb, var(--text-primary, #fff) 8%, transparent); }
         .vp-msg-ava { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-            color: #fff; background: var(--vp-accent, #0080ff); }
+            color: var(--vp-on-accent, #fff); background: var(--vp-accent, #0080ff); }
         .vp-msg-who { display: flex; flex-direction: column; min-width: 0; }
         .vp-msg-name { font-weight: 700; font-size: 15px; }
         .vp-msg-status { font-size: 12px; color: var(--text-secondary, #8a8a99); }
@@ -4499,7 +4500,7 @@
         .vp-msg-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px;
             color: var(--text-secondary, #8a8a99); }
         .vp-msg-again { border: 0; border-radius: 999px; padding: 9px 16px; cursor: pointer; font: inherit; font-size: 14px; font-weight: 600;
-            color: #fff; background: var(--vp-accent, #0080ff); transition: filter .15s, transform .15s; }
+            color: var(--vp-on-accent, #fff); background: var(--vp-accent, #0080ff); transition: filter .15s, transform .15s; }
         .vp-msg-again:hover { filter: brightness(1.12); }
         .vp-msg-again:active { transform: scale(.96); }
         .vp-msg-again:disabled { opacity: .5; cursor: default; }
@@ -4507,7 +4508,10 @@
         @keyframes vpMsgPop { from { opacity: 0; transform: translateY(12px) scale(.96); } }
         @keyframes vpMsgIn { from { opacity: 0; transform: translateY(6px); } }
         @keyframes vpMsgDot { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
-        @media (prefers-reduced-motion: reduce) { .vp-msg-backdrop, .vp-msg-backdrop * { animation: none !important; } }`;
+        @media (prefers-reduced-motion: reduce) { .vp-msg-backdrop, .vp-msg-backdrop * { animation: none !important; } }
+        /* пока окно открыто, видео под ним прячем: Яндекс.Браузер видит курсор над видео сквозь окно
+           и выкладывает свою панель («Субтитры», картинка в картинке) поверх наших кнопок */
+        html.vp-msg-shown video { visibility: hidden !important; }`;
         document.head.appendChild(style);
 
         const root = document.createElement('div');
@@ -4553,6 +4557,7 @@
         function close() {
             clearTimeout(timer);
             root.classList.remove('vp-open');
+            document.documentElement.classList.remove('vp-msg-shown');
             document.removeEventListener('keydown', onKey, true);
         }
         function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
@@ -4562,6 +4567,7 @@
         again.onclick = say;
         root.open = () => {
             root.classList.add('vp-open');
+            document.documentElement.classList.add('vp-msg-shown');
             document.addEventListener('keydown', onKey, true);
             say();
         };
