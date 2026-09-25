@@ -6263,8 +6263,10 @@
         // У пунктов нижней панели своего скругления нет. Скругление — в px от овала на месте: при растяжке
         // края остаются теми же полуовалами (выходит капля-пилюля), а не растягиваются сами
         const rad = getComputedStyle(active).borderRadius;
-        blob.style.borderRadius = blobRadius = siteInd && parseFloat(getComputedStyle(siteInd).borderRadius) ? getComputedStyle(siteInd).borderRadius
-            : row || !parseFloat(rad) ? `${to.width / 2}px / ${to.height / 2}px` : rad;
+        // Левое меню компьютера — как было: скругление самого пункта сайта
+        blob.style.borderRadius = blobRadius = !row ? rad
+            : siteInd && parseFloat(getComputedStyle(siteInd).borderRadius) ? getComputedStyle(siteInd).borderRadius
+            : `${to.width / 2}px / ${to.height / 2}px`;
         const from = blobAt && !calm && blob.style.opacity === '1' ? blobAt : null;
         if (from && row) {
             // Нижняя панель телефона: перетекание — анимация браузера, без кода на каждый кадр и без замеров
