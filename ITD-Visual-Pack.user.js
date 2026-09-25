@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.17
+// @version      3.0.18
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -491,7 +491,7 @@
             GM_setValue('vp_learned', JSON.stringify(learned));
         }
     }
-    const byLearned = role => learned[role] ? [...document.getElementsByClassName(learned[role])] : [];
+    const byLearned = role => learned[role] ? [...document.getElementsByClassName(learned[role])].filter(inScope) : [];
 
     // Самый глубокий span с текстом внутри ника (имя бывает вложено: span > span > span)
     function nickTextOf(container) {
@@ -618,17 +618,39 @@
     let tickCache = null;
     const F = role => (tickCache && tickCache[role]) || FIND[role]();
 
-    function tagAll() {
+    // Разбирать заново всю ленту на каждое изменение страницы — дорого: чем дальше листаешь,
+    // тем больше постов. Поэтому внутренности постов разбираем только у новых постов и у тех,
+    // в которых что-то поменялось (dirtyPosts). Всё остальное (меню, вкладки, шапка профиля) —
+    // как раньше, целиком. Раз в 5 секунд и по itdvp.diag() — полный проход, на всякий случай.
+    let scope = null;                                   // null — все посты; иначе Set постов для разбора
+    const dirtyPosts = new Set();
+    let lastFullTag = 0;
+    function inScope(el) {
+        if (!scope) return true;
+        const p = el.closest('.' + SELECTORS.post);
+        return !p || scope.has(p);
+    }
+
+    function tagAll(full = true) {
         tickCache = {};
+        scope = null;
+        const now = performance.now();
+        if (full || now - lastFullTag > 5000) { full = true; lastFullTag = now; }
         for (const role of ROLE_ORDER) {
             let els = [];
             try { els = FIND[role](); } catch (e) { console.warn('[ITD VP] поиск сломался:', role, e); }
-            tickCache[role] = els;
-            roleCount[role] = els.length;
             const cls = SELECTORS[role];
+            if (role === 'post' && !full) {
+                // новые посты (ещё без метки) и посты, где что-то поменялось
+                scope = new Set(els.filter(el => !el.classList.contains(cls) || dirtyPosts.has(el)));
+            }
+            tickCache[role] = role === 'post' && scope ? [...scope] : els;
+            if (full) roleCount[role] = els.length;
             for (const el of els) if (!el.classList.contains(cls)) el.classList.add(cls);
         }
+        dirtyPosts.clear();
         tickCache = null;
+        scope = null;
     }
 
     // Один наблюдатель на всю страницу вместо десятка: сначала расставляем метки,
@@ -636,21 +658,42 @@
     const domHandlers = [];
     function onDom(fn) { domHandlers.push(fn); }
     let domQueued = false;
+    const DOM_WATCH = { childList: true, subtree: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true };
     function domTick() {
         domQueued = false;
+        domRecords(domObserver.takeRecords());
         domObserver.disconnect();                 // свои правки не должны будить наблюдателя
         try {
-            tagAll();
+            tagAll(false);
             for (const fn of domHandlers) { try { fn(); } catch (e) { console.warn('[ITD VP]', fn.name || 'обработчик', e); } }
         } finally {
-            domObserver.observe(document.body, { childList: true, subtree: true });
+            domObserver.observe(document.body, DOM_WATCH);
         }
     }
-    const domObserver = new MutationObserver(() => {
-        if (!domQueued) { domQueued = true; requestAnimationFrame(domTick); }
+    // Что поменялось: пост, внутри которого была правка, разберём заново. Смена класса важна,
+    // только если сайт перерисовал элемент и стёр наши метки vp-* (свои правки класса — не повод).
+    const lostVp = m => {
+        const old = m.oldValue || '';
+        if (!old.includes('vp-')) return false;
+        const cl = m.target.classList;
+        return old.split(/\s+/).some(c => c.startsWith('vp-') && !cl.contains(c));
+    };
+    function domRecords(muts) {
+        let any = false;
+        for (const m of muts) {
+            if (m.type === 'attributes' && !lostVp(m)) continue;
+            any = true;
+            const el = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+            const p = el && el.closest('.' + SELECTORS.post);
+            if (p) dirtyPosts.add(p);
+        }
+        return any;
+    }
+    const domObserver = new MutationObserver(muts => {
+        if (domRecords(muts) && !domQueued) { domQueued = true; requestAnimationFrame(domTick); }
     });
     tagAll();
-    domObserver.observe(document.body, { childList: true, subtree: true });
+    domObserver.observe(document.body, DOM_WATCH);
 
     // Проверка: какие элементы не нашлись. В консоли страницы: itdvp.diag()
     const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
@@ -664,6 +707,7 @@
     };
     // Раз в заход — предупреждение, если не нашлось то, что есть на любой странице
     setTimeout(() => {
+        tagAll();                                 // полный проход: счёт по всей странице, а не по последним правкам
         const must = ['nav', 'sidebar', 'logoContainer'];
         if (roleCount.post) must.push('avatar', 'nickContainer', 'nickText');
         const lost = must.filter(r => !roleCount[r]);
@@ -1673,7 +1717,9 @@
         const style = nickStyles[currentStyle];
         const rainbow = currentStyle === 'rainbow';
         const dark = isDarkTheme();
-        const h = Math.round(globalHue * 10) / 10;
+        // Шаг оттенка — 1°: глазом не отличить от плавного, а правила стилей (и пересчёт страницы за ними)
+        // меняются ~16 раз в секунду, а не каждый кадр
+        const h = Math.round(globalHue);
         const key = [currentStyle, rainbow ? h : '', dark, nickGlowEnabled, avatarGlowEnabled, postBorderEnabled].join();
         if (key === paintKey) return;
         paintKey = key;
@@ -2782,9 +2828,15 @@
                 badge.style.cssText = `display:inline-flex!important;align-items:center!important;width:${size}px!important;height:${size}px!important;flex-shrink:0!important;vertical-align:middle!important;margin-left:4px!important;`;
                 nick.insertAdjacentElement('afterend', badge);
             }
+            // список разбираем заново, только когда он поменялся, а не на каждую правку страницы
+            let verifiedRaw = null, verifiedNames = new Set();
             function markVerifiedUsers() {
-                const verified = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}');
-                const names = new Set(Object.keys(verified).map(u => u.toLowerCase()));
+                const raw = localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}';
+                if (raw !== verifiedRaw) {
+                    verifiedRaw = raw;
+                    verifiedNames = new Set(Object.keys(JSON.parse(raw)).map(u => u.toLowerCase()));
+                }
+                const names = new Set(verifiedNames);
                 names.delete(myUsername.toLowerCase());          // у меня свой значок
                 if (!names.size) return;
                 document.querySelectorAll(PROFILE_LINK).forEach(link => {
@@ -3039,11 +3091,13 @@
 
     // Кадр через requestAnimationFrame: в свёрнутой вкладке он сам встаёт на паузу.
     // Статичный цвет рисуется один раз (paint), радуга — каждый кадр.
-    // Фон рисуется на частоте экрана. Если кадры начинают пропадать (слабый компьютер, тяжёлая
+    // Фон рисуется на частоте экрана (но не чаще ~60 раз в секунду). Если кадры начинают пропадать (слабый компьютер, тяжёлая
     // страница), фон сам переходит на каждый второй кадр: картинка та же, только реже.
     let lastFrame = 0, bestGap = 1000, slow = 0, halfRate = false, odd = false;
     function frame(t) {
         requestAnimationFrame(frame);
+        // экраны 120–144 Гц (многие телефоны): фон — не чаще ~60 кадров, вдвое меньше работы, скорость та же (dt)
+        if (lastFrame && t - lastFrame < 10) return;
         if (halfRate && (odd = !odd)) return;
         const gap = lastFrame ? t - lastFrame : 16.7;
         lastFrame = t;
@@ -4805,8 +4859,10 @@
     }
 
     // Свои покраски (ники и аватарки — в радуге каждый кадр) окно не открывают: их пропускаем,
-    // иначе проверка окон с пересчётом раскладки шла бы 20 раз в секунду.
-    const PAINTED = '.vp-nick, .vp-nick-text, .my-avatar-glow';
+    // иначе проверка окон с пересчётом раскладки шла бы 20 раз в секунду. Так же — то, что мы
+    // двигаем каждый кадр: посты при прокрутке (сцена), кнопки меню и подложка, баннер, свечение видео.
+    const PAINTED = '.vp-nick, .vp-nick-text, .my-avatar-glow, article.vp-post, .vp-nav-link, .vp-nav-icon, .vp-nav-blob, '
+        + '.vp-banner > img, .vp-ambient, .vp-bg-canvas, .vp-rail';
     const modalObserver = new MutationObserver(muts => {
         if (muts.some(m => m.type === 'childList' || !m.target.matches(PAINTED))) updateModalOverlay();
     });
@@ -4837,9 +4893,17 @@
     document.head.appendChild(styleIcons);
 
     function addBlurBackground() {
-        document.querySelectorAll('article.' + SELECTORS.post + ', .' + SELECTORS.repost).forEach(article => {
-            if (article.hasAttribute('data-blur-bg')) return;
-
+        // Идём от картинок, а не от всех постов: посты без картинки иначе перебирались на каждую правку страницы
+        const cards = new Set();
+        document.querySelectorAll('img.' + SELECTORS.postMedia).forEach(img => {
+            if (img._vpBlurDone) return;                  // её карточки уже с фоном
+            let pending = false;
+            for (const card of [img.closest('.' + SELECTORS.repost), img.closest('article.' + SELECTORS.post)]) {
+                if (card && !card.hasAttribute('data-blur-bg')) { cards.add(card); pending = true; }
+            }
+            if (!pending) img._vpBlurDone = true;
+        });
+        cards.forEach(article => {
             const img = article.querySelector('img.' + SELECTORS.postMedia);
             if (!img || !img.src || img.src.includes('avatar')) return;
 
@@ -5611,7 +5675,11 @@
             88% { text-shadow: -2px 0 rgba(255, 0, 200, .85), 2px 0 rgba(0, 255, 240, .85); transform: translateX(-1px); }
             89% { text-shadow: 1.5px 0 rgba(255, 0, 200, .75), -1.5px 0 rgba(0, 255, 240, .75); transform: none; }
         }
-        /* 20. Сцена ленты: положение поста на экране (считает sceneFrame) → прозрачность и масштаб */
+        /* 20. Сцена ленты: положение поста на экране (считает sceneFrame) → прозрачность и масштаб.
+           Переменные не наследуются: их смена пересчитывает стиль только самого поста, а не всего внутри */
+        @property --vp-so { syntax: '<number>'; inherits: false; initial-value: 1; }
+        @property --vp-ss { syntax: '<number>'; inherits: false; initial-value: 1; }
+        @property --vp-sy { syntax: '<length>'; inherits: false; initial-value: 0px; }
         html.vp-scene article.vp-post {
             animation: none !important; transform-origin: 50% 0;
             opacity: var(--vp-so, 1); transform: translateY(var(--vp-sy, 0px)) scale(var(--vp-ss, 1));
@@ -5851,7 +5919,7 @@
     const sceneSeen = new Set();
     const sceneIO = new IntersectionObserver(es => es.forEach(e => {
         if (e.isIntersecting) { sceneSeen.add(e.target); sceneKick(); }
-        else { sceneSeen.delete(e.target); ['--vp-so', '--vp-sy', '--vp-ss'].forEach(v => e.target.style.removeProperty(v)); }
+        else { sceneSeen.delete(e.target); e.target._vpSceneKey = null; ['--vp-so', '--vp-sy', '--vp-ss'].forEach(v => e.target.style.removeProperty(v)); }
     }), { rootMargin: '150px 0px' });
     const ease = t => t * t * (3 - 2 * t);
     let sceneQueued = false;
@@ -5859,15 +5927,21 @@
         sceneQueued = false;
         if (!sceneEnabled) return;
         const H = innerHeight;
-        for (const a of sceneSeen) {
-            const r = a.getBoundingClientRect();
+        // Сначала все замеры, потом все записи: замер после записи заставлял браузер
+        // пересчитывать раскладку страницы заново — на каждый видимый пост в каждом кадре.
+        const rects = [...sceneSeen].map(a => [a, a.getBoundingClientRect()]);
+        for (const [a, r] of rects) {
             // Мягко: читать не мешает. Уходящий бледнеет, только когда за верх ушла его четверть,
             // и не до конца; входящий снизу не тускнеет — лишь чуть поднимается на своё место.
             const out = ease(Math.max(0, Math.min(1, (-r.top - r.height * 0.25) / Math.max(1, r.height * 0.75))));
             const inn = ease(Math.max(0, Math.min(1, (H - r.top) / 220)));
-            a.style.setProperty('--vp-so', (1 - 0.45 * out).toFixed(3));
-            a.style.setProperty('--vp-ss', (1 - 0.04 * out).toFixed(4));
-            a.style.setProperty('--vp-sy', (14 * (1 - inn)).toFixed(1) + 'px');
+            const so = (1 - 0.45 * out).toFixed(3), ss = (1 - 0.04 * out).toFixed(4), sy = (14 * (1 - inn)).toFixed(1) + 'px';
+            const key = so + ss + sy;
+            if (a._vpSceneKey === key) continue;           // пост посреди экрана: ничего не поменялось
+            a._vpSceneKey = key;
+            a.style.setProperty('--vp-so', so);
+            a.style.setProperty('--vp-ss', ss);
+            a.style.setProperty('--vp-sy', sy);
         }
     }
     const sceneKick = () => { if (!sceneQueued) { sceneQueued = true; requestAnimationFrame(sceneFrame); } };
@@ -6055,8 +6129,8 @@
     function countUp() {
         if (counted.has(countKey())) return;
         const spans = [...document.querySelectorAll('span')].filter(sp => {
-            const next = sp.nextElementSibling;
-            return /^\d{1,7}$/.test(sp.textContent.trim()) && !sp.children.length && next && COUNT_LABEL.test(next.textContent)
+            const next = sp.nextElementSibling;                          // сначала дешёвые проверки: span-ов тысячи
+            return next && !sp.children.length && /^\d{1,7}$/.test(sp.textContent.trim()) && COUNT_LABEL.test(next.textContent)
                 && !sp.closest('.' + SELECTORS.post + ', .' + SELECTORS.notification + ', nav, .vp-rail');   // панель — свои числа, не накручиваем
         });
         if (!spans.length) return;
@@ -6081,8 +6155,8 @@
         const login = loginOf(location.pathname);
         if (!login) return;
         // строка счётчиков: пункт «число + подпись», где подпись — «подписчиков»/«подписок»
-        const num = [...document.querySelectorAll('span')].find(sp => /^\d[\d\s]*$/.test(sp.textContent.trim()) && !sp.children.length
-            && sp.nextElementSibling && /подпис/i.test(sp.nextElementSibling.textContent) && !sp.closest('.' + SELECTORS.post + ', nav, .vp-rail'));
+        const num = [...document.querySelectorAll('span')].find(sp => sp.nextElementSibling && !sp.children.length && /^\d[\d\s]*$/.test(sp.textContent.trim())
+            && /подпис/i.test(sp.nextElementSibling.textContent) && !sp.closest('.' + SELECTORS.post + ', nav, .vp-rail'));
         const item = num && num.parentElement, row = item && item.parentElement;
         if (!row || row.querySelector('.vp-posts-stat')) return;
         if (row.dataset.vpPosts === login) return;           // уже ждём ответ для этого профиля
@@ -6234,13 +6308,29 @@
     // Края колонки с содержимым — по её внешней обёртке: от блока ленты/поста вверх до самой широкой,
     // где ещё нет боковых меню. Внутренние блоки у открытого поста уже карточки (у неё свои поля),
     // и по ним меню наезжало на карточку, а панель прилипала к ней.
+    // Посты ленты лежат в одной колонке: путь вверх у них общий. Ответ по каждому предку запоминаем
+    // (memo) — раньше путь и поиск меню внутри обёртки повторялись для каждого поста.
+    // Один ответ на проход: его спрашивают и панель, и левое меню (забываем, как проход закончится).
+    let cbCached;
     function contentBox() {
+        if (cbCached === undefined) {
+            cbCached = contentBoxNow();
+            queueMicrotask(() => { cbCached = undefined; });
+        }
+        return cbCached;
+    }
+    function contentBoxNow() {
         const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail';
         let left = Infinity, right = 0;
-        document.querySelectorAll('.' + [SELECTORS.tabs, SELECTORS.feedBar, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .')).forEach(e => {
-            let el = e;
-            while (el.parentElement && el.parentElement !== document.body && !el.parentElement.querySelector(side)
-                && el.parentElement.getBoundingClientRect().width < innerWidth * 0.72) el = el.parentElement;
+        const memo = new Map(), tops = new Set();         // предок → куда дойдёт путь от него (null — стоп)
+        const up = el => {
+            const p = el.parentElement;
+            if (!p || p === document.body) return el;
+            if (!memo.has(p)) memo.set(p, !p.querySelector(side) && p.getBoundingClientRect().width < innerWidth * 0.72 ? up(p) : null);
+            return memo.get(p) || el;
+        };
+        document.querySelectorAll('.' + [SELECTORS.tabs, SELECTORS.feedBar, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .')).forEach(e => tops.add(up(e)));
+        tops.forEach(el => {
             const r = el.getBoundingClientRect();
             if (r.width > 300) { left = Math.min(left, r.left); right = Math.max(right, r.right); }
         });
