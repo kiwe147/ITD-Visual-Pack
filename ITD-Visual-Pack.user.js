@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.18
+// @version      3.0.19
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -5645,7 +5645,7 @@
         .vp-nav-has-blob > .vp-nav-link { position: relative; z-index: 1; transition: background-color .2s ease, opacity .2s ease !important; }
         .vp-nav-has-blob > .vp-nav-link .vp-nav-icon { transition: none; }
         .vp-nav-has-blob > .vp-nav-link.vp-active { background: transparent !important; }
-        .vp-nav-blob { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; opacity: 0;
+        .vp-nav-blob { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; opacity: 0; transform-origin: 0 0;
             background: color-mix(in srgb, var(--vp-accent, #0080ff) 14%, var(--block-bg, #1c1c1c));
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 32%, transparent),
                 0 8px 24px -10px color-mix(in srgb, var(--vp-accent, #0080ff) 70%, transparent);
@@ -5803,10 +5803,12 @@
             blobAt = null;
             if (was && !calm) {
                 blob.style.transition = 'none';
-                Object.assign(blob.style, { top: was.top + 'px', left: was.left + 'px', width: was.width + 'px', height: was.height + 'px', opacity: '1' });
+                Object.assign(blob.style, blobBox(was), { opacity: '1', borderRadius: blobRadius });
                 blob.offsetWidth;                          // применить без перехода прозрачности
                 blob.style.transition = '';
                 blobAt = was;
+                // меню перерисовали посреди перетекания — новая подложка доигрывает его с того же места
+                if (flow && performance.now() - flow.t0 < BLOB_MS) blobFlow(flow.f, flow.t, flow.t0);
             }
         }
         if (!active) { blob.style.opacity = '0'; return; }
@@ -5814,33 +5816,55 @@
         if (blobAt && to.top === blobAt.top && to.left === blobAt.left && to.width === blobAt.width && to.height === blobAt.height) return;
         // у пунктов нижней панели телефона своего скругления нет — там подложка круглая, а не квадрат
         const rad = getComputedStyle(active).borderRadius;
-        blob.style.borderRadius = parseFloat(rad) ? rad : Math.min(to.width, to.height) / 2 + 'px';
-        const px = r => ({ top: r.top + 'px', left: r.left + 'px', width: r.width + 'px', height: r.height + 'px' });
-        // Перетекание считаем по кадрам (proxFrame): подложка растягивается к новому пункту,
-        // стягивается на нём, а по пути сдвигается так же, как кнопки, мимо которых идёт.
-        if (blobAt && !calm && blob.style.opacity === '1') blobAnim = { from: blobAt, to, t0: performance.now(), row: navIsRow(nav) };
-        else { blobAnim = null; Object.assign(blob.style, px(to)); }
+        blob.style.borderRadius = blobRadius = parseFloat(rad) ? rad : Math.min(to.width, to.height) / 2 + 'px';
+        const from = blobAt && !calm && blob.style.opacity === '1' ? blobAt : null;
+        if (from && navIsRow(nav)) {
+            // Нижняя панель телефона: перетекание — анимация браузера по transform. Её ведёт видеокарта,
+            // и она идёт ровно, даже пока сайт занят отрисовкой новой страницы (а это ровно момент перехода).
+            blobAnim = null;
+            Object.assign(blob.style, blobBox(to), { transform: '' });
+            blobFlow(from, to);
+        } else if (from) {
+            // Левое меню компьютера: считаем по кадрам (proxFrame) — подложка по пути сдвигается так же,
+            // как кнопки-«док», мимо которых идёт
+            blobAnim = { from, to, t0: performance.now() };
+        } else { blobAnim = null; Object.assign(blob.style, blobBox(to)); }
         blob.style.opacity = '1';
         blobAt = to;
         proxKick();
     }
-    let blobAnim = null;
+    let blobAnim = null, flow = null, blobRadius = '';
     const BLOB_MS = 460;
+    const blobBox = r => ({ top: r.top + 'px', left: r.left + 'px', width: r.width + 'px', height: r.height + 'px' });
     const easeIO = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     const lerp = (a, b, t) => a + (b - a) * t;
+    // середина перетекания: подложка растянута от старого пункта до нового
+    function blobMid(f, t, row) {
+        if (row) {                                         // меню в строку (телефон): растягивается вбок
+            const lo = Math.min(f.left, t.left), hi = Math.max(f.left + f.width, t.left + t.width);
+            return { left: lo, top: t.top + t.height * .04, height: t.height * .92, width: hi - lo };
+        }
+        const lo = Math.min(f.top, t.top), hi = Math.max(f.top + f.height, t.top + t.height);
+        return { top: lo, left: t.left + t.width * .04, width: t.width * .92, height: hi - lo };
+    }
     // геометрия подложки в момент перетекания: 0–45% — растяжение от старого до нового, дальше — стяжка
     function blobGeom(an, now) {
-        const p = Math.min(1, (now - an.t0) / BLOB_MS), f = an.from, t = an.to;
-        let mid;
-        if (an.row) {                                      // меню в строку (телефон): растягивается вбок
-            const lo = Math.min(f.left, t.left), hi = Math.max(f.left + f.width, t.left + t.width);
-            mid = { left: lo, top: t.top + t.height * .04, height: t.height * .92, width: hi - lo };
-        } else {
-            const lo = Math.min(f.top, t.top), hi = Math.max(f.top + f.height, t.top + t.height);
-            mid = { top: lo, left: t.left + t.width * .04, width: t.width * .92, height: hi - lo };
-        }
+        const p = Math.min(1, (now - an.t0) / BLOB_MS), f = an.from, t = an.to, mid = blobMid(f, t, false);
         const [a, b, q] = p < .45 ? [f, mid, easeIO(p / .45)] : [mid, t, easeIO((p - .45) / .55)];
         return { g: { top: lerp(a.top, b.top, q), left: lerp(a.left, b.left, q), width: lerp(a.width, b.width, q), height: lerp(a.height, b.height, q) }, done: p >= 1 };
+    }
+    // То же перетекание, но без кода на кадр: подложка стоит на новом пункте, а transform ведёт её
+    // от старого через растяжку. Кривая на каждом отрезке — та же easeIO (cubic-bezier(.65, 0, .35, 1)).
+    function blobFlow(f, t, t0 = performance.now()) {
+        flow = { f, t, t0 };
+        const at = r => `translate(${(r.left - t.left).toFixed(1)}px, ${(r.top - t.top).toFixed(1)}px) scale(${(r.width / t.width).toFixed(4)}, ${(r.height / t.height).toFixed(4)})`;
+        const e = 'cubic-bezier(.65, 0, .35, 1)';
+        const an = blob.animate([
+            { transform: at(f), easing: e },
+            { transform: at(blobMid(f, t, true)), offset: .45, easing: e },
+            { transform: 'none' }
+        ], { duration: BLOB_MS });
+        an.currentTime = Math.max(0, performance.now() - t0);
     }
     onDom(moveNavBlob);
     addEventListener('resize', () => { blobAt = null; moveNavBlob(); });
