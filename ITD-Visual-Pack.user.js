@@ -4777,7 +4777,7 @@
     // берёт у «+» (классы сайта), чтобы совпадал до пикселя.
     // кнопка; радиус купола; центр купола выше края панели на BUMP_UP (пункты под ним не задеваются);
     // широкие плавные переходы от края к куполу — бугорок выглядит частью панели, как выпуклость
-    const BUMP = 40, BUMP_R = 19, BUMP_UP = 2, BUMP_FILLET = 30, BUMP_LIFT = BUMP_R + BUMP_UP;
+    const BUMP = 40, BUMP_R = 19, BUMP_UP = 2, BUMP_FILLET = 146, BUMP_LIFT = BUMP_R + BUMP_UP;
     // контур «скруглённая панель + бугорок»: w×h панели, её верх — на y = top
     function bumpPath(w, h, top) {
         const r = h / 2, cx = w / 2, cy = top - BUMP_UP, f = BUMP_FILLET;
