@@ -1600,9 +1600,10 @@
         .vp-emoji-tint .vp-soft-bg, .itd-blur-active .vp-soft-bg { background-color: rgba(0, 0, 0, .22) !important; }
         html.vp-light .vp-emoji-tint .vp-soft-bg, html.vp-light .itd-blur-active .vp-soft-bg { background-color: rgba(255, 255, 255, .35) !important; }
         /* длинный ник в шапке поста не налезает на время: обрезается многоточием (значки — после, не режутся) */
-        article .vp-nick-row > a { min-width: 0; overflow: hidden; }
-        article .vp-nick-row .vp-nick { min-width: 0; max-width: 100%; }
-        article .vp-nick-row .vp-nick-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
+        /* то же в списках «Подписчики»/«Подписки» и везде, где ник в строке (кроме крупного ника профиля) */
+        .vp-nick-row > a { min-width: 0; overflow: hidden; }
+        .vp-nick-row .vp-nick:not(.vp-nick-large *) { min-width: 0; max-width: 100%; }
+        .vp-nick-row .vp-nick-text:not(.vp-nick-large *) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
         article .vp-nick-row time { flex-shrink: 0; }
         /* свёрнутый длинный пост: низ текста тает сам, без полосы цвета обычной карточки */
         .vp-clamp::after { display: none !important; }
