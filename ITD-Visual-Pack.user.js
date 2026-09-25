@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.21
+// @version      3.0.22
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -907,6 +907,7 @@
     // Мой аватар — в первой ссылке на мой профиль
     function myAvatarEl() {
         if (!myUsername) return null;
+        // первая ссылка на мой профиль — обычно пункт «Профиль» в меню: его иконка светится так же, как аватарка
         const link = document.querySelector(`a[href="/@${myUsername}" i]`);
         if (!link) return null;
         const container = link.querySelector(':scope > div');
@@ -4747,6 +4748,58 @@
 
     addMessagesButton();
     onDom(addMessagesButton);
+    // Нижняя панель телефона: у сайта подписи короткие («Магаз», «Уведы»), а «Профиль» — длинная и у самого
+    // края: задевала обводку. Там — «Акк», в тон остальным. На компьютере (полные подписи: «Уведомления») — как у сайта.
+    const PROFILE_SHORT = 'Акк';
+    onDom(function shortProfileLabel() {
+        const nav = document.querySelector('.' + SELECTORS.nav);
+        const notif = nav && nav.querySelector(':scope > a[href="/notifications"]');
+        if (!notif || /уведомления/i.test(notif.textContent)) return;
+        nav.querySelectorAll(':scope > a[href^="/@"]').forEach(a => {
+            const label = a.children[1];
+            if (label && label.textContent.trim() === 'Профиль') label.textContent = PROFILE_SHORT;
+        });
+    });
+
+    // Ивент: у сайта иконка — картинка-портал (portal-inactive.png), а не значок как у остальных пунктов,
+    // поэтому ни цвет стиля, ни свечение активного пункта на неё не ложились. Свой значок в стиле иконок ИТД
+    // (24×24, цвет текста): звезда с сильно скруглёнными лучами — по закрашенной площади как соседние иконки (~40% поля, как «Лента» и «Уведы»). «Пассив» — звезда с маленькой
+    // вырезанной звёздочкой в центре (как «дырочки» у иконок ИТД); «актив» (сайт вешает
+    // на картинку второй класс — пульсацию, или меняет файл) — та же звезда (того же размера) с голубой звездой прямо поверх и три искры
+    // рядом, пульсирует как у сайта.
+    const PORTAL_ICON = {
+        idle: { mask: '<path d="M12 4.17L14.35 9.82L20.45 10.31L15.8 14.28L17.22 20.23L12 17.05L6.78 20.23L8.2 14.28L3.55 10.31L9.65 9.82Z" stroke="currentColor" stroke-width="4.4" stroke-linejoin="round"/>', hole: '<path d="M12 11.13L12.59 12.54L14.11 12.66L12.95 13.66L13.3 15.15L12 14.35L10.7 15.15L11.05 13.66L9.89 12.66L11.41 12.54Z" stroke="currentColor" stroke-width="1.9800000000000002" stroke-linejoin="round"/>' },
+        live: { mask: '<path d="M12 4.17L14.35 9.82L20.45 10.31L15.8 14.28L17.22 20.23L12 17.05L6.78 20.23L8.2 14.28L3.55 10.31L9.65 9.82Z" stroke="currentColor" stroke-width="4.4" stroke-linejoin="round"/><path d="M20.5 0.8C21.2 2.6 21.2 2.6 23 3.3C21.2 4 21.2 4 20.5 5.8C19.8 4 19.8 4 18 3.3C19.8 2.6 19.8 2.6 20.5 0.8Z"/><path d="M21.7 15C22.09 16.01 22.09 16.01 23.1 16.4C22.09 16.79 22.09 16.79 21.7 17.8C21.31 16.79 21.31 16.79 20.3 16.4C21.31 16.01 21.31 16.01 21.7 15Z"/><path d="M15.9 0.2C16.26 1.14 16.26 1.14 17.2 1.5C16.26 1.86 16.26 1.86 15.9 2.8C15.54 1.86 15.54 1.86 14.6 1.5C15.54 1.14 15.54 1.14 15.9 0.2Z"/>', over: '<path d="M12 9.18L13.1 11.83L15.97 12.06L13.79 13.93L14.45 16.73L12 15.23L9.55 16.73L10.21 13.93L8.03 12.06L10.9 11.83Z" fill="#5cc8ff" stroke="#5cc8ff" stroke-width="2.64" stroke-linejoin="round"/>' }
+    };
+    let eventMaskN = 0;
+    onDom(function eventIcon() {
+        document.querySelectorAll('a[href="/event"] img').forEach(img => {
+            const own = [...img.classList].filter(c => !c.startsWith('vp-'));
+            const state = own.length > 1 || (/portal/.test(img.src) && !/inactive/.test(img.src)) ? 'live' : 'idle';
+            if (!img.classList.contains('vp-portal-img')) img.classList.add('vp-portal-img');   // сайт перерисует — заметим
+            let svg = img.parentElement.querySelector(':scope > svg.vp-portal');
+            if (!svg) {
+                svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                svg.setAttribute('class', 'vp-portal');
+                svg.setAttribute('width', '24'); svg.setAttribute('height', '24');
+                svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'currentColor');
+                img.after(svg);
+            }
+            if (svg.dataset.state !== state) {
+                svg.dataset.state = state;
+                // Значок из нескольких фигур (звезда и искры; у звезды ещё заливка и обводка): у неактивного пункта цвет полупрозрачный,
+                // и на стыках прозрачность складывалась — пересечения светлели. Поэтому фигуры — белым в маске,
+                // а цветом заливаем один раз, как у цельных иконок сайта.
+                const id = 'vp-ev-' + (++eventMaskN);
+                // hole — прорезь в значке (если понадобится), over — цветная деталь поверх (голубая звезда)
+                const ic = PORTAL_ICON[state];
+                svg.innerHTML = `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">`
+                    + `<g fill="#fff" style="color:#fff">${ic.mask}</g>`
+                    + (ic.hole ? `<g fill="#000" style="color:#000">${ic.hole}</g>` : '') + `</mask></defs>`
+                    + `<rect width="24" height="24" fill="currentColor" mask="url(#${id})"/>` + (ic.over || '');
+            }
+        });
+    });
 
     const postDesignStyle = document.createElement('style');
     // Оформление карточки — только постам ленты (article). Открытый пост собран иначе:
@@ -5736,6 +5789,16 @@
         .vp-nav-has-blob > .vp-nav-link { position: relative; z-index: 1; transition: background-color .2s ease, opacity .2s ease !important; }
         .vp-nav-has-blob > .vp-nav-link .vp-nav-icon { transition: none; }
         .vp-nav-has-blob > .vp-nav-link.vp-active { background: transparent !important; }
+        /* своя подложка сайта (нижняя панель телефона) — прячем: вместо неё наша, той же формы */
+        .vp-nav-has-blob > div:not(.vp-nav-blob) { opacity: 0 !important; }
+        /* Ивент: вместо картинки-портала сайта — свой значок (eventIcon) */
+        a[href="/event"] img[src*="/portal/"], img.vp-portal-img { display: none !important; }
+        @media (prefers-reduced-motion: reduce) { .vp-portal { animation: none !important; } }
+        .vp-portal[data-state="live"] { animation: vpPortalPulse 2s ease-in-out infinite; }
+        @keyframes vpPortalPulse {
+            0%, 100% { filter: drop-shadow(0 0 4px rgba(144, 162, 255, .2)); }
+            50% { filter: drop-shadow(0 0 16px rgb(144, 162, 255)); }
+        }
         .vp-nav-blob { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; opacity: 0;
             background: color-mix(in srgb, var(--vp-accent, #0080ff) 14%, var(--block-bg, #1c1c1c));
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 32%, transparent),
@@ -5915,13 +5978,20 @@
         if (!active) { blob.style.opacity = '0'; return; }
         const row = navIsRow(nav);
         let to = { top: active.offsetTop, left: active.offsetLeft, width: active.offsetWidth, height: active.offsetHeight };
-        // нижняя панель телефона: подложка — овал чуть шире кнопки (подпись под иконкой шире круга)
-        if (row) { const extra = Math.round(to.width * .18); to = { ...to, left: to.left - extra / 2, width: to.width + extra }; }
+        // Нижняя панель телефона: у сайта своя подложка (div в панели, 58 px, по 6 px от краёв панели,
+        // скругление 32px). Наша встаёт ровно её размера и формы — по центру активной кнопки, а свою
+        // сайт прячет (стиль .vp-nav-has-blob > div). Нет её — овал чуть шире кнопки.
+        const siteInd = row && [...nav.children].find(c => c.tagName === 'DIV' && c !== blob);
+        if (siteInd && siteInd.offsetHeight) {
+            const w = parseFloat(siteInd.style.width) || siteInd.offsetWidth;
+            to = { top: siteInd.offsetTop, height: siteInd.offsetHeight, width: w, left: to.left + (to.width - w) / 2 };
+        } else if (row) { const extra = Math.round(to.width * .18); to = { ...to, left: to.left - extra / 2, width: to.width + extra }; }
         if (blobAt && to.top === blobAt.top && to.left === blobAt.left && to.width === blobAt.width && to.height === blobAt.height) return;
         // У пунктов нижней панели своего скругления нет. Скругление — в px от овала на месте: при растяжке
         // края остаются теми же полуовалами (выходит капля-пилюля), а не растягиваются сами
         const rad = getComputedStyle(active).borderRadius;
-        blob.style.borderRadius = blobRadius = row || !parseFloat(rad) ? `${to.width / 2}px / ${to.height / 2}px` : rad;
+        blob.style.borderRadius = blobRadius = siteInd && parseFloat(getComputedStyle(siteInd).borderRadius) ? getComputedStyle(siteInd).borderRadius
+            : row || !parseFloat(rad) ? `${to.width / 2}px / ${to.height / 2}px` : rad;
         const from = blobAt && !calm && blob.style.opacity === '1' ? blobAt : null;
         if (from && row) {
             // Нижняя панель телефона: перетекание — анимация браузера, без кода на каждый кадр и без замеров
