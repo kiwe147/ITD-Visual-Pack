@@ -6610,30 +6610,34 @@
     // с тем же адресом, «назад» снимает её, а мы закрываем окно (Escape → клик по затемнению → кнопка
     // «Закрыть»). Окно закрыли сами — снимаем запись, чтобы лишнего шага «назад» не осталось.
     // Затемнения сайта узнаём по его же стилям: fixed на весь экран, z-index от 1000, тёмный фон.
-    let backdropSel = null;
+    // Стили сайта подгружаются кусками (просмотр картинок — отдельный кусок), поэтому список
+    // пересобираем, когда число таблиц стилей меняется.
+    let backdropSel = '', backdropSheets = -1;
     function siteBackdropSelector() {
-        if (backdropSel !== null) return backdropSel;
+        if (document.styleSheets.length === backdropSheets) return backdropSel;
+        backdropSheets = document.styleSheets.length;
         const found = new Set();
+        const zero = v => v === '0px' || v === '0';
         for (const sh of document.styleSheets) {
             let rules;
             try { rules = sh.cssRules; } catch (e) { continue; }
             for (const r of rules || []) {
                 const st = r.style;
                 if (!st || !r.selectorText || /vp-/.test(r.selectorText)) continue;
-                if (st.position === 'fixed' && (st.inset === '0px' || st.inset === '0') && parseInt(st.zIndex) >= 1000
-                    && /rgba\(0,\s*0,\s*0/.test(st.background || st.backgroundColor)) {
-                    r.selectorText.split(',').forEach(x => { if (/^\.[\w-]+$/.test(x.trim())) found.add(x.trim()); });
-                }
+                if (st.position !== 'fixed' || !(parseInt(st.zIndex) >= 100)) continue;
+                const full = zero(st.inset) || (zero(st.top) && zero(st.left) && (zero(st.right) || /^100(%|vw)$/.test(st.width))
+                    && (zero(st.bottom) || /^100(%|vh|dvh)$/.test(st.height)));
+                if (full) r.selectorText.split(',').forEach(x => { if (/^\.[\w-]+$/.test(x.trim())) found.add(x.trim()); });
             }
         }
         backdropSel = [...found].join(', ');
-        if (!backdropSel) setTimeout(() => { backdropSel = null; }, 3000);   // стили ещё не подгрузились
         return backdropSel;
     }
-    const shown = el => el.isConnected && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
+    const shown = el => { if (!el.isConnected || !el.getClientRects().length) return false; const cs = getComputedStyle(el); return cs.visibility !== 'hidden' && cs.pointerEvents !== 'none'; };
     function siteOverlay() {
         const sel = siteBackdropSelector();
-        const list = [...document.querySelectorAll(['[data-comments-modal]', '.vp-comments-sheet', sel].filter(Boolean).join(', '))];
+        const list = [...document.querySelectorAll(['[data-comments-modal]', '.vp-comments-sheet', '[role="dialog"]:not(.vp-modal)',
+            '[aria-modal="true"]:not(.vp-modal)', sel].filter(Boolean).join(', '))].filter(e => !e.closest('.vp-msg-backdrop, .settings-dropdown'));
         // верхнее окно — последнее в разметке
         // окно — только крупное (больше полэкрана): закреплённое поле комментария внизу страницы — не окно
         for (let i = list.length - 1; i >= 0; i--) if (shown(list[i]) && list[i].getBoundingClientRect().height > innerHeight * 0.5) return list[i];
