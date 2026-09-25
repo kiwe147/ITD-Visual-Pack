@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.13
+// @version      3.0.14
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2682,6 +2682,7 @@
             myUsername = me.username;
             myDisplayName = me.displayName || me.username;
             tagAll();
+            try { placeRail(); } catch (e) { /* панель ещё не собрана — встанет сама при первой перестройке */ }
 
             updateAutoLikeButtons();
 
@@ -6187,7 +6188,14 @@
             if (r.width > 300) { left = Math.min(left, r.left); right = Math.max(right, r.right); }
         });
         if (!right) {
-            // страница без ленты, вкладок и постов (магазин и т. п.): колонка — то, что лежит в середине
+            // магазин — отдельная страница в рамке (iframe) во весь экран: своей колонки нет, и меню с панелью
+            // встают как при открытии с нуля (меню на месте сайта, панель — в правую колонку), а не по прошлой странице
+            const frame = [...document.querySelectorAll('iframe')].find(f => {
+                const r = f.getBoundingClientRect();
+                return r.width >= innerWidth * 0.72 && r.height >= innerHeight * 0.6;
+            });
+            if (frame) return { left: 0, right: 0 };
+            // страница без ленты, вкладок и постов: колонка — то, что лежит в середине
             // экрана, поднятое до обёртки без боковых колонок. Иначе меню и панель стояли по прошлой странице
             const skip = side + ', nav, .vp-hc, .vp-msg-backdrop, .vpi-overlay';
             for (const y of [0.35, 0.6]) {
@@ -6212,10 +6220,11 @@
         const right = side ? side.getBoundingClientRect().left : innerWidth;
         const gap = right - edge;
         let box = null;
-        if (railEnabled && edge > 0 && gap >= 240) {
+        const on = railEnabled && !!myUsername;             // не вошли (страница входа) — панели не место
+        if (on && edge > 0 && gap >= 240) {
             const width = Math.min(300, gap - 48);
             box = { left: Math.round(edge + 24), width, maxH: innerHeight - 48 };
-        } else if (railEnabled && side) {
+        } else if (on && side) {
             // узкий экран: в верх правой колонки сайта, над её ссылками (они внизу)
             const sr = side.getBoundingClientRect(), links = side.lastElementChild;
             const maxH = (links ? links.getBoundingClientRect().top : sr.bottom) - 24 - 24;
