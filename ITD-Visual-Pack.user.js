@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.3
+// @version      3.1.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -98,7 +98,8 @@
         // X за словом (как на иконке «ИТД X»): два росчерка крест-накрест после последнего удара
         X_DRAW: 170,                         // один росчерк, мс
         X_GAP: 150,                          // между росчерками
-        SPLIT: 380                           // уход: экран делится пополам и разъезжается
+        SPLIT: 380,                          // уход: экран делится пополам и разъезжается
+        IDLE: 3000                           // телефон: ждём касания (со звуком), потом играем сами без звука
     };
     INTRO.X = INTRO.LOCK[2] + 220;           // первый росчерк
     INTRO.EXIT = INTRO.X + INTRO.X_GAP + INTRO.X_DRAW + 380;
@@ -240,7 +241,7 @@
         whoosh(at(INTRO.EXIT - 200), 0.26);                  // створки разъезжаются
     }
 
-    function playIntro() {
+    function playIntro(mode) {
         const root = document.documentElement;
         const css = document.createElement('style');
         css.textContent = `
@@ -371,21 +372,24 @@
         ], { delay: EXIT, duration: SPLIT, easing: 'cubic-bezier(.7,0,.3,1)', fill: 'forwards' }));
         const out = doors[1];
 
-        // Звук: браузер пускает его без клика, только если разрешает сайту автозвук.
-        // Не пустил сразу — молчим: запоздалый лязг после заставки хуже тишины.
-        const t0 = performance.now();
-        let ctx = null;
-        try {
-            ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const go = () => {
-                const base = ctx.currentTime - (performance.now() - t0) / 1000;
-                introSound(ctx, ms => Math.max(ctx.currentTime, base + ms / 1000));
-            };
-            if (ctx.state === 'running') go();
-            else ctx.resume().then(() => { if (performance.now() - t0 < 150) go(); else ctx.close(); }, () => {});
-        } catch (e) { ctx = null; }
+        // Звук: браузер пускает его только после касания страницы. На компьютере обычно пускает сразу,
+        // на телефоне — нет. Поэтому на телефоне заставка ждёт касания: тёмный экран, в центре «дышит»
+        // маленький логотип; коснулся — ролик идёт со звуком ровно в такт. Не коснулся за IDLE мс —
+        // идёт сам, без звука (как раньше): на входе никого не держим.
+        let ctx = null, t0 = 0;
+        function startSound() {
+            try {
+                ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const go = () => {
+                    const base = ctx.currentTime - (performance.now() - t0) / 1000;
+                    introSound(ctx, ms => Math.max(ctx.currentTime, base + ms / 1000));
+                };
+                if (ctx.state === 'running') go();
+                else ctx.resume().then(() => { if (performance.now() - t0 < 150) go(); else ctx.close(); }, () => {});
+            } catch (e) { ctx = null; }
+        }
 
-        let done = false;
+        let done = false, started = false;
         const cleanup = () => {
             if (done) return;
             done = true;
@@ -395,7 +399,6 @@
             if (ctx) setTimeout(() => ctx.close().catch(() => {}), 3500);   // дать дотаять хвосту последнего удара
         };
         out.finished.then(cleanup, cleanup);
-        setTimeout(cleanup, EXIT + SPLIT + 2500);           // если анимации не доиграют (вкладка в фоне)
         // клик или клавиша — пропустить
         const skip = () => {
             if (done) return;
@@ -404,15 +407,65 @@
             ctx = null;
             ov.animate([{ opacity: getComputedStyle(ov).opacity }, { opacity: 0 }], { duration: 200, fill: 'forwards' }).finished.then(cleanup, cleanup);
         };
-        ov.addEventListener('click', skip);
-        addEventListener('keydown', skip, true);
+        function begin(withSound) {
+            if (started) return;
+            started = true;
+            t0 = performance.now();
+            for (const a of anims) { a.currentTime = 0; a.play(); }
+            if (withSound) startSound();
+            setTimeout(cleanup, EXIT + SPLIT + 2500);       // если анимации не доиграют (вкладка в фоне)
+            // пропуск — не тем же касанием, что запустило ролик
+            setTimeout(() => { if (done) return; ov.addEventListener('click', skip); addEventListener('keydown', skip, true); }, 400);
+        }
+
+        if (mode !== 'tap') { begin(mode === 'desk'); return anims; }
+
+        // телефон: ждём касания
+        for (const a of anims) a.pause();
+        const idle = document.createElement('div');
+        idle.className = 'vpi-idle';
+        idle.innerHTML = `<div class="vpi-idle-logo"><svg viewBox="0 0 100 100"><defs><linearGradient id="vpiXi" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#00e5ff"/><stop offset=".5" stop-color="#7c4dff"/><stop offset="1" stop-color="#ff3d9a"/></linearGradient></defs>
+            <g fill="none" stroke-linecap="round"><path d="M14 14L86 86M86 14L14 86" stroke="url(#vpiXi)" stroke-width="12"/>
+            <path d="M14 14L86 86M86 14L14 86" stroke="#000" stroke-width="7"/></g></svg><span>ИТД</span></div><div class="vpi-idle-hint">коснись</div>`;
+        ov.appendChild(idle);
+        css.textContent += `
+            .vpi-idle { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; }
+            .vpi-idle-logo { position: relative; width: 96px; height: 96px; display: flex; align-items: center; justify-content: center;
+                animation: vpiBreath 2.6s ease-in-out infinite; }
+            .vpi-idle-logo svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+            .vpi-idle-logo span { position: relative; color: #fff; font: 900 30px/1 "Arial Black", "Segoe UI Black", Arial, sans-serif; }
+            .vpi-idle-hint { color: rgba(255, 255, 255, .38); font: 500 13px/1 system-ui, sans-serif; letter-spacing: .28em; text-transform: lowercase;
+                opacity: 0; animation: vpiHint .8s ease 1.1s forwards; }
+            @keyframes vpiBreath { 0%, 100% { opacity: .55; transform: scale(.96); filter: drop-shadow(0 0 0 rgba(124,77,255,0)); }
+                50% { opacity: 1; transform: scale(1.03); filter: drop-shadow(0 0 16px rgba(124,77,255,.55)); } }
+            @keyframes vpiHint { to { opacity: 1; } }`;
+        const auto = setTimeout(() => go(false), INTRO.IDLE);
+        function go(withSound) {
+            if (started) return;
+            clearTimeout(auto);
+            ov.removeEventListener('pointerup', tap, true);
+            ov.removeEventListener('click', tap, true);
+            idle.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.9)' }], { duration: 220, fill: 'forwards' })
+                .finished.then(() => idle.remove(), () => idle.remove());
+            begin(withSound);
+        }
+        // звук включается только в обработчике самого касания (pointerup/click — они дают разрешение)
+        function tap(e) { e.stopPropagation(); go(true); }
+        ov.addEventListener('pointerup', tap, true);
+        ov.addEventListener('click', tap, true);
         return anims;
     }
     // ==== заставка:конец
 
-    if (window.top === window.self && GM_getValue('introEnabled', true)
+    // Заставка: на компьютере — вкл/выкл (introEnabled). На телефоне — свой выбор (introMobile):
+    // 'tap' — ждёт касания и играет со звуком, 'silent' — сразу без звука, 'off' — выключена.
+    const IS_PHONE = matchMedia('(pointer: coarse)').matches;
+    const introMode = () => IS_PHONE ? GM_getValue('introMobile', GM_getValue('introEnabled', true) ? 'tap' : 'off')
+        : GM_getValue('introEnabled', true) ? 'desk' : 'off';
+    if (window.top === window.self && introMode() !== 'off'
         && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        try { playIntro(); } catch (e) { console.warn('[ITD VP] заставка', e); }
+        try { playIntro(introMode()); } catch (e) { console.warn('[ITD VP] заставка', e); }
     }
 
     // Остальное — когда страница разобрана (раньше весь скрипт и запускался на document-idle);
@@ -1412,6 +1465,20 @@
         }
         /* кнопки на баннере — к верхнему краю: снизу их закрывает аватарка */
         .vp-banner-buttons { top: 12px !important; bottom: auto !important; }
+        /* заставка на телефоне: три варианта */
+        .toggle-switch.vp-tri { width: 58px !important; }
+        .toggle-switch.vp-tri[data-s="1"]::after { left: 20px !important; }
+        /* синяя часть — отдельная капсула под ручкой: доходит до ручки и прячет конец за ней,
+           поэтому в «Вкл» справа тёмное без резкого среза; между положениями плавно растёт */
+        .toggle-switch.vp-tri { background: rgba(0, 0, 0, 0.5) !important; }
+        .toggle-switch.vp-tri::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 22px; border-radius: 11px;
+            background: var(--accent-primary, #0080FF); opacity: 0; transition: width .2s ease, opacity .2s ease; }
+        .toggle-switch.vp-tri[data-s="1"]::before { width: 40px; opacity: 1; }
+        .toggle-switch.vp-tri[data-s="2"]::before { width: 58px; opacity: 1; }
+        .toggle-switch.vp-tri[data-s="2"]::after { left: 38px !important;
+            background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230080ff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 9.5v5h3.5L12 18.5V5.5L7.5 9.5z'/%3E%3Cpath d='M16 9a4 4 0 0 1 0 6'/%3E%3C/svg%3E") center / 12px no-repeat !important; }
+        .vp-tri-text { display: flex; flex-direction: column; gap: 1px; }
+        .vp-tri-text small { font-size: 11.5px; color: var(--text-secondary, rgba(255, 255, 255, .5)); }
         /* кнопка «ИТД X» вместо «ИТД НУКСТА» */
         .vp-nuksta-hidden { display: none !important; }
         .vp-sec-title { font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--text-secondary, rgba(255, 255, 255, .55));
@@ -2244,6 +2311,25 @@
         };
         return row;
     }
+    // Заставка на телефоне — такой же переключатель, как остальные, но на три положения:
+    // Выкл → Вкл (без звука) → Вкл + звук. Тап по строке — следующее положение.
+    function introModeRow() {
+        const STEPS = [['off', 'Выкл'], ['silent', 'Вкл'], ['tap', 'Вкл + звук · коснись при входе']];
+        const row = document.createElement('div');
+        row.className = 'settings-option';
+        row.innerHTML = `<span class="vp-setting-label">${ICONS.settings['Заставка при входе'] || ''}<span class="vp-tri-text"><span>Заставка при входе</span><small></small></span></span><div class="toggle-switch vp-tri"></div>`;
+        const sw = row.querySelector('.vp-tri'), sub = row.querySelector('small');
+        let idx = Math.max(0, STEPS.findIndex(st => st[0] === introMode()));
+        const show = () => { sw.dataset.s = idx; sw.classList.toggle('active', idx > 0); sub.textContent = STEPS[idx][1]; };
+        show();
+        row.onclick = (e) => {
+            e.stopPropagation();
+            idx = (idx + 1) % STEPS.length;
+            GM_setValue('introMobile', STEPS[idx][0]);
+            show();
+        };
+        return row;
+    }
     const secTitle = (text) => {
         const t = document.createElement('div');
         t.className = 'vp-sec-title';
@@ -2276,7 +2362,11 @@
             const redraw = () => show(id);
             const tab = SETTINGS_TABS.find(t => t.id === id);
             if (id === 'icon') body.appendChild(iconPicker());
-            else for (const label of tab.items) body.appendChild(settingRow(SETTINGS.find(o => o.label === label), id === 'bg' ? redraw : null));
+            else for (const label of tab.items) {
+                // на телефоне у заставки три варианта вместо переключателя
+                if (label === 'Заставка при входе' && IS_PHONE) { body.appendChild(introModeRow()); continue; }
+                body.appendChild(settingRow(SETTINGS.find(o => o.label === label), id === 'bg' ? redraw : null));
+            }
             if (id === 'nick') {
                 body.appendChild(secTitle('Стиль ника'));
                 const grid = document.createElement('div');
