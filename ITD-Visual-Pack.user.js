@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.11
+// @version      3.1.12
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -747,8 +747,10 @@
     function onDom(fn) { domHandlers.push(fn); }
     let domQueued = false;
     const DOM_WATCH = { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true };
+    let lastTick = 0;
     function domTick() {
         domQueued = false;
+        lastTick = performance.now();
         domRecords(domObserver.takeRecords());
         domObserver.disconnect();                 // свои правки не должны будить наблюдателя
         try {
@@ -781,7 +783,13 @@
         return any;
     }
     const domObserver = new MutationObserver(muts => {
-        if (domRecords(muts) && !domQueued) { domQueued = true; requestAnimationFrame(domTick); }
+        if (domRecords(muts) && !domQueued) {
+            domQueued = true;
+            // телефон: не чаще ~20 проходов в секунду — при прокрутке ленты сайт правит страницу почти
+            // каждый кадр, и полный проход на каждом отнимал кадры у самой прокрутки
+            const wait = IS_PHONE ? Math.max(0, lastTick + 50 - performance.now()) : 0;
+            if (wait) setTimeout(() => requestAnimationFrame(domTick), wait); else requestAnimationFrame(domTick);
+        }
     });
     tagAll();
     domObserver.observe(document.body, DOM_WATCH);
@@ -7390,12 +7398,25 @@
     const loginOf = href => ((href || '').match(/^\/@([\w.]+)/) || [])[1] || null;
     // Данные профиля: сперва — что уже получил сайт (или ждём его ответ waitMs), свой запрос —
     // только если сайт этот профиль не запрашивал (карточка при наведении на чужой ник, клуб).
+    // Профили кешируются и между перезагрузками (sessionStorage, 10 мин): карточки при наведении,
+    // личка и счётчик постов не ходят за теми же данными заново после каждого обновления страницы
+    const HC_TTL = 10 * 60 * 1000;
+    function hcStored(key) {
+        try { const v = JSON.parse(sessionStorage.getItem('vp-hc:' + key) || 'null'); return v && Date.now() - v.at < HC_TTL ? v.d : null; } catch (e) { return null; }
+    }
+    function hcStore(key, d) {
+        try { if (d) sessionStorage.setItem('vp-hc:' + key, JSON.stringify({ at: Date.now(), d })); } catch (e) { }
+        return d;
+    }
     function hcData(user, waitMs = 0) {
         const key = user.toLowerCase();
         if (siteUsers.has(key)) return Promise.resolve(siteUsers.get(key));
-        if (!hcCache.has(key)) hcCache.set(key, siteUser(user, waitMs).then(site => site || api('/api/users/' + encodeURIComponent(user))
-            .then(r => r.ok ? r.json() : null)
-            .then(j => j && (j.data || j.user || j))).catch(() => null));
+        if (!hcCache.has(key)) {
+            const stored = waitMs ? null : hcStored(key);        // счётчик в профиле (ждёт сайт) — всегда свежий
+            hcCache.set(key, stored ? Promise.resolve(stored) : siteUser(user, waitMs).then(site => site || api('/api/users/' + encodeURIComponent(user))
+                .then(r => r.ok ? r.json() : null)
+                .then(j => j && (j.data || j.user || j))).then(d => hcStore(key, d)).catch(() => null));
+        }
         return hcCache.get(key);
     }
     const pick = (...vals) => vals.find(v => v !== undefined && v !== null && v !== '');
