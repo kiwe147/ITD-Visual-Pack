@@ -241,7 +241,7 @@
         whoosh(at(INTRO.EXIT - 200), 0.26);                  // створки разъезжаются
     }
 
-    function playIntro() {
+    function playIntro(mode) {
         const root = document.documentElement;
         const css = document.createElement('style');
         css.textContent = `
@@ -418,7 +418,7 @@
             setTimeout(() => { if (done) return; ov.addEventListener('click', skip); addEventListener('keydown', skip, true); }, 400);
         }
 
-        if (!matchMedia('(pointer: coarse)').matches) { begin(true); return anims; }
+        if (mode !== 'tap') { begin(mode === 'desk'); return anims; }
 
         // телефон: ждём касания
         for (const a of anims) a.pause();
@@ -458,9 +458,14 @@
     }
     // ==== заставка:конец
 
-    if (window.top === window.self && GM_getValue('introEnabled', true)
+    // Заставка: на компьютере — вкл/выкл (introEnabled). На телефоне — свой выбор (introMobile):
+    // 'tap' — ждёт касания и играет со звуком, 'silent' — сразу без звука, 'off' — выключена.
+    const IS_PHONE = matchMedia('(pointer: coarse)').matches;
+    const introMode = () => IS_PHONE ? GM_getValue('introMobile', GM_getValue('introEnabled', true) ? 'tap' : 'off')
+        : GM_getValue('introEnabled', true) ? 'desk' : 'off';
+    if (window.top === window.self && introMode() !== 'off'
         && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        try { playIntro(); } catch (e) { console.warn('[ITD VP] заставка', e); }
+        try { playIntro(introMode()); } catch (e) { console.warn('[ITD VP] заставка', e); }
     }
 
     // Остальное — когда страница разобрана (раньше весь скрипт и запускался на document-idle);
@@ -1460,6 +1465,17 @@
         }
         /* кнопки на баннере — к верхнему краю: снизу их закрывает аватарка */
         .vp-banner-buttons { top: 12px !important; bottom: auto !important; }
+        /* заставка на телефоне: три варианта */
+        .vp-intro-mode { padding: 10px 12px; }
+        .vp-intro-mode .vp-setting-label { color: var(--text-primary, #fff); font-size: 14px; }
+        .vp-seg { display: flex; gap: 3px; padding: 3px; margin-top: 10px; border-radius: 14px;
+            background: color-mix(in srgb, var(--text-primary, #fff) 7%, transparent); }
+        .vp-seg button { flex: 1; border: 0; background: none; cursor: pointer; font: inherit; font-size: 13px; padding: 7px 4px; border-radius: 11px;
+            color: var(--text-secondary, rgba(255, 255, 255, .6)); white-space: nowrap; }
+        .vp-seg button.vp-active { color: var(--text-primary, #fff); font-weight: 600;
+            background: color-mix(in srgb, var(--vp-accent, #0080ff) 22%, transparent);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 45%, transparent); }
+        .vp-intro-note { font-size: 11.5px; margin-top: 6px; color: var(--text-secondary, rgba(255, 255, 255, .5)); }
         /* кнопка «ИТД X» вместо «ИТД НУКСТА» */
         .vp-nuksta-hidden { display: none !important; }
         .vp-sec-title { font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--text-secondary, rgba(255, 255, 255, .55));
@@ -2292,6 +2308,32 @@
         };
         return row;
     }
+    function introModeRow() {
+        const row = document.createElement('div');
+        row.className = 'vp-intro-mode';
+        row.innerHTML = `<span class="vp-setting-label">${ICONS.settings['Заставка при входе'] || ''}<span>Заставка при входе</span></span><div class="vp-seg"></div>`;
+        const seg = row.querySelector('.vp-seg');
+        const cur = introMode();
+        for (const [v, name] of [['tap', 'Со звуком'], ['silent', 'Без звука'], ['off', 'Выкл']]) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = name;
+            b.className = v === cur ? 'vp-active' : '';
+            b.onclick = (e) => {
+                e.stopPropagation();
+                GM_setValue('introMobile', v);
+                seg.querySelectorAll('button').forEach(x => x.classList.toggle('vp-active', x === b));
+                note.textContent = NOTES[v];
+            };
+            seg.appendChild(b);
+        }
+        const NOTES = { tap: 'Коснись экрана при входе — ролик пойдёт со звуком.', silent: 'Ролик сразу, без звука.', off: 'Заставки не будет.' };
+        const note = document.createElement('div');
+        note.className = 'vp-intro-note';
+        note.textContent = NOTES[cur];
+        row.appendChild(note);
+        return row;
+    }
     const secTitle = (text) => {
         const t = document.createElement('div');
         t.className = 'vp-sec-title';
@@ -2324,7 +2366,11 @@
             const redraw = () => show(id);
             const tab = SETTINGS_TABS.find(t => t.id === id);
             if (id === 'icon') body.appendChild(iconPicker());
-            else for (const label of tab.items) body.appendChild(settingRow(SETTINGS.find(o => o.label === label), id === 'bg' ? redraw : null));
+            else for (const label of tab.items) {
+                // на телефоне у заставки три варианта вместо переключателя
+                if (label === 'Заставка при входе' && IS_PHONE) { body.appendChild(introModeRow()); continue; }
+                body.appendChild(settingRow(SETTINGS.find(o => o.label === label), id === 'bg' ? redraw : null));
+            }
             if (id === 'nick') {
                 body.appendChild(secTitle('Стиль ника'));
                 const grid = document.createElement('div');
