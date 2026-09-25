@@ -1463,6 +1463,8 @@
         .toggle-switch.active::after {
             left: 20px !important;
         }
+        /* вкладки ленты рядом с логотипом: в одну строку, «Лента кланов» не переносится (иначе капсула толстеет) */
+        .vp-feed-bar .vp-tabs button { white-space: nowrap !important; }
         /* кнопки на баннере — к верхнему краю: снизу их закрывает аватарка */
         .vp-banner-buttons { top: 12px !important; bottom: auto !important; }
         /* заставка на телефоне: три варианта */
@@ -3591,6 +3593,21 @@
                     block.style.flex = '0 0 auto';
                     nav.style.display = 'flex';
                     nav.style.width = '100%';
+                    // логотип с версией — ровно на высоту вкладок и по центру своего места
+                    const logo = block.querySelector('img.vp-app-logo'), chip = block.querySelector('.vp-version-row');
+                    const h = tabs.getBoundingClientRect().height;
+                    if (logo && chip && h) {
+                        const size = Math.round(Math.max(28, Math.min(48, h - chip.offsetHeight - 4)));
+                        if (logo.width !== size) {
+                            logo.width = logo.height = size;
+                            logo.style.width = logo.style.height = size + 'px';
+                            logo.style.borderRadius = Math.round(size * 0.25) + 'px';
+                        }
+                        block.style.alignSelf = 'center';
+                        block.style.height = h + 'px';
+                        block.firstElementChild.style.justifyContent = 'space-between';
+                        block.firstElementChild.style.height = '100%';
+                    }
                 }
             }
 
