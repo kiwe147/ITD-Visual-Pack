@@ -1596,6 +1596,9 @@
         .vp-fab-a { font: 800 21px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: -.02em; }
         /* профиль на телефоне: без палочки между «подписчиков» и «подписок» */
         @media (max-width: 1172px) { [data-vp-posts] > hr { display: none !important; } }
+        /* репост в подкрашенной карточке — полупрозрачный, цвет карточки просвечивает */
+        .vp-emoji-tint .vp-soft-bg, .itd-blur-active .vp-soft-bg { background-color: rgba(0, 0, 0, .22) !important; }
+        html.vp-light .vp-emoji-tint .vp-soft-bg, html.vp-light .itd-blur-active .vp-soft-bg { background-color: rgba(255, 255, 255, .35) !important; }
         /* длинный ник в шапке поста не налезает на время: обрезается многоточием (значки — после, не режутся) */
         article .vp-nick-row > a { min-width: 0; overflow: hidden; }
         article .vp-nick-row .vp-nick { min-width: 0; max-width: 100%; }
@@ -6806,6 +6809,21 @@
             if (!key) { post.removeAttribute('data-post-colored'); return; }
             post.setAttribute('data-post-colored', key);
             if (!withBlur) tintCard(post, emoji);                // с картинкой фон даёт её размытие
+        });
+        // репосты могли дорисоваться позже самой карточки
+        document.querySelectorAll('article.' + SELECTORS.post + '[data-post-colored] .' + SELECTORS.repost + ':not([data-vp-soft])').forEach(rp => softenRepost(rp.closest('article')));
+    }
+    // Репост внутри подкрашенной карточки: у сайта он и плашки в нём залиты сплошным тёмным —
+    // на цветной карточке это чёрная дыра. Сплошные фоны в репосте делаем полупрозрачными.
+    function softenRepost(post) {
+        post.querySelectorAll('.' + SELECTORS.repost + ':not([data-vp-soft])').forEach(rp => {
+            rp.setAttribute('data-vp-soft', '');
+            [rp, ...rp.querySelectorAll('div, p, section')].forEach(el => {
+                if (el.closest('button, a, video') || el.querySelector(':scope > img, :scope > video')) return;
+                const m = getComputedStyle(el).backgroundColor.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?/);
+                if (!m || (m[4] !== undefined && +m[4] < .5)) return;           // прозрачный — не трогаем
+                el.classList.add('vp-soft-bg');
+            });
         });
     }
 
