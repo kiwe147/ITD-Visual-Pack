@@ -1420,7 +1420,8 @@
             max-height: calc(100dvh - 16px); overflow-y: auto !important; overscroll-behavior: contain; scrollbar-width: none;
             touch-action: pan-y; -webkit-overflow-scrolling: touch; }
         /* стили ника и фона — сеткой в два столбца */
-        .vp-pick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 4px; }
+        /* заполняется по столбцам: сверху вниз, потом следующий — соседние цвета стоят друг под другом */
+        .vp-pick-grid { display: grid; grid-template-columns: 1fr 1fr; grid-auto-flow: column; gap: 2px 4px; }
         .vp-pick-grid .nick-style-option { padding: 8px 8px !important; gap: 8px !important; font-size: 13px !important; min-width: 0; margin: 0 !important; }
         .vp-pick-grid .nick-style-option:hover { transform: none !important; }
         .vp-pick-grid .nick-style-option > span:not(.vp-opt-check) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2275,6 +2276,7 @@
                     GM_setValue('nickStyle', key);
                     paint();
                 }, redraw)));
+                grid.style.gridTemplateRows = `repeat(${Math.ceil(grid.children.length / 2)}, auto)`;
                 body.appendChild(grid);
             }
             if (id === 'bg' && backgroundEnabled) {
@@ -2290,6 +2292,7 @@
                         GM_setValue('backgroundStyle', key);
                     }, redraw));
                 });
+                grid.style.gridTemplateRows = `repeat(${Math.ceil(grid.children.length / 2)}, auto)`;
                 body.appendChild(grid);
             }
             if (id === 'likes') {
