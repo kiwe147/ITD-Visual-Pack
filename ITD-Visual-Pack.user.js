@@ -4748,6 +4748,18 @@
 
     addMessagesButton();
     onDom(addMessagesButton);
+    // Нижняя панель телефона: у сайта подписи короткие («Магаз», «Уведы»), а «Профиль» — длинная и у самого
+    // края: задевала обводку. Там — «Проф». На компьютере (полные подписи: «Уведомления») — как у сайта.
+    const PROFILE_SHORT = 'Проф';
+    onDom(function shortProfileLabel() {
+        const nav = document.querySelector('.' + SELECTORS.nav);
+        const notif = nav && nav.querySelector(':scope > a[href="/notifications"]');
+        if (!notif || /уведомления/i.test(notif.textContent)) return;
+        nav.querySelectorAll(':scope > a[href^="/@"]').forEach(a => {
+            const label = a.children[1];
+            if (label && label.textContent.trim() === 'Профиль') label.textContent = PROFILE_SHORT;
+        });
+    });
 
     const postDesignStyle = document.createElement('style');
     // Оформление карточки — только постам ленты (article). Открытый пост собран иначе:
