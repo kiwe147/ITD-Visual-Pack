@@ -4767,9 +4767,10 @@
     // второй класс — пульсацию, или меняет файл) — песок сыплется, по бокам искры, пульсирует как у сайта:
     // «ивент идёт — успей».
     const PORTAL_ICON = {
-        idle: '<rect x="4.5" y="2.4" width="15" height="2.7" rx="1.35"/><rect x="4.5" y="18.9" width="15" height="2.7" rx="1.35"/><path d="M7 5.1c0 4 5 5.3 5 6.9s-5 2.9-5 6.9M17 5.1c0 4-5 5.3-5 6.9s5 2.9 5 6.9" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/><path d="M7.5 18.9c.6-2.5 2.4-3.7 4.5-4.3 2.1.6 3.9 1.8 4.5 4.3Z"/>',
+        idle: '<rect x="4.5" y="2.4" width="15" height="2.7" rx="1.35"/><rect x="4.5" y="18.9" width="15" height="2.7" rx="1.35"/><path d="M7 5.1c0 4 5 5.3 5 6.9s-5 2.9-5 6.9M17 5.1c0 4-5 5.3-5 6.9s5 2.9 5 6.9" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/><path d="M7.5 18.9c.6-2.9 2.4-4.9 4.5-5.7 2.1.8 3.9 2.8 4.5 5.7Z"/>',
         live: '<rect x="4.5" y="2.4" width="15" height="2.7" rx="1.35"/><rect x="4.5" y="18.9" width="15" height="2.7" rx="1.35"/><path d="M7 5.1c0 4 5 5.3 5 6.9s-5 2.9-5 6.9M17 5.1c0 4-5 5.3-5 6.9s5 2.9 5 6.9" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/><path d="M7.9 6.2h8.2c-.7 2.1-2.3 3.3-4.1 4.2-1.8-.9-3.4-2.1-4.1-4.2Z"/><path d="M9.4 18.9c.4-1.4 1.3-2.1 2.6-2.5 1.3.4 2.2 1.1 2.6 2.5Z"/><path d="M12 11.4v3.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M21.3 9.7C21.83 11.07 21.83 11.07 23.2 11.6C21.83 12.13 21.83 12.13 21.3 13.5C20.77 12.13 20.77 12.13 19.4 11.6C20.77 11.07 20.77 11.07 21.3 9.7Z"/><path d="M2.7 10.1C3.12 11.18 3.12 11.18 4.2 11.6C3.12 12.02 3.12 12.02 2.7 13.1C2.28 12.02 2.28 12.02 1.2 11.6C2.28 11.18 2.28 11.18 2.7 10.1Z"/>'
     };
+    let eventMaskN = 0;
     onDom(function eventIcon() {
         document.querySelectorAll('a[href="/event"] img').forEach(img => {
             const own = [...img.classList].filter(c => !c.startsWith('vp-'));
@@ -4783,7 +4784,16 @@
                 svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'currentColor');
                 img.after(svg);
             }
-            if (svg.dataset.state !== state) { svg.dataset.state = state; svg.innerHTML = PORTAL_ICON[state]; }
+            if (svg.dataset.state !== state) {
+                svg.dataset.state = state;
+                // Значок из нескольких фигур (колпачки, колба, песок): у неактивного пункта цвет полупрозрачный,
+                // и на стыках прозрачность складывалась — пересечения светлели. Поэтому фигуры — белым в маске,
+                // а цветом заливаем один раз, как у цельных иконок сайта.
+                const id = 'vp-ev-' + (++eventMaskN);
+                svg.innerHTML = `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">`
+                    + `<g fill="#fff" style="color:#fff">${PORTAL_ICON[state]}</g></mask></defs>`
+                    + `<rect width="24" height="24" fill="currentColor" mask="url(#${id})"/>`;
+            }
         });
     });
 
