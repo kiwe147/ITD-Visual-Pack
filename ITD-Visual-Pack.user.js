@@ -1522,6 +1522,9 @@
         .vp-fab-menu button:active { background: rgba(255, 255, 255, .1); }
         .vp-fab svg { flex: 0 0 auto; width: 20px !important; height: 20px !important; }
         .vp-fab-a { font: 800 21px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: -.02em; }
+        /* свёрнутый длинный пост: низ текста тает сам, без полосы цвета обычной карточки */
+        .vp-clamp::after { display: none !important; }
+        .vp-clamp { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); }
         /* кнопки на баннере — к верхнему краю: снизу их закрывает аватарка */
         .vp-banner-buttons { top: 12px !important; bottom: auto !important; }
         /* заставка на телефоне: три варианта */
@@ -6936,6 +6939,21 @@
             }
             if (sheet && !sheet.classList.contains('vp-comments-sheet')) sheet.classList.add('vp-comments-sheet');
         }
+    });
+
+    // Длинный пост, свёрнутый под «Читать далее»: сайт гасит низ текста полосой цвета обычной карточки
+    // (::after с градиентом в --block-bg). На карточке, подкрашенной под эмодзи или картинку, это тёмная
+    // плашка поверх текста. Вместо полосы — прозрачность самого текста (mask): низ тает в любой фон.
+    onDom(function clampFade() {
+        document.querySelectorAll('.vp-clamp').forEach(el => {
+            const b = el.nextElementSibling;
+            if (!b || b.tagName !== 'BUTTON' || !/Читать далее/i.test(b.textContent)) el.classList.remove('vp-clamp');
+        });
+        document.querySelectorAll('.' + SELECTORS.post + ' button').forEach(b => {
+            if (!/^\s*Читать далее\s*$/i.test(b.textContent)) return;
+            const box = b.previousElementSibling;
+            if (box && !box.classList.contains('vp-clamp')) box.classList.add('vp-clamp');
+        });
     });
 
     // Кнопка «назад» на телефоне закрывает окна сайта (комментарии, создание поста и т.п.), а не уводит
