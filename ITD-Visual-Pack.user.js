@@ -4565,52 +4565,68 @@
 
     // Сообщений на ИТД нет — кнопка открывает «чат», где сервер сначала печатает,
     // а потом отвечает шуткой. «Ещё раз» — новая шутка, Esc или клик мимо — закрыть.
+    // Ответы бота «Сервер ИТД» в личке (прототип: сообщения никуда не уходят — бот над этим и шутит)
     const MESSAGE_JOKES = [
-        ['🖤', 'But nobody came...'],
-        ['😔', 'Ошибка загрузки'],
-        ['💀', 'Загрузка... шучу, ошибка'],
-        ['🐎', 'Твои сообщения украли цыгане'],
-        ['😈', 'Загрузка... нет'],
-        ['🤝', 'Ты им не нужен, брат'],
-        ['⏳', 'Сообщения загружены на 99%... 99%... 99%...'],
-        ['🎂', 'Сообщения — это ложь'],
-        ['🖕', 'Иди ка ты на хуй'],
-        ['🤖', 'Сервер ответил: пошёл нахуй'],
-        ['🚫', 'Связь заблокирована Роскомнадзором'],
-        ['📭', 'Пусто. Как в холодильнике в конце месяца'],
-        ['🕊️', 'Сообщение отправлено голубем. Голубь не вернулся'],
-        ['🔒', 'Чат зашифрован так надёжно, что даже ты его не прочитаешь'],
-        ['👀', 'Все прочитали. Никто не ответил'],
-        ['📡', 'Ищем сигнал... Попробуй встать на табуретку'],
-        ['🐈', 'Тут были сообщения, но их съел кот'],
-        ['💌', 'Тебе пишут... пишут... передумали'],
-        ['📵', 'Абонент временно недоступен. И постоянно тоже'],
-        ['🗿', 'Сообщений: 0. Друзей: загрузка...'],
-        ['🧾', 'Первое сообщение платное: 99 999 ₽'],
-        ['🛠️', 'Сообщения появятся в следующем обновлении. В каком — не скажем'],
+        ['📨', 'Твоё сообщение отправлено. Куда — лучше не спрашивай'],
+        ['🐌', 'Доставляем почтой России. Ориентировочно — к следующему обновлению сайта'],
+        ['🧠', 'Я прочитал твоё сообщение. Потом забыл. Прототип, что с меня взять'],
+        ['🔌', 'Сервер на месте. Сообщений нет. Ищем, кто выдернул провод'],
+        ['🕳️', 'Сообщение улетело в /dev/null. Там тихо и уютно, ему понравится'],
+        ['🧾', 'Статус доставки: «доставлено в мечтах»'],
+        ['🤖', 'Я бы ответил по-человечески, но меня писали в три ночи'],
+        ['📶', 'Одна палочка связи. Подними телефон повыше. Ещё выше. Почти'],
+        ['🪄', 'Отправка сообщений — это магия. Магию пока не завезли'],
+        ['🧊', 'Собеседник заморожен до релиза лички. Разморозим — передадим'],
+        ['🐢', 'Загрузка чата: ██░░░░░░░░ 20%. Можешь пока погладить кота'],
+        ['🗑️', 'Сохранил твоё сообщение в самое надёжное место — в оперативку. До перезагрузки'],
+        ['👻', 'Кто-то печатает... а, это ты'],
+        ['🎰', 'Шанс, что сообщение дойдёт: 0%. Но крутить можно сколько угодно'],
+        ['📜', 'Пользовательское соглашение, пункт 404: личка не найдена'],
+        ['🥷', 'Твоё сообщение настолько секретное, что его не видит даже сервер'],
+        ['🐦', 'Голубь с твоим сообщением взял больничный'],
+        ['⌛', 'Ответ поступит в течение 3–5 рабочих обновлений'],
+        ['🎧', 'Я тебя внимательно не слышу. Но киваю'],
+        ['🍝', 'Код лички сейчас как макароны: вкусно, но не работает'],
+        ['🧪', 'Ты участвуешь в эксперименте. Контрольная группа — тоже ты'],
+        ['🛸', 'Сообщение похитили инопланетяне. Обещали вернуть с пометкой «переслано»'],
+        ['📦', 'Посылка с перепиской застряла на таможне ИТД'],
+        ['🔁', 'Ты пишешь — я шучу. Идеальный диалог, повторим?'],
+        ['💤', 'Бэкенд спит. Не буди — он злой спросонья'],
+        ['🧯', 'Пробовали запустить личку. Потушили. Пробуем снова'],
+        ['🎮', 'Личка: уровень 1. До разблокировки отправки — 9 999 опыта'],
+        ['🕵️', 'Модерация проверила твоё сообщение и ушла на обед'],
+        ['🍿', 'Поболтал бы, но у меня тут прототип на плите'],
+        ['🧩', 'Не хватает одного кусочка пазла. Сервера'],
     ];
+    const BOT_HELLO = [['👋', 'Привет! Я всё запомню. Ровно до обновления страницы'], ['🫡', 'Здравия желаю! Сообщения — пока нет, а бот — вот он']];
+    const BOT_ASK = [['🤔', 'Отличный вопрос. Отвечу, как только личка заработает'], ['🔮', 'Шар предсказаний говорит: «спроси, когда выйдет релиз»']];
 
     // ================= Личка: прототип сообщений =================
     // Пока не рабочий: диалоги и переписка — примеры, отправленное видно только тебе. Открывается как
     // страница, но это окно поверх: на телефоне — весь экран над нижней панелью (панель остаётся сверху,
     // активный пункт — «Личка»), на компьютере — на месте ленты, меню и правая панель на месте.
     // «Назад» (кнопка браузера или телефона) закрывает, как при обычном переходе.
-    const MSG_DIALOGS = [
-        { id: 'bot', ava: '🤖', name: 'Сервер ИТД', last: 'Сообщения загружены на 99%... 99%...', time: 'сейчас', unread: 1, online: true, bot: true,
-          msgs: [['in', 'Привет! Я — Сервер ИТД. Личка пока в разработке 🛠️'], ['in', 'Напиши что-нибудь — я отвечу. Честно-честно.']] },
-        { id: 'club', ava: '🧩', name: 'Клуб ИТД X', last: 'Raduz1232: кто уже обновился до 3.0.23?', time: '12:40', unread: 3, group: true,
-          msgs: [['in', 'Helios: бугорок с плюсом — топ'], ['in', 'Пётр I: а где тёмная тема для лички?'], ['in', 'Raduz1232: кто уже обновился до 3.0.23?']] },
-        { id: 'raduz', ava: '🤡', name: 'Raduz1232', last: 'а чё за название у ТГК', time: '11:02', unread: 0, online: true,
-          msgs: [['in', 'а чё за название у ТГК'], ['out', 'Neurosfw 😎']] },
-        { id: 'helios', ava: '🦎', name: 'Helios', last: 'Хаха роза среди навоза', time: 'вчера', unread: 0,
-          msgs: [['out', 'зацени новую панель'], ['in', 'Хаха роза среди навоза']] },
-        { id: 'petr', ava: '🫡', name: 'Пётр I (бебебе BVC)', last: 'когда говорят про песню «зомби»...', time: 'вчера', unread: 2,
-          msgs: [['in', 'когда говорят про песню «зомби»'], ['in', 'я вспоминаю не новки, а «ин ер хеееееед»']] },
-        { id: 'virtual', ava: '🎮', name: 'ツFrom the virtual world', last: 'Ути путиии 🥹', time: 'пн', unread: 0,
-          msgs: [['in', 'Ути путиии 🥹']] },
-        { id: 'saved', ava: '🔖', name: 'Избранное', last: 'Заметка: доделать личку', time: 'вс', unread: 0, saved: true,
-          msgs: [['out', 'Заметка: доделать личку']] }
-    ];
+    // Диалоги: бот «Сервер ИТД» и все, у кого стоит ИТД X (тот же список, что в «Клубе ИТД X»).
+    // Переписки пока нет — пусто, пока не напишешь; ничего не сохраняется.
+    const MSG_BOT = { id: 'bot', ava: '🤖', name: 'Сервер ИТД', login: '', last: 'Напиши что-нибудь — отвечу. Честно', time: 'сейчас', unread: 1, online: true, bot: true,
+        msgs: [['in', 'Привет! Я — Сервер ИТД. Личка пока в разработке 🛠️'], ['in', 'Сообщения никуда не уходят, зато я отвечаю. Проверь 😏']] };
+    let MSG_DIALOGS = [MSG_BOT];
+    const msgPeople = new Map();                        // логин → диалог (переписка живёт, пока открыта вкладка)
+    async function loadMsgPeople(onUpdate) {
+        let names = [];
+        try { names = Object.keys(JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}')); } catch (e) { }
+        names = names.filter(n => !myUsername || n.toLowerCase() !== myUsername.toLowerCase()).sort((a, b) => a.localeCompare(b));
+        names.forEach(n => { if (!msgPeople.has(n)) msgPeople.set(n, { id: 'u:' + n, login: n, ava: '👤', name: n, last: 'Тоже с ИТД X · напиши первым', time: '', unread: 0, msgs: [] }); });
+        MSG_DIALOGS = [MSG_BOT, ...names.map(n => msgPeople.get(n))];
+        onUpdate();
+        await Promise.all(names.map(async n => {
+            const d = await hcData(n).catch(() => null), p = msgPeople.get(n);
+            if (!d || !p) return;
+            p.name = pick(d.displayName, d.display_name, n);
+            p.ava = pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl, d.emoji, '👤');
+        }));
+        onUpdate();
+    }
     const MSG_ICON = {
         back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
         edit: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16Z"/><path d="M13.5 6.5l4 4"/></svg>',
@@ -4643,10 +4659,9 @@
         .vp-msgs-search { margin: 0 16px 10px; display: flex; align-items: center; gap: 8px; padding: 0 14px; height: 42px; border-radius: 999px;
             background: var(--block-bg, #1c1c1c); color: var(--text-secondary, #8a8a8a); }
         .vp-msgs-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
-        .vp-msgs-tabs { display: flex; gap: 8px; padding: 0 16px 10px; }
-        .vp-msgs-tab { border: 0; border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
-            background: var(--block-bg, #1c1c1c); color: var(--text-secondary, #8a8a8a); }
-        .vp-msgs-tab.vp-on { background: var(--text-primary, #fff); color: var(--bg-primary, #000); }
+        .vp-msgs-sub { padding: 2px 20px 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary, #8a8a8a); }
+        .vp-msgs-ava img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+        .vp-msgs-who, .vp-msgs-chead .vp-msgs-ava { cursor: pointer; }
         .vp-msgs-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; overscroll-behavior: contain; }
         .vp-msgs-row { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 18px; cursor: pointer; }
         .vp-msgs-row:hover, .vp-msgs-row:active { background: var(--block-bg, #1c1c1c); }
@@ -4709,7 +4724,7 @@
                 <div class="vp-msgs-top"><div class="vp-msgs-title">Сообщения</div>
                     <button class="vp-msgs-ib vp-msgs-new" title="Новый чат (пока не работает)">${MSG_ICON.edit}</button></div>
                 <label class="vp-msgs-search">${MSG_ICON.search}<input type="search" placeholder="Поиск"></label>
-                <div class="vp-msgs-tabs"><button class="vp-msgs-tab vp-on" data-f="all">Все</button><button class="vp-msgs-tab" data-f="unread">Непрочитанные</button><button class="vp-msgs-tab" data-f="group">Группы</button></div>
+                <div class="vp-msgs-sub"></div>
                 <div class="vp-msgs-list"></div>
             </section>
             <section class="vp-msgs-view vp-msgs-chat" hidden>
@@ -4727,16 +4742,19 @@
         const $ = s => root.querySelector(s);
         const list = $('.vp-msgs-list'), home = $('.vp-msgs-home'), chat = $('.vp-msgs-chat'), feed = $('.vp-msgs-feed');
         const input = $('.vp-msgs-bar input'), send = $('.vp-msgs-send'), search = $('.vp-msgs-search input');
-        let filter = 'all', current = null, botTimer = 0, lastJoke = -1;
+        let current = null, botTimer = 0, lastJoke = -1;
+        const isUrl = a => /^https?:|^\//.test(a);
+        const avaHtml = a => isUrl(a) ? `<img src="${esc(a)}" alt="">` : esc(a);
 
         function renderList() {
             const q = search.value.trim().toLowerCase();
-            const rows = MSG_DIALOGS.filter(d => (filter === 'all' || (filter === 'unread' ? d.unread : d.group))
-                && (!q || (d.name + ' ' + d.last).toLowerCase().includes(q)));
+            const rows = MSG_DIALOGS.filter(d => !q || (d.name + ' ' + d.login + ' ' + d.last).toLowerCase().includes(q));
+            const people = MSG_DIALOGS.length - 1;
+            $('.vp-msgs-sub').textContent = people ? `Сервер ИТД и ${people} ${plural(people, 'человек', 'человека', 'человек')} с ИТД X` : 'Пока никого с ИТД X — список обновится сам';
             list.innerHTML = rows.length ? rows.map(d => `
                 <div class="vp-msgs-row" data-id="${d.id}">
-                    <div class="vp-msgs-ava${d.online ? ' vp-online' : ''}">${d.ava}</div>
-                    <div class="vp-msgs-mid"><div class="vp-msgs-name"><span>${esc(d.name)}</span>${d.saved ? MSG_ICON.pin : ''}</div>
+                    <div class="vp-msgs-ava${d.online ? ' vp-online' : ''}">${avaHtml(d.ava)}</div>
+                    <div class="vp-msgs-mid"><div class="vp-msgs-name"><span>${esc(d.name)}</span></div>
                         <div class="vp-msgs-last">${esc(d.last)}</div></div>
                     <div class="vp-msgs-side"><span>${esc(d.time)}</span>${d.unread ? `<span class="vp-msgs-badge">${d.unread}</span>` : ''}</div>
                 </div>`).join('') : '<div class="vp-msgs-empty">Ничего не нашлось</div>';
@@ -4756,11 +4774,12 @@
         function openChat(d) {
             current = d;
             d.unread = 0;
-            $('.vp-msgs-chead .vp-msgs-ava').textContent = d.ava;
+            $('.vp-msgs-chead .vp-msgs-ava').innerHTML = avaHtml(d.ava);
             $('.vp-msgs-chead .vp-msgs-ava').classList.toggle('vp-online', !!d.online);
             $('.vp-msgs-who b').textContent = d.name;
-            $('.vp-msgs-who small').textContent = d.bot ? 'бот · всегда в сети' : d.group ? '4 участника' : d.saved ? 'только ты' : d.online ? 'в сети' : 'был(а) недавно';
-            feed.innerHTML = '<div class="vp-msgs-note">🧪 Прототип: сообщения пока никуда не отправляются</div><div class="vp-msgs-note">Сегодня</div>';
+            $('.vp-msgs-who small').textContent = d.bot ? 'бот · всегда в сети' : '@' + d.login + ' · с ИТД X';
+            feed.innerHTML = '<div class="vp-msgs-note">🧪 Прототип: сообщения пока никуда не отправляются и не сохраняются</div>'
+                + (d.msgs.length ? '<div class="vp-msgs-note">Сегодня</div>' : `<div class="vp-msgs-note">Это начало переписки с ${esc(d.name)}</div>`);
             d.msgs.forEach(([dir, text]) => bubble(dir, text, dir === 'out' ? now() + ' ✓✓' : now()));
             home.hidden = true; chat.hidden = false;
             input.value = ''; send.disabled = true;
@@ -4779,18 +4798,26 @@
             feed.scrollTop = feed.scrollHeight;
             botTimer = setTimeout(() => {
                 typing.remove();
-                let i; do i = Math.floor(Math.random() * MESSAGE_JOKES.length); while (i === lastJoke && MESSAGE_JOKES.length > 1);
-                lastJoke = i;
-                const [e, t] = MESSAGE_JOKES[i];
+                const q = (current && current.msgs.length ? current.msgs[current.msgs.length - 1][1] : '').toLowerCase();
+                let e, t;
+                if (/(^|\s)(прив|здаров|здрав|хай|ку|йоу|салам)/.test(q)) [e, t] = BOT_HELLO[Math.random() * BOT_HELLO.length | 0];
+                else if (q.includes('?') && Math.random() < .5) [e, t] = BOT_ASK[Math.random() * BOT_ASK.length | 0];
+                else {
+                    let i; do i = Math.floor(Math.random() * MESSAGE_JOKES.length); while (i === lastJoke && MESSAGE_JOKES.length > 1);
+                    lastJoke = i;
+                    [e, t] = MESSAGE_JOKES[i];
+                }
                 bubble('in', e + ' ' + t);
             }, 700 + Math.random() * 600);
         }
 
         list.addEventListener('click', e => { const r = e.target.closest('.vp-msgs-row'); if (r) openChat(MSG_DIALOGS.find(d => d.id === r.dataset.id)); });
-        root.querySelectorAll('.vp-msgs-tab').forEach(t => t.onclick = () => {
-            filter = t.dataset.f;
-            root.querySelectorAll('.vp-msgs-tab').forEach(x => x.classList.toggle('vp-on', x === t));
-            renderList();
+        // шапка чата: имя или аватар — в профиль человека
+        root.querySelectorAll('.vp-msgs-who, .vp-msgs-chead .vp-msgs-ava').forEach(el => el.onclick = () => {
+            if (!current || !current.login) return;
+            const login = current.login;
+            close(true);
+            openProfile(login);
         });
         search.addEventListener('input', renderList);
         $('.vp-msgs-back').onclick = closeChat;
@@ -4802,7 +4829,7 @@
             input.value = ''; send.disabled = true;
             current.msgs.push(['out', text]);
             current.last = 'Ты: ' + text; current.time = now();
-            if (current.bot || current.saved) { bubble('out', text, now() + ' ✓'); if (current.bot) botReply(); }
+            if (current.bot) { bubble('out', text, now() + ' ✓'); botReply(); }
             else bubble('out', text, now() + ' · не отправлено (прототип)').classList.add('vp-fail');
         });
 
@@ -4852,6 +4879,7 @@
             openPath = location.pathname;
             msgsOpen = true;
             closeChat();
+            loadMsgPeople(() => { if (!current) renderList(); });
             place();
             root.classList.add('vp-open');
             document.documentElement.classList.add('vp-msgs-open');
