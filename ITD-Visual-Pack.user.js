@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.10
+// @version      3.1.12
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -747,8 +747,10 @@
     function onDom(fn) { domHandlers.push(fn); }
     let domQueued = false;
     const DOM_WATCH = { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true };
+    let lastTick = 0;
     function domTick() {
         domQueued = false;
+        lastTick = performance.now();
         domRecords(domObserver.takeRecords());
         domObserver.disconnect();                 // свои правки не должны будить наблюдателя
         try {
@@ -781,7 +783,13 @@
         return any;
     }
     const domObserver = new MutationObserver(muts => {
-        if (domRecords(muts) && !domQueued) { domQueued = true; requestAnimationFrame(domTick); }
+        if (domRecords(muts) && !domQueued) {
+            domQueued = true;
+            // телефон: не чаще ~20 проходов в секунду — при прокрутке ленты сайт правит страницу почти
+            // каждый кадр, и полный проход на каждом отнимал кадры у самой прокрутки
+            const wait = IS_PHONE ? Math.max(0, lastTick + 50 - performance.now()) : 0;
+            if (wait) setTimeout(() => requestAnimationFrame(domTick), wait); else requestAnimationFrame(domTick);
+        }
     });
     tagAll();
     domObserver.observe(document.body, DOM_WATCH);
@@ -6826,6 +6834,15 @@
             0%, 100% { filter: drop-shadow(0 0 4px rgba(144, 162, 255, .2)); }
             50% { filter: drop-shadow(0 0 16px rgb(144, 162, 255)); }
         }
+        /* нижняя панель: подложка — три части, двигаются transform'ом (см. blobFlow) */
+        .vp-nav-blob > i { display: none; }
+        .vp-nav-blob.vp-blob-row { width: 0 !important; height: 0 !important; background: none !important; box-shadow: none !important; }
+        .vp-nav-blob.vp-blob-row > i { display: block; position: absolute; left: 0; top: 0; box-sizing: border-box; transform-origin: 0 50%; will-change: transform;
+            background: color-mix(in srgb, var(--vp-accent, #0080ff) 14%, var(--block-bg, #1c1c1c));
+            border: 1px solid color-mix(in srgb, var(--vp-accent, #0080ff) 32%, transparent); transition: background-color .4s ease; }
+        .vp-nav-blob .vp-bl { border-right: 0 !important; border-radius: 999px 0 0 999px; }
+        .vp-nav-blob .vp-bm { border-left: 0 !important; border-right: 0 !important; }
+        .vp-nav-blob .vp-br { border-left: 0 !important; border-radius: 0 999px 999px 0; }
         .vp-nav-blob { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; opacity: 0;
             background: color-mix(in srgb, var(--vp-accent, #0080ff) 14%, var(--block-bg, #1c1c1c));
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 32%, transparent),
@@ -7091,7 +7108,8 @@
             blobAt = null;
             if (was && !calm) {
                 blob.style.transition = 'none';
-                Object.assign(blob.style, blobBox(was), { opacity: '1', borderRadius: blobRadius });
+                if (navIsRow(nav)) rowPlace(was); else Object.assign(blob.style, blobBox(was), { borderRadius: blobRadius });
+                blob.style.opacity = '1';
                 blob.offsetWidth;                          // применить без перехода прозрачности
                 blob.style.transition = '';
                 blobAt = was;
@@ -7123,13 +7141,13 @@
             // Нижняя панель телефона: перетекание — анимация браузера, без кода на каждый кадр и без замеров
             // по пути (они и тормозили: сайт в этот момент рисует новую страницу)
             blobAnim = null;
-            Object.assign(blob.style, blobBox(to));
+            rowPlace(to);
             blobFlow(from, to);
         } else if (from) {
             // Левое меню компьютера: считаем по кадрам (proxFrame) — подложка по пути сдвигается так же,
             // как кнопки-«док», мимо которых идёт
             blobAnim = { from, to, t0: performance.now() };
-        } else { blobAnim = null; Object.assign(blob.style, blobBox(to)); }
+        } else { blobAnim = null; if (row) rowPlace(to); else Object.assign(blob.style, blobBox(to)); }
         blob.style.opacity = '1';
         blobAt = to;
         if (!row) proxKick();                             // «док» и покадровое перетекание — только у левого меню
@@ -7157,15 +7175,38 @@
     // То же перетекание, но без кода на кадр: анимация браузера по положению и размеру, от старого пункта
     // через растяжку к новому. Не масштабом (transform: scale): тот растягивал и скругления, и обводку —
     // подложка по пути становилась ромбом. Кривая на каждом отрезке — та же easeIO (cubic-bezier(.65, 0, .35, 1)).
+    // Нижняя панель телефона: подложка из трёх частей — левый полукруг, середина, правый полукруг.
+    // Двигаются и тянутся они только transform'ом — его считает видеокарта, без пересчёта раскладки
+    // на каждом кадре. Раньше анимировались left/width: кадры считал процессор, а он в этот момент
+    // занят — сайт рисует новую страницу, — отсюда рывки.
+    function blobParts() {
+        if (!blob.firstElementChild) blob.innerHTML = '<i class="vp-bl"></i><i class="vp-bm"></i><i class="vp-br"></i>';
+        return [...blob.children];
+    }
+    function rowTransforms(r, sy = 1) {
+        const R = r.height / 2, mid = Math.max(0.01, r.width - 2 * R);
+        return [`translate(${r.left}px, ${r.top}px) scale(1, ${sy})`,
+            `translate(${r.left + R}px, ${r.top}px) scale(${mid}, ${sy})`,
+            `translate(${r.left + r.width - R}px, ${r.top}px) scale(1, ${sy})`];
+    }
+    function rowPlace(r) {
+        blob.classList.add('vp-blob-row');
+        const tr = rowTransforms(r);
+        blobParts().forEach((el, i) => {
+            el.style.width = i === 1 ? '1px' : r.height / 2 + 'px';
+            el.style.height = r.height + 'px';
+            el.style.transform = tr[i];
+        });
+    }
     function blobFlow(f, t, t0 = performance.now()) {
         flow = { f, t, t0 };
         const e = 'cubic-bezier(.65, 0, .35, 1)';
-        const an = blob.animate([
-            { ...blobBox(f), easing: e },
-            { ...blobBox(blobMid(f, t, true)), offset: .45, easing: e },
-            blobBox(t)
-        ], { duration: BLOB_MS });
-        an.currentTime = Math.max(0, performance.now() - t0);
+        const m = blobMid(f, t, true);
+        const a = rowTransforms({ ...f, top: t.top, height: t.height }), b = rowTransforms({ ...m, top: t.top, height: t.height }, .92), c = rowTransforms(t);
+        blobParts().forEach((el, i) => {
+            const an = el.animate([{ transform: a[i], easing: e }, { transform: b[i], offset: .45, easing: e }, { transform: c[i] }], { duration: BLOB_MS });
+            an.currentTime = Math.max(0, performance.now() - t0);
+        });
     }
     onDom(moveNavBlob);
     addEventListener('resize', () => { blobAt = null; moveNavBlob(); });
@@ -7357,12 +7398,25 @@
     const loginOf = href => ((href || '').match(/^\/@([\w.]+)/) || [])[1] || null;
     // Данные профиля: сперва — что уже получил сайт (или ждём его ответ waitMs), свой запрос —
     // только если сайт этот профиль не запрашивал (карточка при наведении на чужой ник, клуб).
+    // Профили кешируются и между перезагрузками (sessionStorage, 10 мин): карточки при наведении,
+    // личка и счётчик постов не ходят за теми же данными заново после каждого обновления страницы
+    const HC_TTL = 10 * 60 * 1000;
+    function hcStored(key) {
+        try { const v = JSON.parse(sessionStorage.getItem('vp-hc:' + key) || 'null'); return v && Date.now() - v.at < HC_TTL ? v.d : null; } catch (e) { return null; }
+    }
+    function hcStore(key, d) {
+        try { if (d) sessionStorage.setItem('vp-hc:' + key, JSON.stringify({ at: Date.now(), d })); } catch (e) { }
+        return d;
+    }
     function hcData(user, waitMs = 0) {
         const key = user.toLowerCase();
         if (siteUsers.has(key)) return Promise.resolve(siteUsers.get(key));
-        if (!hcCache.has(key)) hcCache.set(key, siteUser(user, waitMs).then(site => site || api('/api/users/' + encodeURIComponent(user))
-            .then(r => r.ok ? r.json() : null)
-            .then(j => j && (j.data || j.user || j))).catch(() => null));
+        if (!hcCache.has(key)) {
+            const stored = waitMs ? null : hcStored(key);        // счётчик в профиле (ждёт сайт) — всегда свежий
+            hcCache.set(key, stored ? Promise.resolve(stored) : siteUser(user, waitMs).then(site => site || api('/api/users/' + encodeURIComponent(user))
+                .then(r => r.ok ? r.json() : null)
+                .then(j => j && (j.data || j.user || j))).then(d => hcStore(key, d)).catch(() => null));
+        }
         return hcCache.get(key);
     }
     const pick = (...vals) => vals.find(v => v !== undefined && v !== null && v !== '');
