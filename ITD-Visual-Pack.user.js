@@ -4749,8 +4749,8 @@
     addMessagesButton();
     onDom(addMessagesButton);
     // Нижняя панель телефона: у сайта подписи короткие («Магаз», «Уведы»), а «Профиль» — длинная и у самого
-    // края: задевала обводку. Там — «Профа», в тон остальным. На компьютере (полные подписи: «Уведомления») — как у сайта.
-    const PROFILE_SHORT = 'Профа';
+    // края: задевала обводку. Там — «Акк», в тон остальным. На компьютере (полные подписи: «Уведомления») — как у сайта.
+    const PROFILE_SHORT = 'Акк';
     onDom(function shortProfileLabel() {
         const nav = document.querySelector('.' + SELECTORS.nav);
         const notif = nav && nav.querySelector(':scope > a[href="/notifications"]');
