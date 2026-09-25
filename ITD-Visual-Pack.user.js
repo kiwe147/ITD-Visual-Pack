@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.2
+// @version      3.1.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1410,6 +1410,8 @@
         .toggle-switch.active::after {
             left: 20px !important;
         }
+        /* кнопки на баннере — к верхнему краю: снизу их закрывает аватарка */
+        .vp-banner-buttons { top: 12px !important; bottom: auto !important; }
         /* кнопка «ИТД X» вместо «ИТД НУКСТА» */
         .vp-nuksta-hidden { display: none !important; }
         .vp-sec-title { font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--text-secondary, rgba(255, 255, 255, .55));
