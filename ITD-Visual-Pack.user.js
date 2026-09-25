@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.0.25
+// @version      3.1.0
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -716,43 +716,147 @@
 
     // Иконки мода — один стиль: контур 1.8 px, скруглённые концы, сетка 24×24, цвет — currentColor.
     // Каждая рисует свою функцию: по ней должно быть понятно, что делает кнопка.
-    // Логотип скрипта задаётся в ОДНОМ месте — строкой @icon в шапке. Tampermonkey показывает
-    // его в своём списке, а мы берём его оттуда же (GM_info) для логотипа в углу сайта.
-    // Нет картинки — логотип сайта остаётся свой.
+    // Логотип скрипта по умолчанию задаётся в ОДНОМ месте — строкой @icon в шапке. Tampermonkey показывает
+    // его в своём списке, а мы берём его оттуда же (GM_info). Остальные иконки — вкладка «Иконка» в настройках.
     function scriptIconSrc() {
         const meta = (GM_info.scriptMetaStr || '').match(/^\/\/ @icon\s+(.+?)\s*$/m);
         return (GM_info.script && GM_info.script.icon) || (meta && meta[1]) || null;
     }
+
+    // ================= Иконка скрипта (вкладка «Иконка» в настройках) =================
+    // Выбранная ставится на вкладку браузера, в логотип на сайте и на ярлык «На главный экран».
+    // Ярлыку телефон берёт PNG — рисуем её из выбранной картинки на холсте (192 px и 180 px для iOS).
+    // Уже созданный ярлык сам не поменяется: его надо добавить заново.
+    // Классика — строка @icon из шапки.
+    const APP_ICONS = [
+        { id: "classic", name: "Классика", svg: null },
+        { id: "neon", name: "Неон", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><linearGradient id=\"n\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#00e5ff\"/><stop offset=\".5\" stop-color=\"#7c4dff\"/><stop offset=\"1\" stop-color=\"#ff3d9a\"/></linearGradient><filter id=\"g\" x=\"-50%\" y=\"-50%\" width=\"200%\" height=\"200%\"><feGaussianBlur stdDeviation=\"3\"/></filter></defs><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"#0b0d13\"/><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"url(#n)\" stroke-width=\"10\" stroke-linecap=\"round\" fill=\"none\" filter=\"url(#g)\" opacity=\".9\"/><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"url(#n)\" stroke-width=\"8\" stroke-linecap=\"round\" fill=\"none\" /><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"#fff\" stroke-width=\"3\" stroke-linecap=\"round\" fill=\"none\" opacity=\".55\"/></svg>" },
+        { id: "gradient", name: "Градиент", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><linearGradient id=\"n\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#00e5ff\"/><stop offset=\".5\" stop-color=\"#7c4dff\"/><stop offset=\"1\" stop-color=\"#ff3d9a\"/></linearGradient><filter id=\"s\" x=\"-50%\" y=\"-50%\" width=\"200%\" height=\"200%\"><feDropShadow dx=\"0\" dy=\"1.5\" stdDeviation=\"1.5\" flood-opacity=\".35\"/></filter></defs><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"url(#n)\"/><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"#fff\" stroke-width=\"9\" stroke-linecap=\"round\" fill=\"none\" filter=\"url(#s)\"/></svg>" },
+        { id: "glitch", name: "Глитч", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs></defs><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"#0b0b10\"/><g transform=\"translate(-2.5 0)\" opacity=\".95\"><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"#00f0ff\" stroke-width=\"8\" stroke-linecap=\"round\" fill=\"none\" /></g><g transform=\"translate(2.5 0)\" opacity=\".95\"><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"#ff2bd6\" stroke-width=\"8\" stroke-linecap=\"round\" fill=\"none\" /></g><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"#fff\" stroke-width=\"8\" stroke-linecap=\"round\" fill=\"none\" /><rect x=\"14\" y=\"30\" width=\"36\" height=\"3\" fill=\"#0b0b10\" opacity=\".85\"/></svg>" },
+        { id: "matrix", name: "Матрица", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><filter id=\"g\" x=\"-50%\" y=\"-50%\" width=\"200%\" height=\"200%\"><feGaussianBlur stdDeviation=\"2.5\"/></filter></defs><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"#020a02\"/><text x=\"4\" y=\"9\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.06\">ア</text><text x=\"4\" y=\"18\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.41\">エ</text><text x=\"4\" y=\"27\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.26\">キ</text><text x=\"4\" y=\"36\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.11\">コ</text><text x=\"4\" y=\"45\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.46\">ス</text><text x=\"4\" y=\"54\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.31\">タ</text><text x=\"4\" y=\"63\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.16\">テ</text><text x=\"13\" y=\"9\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.21\">ク</text><text x=\"13\" y=\"18\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.06\">サ</text><text x=\"13\" y=\"27\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.41\">セ</text><text x=\"13\" y=\"36\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.26\">チ</text><text x=\"13\" y=\"45\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.11\">ト</text><text x=\"13\" y=\"54\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.46\">ア</text><text x=\"13\" y=\"63\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.31\">エ</text><text x=\"22\" y=\"9\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.36\">ソ</text><text x=\"22\" y=\"18\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.21\">ツ</text><text x=\"22\" y=\"27\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.06\">0</text><text x=\"22\" y=\"36\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.41\">イ</text><text x=\"22\" y=\"45\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.26\">オ</text><text x=\"22\" y=\"54\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.11\">ク</text><text x=\"22\" y=\"63\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.46\">サ</text><text x=\"31\" y=\"9\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.51\">1</text><text x=\"31\" y=\"18\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.36\">ウ</text><text x=\"31\" y=\"27\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.21\">カ</text><text x=\"31\" y=\"36\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.06\">ケ</text><text x=\"31\" y=\"45\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.41\">シ</text><text x=\"31\" y=\"54\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.26\">ソ</text><text x=\"31\" y=\"63\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.11\">ツ</text><text x=\"40\" y=\"9\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.16\">キ</text><text x=\"40\" y=\"18\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.51\">コ</text><text x=\"40\" y=\"27\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.36\">ス</text><text x=\"40\" y=\"36\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.21\">タ</text><text x=\"40\" y=\"45\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.06\">テ</text><text x=\"40\" y=\"54\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.41\">1</text><text x=\"40\" y=\"63\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.26\">ウ</text><text x=\"49\" y=\"9\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.31\">セ</text><text x=\"49\" y=\"18\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.16\">チ</text><text x=\"49\" y=\"27\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.51\">ト</text><text x=\"49\" y=\"36\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.36\">ア</text><text x=\"49\" y=\"45\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.21\">エ</text><text x=\"49\" y=\"54\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.06\">キ</text><text x=\"49\" y=\"63\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.41\">コ</text><text x=\"58\" y=\"9\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.46\">0</text><text x=\"58\" y=\"18\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.31\">イ</text><text x=\"58\" y=\"27\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.16\">オ</text><text x=\"58\" y=\"36\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.51\">ク</text><text x=\"58\" y=\"45\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.36\">サ</text><text x=\"58\" y=\"54\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.21\">セ</text><text x=\"58\" y=\"63\" font-size=\"7\" font-family=\"monospace\" fill=\"#39ff14\" opacity=\"0.06\">チ</text><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"#39ff14\" stroke-width=\"9\" stroke-linecap=\"round\" fill=\"none\" filter=\"url(#g)\"/><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"#39ff14\" stroke-width=\"7\" stroke-linecap=\"round\" fill=\"none\" /><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"#d8ffd0\" stroke-width=\"2.5\" stroke-linecap=\"round\" fill=\"none\" opacity=\".8\"/></svg>" },
+        { id: "minimal", name: "Минимал", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs></defs><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"#f4f4f6\"/><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"#111\" stroke-width=\"9\" stroke-linecap=\"round\" fill=\"none\" /></svg>" },
+        { id: "minimal2", name: "Минимал 2", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><clipPath id=\"c\"><rect width=\"64\" height=\"64\" rx=\"16\"/></clipPath><clipPath id=\"L\"><rect width=\"32\" height=\"64\"/></clipPath><clipPath id=\"R\"><rect x=\"32\" width=\"32\" height=\"64\"/></clipPath></defs><g clip-path=\"url(#c)\"><rect width=\"32\" height=\"64\" fill=\"#f4f4f6\"/><rect x=\"32\" width=\"32\" height=\"64\" fill=\"#111\"/><g clip-path=\"url(#L)\"><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"#111\" stroke-width=\"9\" stroke-linecap=\"round\" fill=\"none\"/></g><g clip-path=\"url(#R)\"><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"#f4f4f6\" stroke-width=\"9\" stroke-linecap=\"round\" fill=\"none\"/></g></g></svg>" },
+        { id: "printstream", name: "Принтстрим", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><linearGradient id=\"pearl\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fbf4f7\"/><stop offset=\".3\" stop-color=\"#f3e6ee\"/><stop offset=\".55\" stop-color=\"#eeeef6\"/><stop offset=\".8\" stop-color=\"#e5edf6\"/><stop offset=\"1\" stop-color=\"#f4f6f9\"/></linearGradient><linearGradient id=\"sheen\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"#fff\" stop-opacity=\"0\"/><stop offset=\".5\" stop-color=\"#fff\" stop-opacity=\".7\"/><stop offset=\"1\" stop-color=\"#fff\" stop-opacity=\"0\"/></linearGradient><clipPath id=\"c\"><rect width=\"64\" height=\"64\" rx=\"16\"/></clipPath></defs><g clip-path=\"url(#c)\"><rect width=\"64\" height=\"64\" fill=\"url(#pearl)\"/><rect x=\"-20\" y=\"-6\" width=\"30\" height=\"90\" fill=\"url(#sheen)\" transform=\"rotate(-30 32 32)\" opacity=\".8\"/><g stroke=\"#111\" stroke-width=\"2.2\" stroke-linecap=\"round\"><path d=\"M11 10l4.5 4.5M15.5 10l-4.5 4.5\"/></g><g stroke=\"#111\" stroke-linecap=\"round\" fill=\"none\" opacity=\".55\"><path d=\"M40 52h14M46 49.5h8\" stroke-width=\".7\"/></g><g fill=\"#111\"><rect x=\"44\" y=\"10.5\" width=\"1.6\" height=\"1.6\"/><rect x=\"45.6\" y=\"12.1\" width=\"1.6\" height=\"1.6\"/><rect x=\"47.2\" y=\"10.5\" width=\"1.6\" height=\"1.6\"/><rect x=\"48.8\" y=\"12.1\" width=\"1.6\" height=\"1.6\"/></g><path d=\"M17.60 51.50L15.00 53.00L12.40 51.50L12.40 48.50L15.00 47.00L17.60 48.50Z\" fill=\"none\" stroke=\"#111\" stroke-width=\".7\" opacity=\".55\"/><path d=\"M18.5 10l4.5 4.5M23 10l-4.5 4.5\" stroke=\"#111\" stroke-width=\"2.2\" stroke-linecap=\"round\"/><path d=\"M18.5 10l4.5 4.5M23 10l-4.5 4.5\" stroke=\"#f1eef5\" stroke-width=\".8\" stroke-linecap=\"round\"/><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"#111\" stroke-width=\"9\" stroke-linecap=\"round\" fill=\"none\"/></g></svg>" },
+        { id: "gold", name: "Золото", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><radialGradient id=\"bg\" cx=\".5\" cy=\".4\" r=\".75\"><stop offset=\"0\" stop-color=\"#2a1f0c\"/><stop offset=\"1\" stop-color=\"#0b0906\"/></radialGradient><linearGradient id=\"au\" gradientUnits=\"userSpaceOnUse\" x1=\"0\" y1=\"16\" x2=\"0\" y2=\"48\"><stop offset=\"0\" stop-color=\"#fff2c2\"/><stop offset=\".35\" stop-color=\"#f3cb62\"/><stop offset=\".7\" stop-color=\"#dba53a\"/><stop offset=\"1\" stop-color=\"#c48a24\"/></linearGradient></defs><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"url(#bg)\"/><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"url(#au)\" stroke-width=\"9\" stroke-linecap=\"round\" fill=\"none\"/></svg>" },
+        { id: "glass", name: "Стекло", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><filter id=\"b\" x=\"-50%\" y=\"-50%\" width=\"200%\" height=\"200%\"><feGaussianBlur stdDeviation=\"7\"/></filter><clipPath id=\"c\"><rect width=\"64\" height=\"64\" rx=\"16\"/></clipPath></defs><g clip-path=\"url(#c)\"><rect width=\"64\" height=\"64\" fill=\"#0d0f1a\"/><circle cx=\"16\" cy=\"18\" r=\"16\" fill=\"#00c6ff\" filter=\"url(#b)\"/><circle cx=\"50\" cy=\"48\" r=\"18\" fill=\"#ff3d9a\" filter=\"url(#b)\"/><circle cx=\"46\" cy=\"14\" r=\"11\" fill=\"#7c4dff\" filter=\"url(#b)\"/><rect x=\"10\" y=\"10\" width=\"44\" height=\"44\" rx=\"14\" fill=\"#fff\" fill-opacity=\".12\" stroke=\"#fff\" stroke-opacity=\".35\"/></g><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"#fff\" stroke-width=\"7\" stroke-linecap=\"round\" fill=\"none\" /></svg>" },
+        { id: "orbit", name: "Орбита", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><linearGradient id=\"n\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#00e5ff\"/><stop offset=\".5\" stop-color=\"#7c4dff\"/><stop offset=\"1\" stop-color=\"#ff3d9a\"/></linearGradient></defs><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"#0b0d13\"/><ellipse cx=\"32\" cy=\"32\" rx=\"23\" ry=\"9\" fill=\"none\" stroke=\"url(#n)\" stroke-width=\"2.2\" transform=\"rotate(-25 32 32)\" opacity=\".9\"/><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"#fff\" stroke-width=\"8\" stroke-linecap=\"round\" fill=\"none\" /><circle cx=\"51.5\" cy=\"22.5\" r=\"2.6\" fill=\"#ff3d9a\"/></svg>" },
+        { id: "itd", name: "ИТД", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><linearGradient id=\"n\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#00e5ff\"/><stop offset=\".5\" stop-color=\"#7c4dff\"/><stop offset=\"1\" stop-color=\"#ff3d9a\"/></linearGradient></defs><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"#0b0d13\"/><text x=\"32\" y=\"39.5\" text-anchor=\"middle\" font-family=\"Arial Black, Arial, sans-serif\" font-weight=\"900\" font-size=\"20\" fill=\"url(#n)\">ИТД</text><text x=\"32\" y=\"50\" text-anchor=\"middle\" font-family=\"Arial, sans-serif\" font-weight=\"700\" font-size=\"8\" fill=\"#fff\" opacity=\".7\" letter-spacing=\"1.5\">X</text></svg>" },
+        { id: "sakura", name: "Сакура", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><linearGradient id=\"bg\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#3a1330\"/><stop offset=\"1\" stop-color=\"#1c0a1a\"/></linearGradient><radialGradient id=\"halo\" cx=\".5\" cy=\".5\" r=\".5\"><stop offset=\"0\" stop-color=\"#ff7fb0\" stop-opacity=\".35\"/><stop offset=\"1\" stop-color=\"#ff7fb0\" stop-opacity=\"0\"/></radialGradient><radialGradient id=\"pgA\" gradientUnits=\"userSpaceOnUse\" cx=\"0\" cy=\"0\" r=\"20\"><stop offset=\"0\" stop-color=\"#fff6f9\"/><stop offset=\".45\" stop-color=\"#ffd3e2\"/><stop offset=\"1\" stop-color=\"#ff8db4\"/></radialGradient><radialGradient id=\"pgB\" gradientUnits=\"userSpaceOnUse\" cx=\"0\" cy=\"0\" r=\"20\"><stop offset=\"0\" stop-color=\"#ffe9f1\"/><stop offset=\"1\" stop-color=\"#ff9cbf\"/></radialGradient><radialGradient id=\"cg\" cx=\".5\" cy=\".5\" r=\".5\"><stop offset=\"0\" stop-color=\"#ff9ab8\"/><stop offset=\"1\" stop-color=\"#c8356a\"/></radialGradient><filter id=\"sh\" x=\"-50%\" y=\"-50%\" width=\"200%\" height=\"200%\"><feDropShadow dx=\"0\" dy=\"1.2\" stdDeviation=\"1.3\" flood-color=\"#12040f\" flood-opacity=\".55\"/></filter></defs><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"url(#bg)\"/><circle cx=\"31\" cy=\"33\" r=\"24\" fill=\"url(#halo)\"/><g transform=\"translate(31 33.5) rotate(-14) scale(1.05)\"><g filter=\"url(#sh)\"><path d=\"M0 0C-6.2-3.4-8.6-11.4-5.6-17.6C-4.3-20.2-2.3-21.1-.9-19.6L0-18.2L.9-19.6C2.3-21.1 4.3-20.2 5.6-17.6C8.6-11.4 6.2-3.4 0 0Z\" transform=\"rotate(0)\" fill=\"url(#pgA)\"/><path d=\"M0-2.5C-.3-8-.2-12.5 0-16\" transform=\"rotate(0)\" stroke=\"#e5779c\" stroke-width=\".55\" stroke-linecap=\"round\" fill=\"none\" opacity=\".45\"/><path d=\"M0 0C-6.2-3.4-8.6-11.4-5.6-17.6C-4.3-20.2-2.3-21.1-.9-19.6L0-18.2L.9-19.6C2.3-21.1 4.3-20.2 5.6-17.6C8.6-11.4 6.2-3.4 0 0Z\" transform=\"rotate(72)\" fill=\"url(#pgA)\"/><path d=\"M0-2.5C-.3-8-.2-12.5 0-16\" transform=\"rotate(72)\" stroke=\"#e5779c\" stroke-width=\".55\" stroke-linecap=\"round\" fill=\"none\" opacity=\".45\"/><path d=\"M0 0C-6.2-3.4-8.6-11.4-5.6-17.6C-4.3-20.2-2.3-21.1-.9-19.6L0-18.2L.9-19.6C2.3-21.1 4.3-20.2 5.6-17.6C8.6-11.4 6.2-3.4 0 0Z\" transform=\"rotate(144)\" fill=\"url(#pgA)\"/><path d=\"M0-2.5C-.3-8-.2-12.5 0-16\" transform=\"rotate(144)\" stroke=\"#e5779c\" stroke-width=\".55\" stroke-linecap=\"round\" fill=\"none\" opacity=\".45\"/><path d=\"M0 0C-6.2-3.4-8.6-11.4-5.6-17.6C-4.3-20.2-2.3-21.1-.9-19.6L0-18.2L.9-19.6C2.3-21.1 4.3-20.2 5.6-17.6C8.6-11.4 6.2-3.4 0 0Z\" transform=\"rotate(216)\" fill=\"url(#pgA)\"/><path d=\"M0-2.5C-.3-8-.2-12.5 0-16\" transform=\"rotate(216)\" stroke=\"#e5779c\" stroke-width=\".55\" stroke-linecap=\"round\" fill=\"none\" opacity=\".45\"/><path d=\"M0 0C-6.2-3.4-8.6-11.4-5.6-17.6C-4.3-20.2-2.3-21.1-.9-19.6L0-18.2L.9-19.6C2.3-21.1 4.3-20.2 5.6-17.6C8.6-11.4 6.2-3.4 0 0Z\" transform=\"rotate(288)\" fill=\"url(#pgA)\"/><path d=\"M0-2.5C-.3-8-.2-12.5 0-16\" transform=\"rotate(288)\" stroke=\"#e5779c\" stroke-width=\".55\" stroke-linecap=\"round\" fill=\"none\" opacity=\".45\"/></g><circle r=\"3.4\" fill=\"url(#cg)\"/><path d=\"M2.57 0.36L6.34 0.89\" stroke=\"#d94a7a\" stroke-width=\".6\" stroke-linecap=\"round\"/><circle cx=\"6.34\" cy=\"0.89\" r=\".85\" fill=\"#ffd66b\"/><path d=\"M1.97 1.7L5.53 4.76\" stroke=\"#d94a7a\" stroke-width=\".6\" stroke-linecap=\"round\"/><circle cx=\"5.53\" cy=\"4.76\" r=\".85\" fill=\"#ffd66b\"/><path d=\"M0.74 2.49L2.34 7.86\" stroke=\"#d94a7a\" stroke-width=\".6\" stroke-linecap=\"round\"/><circle cx=\"2.34\" cy=\"7.86\" r=\".85\" fill=\"#ffd66b\"/><path d=\"M-0.72 2.5L-1.78 6.15\" stroke=\"#d94a7a\" stroke-width=\".6\" stroke-linecap=\"round\"/><circle cx=\"-1.78\" cy=\"6.15\" r=\".85\" fill=\"#ffd66b\"/><path d=\"M-1.96 1.71L-5.5 4.8\" stroke=\"#d94a7a\" stroke-width=\".6\" stroke-linecap=\"round\"/><circle cx=\"-5.5\" cy=\"4.8\" r=\".85\" fill=\"#ffd66b\"/><path d=\"M-2.57 0.38L-8.11 1.19\" stroke=\"#d94a7a\" stroke-width=\".6\" stroke-linecap=\"round\"/><circle cx=\"-8.11\" cy=\"1.19\" r=\".85\" fill=\"#ffd66b\"/><path d=\"M-2.37 -1.07L-5.83 -2.64\" stroke=\"#d94a7a\" stroke-width=\".6\" stroke-linecap=\"round\"/><circle cx=\"-5.83\" cy=\"-2.64\" r=\".85\" fill=\"#ffd66b\"/><path d=\"M-1.41 -2.18L-3.97 -6.13\" stroke=\"#d94a7a\" stroke-width=\".6\" stroke-linecap=\"round\"/><circle cx=\"-3.97\" cy=\"-6.13\" r=\".85\" fill=\"#ffd66b\"/><path d=\"M-0.01 -2.6L-0.03 -8.2\" stroke=\"#d94a7a\" stroke-width=\".6\" stroke-linecap=\"round\"/><circle cx=\"-0.03\" cy=\"-8.2\" r=\".85\" fill=\"#ffd66b\"/><path d=\"M1.4 -2.19L3.44 -5.39\" stroke=\"#d94a7a\" stroke-width=\".6\" stroke-linecap=\"round\"/><circle cx=\"3.44\" cy=\"-5.39\" r=\".85\" fill=\"#ffd66b\"/><path d=\"M2.36 -1.09L6.63 -3.05\" stroke=\"#d94a7a\" stroke-width=\".6\" stroke-linecap=\"round\"/><circle cx=\"6.63\" cy=\"-3.05\" r=\".85\" fill=\"#ffd66b\"/></g><g transform=\"translate(49 15) rotate(38) scale(.42)\"><path d=\"M0 0C-6.2-3.4-8.6-11.4-5.6-17.6C-4.3-20.2-2.3-21.1-.9-19.6L0-18.2L.9-19.6C2.3-21.1 4.3-20.2 5.6-17.6C8.6-11.4 6.2-3.4 0 0Z\" fill=\"url(#pgB)\" opacity=\".9\"/></g><g transform=\"translate(14.5 52) rotate(-120) scale(.3)\"><path d=\"M0 0C-6.2-3.4-8.6-11.4-5.6-17.6C-4.3-20.2-2.3-21.1-.9-19.6L0-18.2L.9-19.6C2.3-21.1 4.3-20.2 5.6-17.6C8.6-11.4 6.2-3.4 0 0Z\" fill=\"url(#pgB)\" opacity=\".75\"/></g></svg>" },
+        { id: "uwu", name: "UwU", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><linearGradient id=\"bg\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#f7dfb3\"/><stop offset=\".55\" stop-color=\"#f5bfb2\"/><stop offset=\"1\" stop-color=\"#ef93b3\"/></linearGradient><radialGradient id=\"glow\" cx=\".5\" cy=\".5\" r=\".5\"><stop offset=\"0\" stop-color=\"#fff2c7\"/><stop offset=\".4\" stop-color=\"#ffe1a0\" stop-opacity=\".75\"/><stop offset=\"1\" stop-color=\"#ffe1a0\" stop-opacity=\"0\"/></radialGradient><radialGradient id=\"vig\" cx=\".5\" cy=\".45\" r=\".75\"><stop offset=\".6\" stop-color=\"#8f4f72\" stop-opacity=\"0\"/><stop offset=\"1\" stop-color=\"#8f4f72\" stop-opacity=\".22\"/></radialGradient></defs><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"url(#bg)\"/><path d=\"M17 26v6a5 5 0 0 0 10 0v-6\" stroke=\"#1a1016\" stroke-width=\"3.4\" stroke-linecap=\"round\" fill=\"none\"/><path d=\"M37 26v6a5 5 0 0 0 10 0v-6\" stroke=\"#1a1016\" stroke-width=\"3.4\" stroke-linecap=\"round\" fill=\"none\"/><path d=\"M26 40q3 4 6 0 3 4 6 0\" stroke=\"#1a1016\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\" fill=\"none\"/></svg>" },
+        { id: "paw", name: "Лапка", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><clipPath id=\"c\"><rect width=\"64\" height=\"64\" rx=\"16\"/></clipPath><linearGradient id=\"db\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#6d28d9\"/><stop offset=\"1\" stop-color=\"#4c1d95\"/></linearGradient></defs><g clip-path=\"url(#c)\"><rect width=\"64\" height=\"64\" fill=\"url(#db)\"/><g fill=\"#ede4ff\"><ellipse cx=\"20\" cy=\"30\" rx=\"3.7\" ry=\"4.7\" transform=\"rotate(-22 20 30)\"/><ellipse cx=\"27.3\" cy=\"22.3\" rx=\"3.9\" ry=\"5.1\" transform=\"rotate(-6 27.3 22.3)\"/><ellipse cx=\"36.7\" cy=\"22.3\" rx=\"3.9\" ry=\"5.1\" transform=\"rotate(6 36.7 22.3)\"/><ellipse cx=\"44\" cy=\"30\" rx=\"3.7\" ry=\"4.7\" transform=\"rotate(22 44 30)\"/></g><path d=\"M32 34c-5.6 0-10.4 4.6-11.5 9-.9 3.6 1.5 6.6 4.9 6.6 2.6 0 4.4-1.3 6.6-1.3s4 1.3 6.6 1.3c3.4 0 5.8-3 4.9-6.6C42.4 38.6 37.6 34 32 34Z\" fill=\"#ede4ff\"/></g></svg>" },
+        { id: "itdchan", name: "ИТД-чан", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><clipPath id=\"c\"><rect width=\"64\" height=\"64\" rx=\"16\"/></clipPath><linearGradient id=\"bg\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#1a0d10\"/><stop offset=\"1\" stop-color=\"#0b0708\"/></linearGradient><linearGradient id=\"red\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e2233b\"/><stop offset=\"1\" stop-color=\"#8e0f22\"/></linearGradient><radialGradient id=\"bell\" cx=\".38\" cy=\".32\" r=\".75\"><stop offset=\"0\" stop-color=\"#ffffff\"/><stop offset=\".45\" stop-color=\"#c9c9d1\"/><stop offset=\"1\" stop-color=\"#6d6d78\"/></radialGradient></defs><g clip-path=\"url(#c)\"><rect width=\"64\" height=\"64\" fill=\"url(#bg)\"/><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"url(#red)\" stroke-width=\"9\" stroke-linecap=\"round\" fill=\"none\"/></g></svg>" },
+    ];
+    // своя иконка: фон — любой из стилей ника (их цвета) или чёрный, сверху любой эмодзи.
+    // Список собирается при первом обращении: стили ника объявлены ниже по файлу.
+    const ICON_BG_EXTRA = {
+        shimmer: ['#7c3aed', '#a78bfa', '#f0abfc'],
+        glitch: ['#00fff0', '#7c4dff', '#ff00c8'],
+        rainbow: ['#ff3b3b', '#ffb000', '#3ddc84', '#29b6f6', '#b04dff']
+    };
+    let iconBgList = null;
+    function iconBgs() {
+        if (iconBgList) return iconBgList;
+        iconBgList = styleKeys.map(k => {
+            const st = nickStyles[k];
+            const c = ICON_BG_EXTRA[k] || ((st.gradientDark || '').match(/#[0-9a-f]{3,6}\b/gi)) || [st.color];
+            return { id: k, name: st.name, c };
+        });
+        iconBgList.push({ id: 'black', name: 'Чёрный', c: ['#26262c', '#050507'] });
+        // по кругу цветов от красного до розового, потом многоцветные, потом белый → серый → чёрный
+        const MULTI = ['glitch', 'rainbow'], NEUTRAL = ['white', 'gray', 'black'];
+        const rank = b => {
+            if (MULTI.includes(b.id)) return 1000 + MULTI.indexOf(b.id);
+            const h = hueOf(b.c[0]);
+            return h === null ? 2000 + Math.max(0, NEUTRAL.indexOf(b.id)) : (h + 330) % 360;
+        };
+        iconBgList.sort((a, b) => rank(a) - rank(b));
+        return iconBgList;
+    }
+    const svgUrl = svg => 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+    const xmlText = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // первый символ так, как его видит человек: эмодзи с оттенком кожи или флаг — это несколько кодов
+    function firstGrapheme(s) {
+        s = (s || '').trim();
+        if (!s) return '';
+        if (window.Intl && Intl.Segmenter) return new Intl.Segmenter().segment(s)[Symbol.iterator]().next().value.segment;
+        return Array.from(s)[0];
+    }
+    function customIconSvg({ bg, emoji }) {
+        const b = iconBgs().find(x => x.id === bg) || iconBgs().find(x => x.id === 'purpleMystic');
+        const stops = b.c.map((c, i) => `<stop offset="${b.c.length > 1 ? i / (b.c.length - 1) : 0}" stop-color="${c}"/>`).join('');
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">${stops}</linearGradient></defs>` +
+            `<rect width="64" height="64" rx="16" fill="url(#g)"/><text x="32" y="34" text-anchor="middle" dominant-baseline="central" font-size="36">${xmlText(emoji || '🦊')}</text></svg>`;
+    }
+    let appIcon = GM_getValue('appIcon', 'classic');
+    const iconCustom = () => GM_getValue('appIconCustom', { bg: 'purpleMystic', emoji: '🦊' });
+    function iconSrcById(id) {
+        if (id === 'image') return GM_getValue('appIconImage', '') || scriptIconSrc();
+        if (id === 'custom') return svgUrl(customIconSvg(iconCustom()));
+        const it = APP_ICONS.find(i => i.id === id);
+        return it && it.svg ? svgUrl(it.svg) : scriptIconSrc();
+    }
+    const appIconSrc = () => iconSrcById(appIcon);
     function scriptLogo(size) {
-        const src = scriptIconSrc();
+        const src = appIconSrc();
         if (!src) return null;
         const img = document.createElement('img');
+        img.className = 'vp-app-logo';
         img.src = src;
         img.alt = 'ИТД';
         img.width = img.height = size;
         img.style.cssText = `width:${size}px;height:${size}px;display:block;border-radius:${Math.round(size * 0.25)}px;`;
         return img;
     }
-    // Вкладка браузера: наша иконка (та же строка @icon) и название «ИТД X». Сайт сам меняет
+    // PNG нужного размера из любой картинки (SVG или загруженной)
+    function iconPng(src, size) {
+        return new Promise(resolve => {
+            const img = new Image();
+            img.onload = () => {
+                const c = document.createElement('canvas');
+                c.width = c.height = size;
+                c.getContext('2d').drawImage(img, 0, 0, size, size);
+                try { resolve(c.toDataURL('image/png')); } catch (e) { resolve(null); }
+            };
+            img.onerror = () => resolve(null);
+            img.src = src;
+        });
+    }
+    function headLink(id, rel, attrs) {
+        let l = document.getElementById(id);
+        if (!l) {
+            l = document.createElement('link');
+            l.id = id;
+            l.rel = rel;
+            document.head.appendChild(l);
+        }
+        for (const k in attrs) if (l.getAttribute(k) !== attrs[k]) l.setAttribute(k, attrs[k]);
+        return l;
+    }
+    let pngFor = null;
+    function applyAppIcon() {
+        const src = appIconSrc();
+        if (!src) return;
+        headLink('vp-favicon', 'icon', { type: src.startsWith('data:image/svg') ? 'image/svg+xml' : 'image/png', href: src });
+        document.querySelectorAll('img.vp-app-logo').forEach(img => { if (img.src !== src) img.src = src; });
+        if (pngFor === src) return;
+        pngFor = src;
+        iconPng(src, 192).then(png => { if (png && pngFor === src) headLink('vp-icon-192', 'icon', { type: 'image/png', sizes: '192x192', href: png }); });
+        iconPng(src, 180).then(png => { if (png && pngFor === src) headLink('vp-touch-icon', 'apple-touch-icon', { sizes: '180x180', href: png }); });
+    }
+    function setAppIcon(id) {
+        appIcon = id;
+        GM_setValue('appIcon', id);
+        applyAppIcon();
+    }
+
+    // Вкладка браузера: наша иконка и название «ИТД X». Сайт сам меняет
     // заголовок и иконку при переходах — следим за <head> и возвращаем своё.
     const TAB_TITLE = 'ИТД X';
     function brandTab() {
         if (document.title !== TAB_TITLE) document.title = TAB_TITLE;
-        const src = scriptIconSrc();
-        if (!src) return;
-        let ours = document.getElementById('vp-favicon');
-        document.querySelectorAll('link[rel~="icon"]').forEach(l => { if (l !== ours) l.remove(); });
-        if (!ours) {
-            ours = document.createElement('link');
-            ours.id = 'vp-favicon';
-            ours.rel = 'icon';
-            ours.type = 'image/svg+xml';
-            ours.href = src;
-            document.head.appendChild(ours);
-        }
+        document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"]').forEach(l => { if (!l.id.startsWith('vp-')) l.remove(); });
+        applyAppIcon();
     }
-    brandTab();
-    new MutationObserver(brandTab).observe(document.head, { childList: true, subtree: true, characterData: true });
     const svgIcon = (body, size = 20, stroke = 'currentColor') =>
         `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
     // фон: рамка с искрой — «живой фон»
@@ -1057,6 +1161,28 @@
             matrixSat: 15,
             avatarSat: 15
         },
+        orange: {
+            name: 'Оранжевый',
+            color: '#ff8c1a',
+            gradientLight: 'linear-gradient(270deg, #f26b00, #ff8c1a, #ffa64d)',
+            gradientDark: 'linear-gradient(270deg, #ff8c1a, #ffa64d, #ffc080)',
+            glow: 'drop-shadow(0 0 15px rgba(255, 140, 26, 0.9)) drop-shadow(0 0 25px rgba(255, 140, 26, 0.6))',
+            matrixHue: 30,
+            avatarHue: 30,
+            matrixSat: 100,
+            avatarSat: 100
+        },
+        gray: {
+            name: 'Серый',
+            color: '#9a9aa2',
+            gradientLight: 'linear-gradient(270deg, #55555c, #7a7a82, #606067)',
+            gradientDark: 'linear-gradient(270deg, #8e8e96, #b8b8c0, #a0a0a8)',
+            glow: 'drop-shadow(0 0 15px rgba(170, 170, 180, 0.8)) drop-shadow(0 0 25px rgba(170, 170, 180, 0.5))',
+            matrixHue: 0,
+            avatarHue: 0,
+            matrixSat: 0,
+            avatarSat: 0
+        },
         // «Перелив» — по буквам пробегает блик; «Глитч» — цифровые помехи. Вид задаёт nickCss(dark).
         shimmer: {
             name: 'Перелив',
@@ -1111,6 +1237,9 @@
             return h !== null ? h : c === 'rainbow' ? 1001 : 1000; };
         return rank(a) - rank(b);
     });
+    // вкладка браузера и иконка — здесь, после стилей ника: своя иконка берёт фон из них
+    brandTab();
+    new MutationObserver(brandTab).observe(document.head, { childList: true, subtree: true, characterData: true });
 
     const globalStyles = document.createElement('style');
     globalStyles.textContent = `
@@ -1281,6 +1410,47 @@
         .toggle-switch.active::after {
             left: 20px !important;
         }
+        /* кнопка «ИТД X» вместо «ИТД НУКСТА» */
+        .vp-nuksta-hidden { display: none !important; }
+        .vp-sec-title { font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--text-secondary, rgba(255, 255, 255, .55));
+            margin: 12px 12px 6px; }
+        .vp-like-inline { max-height: none !important; }
+        /* настройки по вкладкам */
+        .vp-settings-tabs { width: 300px !important; max-width: calc(100vw - 16px) !important; box-sizing: border-box !important;
+            max-height: calc(100vh - 16px) !important; overflow-y: auto !important; overscroll-behavior: contain; scrollbar-width: none; }
+        .vp-settings-tabs::-webkit-scrollbar { display: none; }
+        .vp-tabs { display: flex; gap: 4px; padding: 3px; margin-bottom: 8px; border-radius: 16px;
+            background: color-mix(in srgb, var(--text-primary, #fff) 7%, transparent); }
+        .vp-tab { flex: 1 1 auto; min-width: 0; border: 0; background: none; cursor: pointer; font: inherit; font-size: 13px;
+            padding: 7px 2px; white-space: nowrap; border-radius: 13px; color: var(--text-secondary, rgba(255, 255, 255, .6)); transition: background .15s ease, color .15s ease; }
+        .vp-tab:hover { color: var(--text-primary, #fff); }
+        .vp-tab.vp-active { color: var(--text-primary, #fff); font-weight: 600;
+            background: color-mix(in srgb, var(--vp-accent, #0080ff) 22%, transparent);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 45%, transparent); }
+        .vp-icon-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        .vp-icon-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; padding: 6px 2px 5px;
+            border: 0; border-radius: 14px; background: none; cursor: pointer; font: inherit; color: var(--text-secondary, rgba(255, 255, 255, .6)); }
+        .vp-icon-tile img { width: 44px; height: 44px; border-radius: 11px; display: block; }
+        .vp-icon-tile span { font-size: 10.5px; line-height: 1.15; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-icon-tile:hover { background: var(--bg-hover, rgba(0, 128, 255, 0.15)); }
+        .vp-icon-tile.vp-active { color: var(--text-primary, #fff);
+            background: color-mix(in srgb, var(--vp-accent, #0080ff) 16%, transparent);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 45%, transparent); }
+        .vp-icon-own { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.1)); }
+        .vp-icon-own-title { font-size: 13px; font-weight: 600; color: var(--text-primary, #fff); margin: 0 4px 8px; }
+        .vp-icon-own-row { display: flex; align-items: center; gap: 10px; padding: 0 4px; }
+        .vp-icon-emoji { width: 44px; height: 44px; flex: 0 0 44px; box-sizing: border-box; text-align: center; font-size: 24px; padding: 0;
+            border-radius: 12px; border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15)); outline: none;
+            background: color-mix(in srgb, var(--text-primary, #fff) 6%, transparent); color: var(--text-primary, #fff); }
+        .vp-icon-emoji:focus { border-color: var(--vp-accent, #0080ff); }
+        .vp-icon-bgs { display: flex; flex-wrap: wrap; gap: 5px; }
+        .vp-icon-bg { width: 20px; height: 20px; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
+            box-shadow: inset 0 0 0 1px rgba(127, 127, 127, .35); }
+        .vp-icon-bg.vp-active { box-shadow: 0 0 0 2px var(--block-bg, #1e1e2e), 0 0 0 4px var(--vp-accent, #0080ff); }
+        .vp-icon-upload { width: 100%; margin-top: 12px; padding: 10px 12px; border-radius: 16px; cursor: pointer; font: inherit; font-size: 14px;
+            border: 1px dashed var(--border-color, rgba(255, 255, 255, 0.2)); background: none; color: var(--text-primary, #fff); }
+        .vp-icon-upload:hover { background: var(--bg-hover, rgba(0, 128, 255, 0.15)); }
+        .vp-icon-note { font-size: 11.5px; line-height: 1.35; margin: 8px 4px 2px; color: var(--text-secondary, rgba(255, 255, 255, .5)); }
     `;
     document.head.appendChild(globalStyles);
 
@@ -1822,14 +1992,26 @@
     // а не окно) и закрывается кликом мимо или когда кнопка ушла с экрана.
     let popup = null;                                   // { el, btn }
 
-    function closePopup() {
+    // Кнопка «назад» на телефоне закрывает открытое меню, а не уводит со страницы: при открытии
+    // кладём в историю запись с тем же адресом, «назад» снимает её. Закрыли меню сами — снимаем её тоже.
+    let popupHist = false;
+    function closePopup(keepHist) {
         if (!popup) return;
         popup.el.remove();
         window.removeEventListener('scroll', placePopup, true);
         window.removeEventListener('resize', placePopup);
         document.removeEventListener('click', clickOutsidePopup, true);
         popup = null;
+        if (popupHist && !keepHist) {
+            popupHist = false;
+            if (history.state && history.state.vpPopup) history.back();
+        }
     }
+    window.addEventListener('popstate', () => {
+        if (!popupHist) return;
+        popupHist = false;
+        closePopup();
+    });
     function placePopup() {
         if (!popup) return;
         const r = popup.btn.getBoundingClientRect();
@@ -1838,6 +2020,13 @@
             return;
         }
         const w = popup.el.offsetWidth, h = popup.el.offsetHeight;
+        // окно настроек ИТД X — под кнопкой по центру; не влезает вниз — прижимаем к низу экрана
+        if (popup.el.classList.contains('vp-settings-tabs')) {
+            const cx = innerWidth < 600 ? innerWidth / 2 : r.left + r.width / 2;          // на телефоне — по центру экрана
+            popup.el.style.left = Math.max(8, Math.min(cx - w / 2, innerWidth - w - 8)) + 'px';
+            popup.el.style.top = Math.max(8, Math.min(r.bottom + 8, innerHeight - h - 8)) + 'px';
+            return;
+        }
         let left = r.right + 8;
         if (left + w > innerWidth) left = r.left - w - 8;
         popup.el.style.left = Math.max(8, left) + 'px';
@@ -1848,9 +2037,13 @@
     }
     function openPopup(btn, el) {
         const same = popup && popup.btn === btn;
-        closePopup();
+        closePopup(!same);                              // меню сменилось на другое — запись в истории та же
         if (same) return false;
         popup = { el, btn };
+        if (!popupHist) {
+            history.pushState(Object.assign({}, history.state, { vpPopup: true }), '', location.href);
+            popupHist = true;
+        }
         el.style.position = 'fixed';
         document.body.appendChild(el);
         placePopup();
@@ -1896,17 +2089,6 @@
         }
         return dot;
     }
-    function openStyleMenu(btn) {
-        const menu = menuBox();
-        styleKeys.forEach(key => menu.appendChild(menuOption(getColorDot(key), nickStyles[key].name, () => {
-            currentStyle = key;
-            GM_setValue('nickStyle', key);
-            paint();
-            btn.title = `Стиль: ${nickStyles[key].name}`;
-        }, key === currentStyle)));
-        openPopup(btn, menu);
-    }
-
     // --- стиль фона
     const BG_STYLES = {
         matrix: { name: 'Матрица', icon: svgIcon('<path d="M6 3v3M6 9.5v5M6 18v3M12 3v6M12 12.5v2M12 18v3M18 3v2M18 8.5v6M18 18v3"/>') },
@@ -1918,21 +2100,6 @@
         grid: { name: 'Неон-сетка', icon: svgIcon('<path d="M8 8a4 4 0 0 1 8 0"/><path d="M2 12h20"/><path d="M12 12v9M12 12l-8 9M12 12l8 9M5 17h14"/>') },
         snow: { name: 'Снегопад', icon: svgIcon('<path d="M12 2v20M3.3 7l17.4 10M3.3 17 20.7 7"/><path d="m9 4 3 2 3-2M9 20l3-2 3 2"/>') }
     };
-    function openBgMenu(btn) {
-        const menu = menuBox();
-        Object.entries(BG_STYLES).forEach(([key, bg]) => {
-            const icon = document.createElement('div');
-            icon.className = 'vp-menu-icon';
-            icon.innerHTML = bg.icon;
-            menu.appendChild(menuOption(icon, bg.name, () => {
-                backgroundStyle = key;
-                GM_setValue('backgroundStyle', key);
-                btn.title = 'Стиль фона: ' + bg.name;
-            }, key === backgroundStyle));
-        });
-        openPopup(btn, menu);
-    }
-
     // --- автолайки: список тех, кого лайкать
     function updateAutoLikeButtons() {
         const active = Object.keys(autoLikeUsers).length > 0;
@@ -1972,20 +2139,6 @@
             list.appendChild(row);
         }
     }
-    function openAutoLikeMenu(btn) {
-        const menu = menuBox();
-        menu.classList.add('vp-like-menu');
-        menu.innerHTML = '<div class="vp-like-list"><div class="vp-menu-note">Загрузка...</div></div><div class="vp-like-footer">Активно: 0</div>';
-        const list = menu.firstElementChild, footer = menu.lastElementChild;
-        if (!openPopup(btn, menu)) return;
-        fetchAutoLikeUsers().then(usersData => {
-            renderAutoLikeUsers(list, footer, usersData);
-            placePopup();
-        }).catch(() => {
-            list.innerHTML = '<div class="vp-menu-note">Ошибка загрузки</div>';
-        });
-    }
-
     // --- настройки: список переключателей
     function applyPostBlurSetting() {
         document.querySelectorAll('.' + SELECTORS.post + '[data-post-colored]').forEach(post => {
@@ -2044,29 +2197,220 @@
         { label: 'Свечение видео', get: () => ambientEnabled, set: v => { ambientEnabled = v; applyAmbient(); }, key: 'ambientEnabled' },
         { label: 'Боковая панель', get: () => railEnabled, set: v => { railEnabled = v; placeRail(); }, key: 'railEnabled' }
     ];
+    // Все настройки ИТД X — одно окно по вкладкам (кнопка «ИТД X» в шапке профиля).
+    // Последняя открытая вкладка запоминается.
+    const SETTINGS_TABS = [
+        { id: 'nick', name: 'Ник', items: ['Подсветка ника', 'Подсветка аватарок', 'Подсветка постов'] },
+        { id: 'bg', name: 'Фон', items: ['Фон'] },
+        { id: 'look', name: 'Вид', items: ['Стекло', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель'] },
+        { id: 'likes', name: 'Лайки', items: ['Автолайки'] },
+        { id: 'misc', name: 'Ещё', items: ['Анти цензура', 'Звуки интерфейса', 'Заставка при входе'] },
+        { id: 'icon', name: 'Иконка' }
+    ];
+    function settingRow(opt, after) {
+        const row = document.createElement('div');
+        row.className = 'settings-option';
+        row.innerHTML = `<span class="vp-setting-label">${ICONS.settings[opt.label] || ''}<span></span></span><div class="toggle-switch"></div>`;
+        row.querySelector('.vp-setting-label > span').textContent = opt.label;
+        const toggle = row.lastElementChild;
+        toggle.classList.toggle('active', !!opt.get());
+        row.onclick = (e) => {
+            e.stopPropagation();
+            const v = !opt.get();
+            GM_setValue(opt.key, v);
+            opt.set(v);
+            toggle.classList.toggle('active', v);
+            if (after) after();
+        };
+        return row;
+    }
+    const secTitle = (text) => {
+        const t = document.createElement('div');
+        t.className = 'vp-sec-title';
+        t.textContent = text;
+        return t;
+    };
+    // пункт списка (стиль ника, фон): выбор не закрывает окно — вкладка перерисовывается с новой галочкой
+    function pickRow(icon, label, active, onPick, redraw) {
+        const o = menuOption(icon, label, onPick, active);
+        o.onclick = (e) => { e.stopPropagation(); onPick(); redraw(); };
+        return o;
+    }
     function openSettingsMenu(btn) {
         const menu = document.createElement('div');
-        menu.className = 'settings-dropdown';
-        for (const opt of SETTINGS) {
-            const row = document.createElement('div');
-            row.className = 'settings-option';
-            row.innerHTML = `<span class="vp-setting-label">${ICONS.settings[opt.label] || ''}<span></span></span><div class="toggle-switch"></div>`;
-            row.querySelector('.vp-setting-label > span').textContent = opt.label;
-            const toggle = row.lastElementChild;
-            toggle.classList.toggle('active', !!opt.get());
-            row.onclick = (e) => {
-                e.stopPropagation();
-                const v = !opt.get();
-                GM_setValue(opt.key, v);
-                opt.set(v);
-                toggle.classList.toggle('active', v);
-            };
-            menu.appendChild(row);
+        menu.className = 'settings-dropdown vp-settings-tabs';
+        const tabs = document.createElement('div');
+        tabs.className = 'vp-tabs';
+        const body = document.createElement('div');
+        body.className = 'vp-tab-body';
+        menu.append(tabs, body);
+        let current = GM_getValue('settingsTab', 'nick');
+        if (!SETTINGS_TABS.some(t => t.id === current)) current = 'nick';
+        const show = (id) => {
+            current = id;
+            GM_setValue('settingsTab', id);
+            tabs.querySelectorAll('.vp-tab').forEach(t => t.classList.toggle('vp-active', t.dataset.tab === id));
+            body.textContent = '';
+            const redraw = () => show(id);
+            const tab = SETTINGS_TABS.find(t => t.id === id);
+            if (id === 'icon') body.appendChild(iconPicker());
+            else for (const label of tab.items) body.appendChild(settingRow(SETTINGS.find(o => o.label === label), id === 'bg' ? redraw : null));
+            if (id === 'nick') {
+                body.appendChild(secTitle('Стиль ника'));
+                styleKeys.forEach(key => body.appendChild(pickRow(getColorDot(key), nickStyles[key].name, key === currentStyle, () => {
+                    currentStyle = key;
+                    GM_setValue('nickStyle', key);
+                    paint();
+                }, redraw)));
+            }
+            if (id === 'bg' && backgroundEnabled) {
+                body.appendChild(secTitle('Стиль фона'));
+                Object.entries(BG_STYLES).forEach(([key, bg]) => {
+                    const icon = document.createElement('div');
+                    icon.className = 'vp-menu-icon';
+                    icon.innerHTML = bg.icon;
+                    body.appendChild(pickRow(icon, bg.name, key === backgroundStyle, () => {
+                        backgroundStyle = key;
+                        GM_setValue('backgroundStyle', key);
+                    }, redraw));
+                });
+            }
+            if (id === 'likes') {
+                body.appendChild(secTitle('Кого лайкать'));
+                const box = document.createElement('div');
+                box.className = 'vp-like-menu vp-like-inline';
+                box.innerHTML = '<div class="vp-like-list"><div class="vp-menu-note">Загрузка...</div></div><div class="vp-like-footer">Активно: 0</div>';
+                body.appendChild(box);
+                const list = box.firstElementChild, footer = box.lastElementChild;
+                fetchAutoLikeUsers().then(usersData => {
+                    if (!list.isConnected) return;
+                    renderAutoLikeUsers(list, footer, usersData);
+                    if (popup && popup.el === menu) placePopup();
+                }).catch(() => { list.innerHTML = '<div class="vp-menu-note">Ошибка загрузки</div>'; });
+            }
+            // не переключатель, а действие: файл со страницей — присылать разработчику, чтобы править по настоящей разметке.
+            // Только у админа (по логину): остальным пункт ни к чему
+            if (id === 'misc' && myUsername && ADMINS.includes(myUsername.toLowerCase())) body.appendChild(snapshotRow());
+            if (popup && popup.el === menu) placePopup();
+        };
+        for (const t of SETTINGS_TABS) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'vp-tab';
+            b.dataset.tab = t.id;
+            b.textContent = t.name;
+            b.onclick = (e) => { e.stopPropagation(); if (current !== t.id) show(t.id); };
+            tabs.appendChild(b);
         }
-        // не переключатель, а действие: файл со страницей — присылать разработчику, чтобы править по настоящей разметке.
-        // Только у админа (по логину): остальным пункт ни к чему
-        if (myUsername && ADMINS.includes(myUsername.toLowerCase())) menu.appendChild(snapshotRow());
+        show(current);
         openPopup(btn, menu);
+    }
+
+    // Вкладка «Иконка»: готовые, своя (фон + эмодзи) и своя картинка
+    function iconPicker() {
+        const wrap = document.createElement('div');
+        wrap.className = 'vp-icon-picker';
+        const grid = document.createElement('div');
+        grid.className = 'vp-icon-grid';
+        const tile = (id, name, src) => {
+            const t = document.createElement('button');
+            t.type = 'button';
+            t.className = 'vp-icon-tile' + (appIcon === id ? ' vp-active' : '');
+            t.dataset.icon = id;
+            t.title = name;
+            t.innerHTML = '<img alt=""><span></span>';
+            t.firstChild.src = src;
+            t.lastChild.textContent = name;
+            t.onclick = (e) => { e.stopPropagation(); pick(id); };
+            return t;
+        };
+        const pick = (id) => {
+            setAppIcon(id);
+            wrap.querySelectorAll('.vp-icon-tile').forEach(t => t.classList.toggle('vp-active', t.dataset.icon === id));
+        };
+        for (const it of APP_ICONS) grid.appendChild(tile(it.id, it.name, iconSrcById(it.id)));
+        const customTile = tile('custom', 'Своя', iconSrcById('custom'));
+        grid.appendChild(customTile);
+        let imageTile = null;
+        const addImageTile = () => {
+            if (imageTile) { imageTile.firstChild.src = iconSrcById('image'); return; }
+            imageTile = tile('image', 'Картинка', iconSrcById('image'));
+            grid.appendChild(imageTile);
+        };
+        if (GM_getValue('appIconImage', '')) addImageTile();
+        wrap.appendChild(grid);
+
+        // своя: эмодзи + фон
+        const own = document.createElement('div');
+        own.className = 'vp-icon-own';
+        own.innerHTML = '<div class="vp-icon-own-title">Своя иконка</div><div class="vp-icon-own-row"><input class="vp-icon-emoji" type="text" maxlength="16" placeholder="🦊" aria-label="Эмодзи"><div class="vp-icon-bgs"></div></div>';
+        const input = own.querySelector('input');
+        const bgs = own.querySelector('.vp-icon-bgs');
+        const cur = iconCustom();
+        input.value = cur.emoji;
+        const saveCustom = (patch) => {
+            const c = Object.assign(iconCustom(), patch);
+            GM_setValue('appIconCustom', c);
+            customTile.firstChild.src = iconSrcById('custom');
+            bgs.querySelectorAll('.vp-icon-bg').forEach(d => d.classList.toggle('vp-active', d.dataset.bg === c.bg));
+            pick('custom');
+        };
+        for (const b of iconBgs()) {
+            const d = document.createElement('button');
+            d.type = 'button';
+            d.className = 'vp-icon-bg' + (cur.bg === b.id ? ' vp-active' : '');
+            d.dataset.bg = b.id;
+            d.title = b.name;
+            d.style.background = b.c.length > 1 ? `linear-gradient(135deg, ${b.c.join(', ')})` : b.c[0];
+            d.onclick = (e) => { e.stopPropagation(); saveCustom({ bg: b.id }); };
+            bgs.appendChild(d);
+        }
+        input.addEventListener('click', e => e.stopPropagation());
+        input.addEventListener('input', () => {
+            const g = firstGrapheme(input.value);
+            if (!g) return;
+            saveCustom({ emoji: g });
+        });
+        input.addEventListener('blur', () => { input.value = iconCustom().emoji; });
+        wrap.appendChild(own);
+
+        // своя картинка: обрезаем по центру в квадрат 256 px и храним у себя (в настройках скрипта)
+        const up = document.createElement('button');
+        up.type = 'button';
+        up.className = 'vp-icon-upload';
+        up.textContent = 'Загрузить свою картинку';
+        up.onclick = (e) => {
+            e.stopPropagation();
+            const f = document.createElement('input');
+            f.type = 'file';
+            f.accept = 'image/*';
+            f.onchange = () => {
+                const file = f.files && f.files[0];
+                if (!file) return;
+                const url = URL.createObjectURL(file);
+                const img = new Image();
+                img.onload = () => {
+                    const s = Math.min(img.naturalWidth, img.naturalHeight);
+                    const c = document.createElement('canvas');
+                    c.width = c.height = 256;
+                    c.getContext('2d').drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, 256, 256);
+                    URL.revokeObjectURL(url);
+                    GM_setValue('appIconImage', c.toDataURL('image/png'));
+                    pngFor = null;
+                    addImageTile();
+                    pick('image');
+                };
+                img.onerror = () => URL.revokeObjectURL(url);
+                img.src = url;
+            };
+            f.click();
+        };
+        wrap.appendChild(up);
+        const note = document.createElement('div');
+        note.className = 'vp-icon-note';
+        note.textContent = 'Иконка меняется на вкладке и в логотипе. Ярлык на главном экране телефона добавь заново — старый сам не обновится.';
+        wrap.appendChild(note);
+        return wrap;
     }
     const ADMINS = ['neurosfw'];
     function snapshotRow() {
@@ -2118,26 +2462,44 @@
         });
         return b;
     }
+    // Кнопка «ИТД X» — на месте кнопки сайта «ИТД НУКСТА» в шапке своего профиля, тем же видом
+    // (берём её классы). Открывает все настройки мода. Кнопку сайта только прячем: её рисует сайт.
+    // Если такой кнопки нет (сайт поменялся) — у ника остаётся круглая кнопка настроек.
+    function findNukstaButton(from) {
+        for (let el = from, i = 0; el && i < 6; el = el.parentElement, i++) {
+            const b = [...el.querySelectorAll('button')].find(x => !x.classList.contains('vp-itdx-btn') && /нукста/i.test(x.textContent));
+            if (b) return b;
+        }
+        return null;
+    }
     function addToggleButtonToNick(ru5n) {
         const nickSpan = ru5n.querySelector('.' + SELECTORS.nickText);
         if (!nickSpan) return;
         const nickText = nickSpan.textContent.trim();
         if (nickText !== myUsername && nickText !== myDisplayName) return;
-        if (ru5n.querySelector('.nick-controls-panel')) return;
 
+        const nuksta = findNukstaButton(ru5n);
+        if (nuksta) {
+            nuksta.classList.add('vp-nuksta-hidden');
+            const next = nuksta.nextElementSibling;
+            if (!next || !next.classList.contains('vp-itdx-btn')) {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = nuksta.className.replace('vp-nuksta-hidden', '').trim() + ' vp-itdx-btn';
+                b.textContent = 'ИТД X';
+                b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openSettingsMenu(b); });
+                nuksta.after(b);
+            }
+            document.querySelectorAll('.nick-controls-panel').forEach(p => p.remove());
+            return;
+        }
+        if (document.querySelector('.vp-itdx-btn') || ru5n.querySelector('.nick-controls-panel')) return;
         const panel = document.createElement('div');
         panel.className = 'nick-controls-panel';
-        panel.append(
-            pillButton('nick-style-toggle', `Стиль: ${nickStyles[currentStyle].name}`, ICONS.PALETTE, openStyleMenu),
-            pillButton('auto-like-toggle', 'Автолайки', ICONS.settings['Автолайки'], openAutoLikeMenu),
-            pillButton('bg-style-toggle', 'Стиль фона', ICONS.settings['Фон'], openBgMenu),
-            pillButton('settings-toggle', 'Настройки', ICONS.GEAR, openSettingsMenu)
-        );
+        panel.append(pillButton('settings-toggle', 'ИТД X', ICONS.GEAR, openSettingsMenu));
         const nick = ru5n.querySelector('.' + SELECTORS.nickContainer);
         if (nick) nick.after(panel);
         else ru5n.appendChild(panel);
-        updateAutoLikeButtons();
-        updateBackgroundToggleButtons();
     }
 
     function updateBackgroundToggleButtons() {
