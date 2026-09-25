@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.17
+// @version      3.1.18
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1596,6 +1596,15 @@
         .vp-fab-a { font: 800 21px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: -.02em; }
         /* профиль на телефоне: без палочки между «подписчиков» и «подписок» */
         @media (max-width: 1172px) { [data-vp-posts] > hr { display: none !important; } }
+        /* репост в подкрашенной карточке — полупрозрачный, цвет карточки просвечивает */
+        .vp-emoji-tint .vp-soft-bg, .itd-blur-active .vp-soft-bg { background-color: rgba(0, 0, 0, .22) !important; }
+        html.vp-light .vp-emoji-tint .vp-soft-bg, html.vp-light .itd-blur-active .vp-soft-bg { background-color: rgba(255, 255, 255, .35) !important; }
+        /* длинный ник в шапке поста не налезает на время: обрезается многоточием (значки — после, не режутся) */
+        /* то же в списках «Подписчики»/«Подписки» и везде, где ник в строке (кроме крупного ника профиля) */
+        .vp-nick-row > a { min-width: 0; overflow: hidden; }
+        .vp-nick-row .vp-nick:not(.vp-nick-large *) { min-width: 0; max-width: 100%; }
+        .vp-nick-row .vp-nick-text:not(.vp-nick-large *) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
+        article .vp-nick-row time { flex-shrink: 0; }
         /* свёрнутый длинный пост: низ текста тает сам, без полосы цвета обычной карточки */
         .vp-clamp::after { display: none !important; }
         .vp-clamp { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); }
@@ -6801,6 +6810,21 @@
             if (!key) { post.removeAttribute('data-post-colored'); return; }
             post.setAttribute('data-post-colored', key);
             if (!withBlur) tintCard(post, emoji);                // с картинкой фон даёт её размытие
+        });
+        // репосты могли дорисоваться позже самой карточки
+        document.querySelectorAll('article.' + SELECTORS.post + '[data-post-colored] .' + SELECTORS.repost + ':not([data-vp-soft])').forEach(rp => softenRepost(rp.closest('article')));
+    }
+    // Репост внутри подкрашенной карточки: у сайта он и плашки в нём залиты сплошным тёмным —
+    // на цветной карточке это чёрная дыра. Сплошные фоны в репосте делаем полупрозрачными.
+    function softenRepost(post) {
+        post.querySelectorAll('.' + SELECTORS.repost + ':not([data-vp-soft])').forEach(rp => {
+            rp.setAttribute('data-vp-soft', '');
+            [rp, ...rp.querySelectorAll('div, p, section')].forEach(el => {
+                if (el.closest('button, a, video') || el.querySelector(':scope > img, :scope > video')) return;
+                const m = getComputedStyle(el).backgroundColor.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?/);
+                if (!m || (m[4] !== undefined && +m[4] < .5)) return;           // прозрачный — не трогаем
+                el.classList.add('vp-soft-bg');
+            });
         });
     }
 
