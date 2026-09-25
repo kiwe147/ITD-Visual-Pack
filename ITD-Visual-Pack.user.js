@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.7
+// @version      3.1.8
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1522,6 +1522,8 @@
         .vp-fab-menu button:active { background: rgba(255, 255, 255, .1); }
         .vp-fab svg { flex: 0 0 auto; width: 20px !important; height: 20px !important; }
         .vp-fab-a { font: 800 21px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: -.02em; }
+        /* профиль на телефоне: без палочки между «подписчиков» и «подписок» */
+        @media (max-width: 1172px) { [data-vp-posts] > hr { display: none !important; } }
         /* свёрнутый длинный пост: низ текста тает сам, без полосы цвета обычной карточки */
         .vp-clamp::after { display: none !important; }
         .vp-clamp { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); }
@@ -6974,7 +6976,7 @@
             try { rules = sh.cssRules; } catch (e) { continue; }
             for (const r of rules || []) {
                 const st = r.style;
-                if (!st || !r.selectorText || /vp-/.test(r.selectorText)) continue;
+                if (!st || !r.selectorText || /vpi?-/.test(r.selectorText)) continue;
                 if (st.position !== 'fixed' || !(parseInt(st.zIndex) >= 100)) continue;
                 const full = zero(st.inset) || (zero(st.top) && zero(st.left) && (zero(st.right) || /^100(%|vw)$/.test(st.width))
                     && (zero(st.bottom) || /^100(%|vh|dvh)$/.test(st.height)));
