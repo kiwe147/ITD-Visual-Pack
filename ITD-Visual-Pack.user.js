@@ -1468,6 +1468,8 @@
         /* заставка на телефоне: три варианта */
         .toggle-switch.vp-tri { width: 58px !important; }
         .toggle-switch.vp-tri[data-s="1"]::after { left: 20px !important; }
+        /* «Вкл» без звука: синим — только до ручки, справа от неё — как выключенная часть */
+        .toggle-switch.vp-tri.active[data-s="1"] { background: linear-gradient(to right, var(--accent-primary, #0080FF) 29px, rgba(0, 0, 0, 0.5) 29px) !important; }
         .toggle-switch.vp-tri[data-s="2"]::after { left: 38px !important;
             background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230080ff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 9.5v5h3.5L12 18.5V5.5L7.5 9.5z'/%3E%3Cpath d='M16 9a4 4 0 0 1 0 6'/%3E%3C/svg%3E") center / 12px no-repeat !important; }
         .vp-tri-text { display: flex; flex-direction: column; gap: 1px; }
