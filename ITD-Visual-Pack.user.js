@@ -1151,6 +1151,28 @@
             matrixSat: 15,
             avatarSat: 15
         },
+        orange: {
+            name: 'Оранжевый',
+            color: '#ff8c1a',
+            gradientLight: 'linear-gradient(270deg, #f26b00, #ff8c1a, #ffa64d)',
+            gradientDark: 'linear-gradient(270deg, #ff8c1a, #ffa64d, #ffc080)',
+            glow: 'drop-shadow(0 0 15px rgba(255, 140, 26, 0.9)) drop-shadow(0 0 25px rgba(255, 140, 26, 0.6))',
+            matrixHue: 30,
+            avatarHue: 30,
+            matrixSat: 100,
+            avatarSat: 100
+        },
+        gray: {
+            name: 'Серый',
+            color: '#9a9aa2',
+            gradientLight: 'linear-gradient(270deg, #55555c, #7a7a82, #606067)',
+            gradientDark: 'linear-gradient(270deg, #8e8e96, #b8b8c0, #a0a0a8)',
+            glow: 'drop-shadow(0 0 15px rgba(170, 170, 180, 0.8)) drop-shadow(0 0 25px rgba(170, 170, 180, 0.5))',
+            matrixHue: 0,
+            avatarHue: 0,
+            matrixSat: 0,
+            avatarSat: 0
+        },
         // «Перелив» — по буквам пробегает блик; «Глитч» — цифровые помехи. Вид задаёт nickCss(dark).
         shimmer: {
             name: 'Перелив',
