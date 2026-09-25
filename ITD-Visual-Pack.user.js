@@ -2069,13 +2069,18 @@
             };
             menu.appendChild(row);
         }
-        // не переключатель, а действие: файл со страницей — присылать разработчику, чтобы править по настоящей разметке
+        // не переключатель, а действие: файл со страницей — присылать разработчику, чтобы править по настоящей разметке.
+        // Только у админа (по логину): остальным пункт ни к чему
+        if (myUsername && ADMINS.includes(myUsername.toLowerCase())) menu.appendChild(snapshotRow());
+        openPopup(btn, menu);
+    }
+    const ADMINS = ['neurosfw'];
+    function snapshotRow() {
         const snap = document.createElement('div');
         snap.className = 'settings-option';
         snap.innerHTML = `<span class="vp-setting-label"><span>📸 Снимок страницы для Claude</span></span>`;
         snap.onclick = e => { e.stopPropagation(); closePopup(); setTimeout(pageSnapshot, 300); };
-        menu.appendChild(snap);
-        openPopup(btn, menu);
+        return snap;
     }
 
     // Снимок страницы: разметка как она есть сейчас (с метками vp-* и классами сайта) + все стили сайта
