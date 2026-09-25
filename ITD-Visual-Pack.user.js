@@ -1596,6 +1596,11 @@
         .vp-fab-a { font: 800 21px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: -.02em; }
         /* профиль на телефоне: без палочки между «подписчиков» и «подписок» */
         @media (max-width: 1172px) { [data-vp-posts] > hr { display: none !important; } }
+        /* длинный ник в шапке поста не налезает на время: обрезается многоточием (значки — после, не режутся) */
+        article .vp-nick-row > a { min-width: 0; overflow: hidden; }
+        article .vp-nick-row .vp-nick { min-width: 0; max-width: 100%; }
+        article .vp-nick-row .vp-nick-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
+        article .vp-nick-row time { flex-shrink: 0; }
         /* свёрнутый длинный пост: низ текста тает сам, без полосы цвета обычной карточки */
         .vp-clamp::after { display: none !important; }
         .vp-clamp { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); }
