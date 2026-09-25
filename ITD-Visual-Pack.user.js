@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.15
+// @version      3.1.16
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -35,6 +35,22 @@
                 b.style.cssText = 'position:fixed;left:50%;bottom:110px;transform:translateX(-50%);z-index:2147483000;padding:10px 18px;border-radius:999px;border:1px solid rgba(255,255,255,.2);background:rgba(20,20,24,.9);color:#fff;font:600 14px system-ui,sans-serif;cursor:pointer';
                 b.onclick = () => { sessionStorage.removeItem('vp-off'); location.reload(); };
                 document.body.appendChild(b);
+                // счётчик FPS — чтобы сравнить сайт без мода с модом (как в админке)
+                const f = document.createElement('div');
+                f.style.cssText = 'position:fixed;left:8px;top:8px;z-index:2147483000;padding:4px 8px;border-radius:8px;pointer-events:none;background:rgba(0,0,0,.75);color:#6f6;font:600 12px ui-monospace,monospace';
+                f.textContent = 'без мода';
+                document.body.appendChild(f);
+                let n = 0, t0 = performance.now(), last = t0, worst = 0;
+                (function tick(t) {
+                    n++; worst = Math.max(worst, t - last); last = t;
+                    if (t - t0 >= 1000) {
+                        const fps = Math.round(n * 1000 / (t - t0));
+                        f.textContent = `без мода · ${fps} FPS · рывок ${Math.round(worst)} мс`;
+                        f.style.color = fps < 45 || worst > 50 ? '#ff6b6b' : '#6f6';
+                        n = 0; t0 = t; worst = 0;
+                    }
+                    requestAnimationFrame(tick);
+                })(t0);
             };
             if (document.body) back(); else addEventListener('DOMContentLoaded', back);
             return;
