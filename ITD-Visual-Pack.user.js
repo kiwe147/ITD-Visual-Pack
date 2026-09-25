@@ -907,8 +907,8 @@
     // Мой аватар — в первой ссылке на мой профиль
     function myAvatarEl() {
         if (!myUsername) return null;
-        // первая ссылка на мой профиль — но не пункт «Профиль» в меню: у него иконка, а не моя аватарка
-        const link = [...document.querySelectorAll(`a[href="/@${myUsername}" i]`)].find(a => !a.closest('nav'));
+        // первая ссылка на мой профиль — обычно пункт «Профиль» в меню: его иконка светится так же, как аватарка
+        const link = document.querySelector(`a[href="/@${myUsername}" i]`);
         if (!link) return null;
         const container = link.querySelector(':scope > div');
         if (container && container.querySelector('span')) return container;
