@@ -4778,7 +4778,7 @@
     // Бугорок — одна плавная кривая-«колокол» шириной BUMP_W и высотой BUMP_H над краем панели:
     // касательные горизонтальны у краёв и на вершине, без стыков разных дуг — без резкого пика.
     // «+» (BUMP px) — по центру, чуть над краем панели (BUMP_UP): пункты панели не задевает.
-    const BUMP = 40, BUMP_UP = 2, BUMP_W = 160, BUMP_H = 21, BUMP_LIFT = BUMP_H;
+    const BUMP = 40, BUMP_UP = 5, BUMP_W = 160, BUMP_H = 21, BUMP_LIFT = BUMP_H;
     // контур «скруглённая панель + бугорок»: w×h панели, её верх — на y = top
     function bumpPath(w, h, top) {
         const r = h / 2, cx = w / 2, half = BUMP_W / 2, peak = top - BUMP_H, n = v => +v.toFixed(2);
