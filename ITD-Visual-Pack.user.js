@@ -5227,14 +5227,24 @@
     // Переписки пока нет — пусто, пока не напишешь; ничего не сохраняется.
     const MSG_BOT = { id: 'bot', ava: '🤖', name: 'Сервер ИТД', login: '', last: 'Напиши что-нибудь — отвечу. Честно', time: 'сейчас', unread: 1, online: true, bot: true,
         msgs: [['in', 'Привет! Я — Сервер ИТД. Личка пока в разработке 🛠️'], ['in', 'Сообщения никуда не уходят, зато я отвечаю. Проверь 😏']] };
-    let MSG_DIALOGS = [MSG_BOT];
+    // Поддержка ИТД X — отдельный чат: пишешь проблему или идею, отвечает «оператор» (пока тоже прототип)
+    const MSG_SUPPORT = { id: 'support', ava: '🛟', name: 'Поддержка ИТД X', login: '', last: 'Нашёл баг или есть идея — пиши сюда', time: '', unread: 0, online: true, support: true,
+        msgs: [['in', 'Привет! Это поддержка ИТД X 👋'], ['in', 'Нашёл баг или есть идея — опиши здесь. Личка пока прототип, так что быстрее всего — в тг @NeuroSFW']] };
+    let supportTicket = 0;
+    let MSG_DIALOGS = [MSG_BOT, MSG_SUPPORT];
+    // закреплённые чаты (как в Telegram): id по порядку закрепления, хранятся в настройках скрипта
+    const msgPins = () => GM_getValue('msgPins', []);
+    function sortDialogs(list) {
+        const pins = msgPins();
+        return [...list.filter(d => pins.includes(d.id)).sort((a, b) => pins.indexOf(a.id) - pins.indexOf(b.id)), ...list.filter(d => !pins.includes(d.id))];
+    }
     const msgPeople = new Map();                        // логин → диалог (переписка живёт, пока открыта вкладка)
     async function loadMsgPeople(onUpdate) {
         let names = [];
         try { names = Object.keys(JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}')); } catch (e) { }
         names = names.filter(n => !myUsername || n.toLowerCase() !== myUsername.toLowerCase()).sort((a, b) => a.localeCompare(b));
         names.forEach(n => { if (!msgPeople.has(n)) msgPeople.set(n, { id: 'u:' + n, login: n, ava: '👤', name: n, last: 'Тоже с ИТД X · напиши первым', time: '', unread: 0, msgs: [] }); });
-        MSG_DIALOGS = [MSG_BOT, ...names.map(n => msgPeople.get(n))];
+        MSG_DIALOGS = [MSG_BOT, MSG_SUPPORT, ...names.map(n => msgPeople.get(n))];
         onUpdate();
         await Promise.all(names.map(async n => {
             const d = await hcData(n).catch(() => null), p = msgPeople.get(n);
@@ -5294,6 +5304,19 @@
         .vp-msgs-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; font-size: 12px; color: var(--text-secondary, #8a8a8a); }
         .vp-msgs-badge { min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; display: flex; align-items: center; justify-content: center;
             font-size: 12px; font-weight: 700; background: var(--vp-accent, #0080ff); color: var(--vp-on-accent, #fff); }
+        .vp-msgs-pin { display: flex; color: var(--text-secondary, #8a8a8a); }
+        .vp-msgs-row.vp-pinned { background: color-mix(in srgb, var(--text-primary, #fff) 4%, transparent); }
+        .vp-msgs-row.vp-pinned + .vp-msgs-row:not(.vp-pinned) { margin-top: 6px; }
+        .vp-msgs-row { -webkit-touch-callout: none; user-select: none; transition: transform .15s; }
+        .vp-msgs-row.vp-held { transform: scale(.97); }
+        .vp-msgs-ctx { position: absolute; z-index: 3; display: none; padding: 5px; border-radius: 16px; min-width: 170px;
+            background: var(--block-bg, #1c1c1c); border: 1px solid var(--border-color, rgba(255, 255, 255, .1)); box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
+        .vp-msgs-ctx.vp-open { display: block; animation: vpMsgsCtx .14s ease-out; }
+        @keyframes vpMsgsCtx { from { opacity: 0; transform: scale(.94); } }
+        .vp-msgs-ctx button { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; color: var(--text-primary, #fff);
+            font: inherit; font-size: 15px; padding: 10px 12px; border-radius: 12px; cursor: pointer; }
+        .vp-msgs-ctx button:hover, .vp-msgs-ctx button:active { background: var(--bg-hover, rgba(255, 255, 255, .08)); }
+        .vp-msgs-ctx svg { width: 16px; height: 16px; }
         .vp-msgs-empty { padding: 40px 16px; text-align: center; color: var(--text-secondary, #8a8a8a); font-size: 14px; }
         .vp-msgs-chead { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px;
             border-bottom: 1px solid color-mix(in srgb, var(--text-primary, #fff) 8%, transparent); }
@@ -5365,15 +5388,17 @@
 
         function renderList() {
             const q = search.value.trim().toLowerCase();
-            const rows = MSG_DIALOGS.filter(d => !q || (d.name + ' ' + d.login + ' ' + d.last).toLowerCase().includes(q));
-            const people = MSG_DIALOGS.length - 1;
-            $('.vp-msgs-sub').textContent = people ? `Сервер ИТД и ${people} ${plural(people, 'человек', 'человека', 'человек')} с ИТД X` : 'Пока никого с ИТД X — список обновится сам';
+            const pins = msgPins();
+            const rows = sortDialogs(MSG_DIALOGS).filter(d => !q || (d.name + ' ' + d.login + ' ' + d.last).toLowerCase().includes(q));
+            const people = MSG_DIALOGS.filter(d => d.login).length;
+            $('.vp-msgs-sub').textContent = people ? `Сервер ИТД, поддержка и ${people} ${plural(people, 'человек', 'человека', 'человек')} с ИТД X` : 'Пока никого с ИТД X — список обновится сам';
             list.innerHTML = rows.length ? rows.map(d => `
-                <div class="vp-msgs-row" data-id="${d.id}">
+                <div class="vp-msgs-row${pins.includes(d.id) ? ' vp-pinned' : ''}" data-id="${d.id}">
                     <div class="vp-msgs-ava${d.online ? ' vp-online' : ''}">${avaHtml(d.ava)}</div>
                     <div class="vp-msgs-mid"><div class="vp-msgs-name"><span>${esc(d.name)}</span></div>
                         <div class="vp-msgs-last">${esc(d.last)}</div></div>
-                    <div class="vp-msgs-side"><span>${esc(d.time)}</span>${d.unread ? `<span class="vp-msgs-badge">${d.unread}</span>` : ''}</div>
+                    <div class="vp-msgs-side"><span>${esc(d.time)}</span>${d.unread ? `<span class="vp-msgs-badge">${d.unread}</span>`
+                        : pins.includes(d.id) ? `<span class="vp-msgs-pin" title="Закреплён">${MSG_ICON.pin}</span>` : ''}</div>
                 </div>`).join('') : '<div class="vp-msgs-empty">Ничего не нашлось</div>';
         }
         const now = () => new Date().toTimeString().slice(0, 5);
@@ -5394,7 +5419,7 @@
             $('.vp-msgs-chead .vp-msgs-ava').innerHTML = avaHtml(d.ava);
             $('.vp-msgs-chead .vp-msgs-ava').classList.toggle('vp-online', !!d.online);
             $('.vp-msgs-who b').textContent = d.name;
-            $('.vp-msgs-who small').textContent = d.bot ? 'бот · всегда в сети' : '@' + d.login + ' · с ИТД X';
+            $('.vp-msgs-who small').textContent = d.bot ? 'бот · всегда в сети' : d.support ? 'поддержка · на связи' : '@' + d.login + ' · с ИТД X';
             feed.innerHTML = '<div class="vp-msgs-note">🧪 Прототип: сообщения пока никуда не отправляются и не сохраняются</div>'
                 + (d.msgs.length ? '<div class="vp-msgs-note">Сегодня</div>' : `<div class="vp-msgs-note">Это начало переписки с ${esc(d.name)}</div>`);
             d.msgs.forEach(([dir, text]) => bubble(dir, text, dir === 'out' ? now() + ' ✓✓' : now()));
@@ -5428,7 +5453,68 @@
             }, 700 + Math.random() * 600);
         }
 
-        list.addEventListener('click', e => { const r = e.target.closest('.vp-msgs-row'); if (r) openChat(MSG_DIALOGS.find(d => d.id === r.dataset.id)); });
+        function supportReply() {
+            const typing = document.createElement('div');
+            typing.className = 'vp-msgs-b vp-in vp-msgs-typing';
+            typing.innerHTML = '<span></span><span></span><span></span>';
+            feed.appendChild(typing);
+            feed.scrollTop = feed.scrollHeight;
+            botTimer = setTimeout(() => {
+                typing.remove();
+                supportTicket = supportTicket || 1000 + (Math.random() * 9000 | 0);
+                bubble('in', `🎫 Приняли, обращение №${supportTicket++}. Ответим, как только личка заработает — а по-настоящему сейчас быстрее в тг @NeuroSFW`);
+            }, 900 + Math.random() * 700);
+        }
+
+        // Закрепить / открепить чат — долгое нажатие (телефон) или правый клик (компьютер), как в Telegram
+        const ctx = document.createElement('div');
+        ctx.className = 'vp-msgs-ctx';
+        root.appendChild(ctx);
+        const hideCtx = () => ctx.classList.remove('vp-open');
+        function showCtx(row, x, y) {
+            const id = row.dataset.id, pinned = msgPins().includes(id);
+            ctx.innerHTML = `<button type="button">${MSG_ICON.pin}<span>${pinned ? 'Открепить' : 'Закрепить'}</span></button>`;
+            ctx.firstChild.onclick = (e) => {
+                e.stopPropagation();
+                const pins = msgPins().filter(p => p !== id);
+                if (!pinned) pins.push(id);
+                GM_setValue('msgPins', pins);
+                hideCtx();
+                renderList();
+            };
+            const rr = root.getBoundingClientRect();
+            ctx.classList.add('vp-open');
+            ctx.style.left = Math.max(8, Math.min(x - rr.left, rr.width - ctx.offsetWidth - 8)) + 'px';
+            ctx.style.top = Math.max(8, Math.min(y - rr.top, rr.height - ctx.offsetHeight - 8)) + 'px';
+            row.classList.add('vp-held');
+            setTimeout(() => row.classList.remove('vp-held'), 250);
+        }
+        let holdT = 0, held = false, holdAt = null;
+        list.addEventListener('pointerdown', e => {
+            const r = e.target.closest('.vp-msgs-row');
+            if (!r || e.button > 0) return;
+            held = false; holdAt = [e.clientX, e.clientY];
+            clearTimeout(holdT);
+            holdT = setTimeout(() => { held = true; if (navigator.vibrate) navigator.vibrate(12); showCtx(r, holdAt[0], holdAt[1]); }, 450);
+        });
+        list.addEventListener('pointermove', e => { if (holdAt && Math.hypot(e.clientX - holdAt[0], e.clientY - holdAt[1]) > 8) clearTimeout(holdT); });
+        ['pointerup', 'pointercancel'].forEach(t => list.addEventListener(t, () => { clearTimeout(holdT); holdAt = null; }));
+        list.addEventListener('contextmenu', e => {
+            const r = e.target.closest('.vp-msgs-row');
+            if (!r) return;
+            e.preventDefault();
+            clearTimeout(holdT);
+            if (!held) showCtx(r, e.clientX, e.clientY);
+            held = true;
+        });
+        root.addEventListener('pointerdown', e => { if (!ctx.contains(e.target)) hideCtx(); }, true);
+        list.addEventListener('scroll', hideCtx, { passive: true });
+
+        list.addEventListener('click', e => {
+            const r = e.target.closest('.vp-msgs-row');
+            if (held) { held = false; return; }                  // это было долгое нажатие — чат не открываем
+            if (r) openChat(MSG_DIALOGS.find(d => d.id === r.dataset.id));
+        });
         // шапка чата: имя или аватар — в профиль человека
         root.querySelectorAll('.vp-msgs-who, .vp-msgs-chead .vp-msgs-ava').forEach(el => el.onclick = () => {
             if (!current || !current.login) return;
@@ -5447,6 +5533,7 @@
             current.msgs.push(['out', text]);
             current.last = 'Ты: ' + text; current.time = now();
             if (current.bot) { bubble('out', text, now() + ' ✓'); botReply(); }
+            else if (current.support) { bubble('out', text, now() + ' ✓'); supportReply(); }
             else bubble('out', text, now() + ' · не отправлено (прототип)').classList.add('vp-fail');
         });
 
