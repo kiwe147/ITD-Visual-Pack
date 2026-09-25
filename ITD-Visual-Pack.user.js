@@ -1749,7 +1749,8 @@
             ? `drop-shadow(0 0 5px ${hsl}) drop-shadow(0 0 12px ${hsl})`
             : `drop-shadow(0 0 3px hsl(${ah}, ${as}%, 60%)) drop-shadow(0 0 6px hsl(${ah}, ${as}%, 60%))`} !important;`;
         const border = rainbow ? `hsla(${h}, 100%, 55%, 0.3)` : borderColorOf(style);
-        post.cssText = !postBorderEnabled ? '' : `border-color: ${border} !important; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3), 0 0 0 2px ${border} !important;`;
+        // подсветка поста при наведении — цвет тонкой линии обводки (сама линия — в postDesignStyle)
+        post.cssText = !postBorderEnabled ? '' : `--vp-post-edge: ${border};`;
 
         // цвет стиля — по интерфейсу: иконка активного пункта меню, бегунок вкладок
         const accent = rainbow ? `hsl(${h}, 100%, ${dark ? 62 : 45}%)`
@@ -5069,9 +5070,28 @@
             border-radius: 24px !important;
             margin-bottom: 16px !important;
             transition: all 0.25s ease !important;
-            border: 1px solid rgba(255, 255, 255, 0.08) !important;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2) !important;
+            position: relative;
+            border: none !important;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22) !important;
             animation: postAppear 0.3s ease-out forwards !important;
+            --vp-edge-a: rgba(255, 255, 255, .16); --vp-edge-b: rgba(255, 255, 255, .035);
+        }
+        /* Обводка — тонкая линия в 1 px, как у стекла ИТД (панель, кнопки): сверху светлее, книзу тает.
+           Рисуем слоем поверх края (маска оставляет только кромку), а не border: так и градиент, и без сдвига */
+        article.vp-post::before {
+            content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; z-index: 1;
+            background: linear-gradient(to bottom, var(--vp-edge-a), var(--vp-edge-b));
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+            mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+            transition: opacity .25s ease;
+        }
+        html.vp-light article.vp-post { --vp-edge-a: rgba(0, 0, 0, .1); --vp-edge-b: rgba(0, 0, 0, .04); }
+        /* наведение — только где есть мышь (на телефоне :hover «залипает» после касания): линия в цвет стиля,
+           та же толщина; цвет даёт paint() через --vp-post-edge */
+        @media (hover: hover) {
+            article.vp-post:hover { --vp-edge-a: color-mix(in srgb, var(--vp-post-edge, rgba(255, 255, 255, .45)) 65%, transparent); --vp-edge-b: rgba(255, 255, 255, .06);
+                box-shadow: 0 12px 32px rgba(0, 0, 0, .32) !important; }
+            html.vp-light article.vp-post:hover { --vp-edge-b: rgba(0, 0, 0, .06); }
         }
         @keyframes postAppear {
             from { opacity: 0; transform: translateY(15px); }
@@ -5950,10 +5970,15 @@
                 rgba(var(--vp-emoji), var(--vp-tint)) 0%,
                 rgba(var(--vp-emoji), calc(var(--vp-tint) * 0.4)) 45%,
                 rgba(var(--vp-emoji), calc(var(--vp-tint) * 0.1)) 100%) !important;
-            border: 1px solid rgba(var(--vp-emoji), 0.22) !important;
-            transition: --vp-tint 0.25s ease, border-color 0.25s ease !important;
+            --vp-edge-a: rgba(var(--vp-emoji), .34); --vp-edge-b: rgba(var(--vp-emoji), .07);
+            transition: --vp-tint 0.25s ease !important;
         }
-        .vp-emoji-tint:hover { --vp-tint: 0.42; border-color: rgba(var(--vp-emoji), 0.4) !important; }
+        .vp-emoji-tint:not(article) { border: 1px solid rgba(var(--vp-emoji), 0.22) !important; }   /* уведомления — не article, у них своя рамка */
+        @media (hover: hover) {
+            .vp-emoji-tint:hover { --vp-tint: 0.42; }
+            .vp-emoji-tint:not(article):hover { border-color: rgba(var(--vp-emoji), 0.4) !important; }
+            article.vp-emoji-tint:hover { --vp-edge-a: rgba(var(--vp-emoji), .55); }
+        }
         /* Телефон: уведомления — скруглённые карточки с зазором, как посты, а не полосы во всю ширину */
         @media (max-width: 1172px) {
             .vp-notif { border-radius: 24px !important; margin: 6px 10px !important; }
