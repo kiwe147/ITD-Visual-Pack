@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.21
+// @version      3.1.22
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -25,6 +25,24 @@
     // Только в самой вкладке: магазин ИТД — страница в рамке (iframe) с того же адреса, и в ней вторая
     // копия скрипта рисовала свою панель и фон поверх товаров. @noframes в шапке — то же для Tampermonkey.
     if (window.top !== window.self) return;
+    // Счётчик FPS: кадры в секунду и самый долгий кадр за секунду (рывок). Один на весь скрипт:
+    // и в админке, и в режиме «Мод выкл». Гаснет сам, когда элемент убрали со страницы.
+    function fpsMeter(box, label = '') {
+        let n = 0, t0 = performance.now(), last = t0, worst = 0;
+        (function tick(t) {
+            if (!box.isConnected) return;
+            n++; worst = Math.max(worst, t - last); last = t;
+            if (t - t0 >= 1000) {
+                const fps = Math.round(n * 1000 / (t - t0));
+                box.textContent = `${label}${fps} FPS · рывок ${Math.round(worst)} мс`;
+                box.dataset.bad = fps < 45 || worst > 50 ? '1' : '';
+                box.style.color = box.dataset.bad ? '#ff6b6b' : '#6f6';
+                n = 0; t0 = t; worst = 0;
+            }
+            requestAnimationFrame(tick);
+        })(t0);
+    }
+
     // Админка → «Мод выкл»: до закрытия вкладки скрипт не запускается вовсе, сайт — как без мода.
     // Вернуть — кнопка «Включить ИТД X» внизу страницы.
     try {
@@ -40,17 +58,7 @@
                 f.style.cssText = 'position:fixed;left:8px;top:8px;z-index:2147483000;padding:4px 8px;border-radius:8px;pointer-events:none;background:rgba(0,0,0,.75);color:#6f6;font:600 12px ui-monospace,monospace';
                 f.textContent = 'без мода';
                 document.body.appendChild(f);
-                let n = 0, t0 = performance.now(), last = t0, worst = 0;
-                (function tick(t) {
-                    n++; worst = Math.max(worst, t - last); last = t;
-                    if (t - t0 >= 1000) {
-                        const fps = Math.round(n * 1000 / (t - t0));
-                        f.textContent = `без мода · ${fps} FPS · рывок ${Math.round(worst)} мс`;
-                        f.style.color = fps < 45 || worst > 50 ? '#ff6b6b' : '#6f6';
-                        n = 0; t0 = t; worst = 0;
-                    }
-                    requestAnimationFrame(tick);
-                })(t0);
+                fpsMeter(f, 'без мода · ');
             };
             if (document.body) back(); else addEventListener('DOMContentLoaded', back);
             return;
@@ -1211,7 +1219,7 @@
                 });
                 if (like.ok) await new Promise(r => setTimeout(r, 300));
             }
-        } catch (e) { }
+        } catch (e) { console.warn('[ITD VP] автолайк', e); logErr('автолайк', e); }
     }
 
     async function processAllAutoLikes() {
@@ -2765,19 +2773,7 @@
         fpsBox = document.createElement('div');
         fpsBox.className = 'vp-fps';
         document.body.appendChild(fpsBox);
-        let n = 0, t0 = performance.now(), last = t0, worst = 0;
-        const box = fpsBox;
-        (function tick(t) {
-            if (!box.isConnected) return;
-            n++; worst = Math.max(worst, t - last); last = t;
-            if (t - t0 >= 1000) {
-                const fps = Math.round(n * 1000 / (t - t0));
-                box.textContent = `${fps} FPS · рывок ${Math.round(worst)} мс`;
-                box.dataset.bad = fps < 45 || worst > 50 ? '1' : '';
-                n = 0; t0 = t; worst = 0;
-            }
-            requestAnimationFrame(tick);
-        })(t0);
+        fpsMeter(fpsBox);
     }
 
     // Админ-островок (только у админа, и на телефоне, и на компьютере): круглая кнопка поверх всего, её можно таскать —
@@ -3957,7 +3953,7 @@
                 if (document.querySelector('.' + SELECTORS.feedBar)) updateNavIcon();
             });
             scheduleAutoLike();
-        } catch (e) { }
+        } catch (e) { console.warn('[ITD VP] запуск мода', e); logErr('запуск мода', e); }
     }
 
     // Кадр через requestAnimationFrame: в свёрнутой вкладке он сам встаёт на паузу.
