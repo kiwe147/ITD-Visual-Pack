@@ -1608,7 +1608,8 @@
             font: inherit; font-size: 14px; padding: 10px 14px; border-radius: 14px; cursor: pointer; }
         .vp-fab-menu button:active { background: rgba(255, 255, 255, .1); }
         .vp-fab svg { flex: 0 0 auto; width: 20px !important; height: 20px !important; }
-        .vp-fab-btn > svg { width: 26px !important; height: 26px !important; }
+        .vp-fab-btn > svg { width: 32px !important; height: 32px !important; }
+        .vp-fab-btn { background: #d97757 !important; border-color: rgba(255, 255, 255, .25) !important; }
         .vp-admin-toast { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 2147483001; padding: 10px 16px; border-radius: 999px;
             background: rgba(20, 20, 24, .92); color: #fff; font: 500 14px system-ui, sans-serif; border: 1px solid rgba(255, 255, 255, .14); pointer-events: none; }
         .vp-fps { position: fixed; left: 8px; top: 8px; z-index: 2147483001; padding: 4px 8px; border-radius: 8px; pointer-events: none;
@@ -2775,7 +2776,7 @@
         if (document.querySelector('.vp-fab') || !myUsername || !ADMINS.includes(myUsername.toLowerCase())) return;
         const fab = document.createElement('div');
         fab.className = 'vp-fab';
-        fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#d97757" stroke-width="2.3" stroke-linecap="round"><path d="M12 12L22.50 12.00M12 12L18.56 16.92M12 12L16.70 20.14M12 12L10.74 22.42M12 12L7.30 20.14M12 12L4.46 15.22M12 12L1.50 12.00M12 12L5.44 7.08M12 12L7.30 3.86M12 12L13.26 1.58M12 12L16.70 3.86M12 12L19.54 8.78"/><circle cx="12" cy="12" r="2.2" fill="#d97757" stroke="none"/></svg></button>
+        fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка"><svg viewBox="0 0 24 24" width="32" height="32" fill="#fff"><path d="M13.90 12.00L13.25 1.40L10.75 1.40L10.10 12.00Z"/><circle cx="12.00" cy="1.40" r="1.25"/><path d="M13.69 12.86L16.70 4.97L14.92 4.06L10.31 11.14Z"/><circle cx="15.81" cy="4.52" r="1.0"/><path d="M13.06 13.58L21.18 7.37L19.73 5.22L10.94 10.42Z"/><circle cx="20.46" cy="6.30" r="1.3"/><path d="M12.13 13.90L20.85 12.43L20.71 10.34L11.87 10.10Z"/><circle cx="20.78" cy="11.39" r="1.05"/><path d="M11.14 13.69L20.88 17.93L22.01 15.70L12.86 10.31Z"/><circle cx="21.44" cy="16.81" r="1.25"/><path d="M10.39 13.01L15.39 19.31L17.09 18.25L13.61 10.99Z"/><circle cx="16.24" cy="18.78" r="1.0"/><path d="M10.10 12.07L11.06 22.44L13.66 22.35L13.90 11.93Z"/><circle cx="12.36" cy="22.39" r="1.3"/><path d="M10.29 11.17L7.29 19.27L9.17 20.19L13.71 12.83Z"/><circle cx="8.23" cy="19.73" r="1.05"/><path d="M10.94 10.42L3.04 16.60L4.38 18.59L13.06 13.58Z"/><circle cx="3.71" cy="17.59" r="1.2"/><path d="M11.87 10.10L3.75 11.57L3.89 13.57L12.13 13.90Z"/><circle cx="3.82" cy="12.57" r="1.0"/><path d="M12.86 10.31L3.15 6.03L1.97 8.35L11.14 13.69Z"/><circle cx="2.56" cy="7.19" r="1.3"/><path d="M13.59 10.97L8.09 4.05L6.33 5.19L10.41 13.03Z"/><circle cx="7.21" cy="4.62" r="1.05"/></svg></button>
             <div class="vp-fab-menu"><button type="button" data-act="snap">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 18)}<span>Снимок для Claude</span></button>
                 <button type="button" data-act="report">${svgIcon('<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h4"/>', 18)}<span>Скопировать отчёт</span></button>
                 <button type="button" data-act="diag">${svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4M8.5 11l1.8 1.8 3.4-3.6"/>', 18)}<span>Диагностика</span></button>
