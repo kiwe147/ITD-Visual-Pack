@@ -71,6 +71,46 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     await p.mouse.click(5, 5);
   } else console.log('—    кнопки ИТД X на этой странице нет (не свой профиль) — окно не проверяю');
 
+  // «Анти цензура»: картинка из поля выбора, перетаскивания и XHR уходит как .gif,
+  // выключатель в окне «ИТД X» действует сразу, без перезагрузки
+  const antiCensor = async () => {
+    await p.evaluate(() => {
+      document.querySelectorAll('.vpTestFile').forEach(e => e.remove());
+      const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.className = 'vpTestFile';
+      i.addEventListener('change', () => { window.__picked = [...i.files].map(f => f.name + ' ' + f.type).join(); });
+      const d = document.createElement('div'); d.className = 'vpTestFile';
+      d.addEventListener('drop', e => { window.__dropped = [...e.dataTransfer.files].map(f => f.name + ' ' + f.type).join(); });
+      document.body.append(i, d);
+    });
+    await p.setInputFiles('input.vpTestFile', { name: 'a.png', mimeType: 'image/png', buffer: Buffer.from('x') });
+    await p.evaluate(() => {
+      const dt = new DataTransfer(); dt.items.add(new File(['x'], 'c.webp', { type: 'image/webp' }));
+      document.querySelector('div.vpTestFile').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    });
+    const sent = p.waitForRequest(r => r.url().endsWith('/vp-test-upload'));
+    await p.evaluate(() => {
+      const f = new FormData(); f.append('file', new File(['x'], 'b.jpg', { type: 'image/jpeg' }));
+      const x = new XMLHttpRequest(); x.open('POST', '/vp-test-upload'); x.send(f);
+    });
+    const body = (await sent).postDataBuffer().toString();
+    return { pick: await p.evaluate(() => window.__picked), drop: await p.evaluate(() => window.__dropped), xhr: (body.match(/filename="([^"]+)"[\s\S]*?Content-Type: (\S+)/) || []).slice(1).join(' ') };
+  };
+  const ac = await antiCensor();
+  check(ac.pick === 'a.gif image/gif' && ac.drop === 'c.gif image/gif' && ac.xhr === 'b.gif image/gif', `анти цензура вкл: всё уходит .gif (${ac.pick} | ${ac.drop} | ${ac.xhr})`);
+  if (opener) {
+    const toggleAC = async () => {
+      await opener.evaluate(b => b.click()); await p.waitForTimeout(300);
+      await p.$eval('.vp-stab[data-tab="misc"]', b => b.click()); await p.waitForTimeout(200);
+      await p.$$eval('.settings-option', rows => rows.find(r => r.textContent.includes('Анти цензура')).click());
+      await p.keyboard.press('Escape'); await p.mouse.click(5, 5); await p.waitForTimeout(200);
+    };
+    await toggleAC();
+    const off = await antiCensor();
+    check(off.pick === 'a.png image/png' && off.drop === 'c.webp image/webp' && off.xhr === 'b.jpg image/jpeg', `анти цензура выкл: файлы как есть (${off.pick} | ${off.drop} | ${off.xhr})`);
+    await toggleAC();
+  }
+  await p.evaluate(() => document.querySelectorAll('.vpTestFile').forEach(e => e.remove()));
+
   // «назад» закрывает окно сайта
   await p.evaluate(() => {
     const st = document.createElement('style'); st.textContent = '.vpTestOverlay{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.4)}'; document.head.appendChild(st);

@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.23
+// @version      3.1.24
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2414,24 +2414,6 @@
         }
         colorizePosts();
     }
-    function applyAntiCensorshipSetting() {
-        if (antiCensorshipEnabled) {
-            document.querySelectorAll('input[type="file"][data-overridden]').forEach(input => {
-                input.removeAttribute('data-overridden');
-                if (input._originalClick) {
-                    input.click = input._originalClick;
-                }
-            });
-            overrideFilePicker();
-        } else {
-            document.querySelectorAll('input[type="file"][data-overridden]').forEach(input => {
-                input.removeAttribute('data-overridden');
-                if (input._originalClick) {
-                    input.click = input._originalClick;
-                }
-            });
-        }
-    }
     // label совпадает с ключом ICONS.settings — оттуда значок пункта
     const SETTINGS = [
         { label: 'Фон', get: () => backgroundEnabled, set: v => { backgroundEnabled = v; updateBackgroundVisibility(); updateBackgroundToggleButtons(); }, key: 'backgroundEnabled' },
@@ -2440,7 +2422,7 @@
         { label: 'Подсветка постов', get: () => postBorderEnabled, set: v => { postBorderEnabled = v; paint(); }, key: 'postBorderEnabled' },
         { label: 'Заставка при входе', get: () => GM_getValue('introEnabled', true), set: () => { }, key: 'introEnabled' },
         { label: 'Размытый фон постов', get: () => postBlurEnabled, set: v => { postBlurEnabled = v; applyPostBlurSetting(); }, key: 'postBlurEnabled' },
-        { label: 'Анти цензура', get: () => antiCensorshipEnabled, set: v => { antiCensorshipEnabled = v; applyAntiCensorshipSetting(); }, key: 'antiCensorshipEnabled' },
+        { label: 'Анти цензура', get: () => antiCensorshipEnabled, set: v => { antiCensorshipEnabled = v; }, key: 'antiCensorshipEnabled' },
         {
             label: 'Автолайки', get: () => autoLikeEnabled, key: 'autoLikeEnabled',
             set: v => { autoLikeEnabled = v; updateAutoLikeButtons(); }
@@ -6333,149 +6315,60 @@
 
     onDom(function postBlur() { if (postBlurEnabled) addBlurBackground(); });
 
-    function overrideFilePicker() {
-        document.querySelectorAll('input[type="file"]').forEach(input => {
-            if (input.hasAttribute('data-overridden')) return;
-
-            const accept = (input.accept || '').toLowerCase();
-            const isImageInput = accept.includes('.jpg') ||
-                accept.includes('.png') ||
-                accept.includes('.gif') ||
-                accept.includes('.webp') ||
-                accept.includes('image/');
-
-            if (!isImageInput) return;
-
-            input.setAttribute('data-overridden', 'true');
-
-            const originalClick = input.click;
-            input.click = function () {
-                const tempInput = document.createElement('input');
-                tempInput.type = 'file';
-                tempInput.accept = input.accept;
-                tempInput.multiple = input.multiple;
-                tempInput.style.display = 'none';
-                document.body.appendChild(tempInput);
-
-                let handled = false;
-
-                tempInput.addEventListener('change', function (e) {
-                    if (handled) return;
-                    if (!this.files || !this.files.length) {
-                        document.body.removeChild(tempInput);
-                        return;
-                    }
-
-                    const dt = new DataTransfer();
-                    for (const file of this.files) {
-                        if (file.type !== 'image/gif' && file.type.startsWith('image/')) {
-                            const newFileName = file.name.replace(/\.[^.]+$/, '') + '.gif';
-                            const newFile = new File([file], newFileName, { type: 'image/gif' });
-                            dt.items.add(newFile);
-                        } else {
-                            dt.items.add(file);
-                        }
-                    }
-                    input.files = dt.files;
-                    const changeEvent = new Event('change', { bubbles: true });
-                    input.dispatchEvent(changeEvent);
-                    document.body.removeChild(tempInput);
-                    handled = true;
-                });
-
-                tempInput.click();
-            };
-        });
+    // ==== анти цензура
+    // Картинка уходит на сайт как .gif: меняются имя и тип файла, содержимое то же.
+    // Подмена одна — gifFile; выбор файла, перетаскивание и отправка через XHR зовут её
+    // и смотрят выключатель в момент срабатывания, поэтому вкл/выкл действует без перезагрузки.
+    function gifFile(file) {
+        if (!(file instanceof File) || !file.type.startsWith('image/') || file.type === 'image/gif') return file;
+        return new File([file], file.name.replace(/\.[^.]+$/, '') + '.gif', { type: 'image/gif' });
     }
-
-
-
-    function overrideDragAndDrop() {
-        document.addEventListener('drop', function (e) {
-            const files = e.dataTransfer?.files;
-            if (!files || !files.length) return;
-
-            const dt = new DataTransfer();
-            let modified = false;
-            for (const file of files) {
-                if (file.type !== 'image/gif' && file.type.startsWith('image/')) {
-                    const newFileName = file.name.replace(/\.[^.]+$/, '') + '.gif';
-                    const newFile = new File([file], newFileName, { type: 'image/gif' });
-                    dt.items.add(newFile);
-                    modified = true;
-                } else {
-                    dt.items.add(file);
-                }
-            }
-
-            if (modified) {
-                e.preventDefault();
-                e.stopPropagation();
-
-                const target = e.target.closest('[contenteditable="true"], input, textarea');
-                if (target) {
-                    const dropEvent = new DragEvent('drop', {
-                        dataTransfer: dt,
-                        bubbles: true,
-                        cancelable: true
-                    });
-                    target.dispatchEvent(dropEvent);
-                }
-            }
-        }, true);
-
-        document.addEventListener('dragover', function (e) {
-            e.preventDefault();
-        }, true);
+    // список файлов с подменой; null — подменять нечего
+    function gifTransfer(files) {
+        if (!antiCensorshipEnabled || !files || ![...files].some(f => gifFile(f) !== f)) return null;
+        const dt = new DataTransfer();
+        for (const f of files) dt.items.add(gifFile(f));
+        return dt;
     }
-
-    function overrideFetchAndXHR() {
-        const originalSend = XMLHttpRequest.prototype.send;
-        XMLHttpRequest.prototype.send = function (body) {
-            if (body instanceof FormData) {
-                const newFormData = new FormData();
+    // поле выбора картинок: подменяем выбранное до обработчиков сайта (перехват на document)
+    function gifOnPick(e) {
+        const input = e.target;
+        if (!(input instanceof HTMLInputElement) || input.type !== 'file') return;
+        if (!/\.(jpe?g|png|gif|webp)|image\//i.test(input.accept || '')) return;
+        const dt = gifTransfer(input.files);
+        if (dt) input.files = dt.files;
+    }
+    // браузер шлёт сначала input, потом change — сайт может слушать любое
+    document.addEventListener('input', gifOnPick, true);
+    document.addEventListener('change', gifOnPick, true);
+    // перетаскивание: гасим настоящий drop и повторяем его с подменёнными файлами
+    // там же, куда бросили; в повторе подменять уже нечего, он проходит к сайту
+    document.addEventListener('drop', function (e) {
+        const dt = gifTransfer(e.dataTransfer && e.dataTransfer.files);
+        if (!dt) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.target.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY }));
+    }, true);
+    // без этого картинка, брошенная мимо поля, открывается вместо страницы
+    document.addEventListener('dragover', function (e) { if (antiCensorshipEnabled) e.preventDefault(); }, true);
+    // отправка через XHR — на случай, если файл дошёл до сайта мимо поля выбора
+    (function gifOnSend() {
+        const X = pageWindow.XMLHttpRequest.prototype, origSend = X.send;
+        X.send = function (body) {
+            if (antiCensorshipEnabled && body instanceof FormData) {
+                const form = new FormData();
+                let changed = false;
                 for (const [key, value] of body.entries()) {
-                    if (value instanceof File && value.type !== 'image/gif' && value.type.startsWith('image/')) {
-                        const newFileName = value.name.replace(/\.[^.]+$/, '') + '.gif';
-                        const newFile = new File([value], newFileName, { type: 'image/gif' });
-                        newFormData.append(key, newFile);
-                    } else {
-                        newFormData.append(key, value);
-                    }
+                    const v = gifFile(value);
+                    if (v !== value) changed = true;
+                    form.append(key, v);
                 }
-                return originalSend.call(this, newFormData);
+                if (changed) body = form;
             }
-            return originalSend.call(this, body);
+            return origSend.call(this, body);
         };
-
-        const originalFetch = window.fetch;
-        window.fetch = function (input, init) {
-            if (init?.body instanceof FormData) {
-                const newFormData = new FormData();
-                for (const [key, value] of init.body.entries()) {
-                    if (value instanceof File && value.type !== 'image/gif' && value.type.startsWith('image/')) {
-                        const newFileName = value.name.replace(/\.[^.]+$/, '') + '.gif';
-                        const newFile = new File([value], newFileName, { type: 'image/gif' });
-                        newFormData.append(key, newFile);
-                    } else {
-                        newFormData.append(key, value);
-                    }
-                }
-                init.body = newFormData;
-            }
-            return originalFetch.call(this, input, init);
-        };
-    }
-
-
-    // новые поля выбора файла — через общий наблюдатель страницы (был отдельный на каждое изменение)
-    onDom(function antiCensorFiles() { if (antiCensorshipEnabled) overrideFilePicker(); });
-    if (antiCensorshipEnabled) {
-        setTimeout(overrideFilePicker, 500);
-        setTimeout(overrideDragAndDrop, 500);
-        setTimeout(overrideFetchAndXHR, 500);
-
-    }
+    })();
 
     // Телефон/компьютер: кнопка «наверх», скрытая полоса прокрутки, обёртка крупного ника.
     // (Правки старых классов сайта — .yYHA, .JHRx, .uDYw, .eqPa — убраны: этих классов на сайте давно нет.)
