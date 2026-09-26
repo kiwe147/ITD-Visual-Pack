@@ -1183,7 +1183,7 @@
     let nickGlowEnabled = GM_getValue('nickGlowEnabled', true);
     let avatarGlowEnabled = GM_getValue('avatarGlowEnabled', true);
     let antiCensorshipEnabled = GM_getValue('antiCensorshipEnabled', true);
-    let autoLikeUsers = JSON.parse(GM_getValue('itd_auto_like_users', '{}'));
+    let autoLikeUsers = (() => { try { return JSON.parse(GM_getValue('itd_auto_like_users', '{}')) || {}; } catch (e) { return {}; } })();
     let autoLikeEnabled = GM_getValue('autoLikeEnabled', true);
 
     // Мой аватар — в первой ссылке на мой профиль
@@ -1196,12 +1196,20 @@
         if (container && container.querySelector('span')) return container;
         return link.firstElementChild || link.querySelector('span');
     }
+    // ==== автолайки
+    // Кого отметили в «ИТД X» → «Лайки» (autoLikeUsers, { ник: true } в GM 'itd_auto_like_users'):
+    // раз в 2–5 минут лайкаем их посты за последние сутки, которые ещё не лайкнуты.
+    // Кандидаты в список — пользователи мода (из проверки значков) и NeuroSFW; их профили
+    // для списка держим в localStorage 10 минут, чтобы окно открывалось без запросов.
     const AUTO_LIKE_CACHE_KEY = 'itd_auto_like_full_cache';
-    const CACHE_TTL = 10 * 60 * 1000;
-
+    const AUTO_LIKE_CACHE_TTL = 10 * 60 * 1000;
     const LIKE_INTERVAL_MIN = 2 * 60 * 1000;
     const LIKE_INTERVAL_MAX = 5 * 60 * 1000;
     const DAY = 24 * 60 * 60 * 1000;
+
+    function saveAutoLikeUsers() {
+        GM_setValue('itd_auto_like_users', JSON.stringify(autoLikeUsers));
+    }
 
     // лайкнуть посты пользователя за последние сутки, которые ещё не лайкнуты
     async function likePostsForUser(username) {
@@ -1217,26 +1225,46 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: '{}'
                 });
-                if (like.ok) await new Promise(r => setTimeout(r, 300));
+                if (like.ok) await new Promise(r => setTimeout(r, 300));   // не частить: лайки одного — через паузу
             }
         } catch (e) { console.warn('[ITD VP] автолайк', e); logErr('автолайк', e); }
     }
 
-    async function processAllAutoLikes() {
-        if (!autoLikeEnabled) return;
-        const activeUsers = Object.keys(autoLikeUsers).filter(u => autoLikeUsers[u] === true);
-        if (!activeUsers.length) return;
-
-        await Promise.all(activeUsers.map(username => likePostsForUser(username)));
-    }
-
+    // следующий проход — через случайные 2–5 минут после конца прошлого
     function scheduleAutoLike() {
-        const delay = Math.floor(Math.random() * (LIKE_INTERVAL_MAX - LIKE_INTERVAL_MIN + 1) + LIKE_INTERVAL_MIN);
-        setTimeout(() => {
-            processAllAutoLikes().finally(() => scheduleAutoLike());
+        const delay = LIKE_INTERVAL_MIN + Math.floor(Math.random() * (LIKE_INTERVAL_MAX - LIKE_INTERVAL_MIN + 1));
+        setTimeout(async () => {
+            try {
+                const users = Object.keys(autoLikeUsers).filter(u => autoLikeUsers[u] === true);
+                if (autoLikeEnabled && users.length) await Promise.all(users.map(likePostsForUser));
+            } finally { scheduleAutoLike(); }
         }, delay);
     }
 
+    // профили кандидатов для списка в окне: { ник: профиль }
+    async function fetchAutoLikeUsers() {
+        try {
+            const c = JSON.parse(localStorage.getItem(AUTO_LIKE_CACHE_KEY) || 'null');
+            if (c && Date.now() - c.timestamp <= AUTO_LIKE_CACHE_TTL) return c.usersData;
+        } catch (e) { /* битый кеш — просто спросим заново */ }
+
+        let verified = {};
+        try { verified = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}'); } catch (e) { }
+        const usernames = Object.keys(verified);
+        if (!usernames.includes('NeuroSFW')) usernames.push('NeuroSFW');
+
+        const usersData = {};
+        await Promise.all(usernames.map(async username => {
+            try {
+                const res = await api(`/api/users/${username}`);
+                if (res.ok) usersData[username] = await res.json();
+            } catch (e) { }
+        }));
+        if (Object.keys(usersData).length) {
+            try { localStorage.setItem(AUTO_LIKE_CACHE_KEY, JSON.stringify({ usersData, timestamp: Date.now() })); } catch (e) { }
+        }
+        return usersData;
+    }
 
     const nickStyles = {
         fire: {
@@ -3331,49 +3359,6 @@
 
         window.addEventListener('scroll', toggleScrollButton);
         toggleScrollButton();
-    }
-
-    function saveAutoLikeUsers() {
-        GM_setValue('itd_auto_like_users', JSON.stringify(autoLikeUsers));
-    }
-
-    function getAutoLikeCache() {
-        try {
-            const raw = localStorage.getItem(AUTO_LIKE_CACHE_KEY);
-            if (!raw) return null;
-            const data = JSON.parse(raw);
-            if (Date.now() - data.timestamp > CACHE_TTL) return null;
-            return data.usersData;
-        } catch { return null; }
-    }
-
-    function setAutoLikeCache(usersData) {
-        try {
-            localStorage.setItem(AUTO_LIKE_CACHE_KEY, JSON.stringify({
-                usersData,
-                timestamp: Date.now()
-            }));
-        } catch { }
-    }
-
-    async function fetchAutoLikeUsers() {
-        const cached = getAutoLikeCache();
-        if (cached) return cached;
-
-        const verified = JSON.parse(localStorage.getItem('itd_verified_users') || '{}');
-        const usernames = Object.keys(verified);
-        if (!usernames.includes('NeuroSFW')) usernames.push('NeuroSFW');
-        if (!usernames.length) return {};
-
-        const usersData = {};
-        await Promise.all(usernames.map(async username => {
-            try {
-                const res = await api(`/api/users/${username}`);
-                if (res.ok) usersData[username] = await res.json();
-            } catch { }
-        }));
-        if (Object.keys(usersData).length) setAutoLikeCache(usersData);
-        return usersData;
     }
 
     async function initVisuals() {
