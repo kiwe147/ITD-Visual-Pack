@@ -44,7 +44,7 @@ async function shoot(browser, src, name) {
     Math.random = () => 0.5;                         // случайные узоры и значки — одинаковые в обоих прогонах
   }, [src.slice(0, src.indexOf('==/UserScript==')), settings]);
   await p.goto(URL0);
-  await p.evaluate(() => document.querySelectorAll('.vp-nav-blob, .vp-fab, .vp-fps, .settings-dropdown, .nick-controls-panel, .vp-itdx-btn, .vp-msgs, .itd-blur-container').forEach(e => e.remove()));
+  await p.evaluate(() => document.querySelectorAll('.vp-nav-blob, .vp-fab, .vp-fps, .settings-dropdown, .nick-controls-panel, .vp-itdx-btn, .vp-msgs, .itd-blur-container, .custom-image-btn, .custom-change-btn, .custom-cancel-btn, .custom-apply-btn').forEach(e => e.remove()));
   await p.addScriptTag({ content: src });
   await p.waitForLoadState('networkidle').catch(() => { });
   await p.waitForTimeout(2500);
