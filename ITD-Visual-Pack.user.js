@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.24
+// @version      3.1.25
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2406,11 +2406,7 @@
         if (postBlurEnabled) {
             addBlurBackground();
         } else {
-            document.querySelectorAll('.itd-blur-container').forEach(el => el.remove());
-            document.querySelectorAll('.' + SELECTORS.post + ', .' + SELECTORS.repost).forEach(el => {
-                el.removeAttribute('data-blur-bg');
-                el.classList.remove('itd-blur-active');
-            });
+            document.querySelectorAll('[data-blur-bg]').forEach(dropBlur);
         }
         colorizePosts();
     }
@@ -6194,6 +6190,60 @@
     `;
     document.head.appendChild(styleIcons);
 
+    // Размытый фон поста: под карточкой с картинкой — её размытая копия ровно на месте картинки
+    // и тёмная вуаль поверх. Слои — .itd-blur-container > .vp-blur-img + .vp-blur-dim, вид — в CSS;
+    // в style.* только то, что считается: адрес картинки и место слоя.
+    // Место пересчитывает один общий ResizeObserver на все карточки (был свой на каждую пересборку
+    // и не отключался — копились на длинной ленте).
+    const blurCards = new Map();                            // карточка → { img, layer }
+    const blurRO = new ResizeObserver(entries => {
+        const todo = new Set(entries.map(e => blurCards.has(e.target) ? e.target : e.target._vpBlurCard));
+        todo.forEach(card => card && placeBlur(card));
+    });
+    function placeBlur(card) {
+        const b = blurCards.get(card);
+        if (!b) return;
+        // карточка ушла со страницы: снимаем, а метку картинки сбрасываем — вернётся, фон соберётся заново
+        if (!b.img.isConnected || !card.isConnected) { b.img._vpBlurDone = null; dropBlur(card); return; }
+        const ar = card.getBoundingClientRect(), ir = b.img.getBoundingClientRect();
+        if (!ar.width || !ir.width) return;
+        const k = card.offsetWidth / ar.width;              // сцена ленты чуть масштабирует пост
+        Object.assign(b.layer.style, {
+            left: ((ir.left - ar.left) * k - card.clientLeft) + 'px', top: ((ir.top - ar.top) * k - card.clientTop) + 'px',
+            width: ir.width * k + 'px', height: ir.height * k + 'px'
+        });
+    }
+    // снять фон с карточки целиком (пост без картинки, выключили настройку, карточка ушла со страницы)
+    function dropBlur(card) {
+        const b = blurCards.get(card);
+        if (b) { blurRO.unobserve(b.img); blurRO.unobserve(card); blurCards.delete(card); }
+        card.removeAttribute('data-blur-bg');
+        card.classList.remove('itd-blur-active', 'vp-blur-rel');
+        const c = card.querySelector(':scope > .itd-blur-container');
+        if (c) c.remove();
+    }
+    function buildBlur(card, img) {
+        const old = blurCards.get(card);
+        if (old) { blurRO.unobserve(old.img); blurRO.unobserve(card); }
+        card.setAttribute('data-blur-bg', img.src);
+        if (getComputedStyle(card).position === 'static') card.classList.add('vp-blur-rel');
+        card.classList.add('itd-blur-active');
+        // только свой слой: у поста с репостом внутри querySelector без :scope находил слой репоста
+        let box = card.querySelector(':scope > .itd-blur-container');
+        if (!box) {
+            box = document.createElement('div');
+            box.className = 'itd-blur-container';
+            box.innerHTML = '<div class="vp-blur-img"></div><div class="vp-blur-dim"></div>';
+            card.insertBefore(box, card.firstChild);
+        }
+        const layer = box.firstChild;
+        layer.style.backgroundImage = `url("${img.src}")`;
+        blurCards.set(card, { img, layer });
+        img._vpBlurCard = card;
+        blurRO.observe(img);
+        blurRO.observe(card);
+        placeBlur(card);
+    }
     function addBlurBackground() {
         // Идём от картинок, а не от всех постов: посты без картинки иначе перебирались на каждую правку страницы
         const cards = new Set();
@@ -6211,89 +6261,20 @@
         });
         // в карточку пришёл пост без картинки — старое размытие убираем
         document.querySelectorAll('[data-blur-bg]').forEach(card => {
-            if (card.querySelector('img.' + SELECTORS.postMedia)) return;
-            card.removeAttribute('data-blur-bg');
-            card.classList.remove('itd-blur-active');
-            const c = card.querySelector(':scope > .itd-blur-container');
-            if (c) c.remove();
+            if (!card.querySelector('img.' + SELECTORS.postMedia)) dropBlur(card);
         });
-        cards.forEach(article => {
-            const img = article.querySelector('img.' + SELECTORS.postMedia);
+        cards.forEach(card => {
+            const img = card.querySelector('img.' + SELECTORS.postMedia);
             if (!img || !img.src || img.src.includes('avatar')) return;
-
-            article.setAttribute('data-blur-bg', img.src);
-
-            if (getComputedStyle(article).position === 'static') {
-                article.style.position = 'relative';
+            // пост, у которого картинка только в репосте: фон — у репоста, сама карточка остаётся
+            // прозрачной без своего слоя (так выглядело всегда; свой слой красит её в серый)
+            const inner = img.closest('.' + SELECTORS.repost);
+            if (inner && inner !== card && card.contains(inner)) {
+                card.setAttribute('data-blur-bg', img.src);
+                card.classList.add('itd-blur-active');
+                return;
             }
-
-            article.classList.add('itd-blur-active');
-
-            let bgContainer = article.querySelector('.itd-blur-container');
-            if (!bgContainer) {
-                bgContainer = document.createElement('div');
-                bgContainer.className = 'itd-blur-container';
-                bgContainer.style.cssText = `
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    border-radius: inherit;
-                    overflow: hidden;
-                    z-index: -1;
-                    pointer-events: none;
-                    background: var(--block-bg, #1c1c1c);
-                `;
-                article.insertBefore(bgContainer, article.firstChild);
-            } else {
-                bgContainer.innerHTML = '';
-            }
-
-            // Свечение — ровно там, где картинка, и её размера: раньше размытая картинка растягивалась
-            // на всю карточку от центра, и пятно цвета оказывалось далеко от самой картинки
-            // (на широком экране — ещё дальше). Место пересчитываем, когда меняется картинка или карточка.
-            const blurLayer = document.createElement('div');
-            blurLayer.style.cssText = `
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 0;
-                height: 0;
-                background-image: url(${img.src});
-                background-size: cover;
-                background-position: center;
-                background-repeat: no-repeat;
-                filter: blur(34px) brightness(1.3) saturate(1.6);
-                transform: scale(1.3);
-            `;
-            const place = () => {
-                if (!img.isConnected || !article.isConnected) return;
-                const ar = article.getBoundingClientRect(), ir = img.getBoundingClientRect();
-                if (!ar.width || !ir.width) return;
-                const k = article.offsetWidth / ar.width;          // сцена ленты чуть масштабирует пост
-                Object.assign(blurLayer.style, {
-                    left: ((ir.left - ar.left) * k - article.clientLeft) + 'px', top: ((ir.top - ar.top) * k - article.clientTop) + 'px',
-                    width: ir.width * k + 'px', height: ir.height * k + 'px'
-                });
-            };
-            const ro = new ResizeObserver(place);
-            ro.observe(img);
-            ro.observe(article);
-            place();
-
-            const darkOverlay = document.createElement('div');
-            darkOverlay.style.cssText = `
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.45);
-            `;
-
-            bgContainer.appendChild(blurLayer);
-            bgContainer.appendChild(darkOverlay);
+            buildBlur(card, img);
         });
     }
 
@@ -6303,6 +6284,18 @@
             background: transparent !important;
             backdrop-filter: none !important;
         }
+        .vp-blur-rel { position: relative; }
+        .itd-blur-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: inherit; overflow: hidden;
+            z-index: -1; pointer-events: none; background: var(--block-bg, #1c1c1c);
+        }
+        /* свечение — ровно на месте картинки и её размера (место ставит placeBlur) */
+        .vp-blur-img {
+            position: absolute; left: 0; top: 0; width: 0; height: 0;
+            background: center / cover no-repeat;
+            filter: blur(34px) brightness(1.3) saturate(1.6); transform: scale(1.3);
+        }
+        .vp-blur-dim { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.45); }
         .itd-blur-active .vp-repost {
             background: rgba(0, 0, 0, 0.3) !important;
         }
