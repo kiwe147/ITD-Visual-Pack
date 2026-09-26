@@ -6187,33 +6187,35 @@
         };
     })();
 
+    // ==== подмена текстов ошибок
+    // Только сообщения об ошибках — всплывашки сайта (role=alert/status, aria-live) с текстом
+    // про ошибку: текст меняется на случайную фразу. В 2.9.x подмена ошибочно шла по тексту
+    // уведомлений — маты стояли у всех у ника. Личка и окна мода не трогаются.
+    // Метка — сама подставленная фраза: сайт переиспользует всплывашку, и новая ошибка в том же
+    // элементе раньше оставалась как есть (метка data-replaced висела навсегда).
+    const ERROR_TEXT = /ошибк|не удалось|не получилось|попробуйте|что-то пошло не так|error|failed/i;
+    const ERROR_REPLIES = [
+        'Нет, иди нахуй',
+        'Пошёл нахуй',
+        'Иди нахуй',
+        'Нахуй иди',
+        'А не пошёл бы ты нахуй',
+        'Вали нахуй',
+        'Отвали',
+        'Хуй тебе',
+        'Ты заебал, отвали',
+        'Соси хуй'
+    ];
     function replaceNotificationTexts() {
-        const messages = [
-            'Нет, иди нахуй',
-            'Пошёл нахуй',
-            'Иди нахуй',
-            'Нахуй иди',
-            'А не пошёл бы ты нахуй',
-            'Вали нахуй',
-            'Отвали',
-            'Хуй тебе',
-            'Ты заебал, отвали',
-            'Соси хуй'
-        ];
-
-        // Только сообщения об ошибках — всплывашки сайта (role=alert/status, aria-live) с текстом
-        // про ошибку. В 2.9.x подмена ошибочно шла по тексту уведомлений — маты стояли у всех у ника.
         document.querySelectorAll('[role="alert"], [role="status"], [aria-live]').forEach(box => {
             if (box.closest('.vp-msgs, .vpi-overlay')) return;
             [box, ...box.querySelectorAll('*')].forEach(el => {
-                if (el.childElementCount || el.hasAttribute('data-replaced')) return;
+                if (el.childElementCount || el.textContent === el._vpReplaced) return;
                 if (!ERROR_TEXT.test(el.textContent)) return;
-                el.textContent = messages[Math.floor(Math.random() * messages.length)];
-                el.setAttribute('data-replaced', 'true');
+                el.textContent = el._vpReplaced = ERROR_REPLIES[Math.floor(Math.random() * ERROR_REPLIES.length)];
             });
         });
     }
-    const ERROR_TEXT = /ошибк|не удалось|не получилось|попробуйте|что-то пошло не так|error|failed/i;
 
     onDom(replaceNotificationTexts);
 

@@ -176,6 +176,25 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     await p.screenshot({ path: path.join(out, mode + '-banner.png') });
   } else console.log('—    кнопки баннера нет (не свой профиль) — редактор не проверяю');
 
+  // Подмена текстов ошибок: ошибка во всплывашке сайта — на фразу; новая ошибка в той же
+  // всплывашке — тоже (сайт их переиспользует); обычный текст и личка — как есть
+  await p.evaluate(() => {
+    const box = (html, where = document.body) => { const d = document.createElement('div'); d.setAttribute('role', 'alert'); d.className = 'vpTestAlert'; d.innerHTML = html; where.append(d); return d; };
+    box('<span id="vpErr">Ошибка загрузки</span>');
+    box('<span id="vpOk">Пост опубликован</span>');
+    const m = document.createElement('div'); m.className = 'vp-msgs vpTestAlert'; document.body.append(m);
+    box('<span id="vpMsgErr">Не удалось отправить</span>', m);
+  });
+  await p.waitForTimeout(400);
+  const t1 = await p.$eval('#vpErr', e => e.textContent);
+  await p.$eval('#vpErr', e => { e.textContent = 'Не удалось сохранить'; });
+  await p.waitForTimeout(400);
+  const t2 = await p.$eval('#vpErr', e => e.textContent);
+  const rest = await p.evaluate(() => document.getElementById('vpOk').textContent + ' | ' + document.getElementById('vpMsgErr').textContent);
+  const bad = /ошибк|не удалось/i;
+  check(!bad.test(t1) && !bad.test(t2) && rest === 'Пост опубликован | Не удалось отправить', `ошибки подменяются и повторно, остальное — нет (${t1} → ${t2} | ${rest})`);
+  await p.evaluate(() => document.querySelectorAll('.vpTestAlert').forEach(e => e.remove()));
+
   // «назад» закрывает окно сайта
   await p.evaluate(() => {
     const st = document.createElement('style'); st.textContent = '.vpTestOverlay{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.4)}'; document.head.appendChild(st);
