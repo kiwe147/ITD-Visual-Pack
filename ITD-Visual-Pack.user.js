@@ -1608,6 +1608,7 @@
             font: inherit; font-size: 14px; padding: 10px 14px; border-radius: 14px; cursor: pointer; }
         .vp-fab-menu button:active { background: rgba(255, 255, 255, .1); }
         .vp-fab svg { flex: 0 0 auto; width: 20px !important; height: 20px !important; }
+        .vp-fab-btn > svg { width: 26px !important; height: 26px !important; }
         .vp-admin-toast { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 2147483001; padding: 10px 16px; border-radius: 999px;
             background: rgba(20, 20, 24, .92); color: #fff; font: 500 14px system-ui, sans-serif; border: 1px solid rgba(255, 255, 255, .14); pointer-events: none; }
         .vp-fps { position: fixed; left: 8px; top: 8px; z-index: 2147483001; padding: 4px 8px; border-radius: 8px; pointer-events: none;
@@ -2774,7 +2775,7 @@
         if (document.querySelector('.vp-fab') || !myUsername || !ADMINS.includes(myUsername.toLowerCase())) return;
         const fab = document.createElement('div');
         fab.className = 'vp-fab';
-        fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка"><span class="vp-fab-a">A</span></button>
+        fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#d97757" stroke-width="2.3" stroke-linecap="round"><path d="M12 12L22.50 12.00M12 12L18.56 16.92M12 12L16.70 20.14M12 12L10.74 22.42M12 12L7.30 20.14M12 12L4.46 15.22M12 12L1.50 12.00M12 12L5.44 7.08M12 12L7.30 3.86M12 12L13.26 1.58M12 12L16.70 3.86M12 12L19.54 8.78"/><circle cx="12" cy="12" r="2.2" fill="#d97757" stroke="none"/></svg></button>
             <div class="vp-fab-menu"><button type="button" data-act="snap">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 18)}<span>Снимок для Claude</span></button>
                 <button type="button" data-act="report">${svgIcon('<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h4"/>', 18)}<span>Скопировать отчёт</span></button>
                 <button type="button" data-act="diag">${svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4M8.5 11l1.8 1.8 3.4-3.6"/>', 18)}<span>Диагностика</span></button>
