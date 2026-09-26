@@ -6335,55 +6335,20 @@
 
     onDom(replaceNotificationTexts);
 
-    const emojiColors = new Map();
-    function getEmojiColor(emoji) {
-        if (!emojiColors.has(emoji)) emojiColors.set(emoji, measureEmojiColor(emoji));
-        return emojiColors.get(emoji);
-    }
-    function measureEmojiColor(emoji) {
-        const canvas = document.createElement('canvas');
-        canvas.width = 64;
-        canvas.height = 64;
-        const ctx = canvas.getContext('2d');
-
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, 64, 64);
-        ctx.font = '48px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(emoji, 32, 34);
-
-        const imageData = ctx.getImageData(0, 0, 64, 64);
-        const data = imageData.data;
-
-        let r = 0, g = 0, b = 0, count = 0;
-        for (let i = 0; i < data.length; i += 4) {
-            if (data[i + 3] > 128) {
-                r += data[i];
-                g += data[i + 1];
-                b += data[i + 2];
-                count++;
-            }
-        }
-
-        if (count === 0) return null;
-
-        r = Math.round(r / count);
-        g = Math.round(g / count);
-        b = Math.round(b / count);
-
-        return { r, g, b };
-    }
-
-    // Цвет эмодзи для оттенка карточки: средний цвет, поднятый по яркости и насыщенности,
-    // иначе тёмные и серые эмодзи давали мутно-бурую заливку. Возвращает «r, g, b».
+    // ==== цвет эмодзи
+    // Оттенок карточки по эмодзи-аватарке: рисуем эмодзи на белом холсте 64×64 и берём средний
+    // цвет всего холста (белый фон входит в среднее — отсюда мягкость), затем поднимаем яркость
+    // и насыщенность, иначе тёмные и серые эмодзи давали мутно-бурую заливку.
+    // Результат — строка «r, g, b» для --vp-emoji или null (эмодзи не нарисовалась);
+    // считается один раз на эмодзи, холст один на все.
     const emojiTints = new Map();
+    let emojiCanvas = null;
     function emojiTint(emoji) {
         if (emojiTints.has(emoji)) return emojiTints.get(emoji);
-        const c = getEmojiColor(emoji);
+        const c = measureEmojiColor(emoji);
         let tint = null;
         if (c) {
-            const [r, g, b] = [c.r, c.g, c.b].map(v => v / 255);
+            const [r, g, b] = c.map(v => v / 255);
             const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
             let hue = 0;
             if (d) hue = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
@@ -6394,6 +6359,29 @@
         }
         emojiTints.set(emoji, tint);
         return tint;
+    }
+    // средний цвет холста с эмодзи: [r, g, b] 0–255
+    function measureEmojiColor(emoji) {
+        if (!emojiCanvas) {
+            emojiCanvas = document.createElement('canvas');
+            emojiCanvas.width = emojiCanvas.height = 64;
+        }
+        const ctx = emojiCanvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, 64, 64);
+        ctx.font = '48px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(emoji, 32, 34);
+        const data = ctx.getImageData(0, 0, 64, 64).data;
+        const sum = [0, 0, 0];
+        let count = 0;
+        for (let i = 0; i < data.length; i += 4) {
+            if (data[i + 3] <= 128) continue;
+            sum[0] += data[i]; sum[1] += data[i + 1]; sum[2] += data[i + 2];
+            count++;
+        }
+        return count ? sum.map(v => Math.round(v / count)) : null;
     }
     function tintCard(el, emoji) {
         const tint = emoji && emojiTint(emoji);

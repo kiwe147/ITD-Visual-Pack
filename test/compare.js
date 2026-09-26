@@ -55,7 +55,8 @@ async function shoot(browser, src, name) {
   // места карточек и слоёв мода — точнее пикселей: видно, сдвинулось ли что-то и на сколько
   const rects = await p.evaluate(() => [...document.querySelectorAll('article, .itd-blur-container > *, .vp-emoji-tint')].map(e => {
     const r = e.getBoundingClientRect();
-    return (e.className.baseVal ?? e.className).toString().split(' ').filter(c => /^(vp|itd)-/.test(c)).join('.') + ' ' + [r.x, r.y + scrollY, r.width, r.height].map(Math.round).join(',');
+    const tint = e.style.getPropertyValue('--vp-emoji').replace(/\s/g, '');     // оттенок по эмодзи — тоже сравниваем
+    return (e.className.baseVal ?? e.className).toString().split(' ').filter(c => /^(vp|itd)-/.test(c)).join('.') + ' ' + [r.x, r.y + scrollY, r.width, r.height].map(Math.round).join(',') + (tint ? '/' + tint : '');
   }));
   const file = path.join(out, `cmp-${mode}-${name}.png`);
   await p.screenshot({ path: file, fullPage: true });
