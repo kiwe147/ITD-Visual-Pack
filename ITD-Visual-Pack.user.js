@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.21
+// @version      3.1.23
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -25,6 +25,24 @@
     // Только в самой вкладке: магазин ИТД — страница в рамке (iframe) с того же адреса, и в ней вторая
     // копия скрипта рисовала свою панель и фон поверх товаров. @noframes в шапке — то же для Tampermonkey.
     if (window.top !== window.self) return;
+    // Счётчик FPS: кадры в секунду и самый долгий кадр за секунду (рывок). Один на весь скрипт:
+    // и в админке, и в режиме «Мод выкл». Гаснет сам, когда элемент убрали со страницы.
+    function fpsMeter(box, label = '') {
+        let n = 0, t0 = performance.now(), last = t0, worst = 0;
+        (function tick(t) {
+            if (!box.isConnected) return;
+            n++; worst = Math.max(worst, t - last); last = t;
+            if (t - t0 >= 1000) {
+                const fps = Math.round(n * 1000 / (t - t0));
+                box.textContent = `${label}${fps} FPS · рывок ${Math.round(worst)} мс`;
+                box.dataset.bad = fps < 45 || worst > 50 ? '1' : '';
+                box.style.color = box.dataset.bad ? '#ff6b6b' : '#6f6';
+                n = 0; t0 = t; worst = 0;
+            }
+            requestAnimationFrame(tick);
+        })(t0);
+    }
+
     // Админка → «Мод выкл»: до закрытия вкладки скрипт не запускается вовсе, сайт — как без мода.
     // Вернуть — кнопка «Включить ИТД X» внизу страницы.
     try {
@@ -40,17 +58,7 @@
                 f.style.cssText = 'position:fixed;left:8px;top:8px;z-index:2147483000;padding:4px 8px;border-radius:8px;pointer-events:none;background:rgba(0,0,0,.75);color:#6f6;font:600 12px ui-monospace,monospace';
                 f.textContent = 'без мода';
                 document.body.appendChild(f);
-                let n = 0, t0 = performance.now(), last = t0, worst = 0;
-                (function tick(t) {
-                    n++; worst = Math.max(worst, t - last); last = t;
-                    if (t - t0 >= 1000) {
-                        const fps = Math.round(n * 1000 / (t - t0));
-                        f.textContent = `без мода · ${fps} FPS · рывок ${Math.round(worst)} мс`;
-                        f.style.color = fps < 45 || worst > 50 ? '#ff6b6b' : '#6f6';
-                        n = 0; t0 = t; worst = 0;
-                    }
-                    requestAnimationFrame(tick);
-                })(t0);
+                fpsMeter(f, 'без мода · ');
             };
             if (document.body) back(); else addEventListener('DOMContentLoaded', back);
             return;
@@ -1211,7 +1219,7 @@
                 });
                 if (like.ok) await new Promise(r => setTimeout(r, 300));
             }
-        } catch (e) { }
+        } catch (e) { console.warn('[ITD VP] автолайк', e); logErr('автолайк', e); }
     }
 
     async function processAllAutoLikes() {
@@ -1600,6 +1608,8 @@
             font: inherit; font-size: 14px; padding: 10px 14px; border-radius: 14px; cursor: pointer; }
         .vp-fab-menu button:active { background: rgba(255, 255, 255, .1); }
         .vp-fab svg { flex: 0 0 auto; width: 20px !important; height: 20px !important; }
+        .vp-fab-btn img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; pointer-events: none; }
+        .vp-fab-btn:has(img) { overflow: hidden; padding: 0; }
         .vp-admin-toast { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 2147483001; padding: 10px 16px; border-radius: 999px;
             background: rgba(20, 20, 24, .92); color: #fff; font: 500 14px system-ui, sans-serif; border: 1px solid rgba(255, 255, 255, .14); pointer-events: none; }
         .vp-fps { position: fixed; left: 8px; top: 8px; z-index: 2147483001; padding: 4px 8px; border-radius: 8px; pointer-events: none;
@@ -2323,11 +2333,6 @@
         option.onclick = (e) => { e.stopPropagation(); onPick(); closePopup(); };
         return option;
     }
-    function menuBox() {
-        const menu = document.createElement('div');
-        menu.className = 'nick-style-dropdown';
-        return menu;
-    }
 
     // --- стиль ника
     function getColorDot(styleKey) {
@@ -2418,11 +2423,7 @@
                 }
             });
             overrideFilePicker();
-            if (window._fileObserver) window._fileObserver.disconnect();
-            window._fileObserver = new MutationObserver(overrideFilePicker);
-            window._fileObserver.observe(document.body, { childList: true, subtree: true });
         } else {
-            if (window._fileObserver) window._fileObserver.disconnect();
             document.querySelectorAll('input[type="file"][data-overridden]').forEach(input => {
                 input.removeAttribute('data-overridden');
                 if (input._originalClick) {
@@ -2765,19 +2766,12 @@
         fpsBox = document.createElement('div');
         fpsBox.className = 'vp-fps';
         document.body.appendChild(fpsBox);
-        let n = 0, t0 = performance.now(), last = t0, worst = 0;
-        const box = fpsBox;
-        (function tick(t) {
-            if (!box.isConnected) return;
-            n++; worst = Math.max(worst, t - last); last = t;
-            if (t - t0 >= 1000) {
-                const fps = Math.round(n * 1000 / (t - t0));
-                box.textContent = `${fps} FPS · рывок ${Math.round(worst)} мс`;
-                box.dataset.bad = fps < 45 || worst > 50 ? '1' : '';
-                n = 0; t0 = t; worst = 0;
-            }
-            requestAnimationFrame(tick);
-        })(t0);
+        fpsMeter(fpsBox);
+    }
+
+    function fabFace() {
+        const face = GM_getValue('fabFace', '');
+        return face ? `<img src="${face.replace(/"/g, '')}" alt="">` : '<span class="vp-fab-a">A</span>';
     }
 
     // Админ-островок (только у админа, и на телефоне, и на компьютере): круглая кнопка поверх всего, её можно таскать —
@@ -2787,11 +2781,12 @@
         if (document.querySelector('.vp-fab') || !myUsername || !ADMINS.includes(myUsername.toLowerCase())) return;
         const fab = document.createElement('div');
         fab.className = 'vp-fab';
-        fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка"><span class="vp-fab-a">A</span></button>
+        fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка">${fabFace()}</button>
             <div class="vp-fab-menu"><button type="button" data-act="snap">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 18)}<span>Снимок для Claude</span></button>
                 <button type="button" data-act="report">${svgIcon('<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h4"/>', 18)}<span>Скопировать отчёт</span></button>
                 <button type="button" data-act="diag">${svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4M8.5 11l1.8 1.8 3.4-3.6"/>', 18)}<span>Диагностика</span></button>
                 <button type="button" data-act="fps">${svgIcon('<path d="M3 17l5-6 4 3 5-7 4 4"/>', 18)}<span>Счётчик FPS</span></button>
+                <button type="button" data-act="face">${svgIcon('<rect x="4" y="4" width="16" height="16" rx="8"/><path d="M8 15l2.5-3 2 2 1.5-2 2 3"/>', 18)}<span>Своя картинка кнопки</span></button>
                 <button type="button" data-act="off">${svgIcon('<path d="M12 3v8"/><path d="M6.3 7a8 8 0 1 0 11.4 0"/>', 18)}<span>Мод выкл (до закрытия вкладки)</span></button></div>`;
         document.body.appendChild(fab);
         const btn = fab.firstElementChild, SIZE = 48, M = 8;
@@ -2846,6 +2841,29 @@
         act('report', () => copyText(adminReport()).then(ok => adminToast(ok ? 'Отчёт скопирован — вставь его Claude' : 'Не вышло скопировать')));
         act('diag', adminDiag);
         act('fps', toggleFps);
+        // своя картинка кнопки — хранится только у тебя (в настройках скрипта), 96 px; пустой выбор — вернуть «A»
+        act('face', () => {
+            if (GM_getValue('fabFace', '') && confirm('Вернуть обычную «A»? (Отмена — выбрать другую картинку)')) {
+                GM_setValue('fabFace', ''); btn.innerHTML = fabFace(); return;
+            }
+            const f = document.createElement('input');
+            f.type = 'file'; f.accept = 'image/*';
+            f.onchange = () => {
+                const file = f.files && f.files[0];
+                if (!file) return;
+                const url = URL.createObjectURL(file), img = new Image();
+                img.onload = () => {
+                    const sd = Math.min(img.naturalWidth, img.naturalHeight), c = document.createElement('canvas');
+                    c.width = c.height = 96;
+                    c.getContext('2d').drawImage(img, (img.naturalWidth - sd) / 2, (img.naturalHeight - sd) / 2, sd, sd, 0, 0, 96, 96);
+                    URL.revokeObjectURL(url);
+                    GM_setValue('fabFace', c.toDataURL('image/png'));
+                    btn.innerHTML = fabFace();
+                };
+                img.src = url;
+            };
+            f.click();
+        });
         act('off', () => { if (!confirm('Выключить ИТД X до закрытия вкладки? Вернуть — кнопкой внизу страницы.')) return; try { sessionStorage.setItem('vp-off', '1'); } catch (e) { } location.reload(); });
         // тап мимо — меню закрывается
         document.addEventListener('pointerdown', e => { if (!fab.contains(e.target)) fab.classList.remove('vp-open'); }, true);
@@ -3957,7 +3975,7 @@
                 if (document.querySelector('.' + SELECTORS.feedBar)) updateNavIcon();
             });
             scheduleAutoLike();
-        } catch (e) { }
+        } catch (e) { console.warn('[ITD VP] запуск мода', e); logErr('запуск мода', e); }
     }
 
     // Кадр через requestAnimationFrame: в свёрнутой вкладке он сам встаёт на паузу.
@@ -6370,57 +6388,7 @@
         });
     }
 
-    /* function overridePasteHandler() {
-        const originalAddEventListener = EventTarget.prototype.addEventListener;
-        EventTarget.prototype.addEventListener = function (type, listener, options) {
-            if (type === 'paste') {
-                const wrappedListener = function (e) {
-                    const items = e.clipboardData?.items;
-                    if (!items) return;
 
-                    let hasImage = false;
-                    const imageFiles = [];
-
-                    for (const item of items) {
-                        if (item.type.startsWith('image/')) {
-                            hasImage = true;
-                            const file = item.getAsFile();
-                            if (file) {
-                                imageFiles.push(file);
-                            }
-                        }
-                    }
-
-                    if (!hasImage || !imageFiles.length) {
-                        return listener.call(this, e);
-                    }
-
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    const dt = new DataTransfer();
-                    for (const file of imageFiles) {
-                        let finalFile = file;
-                        if (file.type !== 'image/gif') {
-                            const newFileName = (file.name || 'pasted_image').replace(/\.[^.]+$/, '') + '.gif';
-                            finalFile = new File([file], newFileName, { type: 'image/gif' });
-                        }
-                        dt.items.add(finalFile);
-                    }
-
-                    const pasteEvent = new ClipboardEvent('paste', {
-                        clipboardData: dt,
-                        bubbles: true,
-                        cancelable: true
-                    });
-
-                    this.dispatchEvent(pasteEvent);
-                };
-                return originalAddEventListener.call(this, type, wrappedListener, options);
-            }
-            return originalAddEventListener.call(this, type, listener, options);
-        };
-    } */
 
     function overrideDragAndDrop() {
         document.addEventListener('drop', function (e) {
@@ -6499,57 +6467,27 @@
         };
     }
 
-    function overrideFileReader() {
-        const originalReadAsDataURL = FileReader.prototype.readAsDataURL;
-        FileReader.prototype.readAsDataURL = function (blob) {
-            if (blob instanceof File && blob.type !== 'image/gif' && blob.type.startsWith('image/')) {
-                const newFileName = blob.name.replace(/\.[^.]+$/, '') + '.gif';
-                const newFile = new File([blob], newFileName, { type: 'image/gif' });
-                return originalReadAsDataURL.call(this, newFile);
-            }
-            return originalReadAsDataURL.call(this, blob);
-        };
-    }
 
+    // новые поля выбора файла — через общий наблюдатель страницы (был отдельный на каждое изменение)
+    onDom(function antiCensorFiles() { if (antiCensorshipEnabled) overrideFilePicker(); });
     if (antiCensorshipEnabled) {
         setTimeout(overrideFilePicker, 500);
-        /* setTimeout(overridePasteHandler, 500); */
         setTimeout(overrideDragAndDrop, 500);
         setTimeout(overrideFetchAndXHR, 500);
 
-        window._fileObserver = new MutationObserver(() => {
-            overrideFilePicker();
-        });
-        window._fileObserver.observe(document.body, { childList: true, subtree: true });
     }
 
-    // Мобильная разметка ещё не сохранена, поэтому здесь последние классы сайта: они устарели
-    // и сейчас ничего не находят (правки просто не применяются, ошибок нет). Заменить на поиск
-    // по приметам, когда будет снимок страницы в мобильной ширине.
-    const MOBILE_OLD = {
-        container: '.yYHA',       // основной контейнер: на телефоне убираем верхний отступ
-        createBtn: '.JHRx',       // кнопка «создать пост» над нижней панелью
-        bordered: '.uDYw',        // элементы с нижней границей
-        toast: '.eqPa'            // всплывашка: на телефоне переносим наверх
-    };
-
+    // Телефон/компьютер: кнопка «наверх», скрытая полоса прокрутки, обёртка крупного ника.
+    // (Правки старых классов сайта — .yYHA, .JHRx, .uDYw, .eqPa — убраны: этих классов на сайте давно нет.)
     (function () {
         function applyFixes() {
             const isMobile = window.innerWidth <= 1172;
-            const container = document.querySelector(MOBILE_OLD.container);
-            const createBtn = document.querySelector(MOBILE_OLD.createBtn);
             const scrollBtn = document.querySelector('.itd-scroll-top-btn');
-            const uDYwElements = document.querySelectorAll(MOBILE_OLD.bordered);
-            const eqPa = document.querySelector(MOBILE_OLD.toast);
             const nickContainer = document.querySelector('.' + SELECTORS.nickLarge);
 
             if (!scrollBtn) return;
 
             if (isMobile) {
-                uDYwElements.forEach(el => {
-                    el.style.setProperty('border-bottom', 'none', 'important');
-                });
-
                 if (!document.querySelector('#itd-mobile-fixes')) {
                     const style = document.createElement('style');
                     style.id = 'itd-mobile-fixes';
@@ -6563,25 +6501,6 @@
                 scrollBtn.style.zIndex = '1';
                 scrollBtn.style.bottom = '100px';
                 scrollBtn.style.right = '16px';
-
-                if (container) {
-                    container.style.paddingTop = '0';
-                }
-
-                if (createBtn) {
-                    createBtn.style.position = 'absolute';
-                    createBtn.style.bottom = 'calc(100% - 1px)';
-                    createBtn.style.left = '50%';
-                    createBtn.style.transform = 'translateX(-50%)';
-                    createBtn.style.width = '120px';
-                    createBtn.style.height = '36px';
-                    createBtn.style.borderRadius = '24px 24px 0 0';
-                }
-
-                if (eqPa) {
-                    eqPa.style.bottom = 'auto';
-                    eqPa.style.top = '16px';
-                }
 
                 if (nickContainer) {
                     let wrapper = nickContainer.querySelector('.nick-wrapper');
@@ -6631,32 +6550,9 @@
                 }
 
             } else {
-                uDYwElements.forEach(el => {
-                    el.style.removeProperty('border-bottom');
-                });
-
                 scrollBtn.style.zIndex = '';
                 scrollBtn.style.bottom = '16px';
                 scrollBtn.style.right = '16px';
-
-                if (container) {
-                    container.style.paddingTop = '';
-                }
-
-                if (createBtn) {
-                    createBtn.style.position = '';
-                    createBtn.style.bottom = '';
-                    createBtn.style.left = '';
-                    createBtn.style.transform = '';
-                    createBtn.style.width = '';
-                    createBtn.style.height = '';
-                    createBtn.style.borderRadius = '';
-                }
-
-                if (eqPa) {
-                    eqPa.style.bottom = '';
-                    eqPa.style.top = '';
-                }
 
                 if (nickContainer) {
                     const wrapper = nickContainer.querySelector('.nick-wrapper');
@@ -6723,7 +6619,6 @@
                 const match = url.match(/\/api\/posts\/([^\/]+)\/comments/);
                 if (match) {
                     currentPostId = match[1];
-                    console.log('📌 Post ID сохранён:', currentPostId);
                 }
             }
             return originalFetch.apply(this, args);
