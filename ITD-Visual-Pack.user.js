@@ -3769,27 +3769,165 @@
         if (verificationInterval) clearInterval(verificationInterval);
     });
 
+    // ==== стикеры в комментариях
+    // Кнопка у поля комментария → панель паков (наведение открывает, уход мыши закрывает).
+    // Паки свои: хранятся в localStorage, картинки грузятся на сайт (/api/files/upload), стикер
+    // уходит в комментарий вложением. «Недавние» — последние отправленные.
+    // Режим правки пака: стикеры дрожат, их можно таскать, удалять, добавлять (с обрезкой).
+    // Вид — в CSS (классы ниже), режимы — классами; в style.* только то, что считается.
     (function () {
-        'use strict';
-
         const STORAGE_KEY = 'user_sticker_packs_v1';
         const RECENT_STORAGE_KEY = 'recent_stickers_v1';
+        const MAX_NAME_LENGTH = 20;
+        const DEFAULT_PACK_NAME = 'Новый пакет';
+        const PANEL_WIDTH = 320;
 
-        function loadUserPacks() {
-            try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
-            catch (e) { return []; }
-        }
-        function saveUserPacks(packs) {
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(packs)); } catch (e) { }
-        }
-        function loadRecentStickers() {
-            try { return JSON.parse(localStorage.getItem(RECENT_STORAGE_KEY)) || []; }
-            catch (e) { return []; }
-        }
-        function saveRecentStickers(recent) {
-            try { localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(recent)); } catch (e) { }
+        const readList = key => { try { return JSON.parse(localStorage.getItem(key)) || []; } catch (e) { return []; } };
+        const writeList = (key, v) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) { } };
+        let userPacks = readList(STORAGE_KEY);
+        let recentStickers = readList(RECENT_STORAGE_KEY);
+        const saveUserPacks = () => writeList(STORAGE_KEY, userPacks);
+        const saveRecent = () => writeList(RECENT_STORAGE_KEY, recentStickers);
+        // стикеры пака по ключу ('recent' — недавние); имя пака
+        const packStickers = key => key === 'recent' ? recentStickers : (userPacks.find(p => p.id === key) || { stickers: [] }).stickers;
+        const packName = key => key === 'recent' ? 'Недавние' : ((userPacks.find(p => p.id === key) || {}).name || DEFAULT_PACK_NAME);
+        const allPackKeys = () => ['recent', ...userPacks.map(p => p.id)];
+        function savePack(key) { if (key === 'recent') saveRecent(); else saveUserPacks(); }
+
+        function addToRecent(sticker) {
+            recentStickers = [sticker, ...recentStickers.filter(s => s.id !== sticker.id)].slice(0, 30);
+            saveRecent();
         }
 
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+            .spin{animation:spin 1s linear infinite;transform-origin:center}
+            .sticker-dragging{opacity:0.3!important;pointer-events:none!important}
+            .sticker-placeholder{background:rgba(0,128,255,0.2)!important;border:2px dashed #0080FF!important}
+            @keyframes stickerShake1{0%,100%{transform:translate(0,0)rotate(0deg)}25%{transform:translate(0.5px,0.5px)rotate(0.3deg)}50%{transform:translate(-0.5px,-0.3px)rotate(-0.2deg)}75%{transform:translate(-0.3px,0.4px)rotate(0.1deg)}}
+            @keyframes stickerShake2{0%,100%{transform:translate(0,0)rotate(0deg)}25%{transform:translate(-0.4px,-0.5px)rotate(-0.3deg)}50%{transform:translate(0.6px,0.2px)rotate(0.2deg)}75%{transform:translate(0.2px,-0.4px)rotate(-0.1deg)}}
+            @keyframes stickerShake3{0%,100%{transform:translate(0,0)rotate(0deg)}25%{transform:translate(-0.5px,0.3px)rotate(0.2deg)}50%{transform:translate(0.4px,-0.5px)rotate(-0.3deg)}75%{transform:translate(0.3px,0.3px)rotate(0.1deg)}}
+            @keyframes stickerShake4{0%,100%{transform:translate(0,0)rotate(0deg)}25%{transform:translate(0.3px,-0.4px)rotate(-0.2deg)}50%{transform:translate(-0.5px,0.5px)rotate(0.3deg)}75%{transform:translate(-0.2px,-0.3px)rotate(-0.1deg)}}
+            @keyframes stickerShake5{0%,100%{transform:translate(0,0)rotate(0deg)}25%{transform:translate(0.2px,-0.3px)rotate(0.25deg)}50%{transform:translate(-0.3px,0.4px)rotate(-0.15deg)}75%{transform:translate(0.4px,0.2px)rotate(0.2deg)}}
+            @keyframes stickerShake6{0%,100%{transform:translate(0,0)rotate(0deg)}25%{transform:translate(-0.6px,0.1px)rotate(-0.35deg)}50%{transform:translate(0.3px,-0.3px)rotate(0.15deg)}75%{transform:translate(-0.2px,0.5px)rotate(-0.25deg)}}
+            @keyframes stickerShake7{0%,100%{transform:translate(0,0)rotate(0deg)}25%{transform:translate(0.4px,-0.2px)rotate(0.2deg)}50%{transform:translate(-0.2px,0.6px)rotate(-0.3deg)}75%{transform:translate(0.3px,-0.1px)rotate(0.1deg)}}
+            @keyframes stickerShake8{0%,100%{transform:translate(0,0)rotate(0deg)}25%{transform:translate(-0.3px,-0.4px)rotate(-0.25deg)}50%{transform:translate(0.5px,0.1px)rotate(0.2deg)}75%{transform:translate(-0.1px,-0.5px)rotate(-0.15deg)}}
+            .sticker-editing{animation-duration:0.4s;animation-iteration-count:infinite;animation-timing-function:ease-in-out;cursor:grab}
+            .sticker-shake-1{animation-name:stickerShake1}
+            .sticker-shake-2{animation-name:stickerShake2}
+            .sticker-shake-3{animation-name:stickerShake3}
+            .sticker-shake-4{animation-name:stickerShake4}
+            .sticker-shake-5{animation-name:stickerShake5}
+            .sticker-shake-6{animation-name:stickerShake6}
+            .sticker-shake-7{animation-name:stickerShake7}
+            .sticker-shake-8{animation-name:stickerShake8}
+            .sticker-editing:active{cursor:grabbing}
+
+            /* кнопка у поля комментария */
+            .sticker-btn { background: transparent; border: none; cursor: pointer; padding: 8px; border-radius: 9999px;
+                display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary);
+                margin-right: 5px; width: 36px; height: 36px; }
+            .sticker-btn:hover { background-color: var(--bg-hover, rgba(255,255,255,0.08)); }
+            .sticker-btn.vp-busy { opacity: 0.6; pointer-events: none; }
+
+            /* прикреплённый стикер над полем: превью и правки строки сайта на это время */
+            #temp_sticker_preview { padding: 12px 16px; background: var(--block-bg); }
+            .vp-sticker-attach { margin-left: 52px; display: flex; gap: 8px; flex-wrap: wrap; }
+            .vp-sticker-thumb { width: 80px; height: 80px; position: relative; border-radius: 8px; overflow: hidden; }
+            .vp-sticker-thumb > img { width: 100%; height: 100%; object-fit: cover; }
+            .vp-sticker-remove { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; background: rgba(0,0,0,0.6);
+                border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; }
+            .vp-sticker-hide { display: none !important; }
+            .vp-sticker-box { border-top: none !important; padding-top: 0 !important; }
+            .vp-sticker-send { margin: 6px !important; transform: translate(0) !important; }
+
+            /* панель */
+            .sticker-panel { position: fixed; display: none; flex-direction: column; background: var(--block-bg,#1e1e2e);
+                border-radius: 20px; border: 1px solid var(--border-color,rgba(255,255,255,0.1)); z-index: 10000;
+                width: ${PANEL_WIDTH}px; height: 440px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); overflow: hidden; }
+            .sticker-panel.vp-open { display: flex; }
+            .vp-sp-head { display: flex; align-items: center; padding: 8px; border-bottom: 1px solid var(--border-color,rgba(255,255,255,0.1));
+                gap: 4px; flex-shrink: 0; }
+            .vp-sp-tab { background: transparent; border: none; width: 32px; height: 32px; border-radius: 12px; cursor: pointer;
+                display: flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0;
+                color: var(--text-secondary,rgba(255,255,255,0.5)); }
+            .vp-sp-tab.vp-recent { color: white; }
+            .vp-sp-tab.vp-on { background: var(--accent-primary,#0080FF); }
+            .vp-sp-tab > img { width: 24px; height: 24px; object-fit: contain; border-radius: 6px; }
+            .vp-sp-tabs { display: flex; gap: 4px; overflow-x: auto; overflow-y: hidden; flex: 1; padding: 0 4px; scrollbar-width: none; }
+            .vp-sp-tabs > div { display: flex; gap: 4px; }
+            .vp-sp-body { flex: 1; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth; scrollbar-width: thin; }
+            .pack-header { padding: 16px 10px 8px; display: flex; align-items: center; gap: 6px; color: var(--text-secondary,rgba(255,255,255,0.5)); }
+            .vp-sp-name { display: flex; align-items: center; gap: 4px; flex-shrink: 0; margin-right: auto; }
+            .pack-name-input { background: transparent; border: 1px solid transparent; color: inherit; font-size: 14px; font-weight: 600;
+                letter-spacing: 0.5px; text-transform: uppercase; padding: 2px 4px; border-radius: 4px; outline: none; width: auto; }
+            .pack-header[data-pack="recent"] .pack-name-input { pointer-events: none; }
+            .vp-sp-edit { background: transparent; border: none; width: 20px; height: 20px; border-radius: 6px; cursor: pointer;
+                display: flex; align-items: center; justify-content: center; padding: 0; color: inherit; }
+            .delete-pack-btn, .vp-sp-done { display: none; border: none; width: 24px; height: 24px; border-radius: 6px; cursor: pointer;
+                padding: 0; align-items: center; justify-content: center; }
+            .delete-pack-btn { background: #ff4444; }
+            .vp-sp-done { background: var(--accent-primary,#0080FF); }
+            .pack-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 3px; padding: 0 10px 16px; }
+            /* режим правки: виден только свой пак, у него — «удалить пак» и «готово» */
+            .vp-sp-body.vp-editing > :not(.vp-cur) { display: none; }
+            .vp-sp-body.vp-editing > .pack-header.vp-cur :is(.delete-pack-btn, .vp-sp-done) { display: flex; }
+            .vp-sticker-item { aspect-ratio: 1; font-size: 34px; background: transparent; border: none; border-radius: 10px;
+                transition: all 0.15s ease; display: flex; align-items: center; justify-content: center; cursor: pointer;
+                padding: 0; position: relative; user-select: none; overflow: hidden; }
+            .sticker-panel:not(.vp-drag) .vp-sticker-item:hover { transform: scale(1.05); box-shadow: 0 0 0 2px var(--accent-primary,#0080FF); }
+            .vp-sticker-item > img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+            .vp-sticker-item > .vp-sticker-empty { width: 100%; height: 100%; background: rgba(128,128,128,0.1); border-radius: 8px; }
+            .vp-sticker-del { position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; background: rgba(0,0,0,0.6);
+                border-radius: 50%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.7);
+                transition: all 0.15s; z-index: 2; pointer-events: auto; font-size: 12px; }
+            .vp-sticker-del:hover { background: #ff4444; }
+            .add-item-btn { aspect-ratio: 1; background: var(--bg-secondary,rgba(128,128,128,0.08));
+                border: 2px dashed var(--border-color,rgba(255,255,255,0.2)); border-radius: 10px; display: flex; align-items: center;
+                justify-content: center; cursor: pointer; padding: 0; color: var(--text-secondary,rgba(255,255,255,0.5)); transition: all 0.15s; }
+            .add-item-btn:hover { border-color: var(--accent-primary,#0080FF); color: var(--accent-primary,#0080FF); }
+            .add-item-btn.vp-busy { pointer-events: none; }
+
+            /* обрезка стикера */
+            .vp-crop-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8);
+                display: flex; align-items: center; justify-content: center; z-index: 20000; }
+            .vp-crop-editor { background: var(--block-bg,#1e1e2e); border-radius: 16px; padding: 20px; display: flex;
+                flex-direction: column; gap: 16px; width: 90%; max-width: 500px; }
+            .vp-crop-editor > h3 { margin: 0; color: var(--text-primary,#fff); font-size: 18px; font-weight: 600; }
+            .vp-crop-view { position: relative; width: 100%; aspect-ratio: 1; overflow: hidden; border-radius: 12px; background: #000; }
+            .vp-crop-view > img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+            .vp-crop-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+            .vp-crop-area { position: absolute; border: 2px solid #0080FF; box-sizing: border-box; pointer-events: auto; touch-action: none; }
+            .vp-crop-area.vp-moving { cursor: move; }
+            .resize-handle { position: absolute; width: 8px; height: 8px; background: #0080FF; pointer-events: auto; touch-action: none; }
+            .resize-handle[data-direction="n"] { top: -4px; left: 50%; transform: translateX(-50%); width: 30px; cursor: n-resize; }
+            .resize-handle[data-direction="s"] { bottom: -4px; left: 50%; transform: translateX(-50%); width: 30px; cursor: s-resize; }
+            .resize-handle[data-direction="e"] { top: 50%; right: -4px; transform: translateY(-50%); height: 30px; cursor: e-resize; }
+            .resize-handle[data-direction="w"] { top: 50%; left: -4px; transform: translateY(-50%); height: 30px; cursor: w-resize; }
+            .resize-handle[data-direction="nw"] { top: -4px; left: -4px; cursor: nw-resize; }
+            .resize-handle[data-direction="ne"] { top: -4px; right: -4px; cursor: ne-resize; }
+            .resize-handle[data-direction="sw"] { bottom: -4px; left: -4px; cursor: sw-resize; }
+            .resize-handle[data-direction="se"] { bottom: -4px; right: -4px; cursor: se-resize; }
+            .vp-crop-ratios { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+            .aspect-ratio-btn { background: var(--bg-hover,rgba(255,255,255,0.1)); border: none; color: var(--text-primary,#fff);
+                padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+            .aspect-ratio-btn.vp-on { background: #0080FF; }
+            .vp-crop-actions { display: flex; gap: 12px; justify-content: flex-end; }
+            .vp-crop-actions > button { padding: 8px 16px; border-radius: 8px; cursor: pointer; color: var(--text-primary,#fff); }
+            .vp-crop-cancel { background: transparent; border: 1px solid var(--border-color,rgba(255,255,255,0.3)); }
+            .vp-crop-actions > .vp-crop-ok { background: #0080FF; border: none; color: white; }
+        `;
+        document.head.appendChild(style);
+
+        const el = (tag, cls, html) => {
+            const e = document.createElement(tag);
+            if (cls) e.className = cls;
+            if (html) e.innerHTML = html;
+            return e;
+        };
+
+        // ---- загрузка картинки и отправка
         async function uploadImageToServer(file) {
             const accessToken = await getAccessToken();
             const formData = new FormData();
@@ -3804,1339 +3942,577 @@
             return await res.json();
         }
 
-        async function insertStickerToComment(stickerId, stickerUrl) {
+        // Номер поста — со страницы (раньше его подсматривали в запросах сайта, но та обёртка
+        // fetch стояла в песочнице Tampermonkey и запросов сайта не видела): из адреса /post/…,
+        // а в ленте — из ссылки на пост в той же карточке, что и поле комментария
+        function stickerPostId() {
+            const m = location.pathname.match(/\/post\/([^\/?#]+)/);
+            if (m) return m[1];
+            const row = stickerBtn && stickerBtn.closest('.' + SELECTORS.stickerContainer);
+            const card = row && row.closest('article');
+            const link = card && card.querySelector('a[href*="/post/"]');
+            const lm = link && link.getAttribute('href').match(/\/post\/([^\/?#]+)/);
+            return lm ? lm[1] : null;
+        }
 
-            let postId = currentPostId;
-
-            if (!postId) {
-                postId = window.location.pathname.split('/post/')[1];
-                if (!postId) {
-                    const match = window.location.pathname.match(/\/post\/([^\/?#]+)/);
-                    if (match) postId = match[1];
-                }
-            }
-
+        // Прикреплённый стикер: превью над полем, «Отправить» уходит нашим запросом
+        // (текст поля + стикер вложением), потом страница перезагружается — так сайт показывает
+        // новый комментарий. Крестик снимает всё, включая перехват «Отправить».
+        let attached = null;          // { box, send, mic, preview }
+        function detachSticker() {
+            if (!attached) return;
+            const { box, send, mic, preview } = attached;
+            attached = null;
+            preview.remove();
+            box.classList.remove('vp-sticker-box');
+            send.classList.remove('vp-sticker-send');
+            if (mic) mic.classList.remove('vp-sticker-hide');
+            send.onclick = null;                                  // раньше оставался — и уносил снятый стикер с обычным комментарием
+            send.disabled = true;
+            if (stickerBtn) { stickerBtn.innerHTML = ICONS.STICKER_BUTTON; stickerBtn.classList.remove('vp-busy'); }
+        }
+        function insertStickerToComment(stickerId, stickerUrl) {
+            const postId = stickerPostId();
             if (!postId) throw new Error('Post ID not found');
+            detachSticker();                                      // прошлый прикреплённый — снять целиком
+            if (stickerBtn) { stickerBtn.innerHTML = ICONS.LOADING; stickerBtn.classList.add('vp-busy'); }
 
-            if (stickerBtn) {
-                stickerBtn.innerHTML = ICONS.LOADING;
-                stickerBtn.style.opacity = '0.6';
-                stickerBtn.style.pointerEvents = 'none';
-            }
-
-            const previewContainer = document.querySelector('.' + SELECTORS.commentPreviewContainer);
-            const sendBtn = document.querySelector('.' + SELECTORS.stickerSendBtn);
-            const micBtn = document.querySelector('.' + SELECTORS.stickerMicBtn);
-
-            if (!previewContainer || !sendBtn) {
-                if (stickerBtn) {
-                    stickerBtn.innerHTML = ICONS.STICKER_BUTTON;
-                    stickerBtn.style.opacity = '';
-                    stickerBtn.style.pointerEvents = '';
-                }
+            const box = document.querySelector('.' + SELECTORS.commentPreviewContainer);
+            const send = document.querySelector('.' + SELECTORS.stickerSendBtn);
+            const mic = document.querySelector('.' + SELECTORS.stickerMicBtn);
+            if (!box || !send) {
+                if (stickerBtn) { stickerBtn.innerHTML = ICONS.STICKER_BUTTON; stickerBtn.classList.remove('vp-busy'); }
                 return;
             }
+            const old = document.getElementById('temp_sticker_preview');
+            if (old) old.remove();
 
-            const origMicDisplay = micBtn ? micBtn.style.display : '';
-            const origBorderTop = previewContainer.style.borderTop;
-            const origPaddingTop = previewContainer.style.paddingTop;
-            const origSendMargin = sendBtn.style.margin;
-            const origSendTransform = sendBtn.style.transform;
+            const preview = el('div', '', `<div class="vp-sticker-attach"><div class="vp-sticker-thumb"><img><button class="vp-sticker-remove">${svgIcon('<path d="M18 6 6 18M6 6l12 12"/>', 14)}</button></div></div>`);
+            preview.id = 'temp_sticker_preview';
+            preview.querySelector('img').src = stickerUrl;
+            preview.querySelector('.vp-sticker-remove').onclick = e => { e.stopPropagation(); detachSticker(); };
 
-            if (micBtn) micBtn.style.display = 'none';
-            previewContainer.style.borderTop = 'none';
-            previewContainer.style.paddingTop = '0';
-            sendBtn.style.margin = '6px 6px 6px 6px';
-            sendBtn.style.transform = 'translate(0)';
-            sendBtn.disabled = false;
-
-            const oldPreview = document.getElementById('temp_sticker_preview');
-            if (oldPreview) oldPreview.remove();
-
-            const previewDiv = document.createElement('div');
-            previewDiv.id = 'temp_sticker_preview';
-            previewDiv.style.cssText = 'padding: 12px 16px; background: var(--block-bg);';
-            previewDiv.innerHTML = `
-                <div style="margin-left: 52px;">
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <div style="width: 80px; height: 80px; position: relative; border-radius: 8px; overflow: hidden;">
-                            <img src="${stickerUrl}" style="width: 100%; height: 100%; object-fit: cover;">
-                            <button class="vp-sticker-remove" style="position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; background: rgba(0,0,0,0.6); border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white;">
-                                ${svgIcon('<path d="M18 6 6 18M6 6l12 12"/>', 14)}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            const closeBtn = previewDiv.querySelector('.vp-sticker-remove');
-            closeBtn.onclick = (e) => {
-                e.stopPropagation();
-                previewDiv.remove();
-                if (micBtn) micBtn.style.display = origMicDisplay;
-                previewContainer.style.borderTop = origBorderTop;
-                previewContainer.style.paddingTop = origPaddingTop;
-                sendBtn.style.margin = origSendMargin;
-                sendBtn.style.transform = origSendTransform;
-                sendBtn.disabled = true;
-                if (stickerBtn) {
-                    stickerBtn.innerHTML = ICONS.STICKER_BUTTON;
-                    stickerBtn.style.opacity = '';
-                    stickerBtn.style.pointerEvents = '';
-                }
-            };
-
-            sendBtn.onclick = async (e) => {
+            attached = { box, send, mic, preview };
+            box.classList.add('vp-sticker-box');
+            send.classList.add('vp-sticker-send');
+            if (mic) mic.classList.add('vp-sticker-hide');
+            send.disabled = false;
+            send.onclick = async e => {
                 e.preventDefault();
                 e.stopPropagation();
-                if (!stickerId || !stickerUrl) return;
-
-                sendBtn.disabled = true;
-                sendBtn.innerHTML = ICONS.LOADING;
-
+                send.disabled = true;
+                send.innerHTML = ICONS.LOADING;
                 try {
-                    const commentField = document.querySelector('[contenteditable="true"][data-placeholder*="комментарий"]');
-                    const content = commentField ? (commentField.innerText || commentField.textContent || "").trim() : "";
-
-                    const postId = window.location.pathname.split('/post/')[1];
-                    if (!postId) throw new Error('Post ID not found');
-
+                    const field = document.querySelector('[contenteditable="true"][data-placeholder*="комментарий"]');
+                    const content = field ? (field.innerText || field.textContent || '').trim() : '';
                     const accessToken = await getAccessToken();
-
                     const response = await fetch(`/api/posts/${postId}/comments`, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${accessToken}`
-                        },
-                        body: JSON.stringify({
-                            content: content,
-                            attachmentIds: [stickerId]
-                        }),
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+                        body: JSON.stringify({ content, attachmentIds: [stickerId] }),
                         credentials: 'include'
                     });
-
                     const result = await response.json();
-
                     if (response.ok) {
-                        previewDiv.remove();
+                        preview.remove();
                         location.reload();
                     } else {
                         alert('Ошибка: ' + JSON.stringify(result.error));
-                        sendBtn.disabled = false;
-                        sendBtn.innerHTML = '';
+                        send.disabled = false;
+                        send.innerHTML = '';
                     }
-                } catch (e) {
-                    alert('Ошибка: ' + e.message);
-                    sendBtn.disabled = false;
-                    sendBtn.innerHTML = '';
+                } catch (err) {
+                    alert('Ошибка: ' + err.message);
+                    send.disabled = false;
+                    send.innerHTML = '';
                 }
             };
-
-            previewContainer.insertBefore(previewDiv, previewContainer.firstChild);
+            box.insertBefore(preview, box.firstChild);
         }
 
+        // ---- панель
+        let stickerPanel = null, scrollContainer = null, tabsRow = null, recentBtn = null;
+        let stickerBtn = null, hideTimeout = null;
+        let editPack = null;                                   // ключ пака в режиме правки
+        let drag = null;                                       // { packKey, index } — перетаскиваемый стикер
 
-        const MAX_NAME_LENGTH = 20;
-        const DEFAULT_PACK_NAME = 'Новый пакет';
-        const PANEL_WIDTH = 320;
-        const PANEL_HEIGHT = 440;
-
-        let userPacks = loadUserPacks();
-        let recentStickers = loadRecentStickers();
-        let stickerPacks = { recent: [...recentStickers] };
-        let packNames = { recent: 'Недавние' };
-
-        function rebuildPacks() {
-            stickerPacks = { recent: [...recentStickers] };
-            packNames = { recent: 'Недавние' };
-            userPacks.forEach(p => {
-                stickerPacks[p.id] = [...p.stickers];
-                packNames[p.id] = p.name || DEFAULT_PACK_NAME;
-            });
-        }
-        rebuildPacks();
-
-        function addToRecent(sticker) {
-            recentStickers = recentStickers.filter(s => s.id !== sticker.id);
-            recentStickers.unshift(sticker);
-            recentStickers = recentStickers.slice(0, 30);
-            stickerPacks.recent = [...recentStickers];
-            saveRecentStickers(recentStickers);
-        }
-
-        let stickerPanel = null, hideTimeout = null, scrollContainer = null, scrollTabs = null;
-        let stickerBtn = null, isProcessing = false, packHeaders = [], tabButtons = [], recentBtn = null;
-        let isScrollingFromTab = false, editMode = false, currentEditPack = null;
-        let dragState = { packKey: null, draggedIndex: null, placeholderIndex: null };
-
-        if (!document.getElementById('sticker-drag-styles')) {
-            const style = document.createElement('style');
-            style.id = 'sticker-drag-styles';
-            style.textContent = `
-                @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-                .spin{animation:spin 1s linear infinite;transform-origin:center}
-                .sticker-dragging{opacity:0.3!important;pointer-events:none!important}
-                .sticker-placeholder{background:rgba(0,128,255,0.2)!important;border:2px dashed #0080FF!important}
-                @keyframes stickerShake1{0%,100%{transform:translate(0,0)rotate(0deg)}25%{transform:translate(0.5px,0.5px)rotate(0.3deg)}50%{transform:translate(-0.5px,-0.3px)rotate(-0.2deg)}75%{transform:translate(-0.3px,0.4px)rotate(0.1deg)}}
-                @keyframes stickerShake2{0%,100%{transform:translate(0,0)rotate(0deg)}25%{transform:translate(-0.4px,-0.5px)rotate(-0.3deg)}50%{transform:translate(0.6px,0.2px)rotate(0.2deg)}75%{transform:translate(0.2px,-0.4px)rotate(-0.1deg)}}
-                @keyframes stickerShake3{0%,100%{transform:translate(0,0)rotate(0deg)}25%{transform:translate(-0.5px,0.3px)rotate(0.2deg)}50%{transform:translate(0.4px,-0.5px)rotate(-0.3deg)}75%{transform:translate(0.3px,0.3px)rotate(0.1deg)}}
-                @keyframes stickerShake4{0%,100%{transform:translate(0,0)rotate(0deg)}25%{transform:translate(0.3px,-0.4px)rotate(-0.2deg)}50%{transform:translate(-0.5px,0.5px)rotate(0.3deg)}75%{transform:translate(-0.2px,-0.3px)rotate(-0.1deg)}}
-                @keyframes stickerShake5{0%,100%{transform:translate(0,0)rotate(0deg)}25%{transform:translate(0.2px,-0.3px)rotate(0.25deg)}50%{transform:translate(-0.3px,0.4px)rotate(-0.15deg)}75%{transform:translate(0.4px,0.2px)rotate(0.2deg)}}
-                @keyframes stickerShake6{0%,100%{transform:translate(0,0)rotate(0deg)}25%{transform:translate(-0.6px,0.1px)rotate(-0.35deg)}50%{transform:translate(0.3px,-0.3px)rotate(0.15deg)}75%{transform:translate(-0.2px,0.5px)rotate(-0.25deg)}}
-                @keyframes stickerShake7{0%,100%{transform:translate(0,0)rotate(0deg)}25%{transform:translate(0.4px,-0.2px)rotate(0.2deg)}50%{transform:translate(-0.2px,0.6px)rotate(-0.3deg)}75%{transform:translate(0.3px,-0.1px)rotate(0.1deg)}}
-                @keyframes stickerShake8{0%,100%{transform:translate(0,0)rotate(0deg)}25%{transform:translate(-0.3px,-0.4px)rotate(-0.25deg)}50%{transform:translate(0.5px,0.1px)rotate(0.2deg)}75%{transform:translate(-0.1px,-0.5px)rotate(-0.15deg)}}
-                .sticker-editing{animation-duration:0.4s;animation-iteration-count:infinite;animation-timing-function:ease-in-out;cursor:grab}
-                .sticker-shake-1{animation-name:stickerShake1}
-                .sticker-shake-2{animation-name:stickerShake2}
-                .sticker-shake-3{animation-name:stickerShake3}
-                .sticker-shake-4{animation-name:stickerShake4}
-                .sticker-shake-5{animation-name:stickerShake5}
-                .sticker-shake-6{animation-name:stickerShake6}
-                .sticker-shake-7{animation-name:stickerShake7}
-                .sticker-shake-8{animation-name:stickerShake8}
-                .sticker-editing:active{cursor:grabbing}
-            `;
-            document.head.appendChild(style);
-        }
-
-
-        let savedScrollTop = 0;
-        let blockHandler = null;
-
+        // колесо над панелью не крутит страницу (сайт крутит #root)
+        let blockWheel = null;
         function disablePageScroll() {
-            if (blockHandler) return;
             const root = document.getElementById('root');
-            if (root) {
-                savedScrollTop = root.scrollTop;
-                blockHandler = (e) => { e.preventDefault(); };
-                root.addEventListener('wheel', blockHandler, { passive: false });
-            }
+            if (blockWheel || !root) return;
+            blockWheel = e => e.preventDefault();
+            root.addEventListener('wheel', blockWheel, { passive: false });
         }
-
         function enablePageScroll() {
-            if (!blockHandler) return;
             const root = document.getElementById('root');
-            if (root) {
-                root.removeEventListener('wheel', blockHandler);
-                blockHandler = null;
-            }
+            if (!blockWheel) return;
+            if (root) root.removeEventListener('wheel', blockWheel);
+            blockWheel = null;
         }
 
+        // ширина поля имени — по тексту
         function adjustInputWidth(input) {
-            const textLength = Math.max(1, Math.min(MAX_NAME_LENGTH, input.value.length || input.placeholder.length || DEFAULT_PACK_NAME.length));
-            const multiplier = 14 - (textLength * 0.2);
-            input.style.width = `${textLength * multiplier}px`;
+            const n = Math.max(1, Math.min(MAX_NAME_LENGTH, input.value.length || input.placeholder.length || DEFAULT_PACK_NAME.length));
+            input.style.width = `${n * (14 - n * 0.2)}px`;
             input.style.minWidth = 'auto';
         }
 
-        function adjustAllInputWidths() {
-            document.querySelectorAll('.pack-name-input').forEach(input => {
-                adjustInputWidth(input);
+        function packTab(pack) {
+            const btn = el('button', 'vp-sp-tab');
+            const first = pack.stickers[0];
+            if (first && first.url) { const img = el('img'); img.src = first.url; btn.appendChild(img); }
+            else btn.innerHTML = ICONS.EMPTY_PACK;
+            btn.title = pack.name || DEFAULT_PACK_NAME;
+            btn.dataset.pack = pack.id;
+            btn.onclick = () => { exitEditMode(); scrollToPack(pack.id); };
+            return btn;
+        }
+        function updateTabButtons() {
+            const wrap = tabsRow && tabsRow.firstElementChild;
+            if (wrap) wrap.replaceChildren(...userPacks.map(packTab));
+        }
+
+        function createStickerPanel() {
+            if (stickerPanel) return;
+            stickerPanel = el('div', 'sticker-panel');
+            const header = el('div', 'vp-sp-head');
+            recentBtn = el('button', 'vp-sp-tab vp-recent vp-on', ICONS.RECENT);
+            recentBtn.title = 'Недавние';
+            recentBtn.onclick = () => { exitEditMode(); scrollToPack('recent'); };
+            tabsRow = el('div', 'vp-sp-tabs', '<div></div>');
+            tabsRow.addEventListener('wheel', e => {
+                if (e.deltaY !== 0) { e.preventDefault(); tabsRow.scrollLeft += e.deltaY * 0.4; }
+            }, { passive: false });
+            updateTabButtons();
+            const addPackBtn = el('button', 'vp-sp-tab', ICONS.ADD_PACK);
+            addPackBtn.title = 'Создать стикерпак';
+            addPackBtn.onclick = () => {
+                const pack = { id: 'user_' + Date.now(), name: '', stickers: [] };
+                userPacks.push(pack);
+                saveUserPacks();
+                rebuildPanel();
+                enterEditMode(pack.id);
+                showPanel();
+            };
+            header.append(recentBtn, tabsRow, addPackBtn);
+
+            scrollContainer = el('div', 'vp-sp-body');
+            scrollContainer.addEventListener('wheel', e => e.stopPropagation(), { passive: true });
+            scrollContainer.addEventListener('touchmove', e => e.stopPropagation(), { passive: true });
+            scrollContainer.addEventListener('scroll', updateActiveTabFromScroll, { passive: true });
+            stickerPanel.append(header, scrollContainer);
+            stickerPanel.addEventListener('mouseenter', () => {
+                clearTimeout(hideTimeout);
+                stickerPanel.querySelectorAll('.pack-name-input').forEach(adjustInputWidth);
             });
+            stickerPanel.addEventListener('mouseleave', () => hidePanel(200));
+            document.body.appendChild(stickerPanel);
+        }
+        // паков стало больше или меньше — панель собираем заново
+        function rebuildPanel() {
+            if (stickerPanel) stickerPanel.remove();
+            stickerPanel = scrollContainer = tabsRow = recentBtn = null;
+            editPack = drag = null;
+            createStickerPanel();
+            renderAllContent();
         }
 
-        function deleteStickerPack(packKey) {
-            userPacks = userPacks.filter(p => p.id !== packKey);
-            saveUserPacks(userPacks);
-            rebuildPacks();
-
-            if (stickerPanel) {
-                stickerPanel.remove();
-                stickerPanel = null;
-                scrollContainer = null;
-                packHeaders = [];
-                tabButtons = [];
-                createStickerPanel();
-                renderAllContent();
-                exitEditMode();
-            }
-        }
-
-        function enterEditMode(packKey) {
-            if (packKey === 'recent') return;
-            dragState = { packKey: null, draggedIndex: null, placeholderIndex: null };
-            editMode = true;
-            currentEditPack = packKey;
-            updatePackVisibility();
-            refreshAllPackGrids();
-            updateDeletePackButton(packKey);
-            updateExitEditButton(packKey);
-            const header = scrollContainer.querySelector(`.pack-header[data-pack="${packKey}"]`);
-            if (header) {
-                header.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        }
-
-        function exitEditMode() {
-            editMode = false;
-            currentEditPack = null;
-            dragState = { packKey: null, draggedIndex: null, placeholderIndex: null };
-            if (scrollContainer) {
-                document.querySelectorAll('.pack-header').forEach(h => h.style.display = '');
-                document.querySelectorAll('.pack-grid').forEach(g => g.style.display = 'grid');
-                document.querySelectorAll('.delete-pack-btn').forEach(b => b.style.display = 'none');
-                updateExitEditButton(null);
-                refreshAllPackGrids();
-            }
-        }
-
-        function updateDeletePackButton(packKey) {
-            document.querySelectorAll('.delete-pack-btn').forEach(b => b.style.display = 'none');
-            const header = scrollContainer?.querySelector(`.pack-header[data-pack="${packKey}"]`);
-            if (header) {
-                const btn = header.querySelector('.delete-pack-btn');
-                if (btn) btn.style.display = 'flex';
-            }
-        }
-
-        function updateExitEditButton(packKey) {
-            document.querySelectorAll('.pack-header').forEach(header => {
-                const exitBtn = header._exitEditBtn;
-                if (exitBtn) {
-                    const headerPackKey = header.dataset.pack;
-                    exitBtn.style.display = (editMode && currentEditPack === headerPackKey) ? 'flex' : 'none';
-                }
-            });
-        }
-
-        function updatePackVisibility() {
+        function renderAllContent() {
             if (!scrollContainer) return;
-            const allKeys = ['recent', ...userPacks.map(p => p.id)];
-            allKeys.forEach(key => {
-                const h = scrollContainer.querySelector(`.pack-header[data-pack="${key}"]`);
-                const g = scrollContainer.querySelector(`.pack-grid[data-pack="${key}"]`);
-                if (h && g) {
-                    if (editMode && currentEditPack !== key) {
-                        h.style.display = 'none';
-                        g.style.display = 'none';
-                    } else {
-                        h.style.display = '';
-                        g.style.display = 'grid';
-                    }
+            scrollContainer.replaceChildren();
+            for (const key of allPackKeys()) {
+                const header = el('div', 'pack-header');
+                header.dataset.pack = key;
+                const name = el('div', 'vp-sp-name');
+                const input = el('input', 'pack-name-input');
+                input.type = 'text';
+                input.value = packName(key);
+                input.placeholder = 'Название...';
+                input.maxLength = MAX_NAME_LENGTH;
+                name.appendChild(input);
+                if (key !== 'recent') {
+                    // имя меняется только в режиме правки этого пака; пустое — «Новый пакет»
+                    const pack = () => userPacks.find(p => p.id === key);
+                    const locked = () => editPack !== key;
+                    input.addEventListener('input', () => {
+                        if (locked()) input.value = packName(key);
+                        else {
+                            input.value = input.value.slice(0, MAX_NAME_LENGTH);
+                            if (pack()) { pack().name = input.value; saveUserPacks(); }
+                        }
+                        adjustInputWidth(input);
+                    });
+                    input.addEventListener('blur', () => {
+                        if (locked()) input.value = packName(key);
+                        else if (!input.value.trim()) {
+                            input.value = DEFAULT_PACK_NAME;
+                            if (pack()) { pack().name = DEFAULT_PACK_NAME; saveUserPacks(); }
+                        }
+                        adjustInputWidth(input);
+                    });
+                    const editBtn = el('button', 'vp-sp-edit', ICONS.EDIT);
+                    editBtn.title = 'Редактировать';
+                    editBtn.onclick = () => { if (editPack === key) exitEditMode(); else { exitEditMode(); enterEditMode(key); } };
+                    const delPack = el('button', 'delete-pack-btn', ICONS.TRASH);
+                    delPack.title = 'Удалить пак';
+                    delPack.onclick = () => { if (confirm('Удалить пак?')) deleteStickerPack(key); };
+                    const done = el('button', 'vp-sp-done', ICONS.CHECK);
+                    done.title = 'Готово';
+                    done.onclick = exitEditMode;
+                    name.append(editBtn, delPack, done);
                 }
-            });
+                header.appendChild(name);
+                const grid = el('div', 'pack-grid');
+                grid.dataset.pack = key;
+                scrollContainer.append(header, grid);
+                refreshPackGrid(key);
+            }
+            markEditing();
         }
 
-        function deleteSticker(packKey, index) {
-            if (packKey === 'recent') {
-                recentStickers.splice(index, 1);
-                stickerPacks.recent = [...recentStickers];
-                saveRecentStickers(recentStickers);
-            } else {
-                const pack = userPacks.find(p => p.id === packKey);
-                if (pack) {
-                    pack.stickers.splice(index, 1);
-                    stickerPacks[packKey] = [...pack.stickers];
-                    saveUserPacks(userPacks);
-                }
+        // режим правки — классы: vp-editing на ленте паков, vp-cur на шапке и сетке своего пака
+        function markEditing() {
+            if (!scrollContainer) return;
+            scrollContainer.classList.toggle('vp-editing', !!editPack);
+            for (const e of scrollContainer.children) e.classList.toggle('vp-cur', e.dataset.pack === editPack);
+        }
+        function enterEditMode(key) {
+            if (key === 'recent') return;
+            editPack = key;
+            drag = null;
+            markEditing();
+            refreshAllPackGrids();
+            const header = scrollContainer.querySelector(`.pack-header[data-pack="${key}"]`);
+            if (header) header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        function exitEditMode() {
+            editPack = drag = null;
+            if (!scrollContainer) return;
+            markEditing();
+            refreshAllPackGrids();
+        }
+
+        function deleteStickerPack(key) {
+            userPacks = userPacks.filter(p => p.id !== key);
+            saveUserPacks();
+            if (stickerPanel) {
+                const open = stickerPanel.classList.contains('vp-open');
+                rebuildPanel();
+                if (open) showPanel();
             }
+        }
+        function deleteSticker(key, index) {
+            packStickers(key).splice(index, 1);
+            savePack(key);
             refreshAllPackGrids();
             updateTabButtons();
         }
+        function moveSticker(key, from, to) {
+            const list = packStickers(key);
+            list.splice(to, 0, list.splice(from, 1)[0]);
+            savePack(key);
+            updateTabButtons();
+        }
 
-        async function addStickerToPack(packKey) {
-            const input = document.createElement('input');
+        function addStickerToPack(key) {
+            const input = el('input');
             input.type = 'file';
             input.accept = 'image/*';
-            input.onchange = async (e) => {
-                const file = e.target.files[0];
+            input.onchange = async () => {
+                const file = input.files[0];
                 if (!file) return;
-
-                const addBtn = scrollContainer?.querySelector(`.pack-grid[data-pack="${packKey}"] .add-item-btn`);
-                if (addBtn) {
-                    addBtn.innerHTML = ICONS.LOADING;
-                    addBtn.style.pointerEvents = 'none';
-                }
-
+                const addBtn = scrollContainer && scrollContainer.querySelector(`.pack-grid[data-pack="${key}"] .add-item-btn`);
+                const busy = on => { if (addBtn) { addBtn.innerHTML = on ? ICONS.LOADING : ICONS.ADD; addBtn.classList.toggle('vp-busy', on); } };
+                busy(true);
                 try {
-                    const imageUrl = URL.createObjectURL(file);
-                    const croppedImage = await showCropEditor(imageUrl);
-                    if (!croppedImage) {
-                        if (addBtn) {
-                            addBtn.innerHTML = ICONS.ADD;
-                            addBtn.style.pointerEvents = 'auto';
-                        }
-                        return;
-                    }
-
-                    const data = await uploadImageToServer(croppedImage);
-                    if (packKey === 'recent') {
-                        recentStickers.unshift(data);
-                        recentStickers = recentStickers.slice(0, 20);
-                        stickerPacks.recent = [...recentStickers];
-                        saveRecentStickers(recentStickers);
+                    const cropped = await showCropEditor(URL.createObjectURL(file));
+                    if (!cropped) { busy(false); return; }
+                    const data = await uploadImageToServer(cropped);
+                    if (key === 'recent') {
+                        recentStickers = [data, ...recentStickers].slice(0, 20);
+                        saveRecent();
                     } else {
-                        const pack = userPacks.find(p => p.id === packKey);
-                        if (pack) {
-                            pack.stickers.push(data);
-                            stickerPacks[packKey] = [...pack.stickers];
-                            saveUserPacks(userPacks);
-                        }
+                        const pack = userPacks.find(p => p.id === key);
+                        if (pack) { pack.stickers.push(data); saveUserPacks(); }
                     }
                     refreshAllPackGrids();
                     updateTabButtons();
                 } catch (err) {
                     alert('Ошибка загрузки: ' + err.message);
-                    if (addBtn) {
-                        addBtn.innerHTML = ICONS.ADD;
-                        addBtn.style.pointerEvents = 'auto';
-                    }
+                    busy(false);
                 }
             };
             input.click();
         }
 
-        function showCropEditor(imageUrl) {
-            return new Promise((resolve) => {
-                let isDragging = false;
-                let isResizing = false;
-                let resizeDirection = null;
-                let offsetX, offsetY;
-                let originalWidth, originalHeight;
-                let originalX, originalY;
-                let currentAspectRatio = null;
-                let activeRatioBtn = null;
-
-                const modal = document.createElement('div');
-                modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:20000;';
-
-                const editor = document.createElement('div');
-                editor.style.cssText = 'background:var(--block-bg,#1e1e2e);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:16px;width:90%;max-width:500px;';
-
-                const title = document.createElement('h3');
-                title.textContent = 'Обрежьте стикер';
-                title.style.cssText = 'margin:0;color:var(--text-primary,#fff);font-size:18px;font-weight:600;';
-
-                const previewContainer = document.createElement('div');
-                previewContainer.style.cssText = 'position:relative;width:100%;aspect-ratio:1;overflow:hidden;border-radius:12px;background:#000;';
-
-                const img = document.createElement('img');
-                img.src = imageUrl;
-                img.style.cssText = 'width:100%;height:100%;object-fit:contain;pointer-events:none;';
-                previewContainer.appendChild(img);
-
-                const overlay = document.createElement('div');
-                overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;';
-
-                const cropArea = document.createElement('div');
-                cropArea.style.cssText = 'position:absolute;border:2px solid #0080FF;box-sizing:border-box;';
-                overlay.appendChild(cropArea);
-                previewContainer.appendChild(overlay);
-
-                const resizeHandles = {};
-                ['n', 'e', 's', 'w', 'nw', 'ne', 'sw', 'se'].forEach(dir => {
-                    resizeHandles[dir] = document.createElement('div');
-                    resizeHandles[dir].style.cssText = `position:absolute;width:8px;height:8px;background:#0080FF;pointer-events:auto;`;
-                    resizeHandles[dir].className = 'resize-handle';
-                    resizeHandles[dir].dataset.direction = dir;
-                });
-
-                resizeHandles.n.style.top = '-4px';
-                resizeHandles.n.style.left = '50%';
-                resizeHandles.n.style.transform = 'translateX(-50%)';
-                resizeHandles.n.style.width = '30px';
-                resizeHandles.n.style.height = '8px';
-                resizeHandles.n.style.cursor = 'n-resize';
-
-                resizeHandles.e.style.top = '50%';
-                resizeHandles.e.style.right = '-4px';
-                resizeHandles.e.style.transform = 'translateY(-50%)';
-                resizeHandles.e.style.width = '8px';
-                resizeHandles.e.style.height = '30px';
-                resizeHandles.e.style.cursor = 'e-resize';
-
-                resizeHandles.s.style.bottom = '-4px';
-                resizeHandles.s.style.left = '50%';
-                resizeHandles.s.style.transform = 'translateX(-50%)';
-                resizeHandles.s.style.width = '30px';
-                resizeHandles.s.style.height = '8px';
-                resizeHandles.s.style.cursor = 's-resize';
-
-                resizeHandles.w.style.top = '50%';
-                resizeHandles.w.style.left = '-4px';
-                resizeHandles.w.style.transform = 'translateY(-50%)';
-                resizeHandles.w.style.width = '8px';
-                resizeHandles.w.style.height = '30px';
-                resizeHandles.w.style.cursor = 'w-resize';
-
-                resizeHandles.nw.style.top = '-4px';
-                resizeHandles.nw.style.left = '-4px';
-                resizeHandles.nw.style.cursor = 'nw-resize';
-
-                resizeHandles.ne.style.top = '-4px';
-                resizeHandles.ne.style.right = '-4px';
-                resizeHandles.ne.style.cursor = 'ne-resize';
-
-                resizeHandles.sw.style.bottom = '-4px';
-                resizeHandles.sw.style.left = '-4px';
-                resizeHandles.sw.style.cursor = 'sw-resize';
-
-                resizeHandles.se.style.bottom = '-4px';
-                resizeHandles.se.style.right = '-4px';
-                resizeHandles.se.style.cursor = 'se-resize';
-
-                Object.values(resizeHandles).forEach(handle => cropArea.appendChild(handle));
-
-                const aspectRatioControls = document.createElement('div');
-                aspectRatioControls.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;justify-content:center;';
-
-                const ratios = [
-                    { label: 'Свободный', value: null },
-                    { label: '1:1', value: 1 },
-                    { label: '4:3', value: 4 / 3 },
-                    { label: '3:4', value: 3 / 4 },
-                    { label: '16:9', value: 16 / 9 },
-                    { label: '9:16', value: 9 / 16 }
-                ];
-
-                ratios.forEach(ratio => {
-                    const btn = document.createElement('button');
-                    btn.textContent = ratio.label;
-                    btn.style.cssText = 'background:var(--bg-hover,rgba(255,255,255,0.1));border:none;color:var(--text-primary,#fff);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;';
-                    btn.onclick = () => {
-                        currentAspectRatio = ratio.value;
-                        document.querySelectorAll('.aspect-ratio-btn').forEach(b => b.style.background = 'var(--bg-hover,rgba(255,255,255,0.1))');
-                        btn.style.background = '#0080FF';
-                        activeRatioBtn = btn;
-
-                        if (ratio.value !== null) {
-                            setAspectRatio(ratio.value);
-                        }
-                    };
-                    btn.className = 'aspect-ratio-btn';
-                    aspectRatioControls.appendChild(btn);
-                });
-
-                if (aspectRatioControls.children[0]) {
-                    aspectRatioControls.children[0].style.background = '#0080FF';
-                    activeRatioBtn = aspectRatioControls.children[0];
-                }
-
-                const controls = document.createElement('div');
-                controls.style.cssText = 'display:flex;gap:12px;justify-content:flex-end;';
-
-                const cancelBtn = document.createElement('button');
-                cancelBtn.textContent = 'Отмена';
-                cancelBtn.style.cssText = 'background:transparent;border:1px solid var(--border-color,rgba(255,255,255,0.3));color:var(--text-primary,#fff);padding:8px 16px;border-radius:8px;cursor:pointer;';
-                cancelBtn.onclick = () => {
-                    document.body.removeChild(modal);
-                    resolve(null);
-                };
-
-                const confirmBtn = document.createElement('button');
-                confirmBtn.textContent = 'Готово';
-                confirmBtn.style.cssText = 'background:#0080FF;border:none;color:white;padding:8px 16px;border-radius:8px;cursor:pointer;';
-                confirmBtn.onclick = () => {
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    const containerRect = previewContainer.getBoundingClientRect();
-                    const bounds = getImageBounds();
-                    const imgDisplayWidth = bounds.width;
-                    const imgDisplayHeight = bounds.height;
-                    const imgOffsetX = bounds.minX;
-                    const imgOffsetY = bounds.minY;
-
-                    const scaleX = img.naturalWidth / imgDisplayWidth;
-                    const scaleY = img.naturalHeight / imgDisplayHeight;
-
-                    const cropRect = cropArea.getBoundingClientRect();
-                    const cropX = (cropRect.left - containerRect.left - imgOffsetX) * scaleX;
-                    const cropY = (cropRect.top - containerRect.top - imgOffsetY) * scaleY;
-                    const cropWidth = cropRect.width * scaleX;
-                    const cropHeight = cropRect.height * scaleY;
-
-                    const finalCropX = Math.max(0, Math.min(cropX, img.naturalWidth - cropWidth));
-                    const finalCropY = Math.max(0, Math.min(cropY, img.naturalHeight - cropHeight));
-
-                    canvas.width = cropWidth;
-                    canvas.height = cropHeight;
-
-                    ctx.drawImage(img, finalCropX, finalCropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
-
-                    canvas.toBlob((blob) => {
-                        const croppedFile = new File([blob], 'sticker.png', { type: 'image/png' });
-                        document.body.removeChild(modal);
-                        resolve(croppedFile);
-                    }, 'image/png');
-                };
-
-                controls.appendChild(cancelBtn);
-                controls.appendChild(confirmBtn);
-
-                editor.appendChild(title);
-                editor.appendChild(previewContainer);
-                editor.appendChild(aspectRatioControls);
-                editor.appendChild(controls);
-                modal.appendChild(editor);
-                document.body.appendChild(modal);
-
-                function getImageBounds() {
-                    const containerRect = previewContainer.getBoundingClientRect();
-
-                    const imgAspectRatio = img.naturalWidth / img.naturalHeight;
-                    const containerAspectRatio = containerRect.width / containerRect.height;
-
-                    let imgDisplayWidth, imgDisplayHeight;
-
-                    if (imgAspectRatio > containerAspectRatio) {
-                        imgDisplayWidth = containerRect.width;
-                        imgDisplayHeight = containerRect.width / imgAspectRatio;
-                    } else {
-                        imgDisplayHeight = containerRect.height;
-                        imgDisplayWidth = containerRect.height * imgAspectRatio;
-                    }
-
-                    const imgOffsetX = (containerRect.width - imgDisplayWidth) / 2;
-                    const imgOffsetY = (containerRect.height - imgDisplayHeight) / 2;
-
-                    return {
-                        minX: imgOffsetX,
-                        minY: imgOffsetY,
-                        maxX: imgOffsetX + imgDisplayWidth,
-                        maxY: imgOffsetY + imgDisplayHeight,
-                        width: imgDisplayWidth,
-                        height: imgDisplayHeight,
-                        offsetX: imgOffsetX,
-                        offsetY: imgOffsetY
-                    };
-                }
-
-                function constrainCropArea() {
-                    const bounds = getImageBounds();
-
-                    let left = parseFloat(cropArea.style.left);
-                    let top = parseFloat(cropArea.style.top);
-                    let width = cropArea.offsetWidth;
-                    let height = cropArea.offsetHeight;
-
-                    if (isNaN(left)) left = 0;
-                    if (isNaN(top)) top = 0;
-
-                    left = Math.max(bounds.minX, Math.min(left, bounds.maxX - width));
-                    top = Math.max(bounds.minY, Math.min(top, bounds.maxY - height));
-
-                    width = Math.min(width, bounds.width);
-                    height = Math.min(height, bounds.height);
-
-                    cropArea.style.left = left + 'px';
-                    cropArea.style.top = top + 'px';
-                    cropArea.style.width = width + 'px';
-                    cropArea.style.height = height + 'px';
-                }
-
-                function checkSnapToCenter() {
-                    const bounds = getImageBounds();
-                    let left = parseFloat(cropArea.style.left);
-                    let top = parseFloat(cropArea.style.top);
-                    const width = cropArea.offsetWidth;
-                    const height = cropArea.offsetHeight;
-
-                    const centerX = bounds.minX + (bounds.width - width) / 2;
-                    const centerY = bounds.minY + (bounds.height - height) / 2;
-
-                    const threshold = 5;
-
-                    let newLeft = left;
-                    let newTop = top;
-                    let snapped = false;
-
-                    if (Math.abs(left - centerX) < threshold) {
-                        newLeft = centerX;
-                        snapped = true;
-                    }
-
-                    if (Math.abs(top - centerY) < threshold) {
-                        newTop = centerY;
-                        snapped = true;
-                    }
-
-                    if (snapped) {
-                        cropArea.style.left = newLeft + 'px';
-                        cropArea.style.top = newTop + 'px';
-                    }
-                }
-
-                function setAspectRatio(ratio) {
-                    if (ratio === null) return;
-
-                    const bounds = getImageBounds();
-                    const containerRect = previewContainer.getBoundingClientRect();
-
-                    let newWidth, newHeight;
-
-                    if (ratio >= 1) {
-                        newWidth = bounds.width;
-                        newHeight = newWidth / ratio;
-                        if (newHeight > bounds.height) {
-                            newHeight = bounds.height;
-                            newWidth = newHeight * ratio;
-                        }
-                    } else {
-                        newHeight = bounds.height;
-                        newWidth = newHeight * ratio;
-                        if (newWidth > bounds.width) {
-                            newWidth = bounds.width;
-                            newHeight = newWidth / ratio;
-                        }
-                    }
-
-                    const newX = bounds.minX + (bounds.width - newWidth) / 2;
-                    const newY = bounds.minY + (bounds.height - newHeight) / 2;
-
-                    cropArea.style.width = newWidth + 'px';
-                    cropArea.style.height = newHeight + 'px';
-                    cropArea.style.left = newX + 'px';
-                    cropArea.style.top = newY + 'px';
-
-                    constrainCropArea();
-
-                    if (activeRatioBtn) {
-                        document.querySelectorAll('.aspect-ratio-btn').forEach(b => b.style.background = 'var(--bg-hover,rgba(255,255,255,0.1))');
-                        activeRatioBtn.style.background = '#0080FF';
-                    }
-                }
-
-                cropArea.addEventListener('mousedown', (e) => {
-                    if (e.target.classList.contains('resize-handle')) {
-                        isResizing = true;
-                        resizeDirection = e.target.dataset.direction;
-                        originalWidth = cropArea.offsetWidth;
-                        originalHeight = cropArea.offsetHeight;
-                        originalX = parseFloat(cropArea.style.left);
-                        originalY = parseFloat(cropArea.style.top);
-                        offsetX = e.clientX;
-                        offsetY = e.clientY;
-                        e.preventDefault();
-                        e.stopPropagation();
-                        return;
-                    }
-
-                    isDragging = true;
-                    const cropRect = cropArea.getBoundingClientRect();
-                    offsetX = e.clientX - cropRect.left;
-                    offsetY = e.clientY - cropRect.top;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    cropArea.style.cursor = 'move';
-                });
-
-                cropArea.style.pointerEvents = 'auto';
-
-                document.addEventListener('mousemove', (e) => {
-                    if (isDragging) {
-                        const containerRect = previewContainer.getBoundingClientRect();
-
-                        let newX = e.clientX - containerRect.left - offsetX;
-                        let newY = e.clientY - containerRect.top - offsetY;
-
-                        cropArea.style.left = newX + 'px';
-                        cropArea.style.top = newY + 'px';
-
-                        constrainCropArea();
-
-                        checkSnapToCenter();
-
-                    } else if (isResizing) {
-                        const bounds = getImageBounds();
-                        const deltaX = e.clientX - offsetX;
-                        const deltaY = e.clientY - offsetY;
-
-                        let newWidth = originalWidth;
-                        let newHeight = originalHeight;
-                        let newX = originalX;
-                        let newY = originalY;
-
-                        switch (resizeDirection) {
-                            case 'n': newHeight = originalHeight - deltaY; newY = originalY + deltaY; break;
-                            case 'e': newWidth = originalWidth + deltaX; break;
-                            case 's': newHeight = originalHeight + deltaY; break;
-                            case 'w': newWidth = originalWidth - deltaX; newX = originalX + deltaX; break;
-                            case 'nw': newWidth = originalWidth - deltaX; newHeight = originalHeight - deltaY; newX = originalX + deltaX; newY = originalY + deltaY; break;
-                            case 'ne': newWidth = originalWidth + deltaX; newHeight = originalHeight - deltaY; newY = originalY + deltaY; break;
-                            case 'sw': newWidth = originalWidth - deltaX; newHeight = originalHeight + deltaY; newX = originalX + deltaX; break;
-                            case 'se': newWidth = originalWidth + deltaX; newHeight = originalHeight + deltaY; break;
-                        }
-
-                        if (currentAspectRatio !== null && currentAspectRatio !== undefined) {
-                            let idealWidth = newWidth;
-                            let idealHeight = newHeight;
-
-                            if (resizeDirection === 'n' || resizeDirection === 's') {
-                                idealWidth = newHeight * currentAspectRatio;
-                                idealHeight = newHeight;
-                            } else {
-                                idealWidth = newWidth;
-                                idealHeight = newWidth / currentAspectRatio;
-                            }
-
-                            if (idealWidth > bounds.width) {
-                                idealWidth = bounds.width;
-                                idealHeight = idealWidth / currentAspectRatio;
-                            }
-                            if (idealHeight > bounds.height) {
-                                idealHeight = bounds.height;
-                                idealWidth = idealHeight * currentAspectRatio;
-                            }
-
-                            newWidth = idealWidth;
-                            newHeight = idealHeight;
-
-                            switch (resizeDirection) {
-                                case 'e':
-                                    newX = originalX;
-                                    newY = originalY - (newHeight - originalHeight) / 2;
-                                    break;
-                                case 'w':
-                                    newX = originalX + (originalWidth - newWidth);
-                                    newY = originalY - (newHeight - originalHeight) / 2;
-                                    break;
-                                case 'n':
-                                    newX = originalX - (newWidth - originalWidth) / 2;
-                                    newY = originalY + (originalHeight - newHeight);
-                                    break;
-                                case 's':
-                                    newX = originalX - (newWidth - originalWidth) / 2;
-                                    newY = originalY;
-                                    break;
-                                case 'nw':
-                                    newX = originalX + (originalWidth - newWidth);
-                                    newY = originalY + (originalHeight - newHeight);
-                                    break;
-                                case 'ne':
-                                    newX = originalX;
-                                    newY = originalY + (originalHeight - newHeight);
-                                    break;
-                                case 'sw':
-                                    newX = originalX + (originalWidth - newWidth);
-                                    newY = originalY;
-                                    break;
-                                case 'se':
-                                    newX = originalX;
-                                    newY = originalY;
-                                    break;
-                            }
-                        }
-
-                        const minSize = 50;
-                        newWidth = Math.max(minSize, Math.min(bounds.width, newWidth));
-                        newHeight = Math.max(minSize, Math.min(bounds.height, newHeight));
-
-                        newX = Math.max(bounds.minX, Math.min(newX, bounds.maxX - newWidth));
-                        newY = Math.max(bounds.minY, Math.min(newY, bounds.maxY - newHeight));
-
-                        cropArea.style.width = newWidth + 'px';
-                        cropArea.style.height = newHeight + 'px';
-                        cropArea.style.left = newX + 'px';
-                        cropArea.style.top = newY + 'px';
-
-                        constrainCropArea();
-                        checkSnapToCenter();
-                    }
-                });
-
-                document.addEventListener('mouseup', () => {
-                    isDragging = false;
-                    isResizing = false;
-
-                    constrainCropArea();
-                });
-
-                img.onload = () => {
-                    const bounds = getImageBounds();
-                    cropArea.style.width = bounds.width + 'px';
-                    cropArea.style.height = bounds.height + 'px';
-                    cropArea.style.left = bounds.minX + 'px';
-                    cropArea.style.top = bounds.minY + 'px';
-                };
-
-                if (img.complete) {
-                    const bounds = getImageBounds();
-                    cropArea.style.width = bounds.width + 'px';
-                    cropArea.style.height = bounds.height + 'px';
-                    cropArea.style.left = bounds.minX + 'px';
-                    cropArea.style.top = bounds.minY + 'px';
-                }
-            });
-        }
-
-        function moveSticker(packKey, from, to) {
-            if (packKey === 'recent') {
-                const item = recentStickers[from];
-                recentStickers.splice(from, 1);
-                recentStickers.splice(to, 0, item);
-                stickerPacks.recent = [...recentStickers];
-                saveRecentStickers(recentStickers);
-            } else {
-                const pack = userPacks.find(p => p.id === packKey);
-                if (pack) {
-                    const item = pack.stickers[from];
-                    pack.stickers.splice(from, 1);
-                    pack.stickers.splice(to, 0, item);
-                    stickerPacks[packKey] = [...pack.stickers];
-                    saveUserPacks(userPacks);
-                }
-            }
-            updateTabButtons();
-        }
-
-        function refreshPackGrid(packKey) {
-            if (!scrollContainer) return;
-            const grid = scrollContainer.querySelector(`.pack-grid[data-pack="${packKey}"]`);
+        function refreshPackGrid(key) {
+            const grid = scrollContainer && scrollContainer.querySelector(`.pack-grid[data-pack="${key}"]`);
             if (!grid) return;
-            grid.innerHTML = '';
-            const stickers = stickerPacks[packKey] || [];
-            const isEditingThisPack = editMode && currentEditPack === packKey;
-            stickers.forEach((sticker, index) => {
-                const btn = createStickerButton(sticker, packKey, index, isEditingThisPack);
-                grid.appendChild(btn);
-            });
-            if (isEditingThisPack) {
-                const addBtn = document.createElement('button');
-                addBtn.className = 'add-item-btn';
-                addBtn.innerHTML = ICONS.ADD;
+            const editing = editPack === key;
+            grid.replaceChildren(...packStickers(key).map((s, i) => createStickerButton(s, key, i, editing)));
+            if (editing) {
+                const addBtn = el('button', 'add-item-btn', ICONS.ADD);
                 addBtn.title = 'Добавить стикер';
-                addBtn.style.cssText = 'aspect-ratio:1;background:var(--bg-secondary,rgba(128,128,128,0.08));border:2px dashed var(--border-color,rgba(255,255,255,0.2));border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;color:var(--text-secondary,rgba(255,255,255,0.5));transition:all 0.15s';
-                addBtn.onmouseenter = () => { addBtn.style.borderColor = 'var(--accent-primary,#0080FF)'; addBtn.style.color = 'var(--accent-primary,#0080FF)'; };
-                addBtn.onmouseleave = () => { addBtn.style.borderColor = 'var(--border-color,rgba(255,255,255,0.2))'; addBtn.style.color = 'var(--text-secondary,rgba(255,255,255,0.5))'; };
-                addBtn.onclick = () => addStickerToPack(packKey);
+                addBtn.onclick = () => addStickerToPack(key);
                 grid.appendChild(addBtn);
             }
         }
-
         function refreshAllPackGrids() {
-            if (!scrollContainer) return;
-            ['recent', ...userPacks.map(p => p.id)].forEach(key => refreshPackGrid(key));
+            if (scrollContainer) allPackKeys().forEach(refreshPackGrid);
         }
 
-        function createStickerButton(sticker, packKey, index, isEditing) {
-            const btn = document.createElement('button');
-            btn.dataset.packKey = packKey;
+        function pickSticker(sticker) {
+            if (sticker && sticker.id && sticker.url) {
+                addToRecent(sticker);
+                try { insertStickerToComment(sticker.id, sticker.url); } catch (e) { console.warn('[ITD VP] стикер', e); logErr('стикер', e); }
+            }
+            stickerPanel.classList.remove('vp-open');
+            exitEditMode();
+            enablePageScroll();                                   // раньше колесо страницы оставалось заблокированным
+        }
+        function createStickerButton(sticker, key, index, editing) {
+            const btn = el('button', 'vp-sticker-item');
+            btn.dataset.packKey = key;
             btn.dataset.stickerIndex = index;
-            btn.style.cssText = 'aspect-ratio:1;font-size:34px;background:transparent;border:none;border-radius:10px;transition:all 0.15s ease;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;position:relative;user-select:none;overflow:hidden;';
+            if (sticker && sticker.url) { const img = el('img'); img.src = sticker.url; btn.appendChild(img); }
+            else btn.appendChild(el('div', 'vp-sticker-empty'));
+            btn.onclick = () => pickSticker(sticker);
+            if (!editing) return btn;
 
-            if (sticker && sticker.url) {
-                const img = document.createElement('img');
-                img.src = sticker.url;
-                img.style.cssText = 'width:100%;height:100%;object-fit:contain;pointer-events:none;';
-                btn.appendChild(img);
-            } else {
-                const placeholder = document.createElement('div');
-                placeholder.style.cssText = 'width:100%;height:100%;background:rgba(128,128,128,0.1);border-radius:8px;';
-                btn.appendChild(placeholder);
-            }
-
-            if (isEditing) {
-                btn.classList.add('sticker-editing', `sticker-shake-${(index % 8) + 1}`);
-                btn.draggable = true;
-
-                btn.onclick = () => {
-                    if (sticker && sticker.id && sticker.url) {
-                        addToRecent(sticker);
-                        insertStickerToComment(sticker.id, sticker.url);
-                    }
-                    stickerPanel.style.display = 'none';
-
-                    exitEditMode();
-                };
-                btn.onmouseenter = (e) => {
-                    if (!dragState.packKey) {
-                        btn.style.transform = 'scale(1.05)';
-                        btn.style.boxShadow = '0 0 0 2px var(--accent-primary,#0080FF)';
-                    }
-                };
-                btn.onmouseleave = (e) => {
-                    if (!dragState.packKey) {
-                        btn.style.transform = 'scale(1)';
-                        btn.style.boxShadow = 'none';
-                    }
-                };
-
-                if (dragState.packKey === packKey) {
-                    if (index === dragState.draggedIndex) btn.classList.add('sticker-dragging');
-                    else if (index === dragState.placeholderIndex) btn.classList.add('sticker-placeholder');
-                }
-
-                const deleteBtn = document.createElement('div');
-                deleteBtn.innerHTML = ICONS.DELETE;
-                deleteBtn.style.cssText = 'position:absolute;top:2px;right:2px;width:16px;height:16px;background:rgba(0,0,0,0.6);border-radius:50%;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.7);transition:all 0.15s;z-index:2;pointer-events:auto;font-size:12px;';
-                deleteBtn.onmouseenter = (e) => { e.stopPropagation(); deleteBtn.style.background = '#ff4444'; };
-                deleteBtn.onmouseleave = (e) => { e.stopPropagation(); deleteBtn.style.background = 'rgba(0,0,0,0.6)'; };
-                deleteBtn.onmousedown = (e) => { e.stopPropagation(); e.preventDefault(); };
-                deleteBtn.onclick = (e) => { e.stopPropagation(); e.preventDefault(); deleteSticker(packKey, index); };
-                btn.appendChild(deleteBtn);
-
-                btn.addEventListener('dragstart', (e) => {
-                    if (!editMode || dragState.packKey) return;
-                    dragState = { packKey, draggedIndex: index, placeholderIndex: index };
-                    e.dataTransfer.setData('text/plain', '');
-                    e.dataTransfer.effectAllowed = 'move';
-                    setTimeout(() => { if (dragState.packKey === packKey) refreshPackGrid(packKey); }, 0);
-                });
-                btn.addEventListener('dragend', () => {
-                    if (dragState.packKey === packKey) {
-                        dragState = { packKey: null, draggedIndex: null, placeholderIndex: null };
-                        refreshPackGrid(packKey);
-                    }
-                });
-                btn.addEventListener('dragover', (e) => {
-                    if (!dragState.packKey || dragState.packKey !== packKey) return;
-                    e.preventDefault();
-                });
-                btn.addEventListener('dragenter', (e) => {
-                    if (!dragState.packKey || dragState.packKey !== packKey) return;
-                    e.preventDefault();
-                    const targetIdx = parseInt(btn.dataset.stickerIndex);
-                    if (targetIdx !== dragState.placeholderIndex) {
-                        moveSticker(packKey, dragState.draggedIndex, targetIdx);
-                        dragState.draggedIndex = targetIdx;
-                        dragState.placeholderIndex = targetIdx;
-                        refreshPackGrid(packKey);
-                    }
-                });
-                btn.addEventListener('drop', (e) => {
-                    if (!dragState.packKey || dragState.packKey !== packKey) return;
-                    e.preventDefault();
-                    dragState = { packKey: null, draggedIndex: null, placeholderIndex: null };
-                    refreshPackGrid(packKey);
-                    updateTabButtons();
-                });
-            } else {
-                btn.onclick = () => {
-                    if (sticker && sticker.id && sticker.url) {
-                        addToRecent(sticker);
-                        insertStickerToComment(sticker.id, sticker.url);
-                    }
-                    stickerPanel.style.display = 'none';
-
-                    exitEditMode();
-                };
-                btn.onmouseenter = () => {
-                    btn.style.transform = 'scale(1.05)';
-                    btn.style.boxShadow = '0 0 0 2px var(--accent-primary,#0080FF)';
-                };
-                btn.onmouseleave = () => {
-                    btn.style.transform = 'scale(1)';
-                    btn.style.boxShadow = 'none';
-                };
-            }
-
+            // правка: дрожь, крестик, перетаскивание внутри пака
+            btn.classList.add('sticker-editing', `sticker-shake-${(index % 8) + 1}`);
+            btn.draggable = true;
+            if (drag && drag.packKey === key && drag.index === index) btn.classList.add('sticker-dragging');
+            const del = el('div', 'vp-sticker-del', ICONS.DELETE);
+            del.onmousedown = e => { e.stopPropagation(); e.preventDefault(); };
+            del.onclick = e => { e.stopPropagation(); e.preventDefault(); deleteSticker(key, index); };
+            btn.appendChild(del);
+            const endDrag = () => {
+                drag = null;
+                stickerPanel.classList.remove('vp-drag');
+                refreshPackGrid(key);
+            };
+            btn.addEventListener('dragstart', e => {
+                if (drag) return;
+                drag = { packKey: key, index };
+                stickerPanel.classList.add('vp-drag');
+                e.dataTransfer.setData('text/plain', '');
+                e.dataTransfer.effectAllowed = 'move';
+                setTimeout(() => { if (drag && drag.packKey === key) refreshPackGrid(key); }, 0);
+            });
+            btn.addEventListener('dragend', () => { if (drag && drag.packKey === key) endDrag(); });
+            btn.addEventListener('dragover', e => { if (drag && drag.packKey === key) e.preventDefault(); });
+            btn.addEventListener('dragenter', e => {
+                if (!drag || drag.packKey !== key) return;
+                e.preventDefault();
+                const to = +btn.dataset.stickerIndex;
+                if (to === drag.index) return;
+                moveSticker(key, drag.index, to);
+                drag.index = to;
+                refreshPackGrid(key);
+            });
+            btn.addEventListener('drop', e => {
+                if (!drag || drag.packKey !== key) return;
+                e.preventDefault();
+                endDrag();
+                updateTabButtons();
+            });
             return btn;
         }
 
-        function updateTabButtons() {
-            tabButtons = [];
-
-            const tabsWrapper = scrollTabs?.querySelector('div');
-            if (tabsWrapper) {
-                tabsWrapper.innerHTML = '';
-                userPacks.forEach(pack => {
-                    const btn = document.createElement('button');
-                    const first = pack.stickers[0];
-                    if (first && first.url) {
-                        const img = document.createElement('img');
-                        img.src = first.url;
-                        img.style.cssText = 'width:24px;height:24px;object-fit:contain;border-radius:6px;';
-                        btn.appendChild(img);
-                    } else {
-                        btn.innerHTML = ICONS.EMPTY_PACK;
-                        btn.style.color = 'rgba(128,128,128,0.5)';
-                    }
-                    btn.title = pack.name || DEFAULT_PACK_NAME;
-                    btn.style.cssText = 'background:transparent;border:none;width:32px;height:32px;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;color:var(--text-secondary,rgba(255,255,255,0.5));';
-                    btn.onclick = () => { exitEditMode(); scrollToPack(pack.id); };
-                    tabsWrapper.appendChild(btn);
-                    tabButtons.push({ button: btn, key: pack.id });
-                });
-            }
+        function scrollToPack(key) {
+            const header = scrollContainer && scrollContainer.querySelector(`.pack-header[data-pack="${key}"]`);
+            if (header) header.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-
-        function createStickerPanel() {
-            if (stickerPanel) return stickerPanel;
-
-            stickerPanel = document.createElement('div');
-            stickerPanel.className = 'sticker-panel';
-            stickerPanel.style.cssText = `position:fixed;display:none;flex-direction:column;background:var(--block-bg,#1e1e2e);border-radius:20px;border:1px solid var(--border-color,rgba(255,255,255,0.1));z-index:10000;width:${PANEL_WIDTH}px;height:${PANEL_HEIGHT}px;box-shadow:0 8px 24px rgba(0,0,0,0.3);overflow:hidden;`;
-
-            const header = document.createElement('div');
-            header.style.cssText = 'display:flex;align-items:center;padding:8px;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.1));gap:4px;flex-shrink:0;';
-
-            recentBtn = document.createElement('button');
-            recentBtn.innerHTML = ICONS.RECENT;
-            recentBtn.title = 'Недавние';
-            recentBtn.style.cssText = 'background:var(--accent-primary,#0080FF);border:none;width:32px;height:32px;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;color:white;';
-            recentBtn.onclick = () => { exitEditMode(); scrollToPack('recent'); };
-
-            scrollTabs = document.createElement('div');
-            scrollTabs.style.cssText = 'display:flex;gap:4px;overflow-x:auto;overflow-y:hidden;flex:1;padding:0 4px;scrollbar-width:none;';
-            scrollTabs.addEventListener('wheel', (e) => {
-                if (e.deltaY !== 0) { e.preventDefault(); scrollTabs.scrollLeft += e.deltaY * 0.4; }
-            }, { passive: false });
-
-            const tabsWrapper = document.createElement('div');
-            tabsWrapper.style.cssText = 'display:flex;gap:4px;';
-            scrollTabs.appendChild(tabsWrapper);
-
-            tabButtons = [];
-            userPacks.forEach(pack => {
-                const btn = document.createElement('button');
-                const first = pack.stickers[0];
-                if (first) {
-                    const img = document.createElement('img');
-                    img.src = first.url;
-                    img.style.cssText = 'width:24px;height:24px;object-fit:contain;border-radius:6px;';
-                    btn.appendChild(img);
-                } else {
-                    btn.innerHTML = ICONS.EMPTY_PACK;
-                    btn.style.color = 'rgba(128,128,128,0.5)';
-                }
-                btn.title = pack.name || DEFAULT_PACK_NAME;
-                btn.style.cssText = 'background:transparent;border:none;width:32px;height:32px;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;color:var(--text-secondary,rgba(255,255,255,0.5));';
-                btn.onclick = () => { exitEditMode(); scrollToPack(pack.id); };
-                tabsWrapper.appendChild(btn);
-                tabButtons.push({ button: btn, key: pack.id });
-            });
-
-            const addPackBtn = document.createElement('button');
-            addPackBtn.innerHTML = ICONS.ADD_PACK;
-            addPackBtn.title = 'Создать стикерпак';
-            addPackBtn.style.cssText = 'background:transparent;border:none;width:32px;height:32px;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;color:var(--text-secondary,rgba(255,255,255,0.5));';
-            addPackBtn.onclick = () => {
-                const pack = { id: 'user_' + Date.now(), name: '', stickers: [] };
-                userPacks.push(pack);
-                saveUserPacks(userPacks);
-                rebuildPacks();
-                stickerPanel.remove();
-                stickerPanel = null;
-                scrollContainer = null;
-                packHeaders = [];
-                tabButtons = [];
-                createStickerPanel();
-                renderAllContent();
-                enterEditMode(pack.id);
-                showPanel();
-            };
-
-            header.appendChild(recentBtn);
-            header.appendChild(scrollTabs);
-            header.appendChild(addPackBtn);
-
-            scrollContainer = document.createElement('div');
-            scrollContainer.style.cssText = 'flex:1;overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth;scrollbar-width:thin;';
-            scrollContainer.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
-            scrollContainer.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
-            scrollContainer.addEventListener('scroll', updateActiveTabFromScroll, { passive: true });
-
-            stickerPanel.appendChild(header);
-            stickerPanel.appendChild(scrollContainer);
-
-            stickerPanel.addEventListener('mouseenter', () => {
-                if (hideTimeout) clearTimeout(hideTimeout);
-                adjustAllInputWidths();
-            });
-            stickerPanel.addEventListener('mouseleave', () => {
-                hideTimeout = setTimeout(() => {
-                    if (stickerPanel && stickerPanel.style.display === 'flex') {
-                        stickerPanel.style.display = 'none';
-                        exitEditMode();
-                        enablePageScroll();
-                    }
-                }, 200);
-            });
-
-            document.body.appendChild(stickerPanel);
-            return stickerPanel;
-        }
-
-        function renderAllContent() {
-            if (!scrollContainer) return;
-            scrollContainer.innerHTML = '';
-            packHeaders = [];
-
-            const allKeys = ['recent', ...userPacks.map(p => p.id)];
-            const allKeysLength = allKeys.length;
-            for (let i = 0; i < allKeysLength; i++) {
-                const key = allKeys[i];
-                const header = document.createElement('div');
-                header.className = 'pack-header';
-                header.dataset.pack = key;
-                header.style.cssText = 'padding:16px 10px 8px;display:flex;align-items:center;gap:6px;color:var(--text-secondary,rgba(255,255,255,0.5));';
-
-                const nameContainer = document.createElement('div');
-                nameContainer.style.cssText = 'display:flex;align-items:center;gap:4px;flex-shrink:0;';
-
-                const nameInput = document.createElement('input');
-                nameInput.type = 'text';
-                nameInput.className = 'pack-name-input';
-                nameInput.value = packNames[key] || '';
-                nameInput.placeholder = 'Название...';
-                nameInput.maxLength = MAX_NAME_LENGTH;
-                nameInput.style.cssText = 'background:transparent;border:1px solid transparent;color:inherit;font-size:14px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;padding:2px 4px;border-radius:4px;outline:none;width:auto;';
-
-                if (key !== 'recent') {
-                    nameInput.addEventListener('input', () => {
-                        if (!editMode || currentEditPack !== key) {
-                            nameInput.value = packNames[key] || '';
-                            adjustInputWidth(nameInput);
-                            return;
-                        }
-                        nameInput.value = nameInput.value.slice(0, MAX_NAME_LENGTH);
-                        packNames[key] = nameInput.value;
-                        const pack = userPacks.find(p => p.id === key);
-                        if (pack) { pack.name = nameInput.value; saveUserPacks(userPacks); }
-                        adjustInputWidth(nameInput);
-                    });
-                    nameInput.addEventListener('blur', () => {
-                        if (!editMode || currentEditPack !== key) {
-                            nameInput.value = packNames[key] || '';
-                            adjustInputWidth(nameInput);
-                            return;
-                        }
-                        if (!nameInput.value.trim()) {
-                            nameInput.value = DEFAULT_PACK_NAME;
-                            packNames[key] = DEFAULT_PACK_NAME;
-                            const pack = userPacks.find(p => p.id === key);
-                            if (pack) { pack.name = DEFAULT_PACK_NAME; saveUserPacks(userPacks); }
-                        }
-                        adjustInputWidth(nameInput);
-                    });
-                } else {
-                    nameInput.style.pointerEvents = 'none';
-                }
-
-                nameContainer.appendChild(nameInput);
-
-                if (key !== 'recent') {
-                    const editBtn = document.createElement('button');
-                    editBtn.innerHTML = ICONS.EDIT;
-                    editBtn.title = 'Редактировать';
-                    editBtn.style.cssText = 'background:transparent;border:none;width:20px;height:20px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;color:inherit;';
-                    editBtn.onclick = () => {
-                        if (editMode && currentEditPack === key) exitEditMode();
-                        else { exitEditMode(); enterEditMode(key); }
-                    };
-                    nameContainer.appendChild(editBtn);
-
-                    const deletePackBtn = document.createElement('button');
-                    deletePackBtn.className = 'delete-pack-btn';
-                    deletePackBtn.innerHTML = ICONS.TRASH;
-                    deletePackBtn.title = 'Удалить пак';
-                    deletePackBtn.style.cssText = 'display:none;background:#ff4444;border:none;width:24px;height:24px;border-radius:6px;cursor:pointer;padding:0;align-items:center;justify-content:center;';
-                    deletePackBtn.onclick = () => { if (confirm('Удалить пак?')) deleteStickerPack(key); };
-                    nameContainer.appendChild(deletePackBtn);
-
-                    const exitBtn = document.createElement('button');
-                    exitBtn.innerHTML = ICONS.CHECK;
-                    exitBtn.title = 'Готово';
-                    exitBtn.style.cssText = 'display:none;background:var(--accent-primary,#0080FF);border:none;width:24px;height:24px;border-radius:6px;cursor:pointer;padding:0;align-items:center;justify-content:center;';
-                    exitBtn.onclick = exitEditMode;
-                    nameContainer.appendChild(exitBtn);
-                    header._exitEditBtn = exitBtn;
-                    exitBtn.style.display = (editMode && currentEditPack === key) ? 'flex' : 'none';
-                }
-
-                header.appendChild(nameContainer);
-                const spacer = document.createElement('div');
-                spacer.style.flex = '1';
-                header.appendChild(spacer);
-                scrollContainer.appendChild(header);
-                packHeaders.push({ element: header, key });
-
-                const grid = document.createElement('div');
-                grid.className = 'pack-grid';
-                grid.dataset.pack = key;
-                grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:3px;padding:0 10px 16px;';
-                const stickers = stickerPacks[key] || [];
-                const stickersLength = stickers.length;
-                for (let j = 0; j < stickersLength; j++) {
-                    const s = stickers[j];
-                    grid.appendChild(createStickerButton(s, key, j, false));
-                }
-                scrollContainer.appendChild(grid);
-            }
-        }
-
-        function scrollToPack(packKey) {
-            const header = scrollContainer.querySelector(`.pack-header[data-pack="${packKey}"]`);
-            if (header) {
-                isScrollingFromTab = true;
-                header.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                setTimeout(() => { isScrollingFromTab = false; }, 500);
-            }
-        }
-
+        // подсветка вкладки пака, чья шапка сейчас вверху ленты
         function updateActiveTabFromScroll() {
-            if (editMode || !scrollContainer) return;
+            if (editPack || !scrollContainer) return;
             const top = scrollContainer.getBoundingClientRect().top + 50;
             let active = 'recent', min = Infinity;
-            const packHeadersLength = packHeaders.length;
-            for (let i = 0; i < packHeadersLength; i++) {
-                const { element, key } = packHeaders[i];
-                const d = element.getBoundingClientRect().top - top;
-                if (d <= 0 && Math.abs(d) < min) { min = Math.abs(d); active = key; }
+            for (const h of scrollContainer.querySelectorAll(':scope > .pack-header')) {
+                const d = h.getBoundingClientRect().top - top;
+                if (d <= 0 && -d < min) { min = -d; active = h.dataset.pack; }
             }
-            if (recentBtn) recentBtn.style.background = active === 'recent' ? 'var(--accent-primary,#0080FF)' : 'transparent';
-            const tabButtonsLength = tabButtons.length;
-            for (let i = 0; i < tabButtonsLength; i++) {
-                const t = tabButtons[i];
-                t.button.style.background = t.key === active ? 'var(--accent-primary,#0080FF)' : 'transparent';
-            }
+            recentBtn.classList.toggle('vp-on', active === 'recent');
+            tabsRow.querySelectorAll('.vp-sp-tab').forEach(t => t.classList.toggle('vp-on', t.dataset.pack === active));
         }
 
         function showPanel() {
             if (!stickerBtn || !stickerBtn.isConnected) return;
-            if (hideTimeout) clearTimeout(hideTimeout);
+            clearTimeout(hideTimeout);
             createStickerPanel();
-            if (!scrollContainer || !scrollContainer.children.length) renderAllContent();
+            if (!scrollContainer.children.length) renderAllContent();
             const rect = stickerBtn.getBoundingClientRect();
             stickerPanel.style.bottom = `${window.innerHeight - rect.top + 8}px`;
             stickerPanel.style.left = `${Math.min(rect.left, window.innerWidth - PANEL_WIDTH - 20)}px`;
-            stickerPanel.style.display = 'flex';
+            stickerPanel.classList.add('vp-open');
             disablePageScroll();
         }
-
-        function hidePanel() {
+        function hidePanel(delay) {
+            clearTimeout(hideTimeout);
             hideTimeout = setTimeout(() => {
-                if (stickerPanel && stickerPanel.style.display === 'flex') {
-                    stickerPanel.style.display = 'none';
-                    exitEditMode();
-                    enablePageScroll();
+                if (!stickerPanel || !stickerPanel.classList.contains('vp-open')) return;
+                stickerPanel.classList.remove('vp-open');
+                exitEditMode();
+                enablePageScroll();
+            }, delay);
+        }
+
+        // ---- обрезка стикера: рамка по картинке, тянуть за края/углы или целиком (мышь и палец),
+        // пропорции на выбор, у середины рамка прилипает. Готово — PNG вырезанной части.
+        function showCropEditor(imageUrl) {
+            return new Promise(resolve => {
+                const modal = el('div', 'vp-crop-modal');
+                modal.innerHTML = `<div class="vp-crop-editor"><h3>Обрежьте стикер</h3>
+                    <div class="vp-crop-view"><img><div class="vp-crop-overlay"><div class="vp-crop-area">${['n', 'e', 's', 'w', 'nw', 'ne', 'sw', 'se'].map(d => `<div class="resize-handle" data-direction="${d}"></div>`).join('')}</div></div></div>
+                    <div class="vp-crop-ratios"></div>
+                    <div class="vp-crop-actions"><button class="vp-crop-cancel">Отмена</button><button class="vp-crop-ok">Готово</button></div></div>`;
+                const view = modal.querySelector('.vp-crop-view');
+                const img = view.querySelector('img');
+                const area = modal.querySelector('.vp-crop-area');
+                img.src = imageUrl;
+                let ratio = null;                        // пропорция рамки, null — свободная
+                let action = null;                       // { dir, x, y, w, h, left, top } — что тянут и откуда начали
+
+                const RATIOS = [['Свободный', null], ['1:1', 1], ['4:3', 4 / 3], ['3:4', 3 / 4], ['16:9', 16 / 9], ['9:16', 9 / 16]];
+                const ratioRow = modal.querySelector('.vp-crop-ratios');
+                RATIOS.forEach(([label, value], i) => {
+                    const b = el('button', 'aspect-ratio-btn' + (i ? '' : ' vp-on'));
+                    b.textContent = label;
+                    b.onclick = () => {
+                        ratio = value;
+                        ratioRow.querySelectorAll('.aspect-ratio-btn').forEach(x => x.classList.toggle('vp-on', x === b));
+                        if (value !== null) setAspectRatio(value);
+                    };
+                    ratioRow.appendChild(b);
+                });
+
+                // где на экране картинка внутри квадрата (object-fit: contain)
+                function imageBounds() {
+                    const r = view.getBoundingClientRect();
+                    const k = img.naturalWidth / img.naturalHeight;
+                    const w = k > r.width / r.height ? r.width : r.height * k;
+                    const h = k > r.width / r.height ? r.width / k : r.height;
+                    const minX = (r.width - w) / 2, minY = (r.height - h) / 2;
+                    return { minX, minY, maxX: minX + w, maxY: minY + h, width: w, height: h };
                 }
-            }, 300);
+                const place = (left, top, width, height) => Object.assign(area.style, {
+                    left: left + 'px', top: top + 'px',
+                    ...(width !== undefined && { width: width + 'px', height: height + 'px' })
+                });
+                function constrain() {
+                    const b = imageBounds();
+                    const w = area.offsetWidth, h = area.offsetHeight;
+                    const left = Math.max(b.minX, Math.min(parseFloat(area.style.left) || 0, b.maxX - w));
+                    const top = Math.max(b.minY, Math.min(parseFloat(area.style.top) || 0, b.maxY - h));
+                    place(left, top, Math.min(w, b.width), Math.min(h, b.height));
+                }
+                // у середины картинки рамка прилипает (порог 5px)
+                function snapToCenter() {
+                    const b = imageBounds();
+                    const left = parseFloat(area.style.left), top = parseFloat(area.style.top);
+                    const cx = b.minX + (b.width - area.offsetWidth) / 2, cy = b.minY + (b.height - area.offsetHeight) / 2;
+                    if (Math.abs(left - cx) < 5 || Math.abs(top - cy) < 5) place(Math.abs(left - cx) < 5 ? cx : left, Math.abs(top - cy) < 5 ? cy : top);
+                }
+                function setAspectRatio(k) {
+                    const b = imageBounds();
+                    let w, h;
+                    if (k >= 1) { w = b.width; h = w / k; if (h > b.height) { h = b.height; w = h * k; } }
+                    else { h = b.height; w = h * k; if (w > b.width) { w = b.width; h = w / k; } }
+                    place(b.minX + (b.width - w) / 2, b.minY + (b.height - h) / 2, w, h);
+                    constrain();
+                }
+                function fitToImage() {
+                    const b = imageBounds();
+                    place(b.minX, b.minY, b.width, b.height);
+                }
+
+                const onDown = e => {
+                    const dir = e.target.classList.contains('resize-handle') ? e.target.dataset.direction : null;
+                    const r = area.getBoundingClientRect();
+                    action = dir
+                        ? { dir, x: e.clientX, y: e.clientY, w: area.offsetWidth, h: area.offsetHeight, left: parseFloat(area.style.left), top: parseFloat(area.style.top) }
+                        : { dir: null, x: e.clientX - r.left, y: e.clientY - r.top };
+                    if (!dir) area.classList.add('vp-moving');
+                    area.setPointerCapture(e.pointerId);
+                    e.preventDefault();
+                    e.stopPropagation();
+                };
+                const onMove = e => {
+                    if (!action) return;
+                    const vr = view.getBoundingClientRect();
+                    if (!action.dir) {
+                        place(e.clientX - vr.left - action.x, e.clientY - vr.top - action.y);
+                        constrain();
+                        snapToCenter();
+                        return;
+                    }
+                    const b = imageBounds(), a = action, d = a.dir;
+                    const dx = e.clientX - a.x, dy = e.clientY - a.y;
+                    let w = a.w, h = a.h, x = a.left, y = a.top;
+                    if (d.includes('n')) { h = a.h - dy; y = a.top + dy; }
+                    if (d.includes('s')) h = a.h + dy;
+                    if (d.includes('w')) { w = a.w - dx; x = a.left + dx; }
+                    if (d.includes('e')) w = a.w + dx;
+                    if (ratio !== null) {
+                        // с пропорцией: за верх/низ тянут высоту, иначе ширину; рамка растёт от
+                        // противоположного края (у боковых — от середины)
+                        if (d === 'n' || d === 's') w = h * ratio; else h = w / ratio;
+                        if (w > b.width) { w = b.width; h = w / ratio; }
+                        if (h > b.height) { h = b.height; w = h * ratio; }
+                        x = d.includes('w') ? a.left + (a.w - w) : d.includes('e') ? a.left : a.left - (w - a.w) / 2;
+                        y = d.includes('n') ? a.top + (a.h - h) : d.includes('s') ? a.top : a.top - (h - a.h) / 2;
+                    }
+                    w = Math.max(50, Math.min(b.width, w));
+                    h = Math.max(50, Math.min(b.height, h));
+                    x = Math.max(b.minX, Math.min(x, b.maxX - w));
+                    y = Math.max(b.minY, Math.min(y, b.maxY - h));
+                    place(x, y, w, h);
+                    constrain();
+                    snapToCenter();
+                };
+                const onUp = () => {
+                    if (!action) return;
+                    action = null;                       // курсор «move» остаётся, как было
+                    constrain();
+                };
+                area.addEventListener('pointerdown', onDown);
+                area.addEventListener('pointermove', onMove);
+                area.addEventListener('pointerup', onUp);
+                area.addEventListener('pointercancel', onUp);
+
+                const close = result => { modal.remove(); URL.revokeObjectURL(imageUrl); resolve(result); };
+                modal.querySelector('.vp-crop-cancel').onclick = () => close(null);
+                modal.querySelector('.vp-crop-ok').onclick = () => {
+                    const vr = view.getBoundingClientRect(), cr = area.getBoundingClientRect(), b = imageBounds();
+                    const sx = img.naturalWidth / b.width, sy = img.naturalHeight / b.height;
+                    const w = cr.width * sx, h = cr.height * sy;
+                    const x = Math.max(0, Math.min((cr.left - vr.left - b.minX) * sx, img.naturalWidth - w));
+                    const y = Math.max(0, Math.min((cr.top - vr.top - b.minY) * sy, img.naturalHeight - h));
+                    const canvas = el('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, x, y, w, h, 0, 0, w, h);
+                    canvas.toBlob(blob => close(new File([blob], 'sticker.png', { type: 'image/png' })), 'image/png');
+                };
+                document.body.appendChild(modal);
+                img.onload = fitToImage;
+                if (img.complete) fitToImage();
+            });
         }
 
-        function addStickerButton() {
-            if (isProcessing) return;
-            isProcessing = true;
-            const container = document.querySelector('.' + SELECTORS.stickerContainer);
-            if (!container || container.querySelector('.sticker-btn')) { isProcessing = false; return; }
-            // Кнопку стикеров ставим перед микрофоном, а если его нет — перед «Отправить»
-            const micBtn = container.querySelector('.' + SELECTORS.stickerMicBtn)
-                || container.querySelector('.' + SELECTORS.stickerSendBtn);
-            if (!micBtn) { isProcessing = false; return; }
-
-            stickerBtn = document.createElement('button');
-            stickerBtn.className = 'sticker-btn';
-            stickerBtn.innerHTML = ICONS.STICKER_BUTTON;
-            stickerBtn.style.cssText = 'background:transparent;border:none;cursor:pointer;padding:8px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-secondary);margin-right:5px;width:36px;height:36px;';
-            stickerBtn.onmouseenter = () => { stickerBtn.style.backgroundColor = 'var(--bg-hover,rgba(255,255,255,0.08))'; showPanel(); };
-            stickerBtn.onmouseleave = () => { stickerBtn.style.backgroundColor = 'transparent'; hidePanel(); };
-            container.insertBefore(stickerBtn, micBtn);
-            isProcessing = false;
-        }
-
+        // ---- кнопка у поля комментария (перед микрофоном, а если его нет — перед «Отправить»)
         onDom(function stickerButton() {
-            const c = document.querySelector('.' + SELECTORS.stickerContainer);
-            if (c && !c.querySelector('.sticker-btn')) addStickerButton();
+            const row = document.querySelector('.' + SELECTORS.stickerContainer);
+            if (!row || row.querySelector('.sticker-btn')) return;
+            const before = row.querySelector('.' + SELECTORS.stickerMicBtn) || row.querySelector('.' + SELECTORS.stickerSendBtn);
+            if (!before) return;
+            stickerBtn = el('button', 'sticker-btn', ICONS.STICKER_BUTTON);
+            stickerBtn.onmouseenter = showPanel;
+            stickerBtn.onmouseleave = () => hidePanel(300);
+            row.insertBefore(stickerBtn, before);
         });
-
-        window.addEventListener('focus', () => {
-            const c = document.querySelector('.' + SELECTORS.stickerContainer);
-            if (c && !c.querySelector('.sticker-btn')) addStickerButton();
-        });
-
-        setTimeout(addStickerButton, 1000);
-
     })();
 
     let messagesOverlay = null;
@@ -6133,22 +5509,6 @@
                 if (changed) body = form;
             }
             return origSend.call(this, body);
-        };
-    })();
-
-    let currentPostId = null;
-
-    (function () {
-        const originalFetch = window.fetch;
-        window.fetch = function (...args) {
-            const url = args[0];
-            if (typeof url === 'string' && url.includes('/api/posts/') && url.includes('/comments')) {
-                const match = url.match(/\/api\/posts\/([^\/]+)\/comments/);
-                if (match) {
-                    currentPostId = match[1];
-                }
-            }
-            return originalFetch.apply(this, args);
         };
     })();
 
