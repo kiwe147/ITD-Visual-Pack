@@ -48,7 +48,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   }, meta);
   await p.goto(URL0);
   // в снимке уже есть следы мода (он снят с работающим скриптом) — убираем элементы, которые скрипт создаёт сам
-  await p.evaluate(() => document.querySelectorAll('.vp-nav-blob, .vp-fab, .vp-fps, .settings-dropdown, .nick-controls-panel, .vp-itdx-btn, .vp-msgs').forEach(e => e.remove()));
+  await p.evaluate(() => document.querySelectorAll('.vp-nav-blob, .vp-fab, .vp-fps, .settings-dropdown, .nick-controls-panel, .vp-itdx-btn, .vp-msgs, .custom-image-btn, .custom-change-btn, .custom-cancel-btn, .custom-apply-btn').forEach(e => e.remove()));
   await p.addScriptTag({ content: src });
   await p.waitForTimeout(1500);
   await p.screenshot({ path: path.join(out, mode + '-page.png') });
@@ -110,6 +110,71 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     await toggleAC();
   }
   await p.evaluate(() => document.querySelectorAll('.vpTestFile').forEach(e => e.remove()));
+
+  // Редактор баннера (только свой профиль): картинка выше баннера, сдвиг пальцем/мышью и колесом,
+  // «Применить» грузит вырезанную часть и ставит баннер, после — обычный режим
+  if (await p.$('.custom-image-btn')) {
+    const tall = 'data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="3000"><rect width="1000" height="3000" fill="#3a6"/></svg>').toString('base64');
+    const png = await p.evaluate(async u => {                        // svg → png, чтобы вышел обычный файл картинки
+      const i = new Image(); i.src = u; await i.decode();
+      const c = document.createElement('canvas'); c.width = 1000; c.height = 3000; c.getContext('2d').drawImage(i, 0, 0);
+      return c.toDataURL('image/png').split(',')[1];
+    }, tall);
+    const [chooser] = await Promise.all([p.waitForEvent('filechooser'), p.click('.custom-image-btn', { force: true })]);
+    await chooser.setFiles({ name: 'tall.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+    await p.waitForTimeout(400);
+    const top = () => p.$eval('.vp-banner-drag', i => Math.round(parseFloat(i.style.top)));
+    const shown = () => p.$$eval('.vp-banner-buttons button', bs => bs.filter(b => getComputedStyle(b).display !== 'none').length);
+    const t0 = await top();
+    // точка на баннере, где сверху сама картинка (на части снимков середину закрывает ряд кнопок)
+    const box = await p.$eval('.vp-banner', b => {
+      const r = b.getBoundingClientRect(), img = b.querySelector('.vp-banner-drag, img[draggable=false]:not([alt])');
+      for (const fy of [0.5, 0.3, 0.7, 0.2, 0.8]) for (const fx of [0.5, 0.25, 0.75, 0.1, 0.9]) {
+        const x = r.x + r.width * fx, y = r.y + r.height * fy;
+        if (document.elementFromPoint(x, y) === img) return { x, y };
+      }
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
+    // палец: касания через CDP — браузер сам делает из них pointer-события, как на телефоне
+    let t1 = t0;
+    if (mode === 'phone') {
+      const cdp = await p.context().newCDPSession(p);
+      const touch = (type, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: box.x, y }] });
+      await touch('touchStart', box.y);
+      for (let i = 1; i <= 5; i++) await touch('touchMove', box.y + i * 8);
+      await touch('touchEnd');
+      await p.waitForTimeout(300);
+      t1 = await top();
+      check(t1 === t0 + 40, `баннер: палец двигает картинку (${t0} → ${t1}, ждём ${t0 + 40})`);
+    } else {
+      await p.mouse.move(box.x, box.y); await p.mouse.down(); await p.mouse.move(box.x, box.y + 40, { steps: 5 }); await p.mouse.up();
+      await p.waitForTimeout(300);
+      t1 = await top();
+      check(t1 === t0 + 40, `баннер: мышь двигает картинку (${t0} → ${t1}, ждём ${t0 + 40})`);
+    }
+    // колесо: один щелчок — 30px, и после второго открытия картинки тоже 30 (раньше копилось)
+    const [chooser2] = await Promise.all([p.waitForEvent('filechooser'), p.click('.custom-change-btn', { force: true })]);
+    await chooser2.setFiles({ name: 'tall.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+    await p.waitForTimeout(400);
+    const w0 = await top();
+    await p.$eval('.vp-banner', b => b.dispatchEvent(new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true })));
+    await p.waitForTimeout(300);
+    const w1 = await top();
+    check(w1 === w0 - 30, `баннер: колесо после второй картинки — шаг 30px (${w0} → ${w1})`);
+    check(await shown() === 3, 'баннер: в режиме правки видны три кнопки (сменить, отмена, применить)');
+    // «Применить»: загрузка и смена баннера — заглушки
+    let sent = '';
+    await p.route('**/api/files/upload', r => { sent = (r.request().postDataBuffer() || '').toString().match(/filename="[^"]+"/)?.[0] || '?'; r.fulfill({ contentType: 'application/json', body: '{"id":"f1","url":"https://example.com/b.jpg"}' }); });
+    await p.route('**/api/users/me', r => r.request().method() === 'PUT' ? r.fulfill({ contentType: 'application/json', body: '{}' }) : r.fallback());
+    const said = new Promise(res => p.once('dialog', d => { res(d.message()); d.accept(); }));
+    await p.$eval('.custom-apply-btn', b => b.click());
+    const msg = await said;
+    await p.waitForTimeout(300);
+    const src = await p.$eval('.vp-banner img[alt="Banner"]', i => i.src);
+    check(msg.includes('Баннер успешно') && src.endsWith('/b.jpg') && !(await p.$('.vp-banner-drag')), `баннер: «Применить» ставит баннер (${msg.slice(0, 30)} | ${sent} | ${src})`);
+    check(await shown() >= 2 && !(await p.$('.vp-banner-buttons.vp-banner-editing')), 'баннер: после — обычный режим');
+    await p.screenshot({ path: path.join(out, mode + '-banner.png') });
+  } else console.log('—    кнопки баннера нет (не свой профиль) — редактор не проверяю');
 
   // «назад» закрывает окно сайта
   await p.evaluate(() => {

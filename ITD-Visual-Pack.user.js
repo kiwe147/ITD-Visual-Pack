@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.24
+// @version      3.1.25
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1183,7 +1183,7 @@
     let nickGlowEnabled = GM_getValue('nickGlowEnabled', true);
     let avatarGlowEnabled = GM_getValue('avatarGlowEnabled', true);
     let antiCensorshipEnabled = GM_getValue('antiCensorshipEnabled', true);
-    let autoLikeUsers = JSON.parse(GM_getValue('itd_auto_like_users', '{}'));
+    let autoLikeUsers = (() => { try { return JSON.parse(GM_getValue('itd_auto_like_users', '{}')) || {}; } catch (e) { return {}; } })();
     let autoLikeEnabled = GM_getValue('autoLikeEnabled', true);
 
     // Мой аватар — в первой ссылке на мой профиль
@@ -1196,12 +1196,20 @@
         if (container && container.querySelector('span')) return container;
         return link.firstElementChild || link.querySelector('span');
     }
+    // ==== автолайки
+    // Кого отметили в «ИТД X» → «Лайки» (autoLikeUsers, { ник: true } в GM 'itd_auto_like_users'):
+    // раз в 2–5 минут лайкаем их посты за последние сутки, которые ещё не лайкнуты.
+    // Кандидаты в список — пользователи мода (из проверки значков) и NeuroSFW; их профили
+    // для списка держим в localStorage 10 минут, чтобы окно открывалось без запросов.
     const AUTO_LIKE_CACHE_KEY = 'itd_auto_like_full_cache';
-    const CACHE_TTL = 10 * 60 * 1000;
-
+    const AUTO_LIKE_CACHE_TTL = 10 * 60 * 1000;
     const LIKE_INTERVAL_MIN = 2 * 60 * 1000;
     const LIKE_INTERVAL_MAX = 5 * 60 * 1000;
     const DAY = 24 * 60 * 60 * 1000;
+
+    function saveAutoLikeUsers() {
+        GM_setValue('itd_auto_like_users', JSON.stringify(autoLikeUsers));
+    }
 
     // лайкнуть посты пользователя за последние сутки, которые ещё не лайкнуты
     async function likePostsForUser(username) {
@@ -1217,26 +1225,46 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: '{}'
                 });
-                if (like.ok) await new Promise(r => setTimeout(r, 300));
+                if (like.ok) await new Promise(r => setTimeout(r, 300));   // не частить: лайки одного — через паузу
             }
         } catch (e) { console.warn('[ITD VP] автолайк', e); logErr('автолайк', e); }
     }
 
-    async function processAllAutoLikes() {
-        if (!autoLikeEnabled) return;
-        const activeUsers = Object.keys(autoLikeUsers).filter(u => autoLikeUsers[u] === true);
-        if (!activeUsers.length) return;
-
-        await Promise.all(activeUsers.map(username => likePostsForUser(username)));
-    }
-
+    // следующий проход — через случайные 2–5 минут после конца прошлого
     function scheduleAutoLike() {
-        const delay = Math.floor(Math.random() * (LIKE_INTERVAL_MAX - LIKE_INTERVAL_MIN + 1) + LIKE_INTERVAL_MIN);
-        setTimeout(() => {
-            processAllAutoLikes().finally(() => scheduleAutoLike());
+        const delay = LIKE_INTERVAL_MIN + Math.floor(Math.random() * (LIKE_INTERVAL_MAX - LIKE_INTERVAL_MIN + 1));
+        setTimeout(async () => {
+            try {
+                const users = Object.keys(autoLikeUsers).filter(u => autoLikeUsers[u] === true);
+                if (autoLikeEnabled && users.length) await Promise.all(users.map(likePostsForUser));
+            } finally { scheduleAutoLike(); }
         }, delay);
     }
 
+    // профили кандидатов для списка в окне: { ник: профиль }
+    async function fetchAutoLikeUsers() {
+        try {
+            const c = JSON.parse(localStorage.getItem(AUTO_LIKE_CACHE_KEY) || 'null');
+            if (c && Date.now() - c.timestamp <= AUTO_LIKE_CACHE_TTL) return c.usersData;
+        } catch (e) { /* битый кеш — просто спросим заново */ }
+
+        let verified = {};
+        try { verified = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}'); } catch (e) { }
+        const usernames = Object.keys(verified);
+        if (!usernames.includes('NeuroSFW')) usernames.push('NeuroSFW');
+
+        const usersData = {};
+        await Promise.all(usernames.map(async username => {
+            try {
+                const res = await api(`/api/users/${username}`);
+                if (res.ok) usersData[username] = await res.json();
+            } catch (e) { }
+        }));
+        if (Object.keys(usersData).length) {
+            try { localStorage.setItem(AUTO_LIKE_CACHE_KEY, JSON.stringify({ usersData, timestamp: Date.now() })); } catch (e) { }
+        }
+        return usersData;
+    }
 
     const nickStyles = {
         fire: {
@@ -1714,12 +1742,26 @@
 
     // ================= Фоны (выбираются в таблетке у ника) =================
     // Рисуются в цвете стиля ника (у радуги — бегущим оттенком) на полупрозрачном слое под сайтом.
-    // Кадр ~30 раз в секунду, скорости заданы на 50 мс (dt), от частоты кадров не зависят.
-    // Свечение — заранее нарисованные спрайты, а не shadowBlur: тот считался бы каждый кадр.
+    // Кадр — в frame() (частота экрана, не чаще ~60 в секунду); скорости заданы на 50 мс (dt),
+    // от частоты кадров не зависят. Свечение — заранее нарисованные спрайты, а не shadowBlur:
+    // тот считался бы каждый кадр. Прозрачность слоя у каждого фона своя (opacity в BACKGROUNDS).
+    const styleBgCanvas = document.createElement('style');
+    styleBgCanvas.textContent = `
+        .vp-bg-canvas {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1;
+            opacity: 0.2; pointer-events: none; transition: opacity .4s ease;
+        }
+        .vp-bg-canvas.vp-bg-off { display: none; }
+    `;
+    document.head.appendChild(styleBgCanvas);
     const canvas = document.createElement('canvas');
     canvas.className = 'vp-bg-canvas';
-    canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;opacity:0.2;pointer-events:none;transition:opacity .4s ease;';
     document.body.appendChild(canvas);
+    // выключатель «Фон»: холст прячем, кадры фона не рисуются (frame смотрит backgroundEnabled)
+    function updateBackgroundVisibility() {
+        canvas.classList.toggle('vp-bg-off', !backgroundEnabled);
+    }
+    updateBackgroundVisibility();
     const ctx = canvas.getContext('2d');
     let W = 0, H = 0;
     let bg = null, bgName = '';                          // текущий фон и его состояние
@@ -2406,11 +2448,7 @@
         if (postBlurEnabled) {
             addBlurBackground();
         } else {
-            document.querySelectorAll('.itd-blur-container').forEach(el => el.remove());
-            document.querySelectorAll('.' + SELECTORS.post + ', .' + SELECTORS.repost).forEach(el => {
-                el.removeAttribute('data-blur-bg');
-                el.classList.remove('itd-blur-active');
-            });
+            document.querySelectorAll('[data-blur-bg]').forEach(dropBlur);
         }
         colorizePosts();
     }
@@ -2938,423 +2976,235 @@
         document.querySelectorAll('.bg-style-toggle').forEach(b => b.classList.toggle('vp-hidden', !backgroundEnabled));
     }
 
-    let draggableImg = null;
-    let currentTop = 0;
-    let banner = null;
-    let buttonsContainer = null;
-    let isDragging = false;
-    let dragStartY = 0;
-    let startTop = 0;
+    // ==== редактор баннера
+    // Своя картинка вместо баннера: кнопка «картинка» рядом с кнопками сайта → выбрать файл →
+    // картинка ложится на баннер во всю ширину, её двигают вверх-вниз (мышь, палец, колесо) →
+    // «Применить» вырезает видимую часть, грузит файл и ставит его баннером профиля.
+    // Режим правки — класс vp-banner-editing на баннере и на ряде кнопок, вид — в CSS.
+    const bannerEdit = { banner: null, img: null, url: null, top: 0, drag: null };   // drag: { y, top } при перетаскивании
+    const bannerBtns = { row: null, draw: null, del: null, image: null, change: null, cancel: null, apply: null };
 
-    let drawBtn = null;
-    let deleteBtn = null;
-    let imageBtn = null;
-    let cancelBtn = null;
-    let applyBtn = null;
-    let changeBtn = null;
-
-    function addBannerStyles() {
-        if (document.getElementById('custom-banner-styles')) return;
-
-        const style = document.createElement('style');
-        style.id = 'custom-banner-styles';
-        style.textContent = `
-            .custom-image-btn:hover {
-                background: var(--accent-primary, #0080FF) !important;
-                color: #fff !important;
-            }
-            .custom-cancel-btn:hover {
-                background: #dc3545cc !important;
-            }
-            .custom-apply-btn:hover {
-                background: #28a745cc !important;
-            }
-            .custom-change-btn:hover {
-                background: var(--accent-primary, #0080FF) !important;
-                color: #fff !important;
-            }
-            @keyframes spin {
-                from { transform: rotate(0deg); }
-                to { transform: rotate(360deg); }
-            }
-            .spin-animation {
-                animation: spin 1s linear infinite;
-                transform-origin: center;
-            }
-        `;
-        document.head.appendChild(style);
-    }
-
-    function createAllButtons() {
-        buttonsContainer = document.querySelector('.' + SELECTORS.bannerButtons);
-        if (!buttonsContainer) return false;
-
-        if (buttonsContainer.querySelector('.custom-image-btn')) return true;
-
-        addBannerStyles();
-
-        drawBtn = buttonsContainer.querySelector('button:not(.' + SELECTORS.bannerDelete + ')');
-        deleteBtn = buttonsContainer.querySelector('.' + SELECTORS.bannerDelete);
-
-        imageBtn = document.createElement('button');
-        imageBtn.className = siteClasses(drawBtn) + ' custom-image-btn';
-        imageBtn.title = 'Добавить картинку';
-        imageBtn.innerHTML = ICONS.BANNER_IMAGE;
-
-        if (deleteBtn) {
-            buttonsContainer.insertBefore(imageBtn, deleteBtn);
-        } else {
-            buttonsContainer.appendChild(imageBtn);
+    const styleBanner = document.createElement('style');
+    styleBanner.textContent = `
+        .custom-image-btn:hover, .custom-change-btn:hover {
+            background: var(--accent-primary, #0080FF) !important;
+            color: #fff !important;
         }
+        .custom-cancel-btn:hover { background: #dc3545cc !important; }
+        .custom-apply-btn:hover { background: #28a745cc !important; }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        /* обычный режим: кнопки правки спрятаны; в режиме правки — наоборот */
+        .vp-banner-buttons:not(.vp-banner-editing) :is(.custom-change-btn, .custom-cancel-btn, .custom-apply-btn),
+        .vp-banner-buttons.vp-banner-editing > :not(.custom-change-btn, .custom-cancel-btn, .custom-apply-btn) { display: none !important; }
+        .vp-banner.vp-banner-editing { position: relative; overflow: hidden; z-index: 0; }
+        /* ряд кнопок сайта бывает во весь баннер — в режиме правки он не должен ловить перетаскивание */
+        .vp-banner-buttons.vp-banner-editing { pointer-events: none; }
+        .vp-banner-buttons.vp-banner-editing > button { pointer-events: auto; }
+        .vp-banner.vp-banner-editing > img:not(.vp-banner-drag) { position: relative; z-index: -3; }
+        /* вес выше правил сайта для картинок баннера (там высота во весь баннер) — как раньше style.* */
+        .vp-banner > img.vp-banner-drag {
+            position: absolute; left: 0; top: 0; width: 100%; height: auto; z-index: -1;
+            cursor: grab; user-select: none; -webkit-user-drag: none; touch-action: none;
+            transition: top 0.1s ease-out;
+        }
+        .vp-banner > img.vp-banner-drag.vp-dragging { cursor: grabbing; transition: none; }
+    `;
+    document.head.appendChild(styleBanner);
 
-        changeBtn = document.createElement('button');
-        changeBtn.className = siteClasses(drawBtn) + ' custom-change-btn';
-        changeBtn.title = 'Сменить картинку';
-        changeBtn.style.display = 'none';
-        changeBtn.innerHTML = ICONS.BANNER_CHANGE;
-
-        cancelBtn = document.createElement('button');
-        cancelBtn.className = siteClasses(drawBtn) + ' custom-cancel-btn';
-        cancelBtn.title = 'Отмена';
-        cancelBtn.style.display = 'none';
-        cancelBtn.innerHTML = ICONS.BANNER_CANCEL;
-
-        applyBtn = document.createElement('button');
-        applyBtn.className = siteClasses(drawBtn) + ' custom-apply-btn';
-        applyBtn.title = 'Применить';
-        applyBtn.style.display = 'none';
-        applyBtn.innerHTML = ICONS.BANNER_APPLY;
-
-        buttonsContainer.appendChild(changeBtn);
-        buttonsContainer.appendChild(cancelBtn);
-        buttonsContainer.appendChild(applyBtn);
-
-        imageBtn.onclick = () => openFilePicker();
-        changeBtn.onclick = () => openFilePicker();
-
-        cancelBtn.onclick = () => {
-            removeDraggableImage();
-            showNormalMode();
-        };
-
-        applyBtn.onclick = async () => {
-            if (!draggableImg || !banner) return;
-
-            applyBtn.innerHTML = ICONS.LOADING;
-            applyBtn.disabled = true;
-
-            try {
-                const croppedBlob = await cropBannerImage();
-
-                const token = await getAccessToken();
-
-                const formData = new FormData();
-                formData.append('file', croppedBlob, 'banner.jpg');
-
-                const uploadData = await new Promise((resolve, reject) => {
-                    const xhr = new XMLHttpRequest();
-                    xhr.open('POST', '/api/files/upload');
-                    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-                    xhr.onload = () => {
-                        if (xhr.status >= 200 && xhr.status < 300) {
-                            try { resolve(JSON.parse(xhr.responseText)); }
-                            catch (e) { reject(e); }
-                        } else {
-                            try {
-                                const error = JSON.parse(xhr.responseText);
-                                const message = error.error?.message || error.message || `Ошибка ${xhr.status}`;
-                                reject(new Error(message));
-                            } catch (e) {
-                                reject(new Error(`Ошибка загрузки: ${xhr.status}`));
-                            }
-                        }
-                    };
-                    xhr.onerror = () => reject(new Error('Ошибка сети'));
-                    xhr.send(formData);
-                });
-
-                const updateRes = await fetch('/api/users/me', {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ bannerId: uploadData.id })
-                });
-
-                if (!updateRes.ok) {
-                    let errorMsg = `Ошибка обновления профиля: ${updateRes.status}`;
-                    try {
-                        const errorData = await updateRes.json();
-                        if (errorData.error?.message) errorMsg = errorData.error.message;
-                    } catch (e) { }
-                    throw new Error(errorMsg);
-                }
-
-                removeDraggableImage();
-
-                const originalImg = banner.querySelector('img');
-                if (originalImg) {
-                    originalImg.src = uploadData.url;
-                    originalImg.style.position = '';
-                    originalImg.style.zIndex = '';
-                }
-
-                showNormalMode();
-                alert('✅ Баннер успешно обновлён!');
-
-            } catch (error) {
-                console.error('Ошибка:', error);
-
-                let message = error.message || 'Неизвестная ошибка';
-
-                if (message.includes('запрещённый контент') || message.includes('CONTENT_MODERATION')) {
-                    alert('❌ Изображение не прошло модерацию.\nПожалуйста, выберите другое изображение.');
-                } else if (message.includes('сети') || message.includes('network')) {
-                    alert('❌ Ошибка сети. Проверьте подключение к интернету.');
-                } else {
-                    alert(`❌ Ошибка: ${message}`);
-                }
-
-                applyBtn.innerHTML = ICONS.BANNER_APPLY;
-                applyBtn.disabled = false;
-            }
-        };
-
-        return true;
+    function bannerButton(cls, title, icon) {
+        const b = document.createElement('button');
+        b.className = siteClasses(bannerBtns.draw) + ' ' + cls;
+        b.title = title;
+        b.innerHTML = icon;
+        return b;
+    }
+    // Кнопки — в ряд кнопок баннера сайта; сайт перерисовывает ряд — ставим заново
+    function createAllButtons() {
+        const row = document.querySelector('.' + SELECTORS.bannerButtons);
+        if (!row || row.querySelector('.custom-image-btn')) return;
+        const B = bannerBtns;
+        B.row = row;
+        B.draw = row.querySelector('button:not(.' + SELECTORS.bannerDelete + ')');
+        B.del = row.querySelector('.' + SELECTORS.bannerDelete);
+        B.image = bannerButton('custom-image-btn', 'Добавить картинку', ICONS.BANNER_IMAGE);
+        B.change = bannerButton('custom-change-btn', 'Сменить картинку', ICONS.BANNER_CHANGE);
+        B.cancel = bannerButton('custom-cancel-btn', 'Отмена', ICONS.BANNER_CANCEL);
+        B.apply = bannerButton('custom-apply-btn', 'Применить', ICONS.BANNER_APPLY);
+        row.insertBefore(B.image, B.del);                 // del нет — insertBefore(null) ставит в конец
+        row.append(B.change, B.cancel, B.apply);
+        B.image.onclick = B.change.onclick = pickBannerFile;
+        B.cancel.onclick = () => setBannerEditing(false);
+        B.apply.onclick = applyBanner;
     }
 
-    function openFilePicker() {
+    function pickBannerFile() {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/jpeg,image/png,image/webp,image/gif';
-        input.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const url = URL.createObjectURL(file);
-            removeDraggableImage();
-            createDraggableImage(url);
-            showEditMode();
+        input.onchange = () => {
+            const file = input.files[0];
+            if (file) putBannerImage(URL.createObjectURL(file));
         };
         input.click();
     }
 
-    function showEditMode() {
-        if (banner) banner.style.zIndex = '0';
-
-        const originalImg = banner?.querySelector('img');
-        if (originalImg) {
-            originalImg.style.position = 'relative';
-            originalImg.style.zIndex = '-3';
+    function setBannerEditing(on) {
+        const E = bannerEdit;
+        if (!on) {
+            if (E.img) E.img.remove();
+            if (E.url) URL.revokeObjectURL(E.url);
+            E.img = E.url = E.drag = null;
+            E.top = 0;
         }
-
-        if (cancelBtn) cancelBtn.style.display = '';
-        if (applyBtn) applyBtn.style.display = '';
-        if (changeBtn) changeBtn.style.display = '';
-
-        if (drawBtn) drawBtn.style.display = 'none';
-        if (deleteBtn) deleteBtn.style.display = 'none';
-        if (imageBtn) imageBtn.style.display = 'none';
+        if (E.banner) E.banner.classList.toggle('vp-banner-editing', on);
+        if (bannerBtns.row) bannerBtns.row.classList.toggle('vp-banner-editing', on);
+        if (bannerBtns.apply && !on) { bannerBtns.apply.innerHTML = ICONS.BANNER_APPLY; bannerBtns.apply.disabled = false; }
     }
 
-    function showNormalMode() {
-        if (banner) banner.style.zIndex = '';
-
-        const originalImg = banner?.querySelector('img');
-        if (originalImg) {
-            originalImg.style.position = '';
-            originalImg.style.zIndex = '';
-        }
-
-        if (drawBtn) drawBtn.style.display = '';
-        if (deleteBtn) deleteBtn.style.display = '';
-        if (imageBtn) imageBtn.style.display = '';
-
-        if (cancelBtn) cancelBtn.style.display = 'none';
-        if (applyBtn) {
-            applyBtn.style.display = 'none';
-            applyBtn.innerHTML = ICONS.BANNER_APPLY;
-            applyBtn.disabled = false;
-        }
-        if (changeBtn) changeBtn.style.display = 'none';
+    // картинка на баннер — сразу посередине по высоте
+    function putBannerImage(url) {
+        const banner = document.querySelector('.' + SELECTORS.banner);
+        if (!banner) return;
+        setBannerEditing(false);
+        const E = bannerEdit;
+        E.banner = banner;
+        E.url = url;
+        E.img = document.createElement('img');
+        E.img.className = 'vp-banner-drag';
+        E.img.draggable = false;
+        E.img.src = url;
+        banner.appendChild(E.img);
+        const center = () => moveBannerImage((banner.clientHeight - E.img.offsetHeight) / 2, true);
+        E.img.onload = center;
+        if (E.img.complete) center();
+        setBannerEditing(true);
     }
 
+    // сдвиг в пределах баннера: край картинки за край баннера не уходит;
+    // free — без ограничения (середина для картинки ниже баннера, как было)
+    function moveBannerImage(top, free) {
+        const E = bannerEdit;
+        if (!E.img) return;
+        E.top = free ? top : Math.max(E.banner.clientHeight - E.img.offsetHeight, Math.min(0, top));
+        E.img.style.top = E.top + 'px';
+    }
+    const bannerMovable = () => bannerEdit.img && bannerEdit.img.offsetHeight > bannerEdit.banner.clientHeight;
+
+    // Перетаскивание — pointer-события: одинаково для мыши и пальца (раньше палец не мог начать
+    // перетаскивание — не было обработчика касания). Колесо — шаг 30px.
+    // Слушатели одни на всё время работы: раньше каждое открытие картинки добавляло ещё один на колесо.
+    document.addEventListener('pointerdown', e => {
+        const E = bannerEdit;
+        if (e.target !== E.img || !bannerMovable()) return;
+        e.preventDefault();
+        E.drag = { y: e.clientY, top: E.top };
+        E.img.classList.add('vp-dragging');
+        E.img.setPointerCapture(e.pointerId);
+    });
+    document.addEventListener('pointermove', e => {
+        const E = bannerEdit;
+        if (!E.drag) return;
+        e.preventDefault();
+        moveBannerImage(E.drag.top + e.clientY - E.drag.y);
+    });
+    const endBannerDrag = () => {
+        const E = bannerEdit;
+        if (!E.drag) return;
+        E.drag = null;
+        if (E.img) E.img.classList.remove('vp-dragging');
+    };
+    document.addEventListener('pointerup', endBannerDrag);
+    document.addEventListener('pointercancel', endBannerDrag);
+    document.addEventListener('wheel', e => {
+        const E = bannerEdit;
+        if (!E.img || E.drag || !E.banner.contains(e.target)) return;
+        e.preventDefault();
+        if (bannerMovable()) moveBannerImage(E.top + (e.deltaY > 0 ? -30 : 30));
+    }, { passive: false });
+
+    // видимая в баннере часть картинки — в JPEG исходного разрешения
     function cropBannerImage() {
         return new Promise((resolve, reject) => {
-            const bannerRect = banner.getBoundingClientRect();
-            const imgRect = draggableImg.getBoundingClientRect();
-            const imgNaturalWidth = draggableImg.naturalWidth;
-            const imgNaturalHeight = draggableImg.naturalHeight;
-            const imgDisplayWidth = draggableImg.offsetWidth;
-            const imgDisplayHeight = draggableImg.offsetHeight;
-
-            const scaleX = imgNaturalWidth / imgDisplayWidth;
-            const scaleY = imgNaturalHeight / imgDisplayHeight;
-
-            const cropX = Math.max(0, (bannerRect.left - imgRect.left)) * scaleX;
-            const cropY = Math.max(0, (bannerRect.top - imgRect.top)) * scaleY;
-            const cropWidth = Math.min(imgRect.right, bannerRect.right) - Math.max(imgRect.left, bannerRect.left);
-            const cropHeight = Math.min(imgRect.bottom, bannerRect.bottom) - Math.max(imgRect.top, bannerRect.top);
-            const naturalCropWidth = cropWidth * scaleX;
-            const naturalCropHeight = cropHeight * scaleY;
-
+            const img = bannerEdit.img;
+            const br = bannerEdit.banner.getBoundingClientRect(), ir = img.getBoundingClientRect();
+            const sx = img.naturalWidth / img.offsetWidth, sy = img.naturalHeight / img.offsetHeight;
+            const x = Math.max(0, br.left - ir.left) * sx, y = Math.max(0, br.top - ir.top) * sy;
+            const w = (Math.min(ir.right, br.right) - Math.max(ir.left, br.left)) * sx;
+            const h = (Math.min(ir.bottom, br.bottom) - Math.max(ir.top, br.top)) * sy;
             const canvas = document.createElement('canvas');
-            canvas.width = naturalCropWidth;
-            canvas.height = naturalCropHeight;
-            const ctx = canvas.getContext('2d');
-
-            const tempImg = new Image();
-            tempImg.crossOrigin = 'anonymous';
-            tempImg.onload = () => {
-                ctx.drawImage(tempImg, cropX, cropY, naturalCropWidth, naturalCropHeight, 0, 0, naturalCropWidth, naturalCropHeight);
-                canvas.toBlob((blob) => {
-                    resolve(blob);
-                }, 'image/jpeg', 0.95);
+            canvas.width = w;
+            canvas.height = h;
+            const src = new Image();
+            src.crossOrigin = 'anonymous';
+            src.onload = () => {
+                canvas.getContext('2d').drawImage(src, x, y, w, h, 0, 0, w, h);
+                canvas.toBlob(resolve, 'image/jpeg', 0.95);
             };
-            tempImg.onerror = reject;
-            tempImg.src = draggableImg.src;
+            src.onerror = reject;
+            src.src = img.src;
         });
     }
 
-    let mouseMoveHandler = null;
-    let mouseUpHandler = null;
-    let touchMoveHandler = null;
-    let touchEndHandler = null;
-
-    function createDraggableImage(url) {
-        banner = document.querySelector('.' + SELECTORS.banner);
-        if (!banner) return;
-
-        removeDraggableImage();
-
-        banner.style.position = 'relative';
-        banner.style.overflow = 'hidden';
-
-        draggableImg = document.createElement('img');
-        draggableImg.src = url;
-        draggableImg.style.cssText = `
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: auto;
-        z-index: -1;
-        pointer-events: auto;
-        cursor: grab;
-        user-select: none;
-        -webkit-user-drag: none;
-    `;
-        draggableImg.setAttribute('draggable', 'false');
-
-        banner.appendChild(draggableImg);
-
-        const updateImagePosition = () => {
-            const bannerHeight = banner.clientHeight;
-            const imgHeight = draggableImg.offsetHeight;
-            currentTop = (bannerHeight - imgHeight) / 2;
-            draggableImg.style.top = currentTop + 'px';
-        };
-
-        draggableImg.onload = updateImagePosition;
-        if (draggableImg.complete) updateImagePosition();
-
-        banner.addEventListener('wheel', (e) => {
-            if (!draggableImg || isDragging) return;
-            e.preventDefault();
-            const bannerHeight = banner.clientHeight;
-            const imgHeight = draggableImg.offsetHeight;
-            if (imgHeight <= bannerHeight) return;
-            const delta = e.deltaY > 0 ? -30 : 30;
-            let newTop = currentTop + delta;
-            newTop = Math.max(bannerHeight - imgHeight, Math.min(0, newTop));
-            draggableImg.style.top = newTop + 'px';
-            currentTop = newTop;
-        }, { passive: false });
-
-        draggableImg.addEventListener('mousedown', (e) => {
-            if (draggableImg.offsetHeight <= banner.clientHeight) return;
-            e.preventDefault();
-            isDragging = true;
-            dragStartY = e.clientY;
-            startTop = currentTop;
-            draggableImg.style.cursor = 'grabbing';
-            draggableImg.style.transition = 'none';
+    // файл грузим через XHR, как раньше: на нём «Анти цензура» (gifOnSend)
+    function uploadBannerFile(blob, token) {
+        return new Promise((resolve, reject) => {
+            const form = new FormData();
+            form.append('file', blob, 'banner.jpg');
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/files/upload');
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            xhr.onload = () => {
+                let data = null;
+                try { data = JSON.parse(xhr.responseText); } catch (e) { }
+                if (xhr.status >= 200 && xhr.status < 300) return data ? resolve(data) : reject(new Error('Ошибка загрузки: ответ не JSON'));
+                reject(new Error(data ? (data.error?.message || data.message || `Ошибка ${xhr.status}`) : `Ошибка загрузки: ${xhr.status}`));
+            };
+            xhr.onerror = () => reject(new Error('Ошибка сети'));
+            xhr.send(form);
         });
-
-        mouseMoveHandler = (e) => {
-            if (!isDragging || !draggableImg) return;
-            e.preventDefault();
-            const deltaY = e.clientY - dragStartY;
-            let newTop = startTop + deltaY;
-            const imgHeight = draggableImg.offsetHeight;
-            newTop = Math.max(banner.clientHeight - imgHeight, Math.min(0, newTop));
-            draggableImg.style.top = newTop + 'px';
-            currentTop = newTop;
-        };
-
-        mouseUpHandler = () => {
-            if (isDragging) {
-                isDragging = false;
-                if (draggableImg) {
-                    draggableImg.style.cursor = 'grab';
-                    draggableImg.style.transition = 'top 0.1s ease-out';
-                }
-            }
-        };
-
-        touchMoveHandler = (e) => {
-            if (!isDragging || !draggableImg) return;
-            e.preventDefault();
-            const deltaY = e.touches[0].clientY - dragStartY;
-            let newTop = startTop + deltaY;
-            const imgHeight = draggableImg.offsetHeight;
-            newTop = Math.max(banner.clientHeight - imgHeight, Math.min(0, newTop));
-            draggableImg.style.top = newTop + 'px';
-            currentTop = newTop;
-        };
-
-        touchEndHandler = () => {
-            if (isDragging) {
-                isDragging = false;
-                if (draggableImg) draggableImg.style.transition = 'top 0.1s ease-out';
-            }
-        };
-
-        window.addEventListener('mousemove', mouseMoveHandler);
-        window.addEventListener('mouseup', mouseUpHandler);
-        window.addEventListener('touchmove', touchMoveHandler, { passive: false });
-        window.addEventListener('touchend', touchEndHandler);
     }
 
-    function removeDraggableImage() {
-        if (draggableImg) {
-            draggableImg.remove();
-            draggableImg = null;
-        }
-        isDragging = false;
-        currentTop = 0;
-
-        if (mouseMoveHandler) {
-            window.removeEventListener('mousemove', mouseMoveHandler);
-            mouseMoveHandler = null;
-        }
-        if (mouseUpHandler) {
-            window.removeEventListener('mouseup', mouseUpHandler);
-            mouseUpHandler = null;
-        }
-        if (touchMoveHandler) {
-            window.removeEventListener('touchmove', touchMoveHandler);
-            touchMoveHandler = null;
-        }
-        if (touchEndHandler) {
-            window.removeEventListener('touchend', touchEndHandler);
-            touchEndHandler = null;
+    async function applyBanner() {
+        const E = bannerEdit, apply = bannerBtns.apply;
+        if (!E.img || !E.banner) return;
+        apply.innerHTML = ICONS.LOADING;
+        apply.disabled = true;
+        try {
+            const token = await getAccessToken();
+            const file = await uploadBannerFile(await cropBannerImage(), token);
+            const res = await fetch('/api/users/me', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ bannerId: file.id })
+            });
+            if (!res.ok) {
+                let msg = `Ошибка обновления профиля: ${res.status}`;
+                try { msg = (await res.json()).error?.message || msg; } catch (e) { }
+                throw new Error(msg);
+            }
+            const site = E.banner.querySelector('img:not(.vp-banner-drag)');
+            setBannerEditing(false);
+            if (site) site.src = file.url;
+            alert('✅ Баннер успешно обновлён!');
+        } catch (error) {
+            console.error('Ошибка:', error);
+            const message = error.message || 'Неизвестная ошибка';
+            if (message.includes('запрещённый контент') || message.includes('CONTENT_MODERATION')) {
+                alert('❌ Изображение не прошло модерацию.\nПожалуйста, выберите другое изображение.');
+            } else if (message.includes('сети') || message.includes('network')) {
+                alert('❌ Ошибка сети. Проверьте подключение к интернету.');
+            } else {
+                alert(`❌ Ошибка: ${message}`);
+            }
+            apply.innerHTML = ICONS.BANNER_APPLY;
+            apply.disabled = false;
         }
     }
 
     function initBanner() {
-        setTimeout(() => createAllButtons(), 500);
-
         onDom(function bannerButtons() { createAllButtons(); });
     }
 
@@ -3526,49 +3376,6 @@
 
         window.addEventListener('scroll', toggleScrollButton);
         toggleScrollButton();
-    }
-
-    function saveAutoLikeUsers() {
-        GM_setValue('itd_auto_like_users', JSON.stringify(autoLikeUsers));
-    }
-
-    function getAutoLikeCache() {
-        try {
-            const raw = localStorage.getItem(AUTO_LIKE_CACHE_KEY);
-            if (!raw) return null;
-            const data = JSON.parse(raw);
-            if (Date.now() - data.timestamp > CACHE_TTL) return null;
-            return data.usersData;
-        } catch { return null; }
-    }
-
-    function setAutoLikeCache(usersData) {
-        try {
-            localStorage.setItem(AUTO_LIKE_CACHE_KEY, JSON.stringify({
-                usersData,
-                timestamp: Date.now()
-            }));
-        } catch { }
-    }
-
-    async function fetchAutoLikeUsers() {
-        const cached = getAutoLikeCache();
-        if (cached) return cached;
-
-        const verified = JSON.parse(localStorage.getItem('itd_verified_users') || '{}');
-        const usernames = Object.keys(verified);
-        if (!usernames.includes('NeuroSFW')) usernames.push('NeuroSFW');
-        if (!usernames.length) return {};
-
-        const usersData = {};
-        await Promise.all(usernames.map(async username => {
-            try {
-                const res = await api(`/api/users/${username}`);
-                if (res.ok) usersData[username] = await res.json();
-            } catch { }
-        }));
-        if (Object.keys(usersData).length) setAutoLikeCache(usersData);
-        return usersData;
     }
 
     async function initVisuals() {
@@ -3993,12 +3800,6 @@
     window.addEventListener('beforeunload', () => {
         if (verificationInterval) clearInterval(verificationInterval);
     });
-
-    function updateBackgroundVisibility() {
-        canvas.style.display = backgroundEnabled ? 'block' : 'none';
-    }
-
-    updateBackgroundVisibility();
 
     (function () {
         'use strict';
@@ -6194,6 +5995,60 @@
     `;
     document.head.appendChild(styleIcons);
 
+    // Размытый фон поста: под карточкой с картинкой — её размытая копия ровно на месте картинки
+    // и тёмная вуаль поверх. Слои — .itd-blur-container > .vp-blur-img + .vp-blur-dim, вид — в CSS;
+    // в style.* только то, что считается: адрес картинки и место слоя.
+    // Место пересчитывает один общий ResizeObserver на все карточки (был свой на каждую пересборку
+    // и не отключался — копились на длинной ленте).
+    const blurCards = new Map();                            // карточка → { img, layer }
+    const blurRO = new ResizeObserver(entries => {
+        const todo = new Set(entries.map(e => blurCards.has(e.target) ? e.target : e.target._vpBlurCard));
+        todo.forEach(card => card && placeBlur(card));
+    });
+    function placeBlur(card) {
+        const b = blurCards.get(card);
+        if (!b) return;
+        // карточка ушла со страницы: снимаем, а метку картинки сбрасываем — вернётся, фон соберётся заново
+        if (!b.img.isConnected || !card.isConnected) { b.img._vpBlurDone = null; dropBlur(card); return; }
+        const ar = card.getBoundingClientRect(), ir = b.img.getBoundingClientRect();
+        if (!ar.width || !ir.width) return;
+        const k = card.offsetWidth / ar.width;              // сцена ленты чуть масштабирует пост
+        Object.assign(b.layer.style, {
+            left: ((ir.left - ar.left) * k - card.clientLeft) + 'px', top: ((ir.top - ar.top) * k - card.clientTop) + 'px',
+            width: ir.width * k + 'px', height: ir.height * k + 'px'
+        });
+    }
+    // снять фон с карточки целиком (пост без картинки, выключили настройку, карточка ушла со страницы)
+    function dropBlur(card) {
+        const b = blurCards.get(card);
+        if (b) { blurRO.unobserve(b.img); blurRO.unobserve(card); blurCards.delete(card); }
+        card.removeAttribute('data-blur-bg');
+        card.classList.remove('itd-blur-active', 'vp-blur-rel');
+        const c = card.querySelector(':scope > .itd-blur-container');
+        if (c) c.remove();
+    }
+    function buildBlur(card, img) {
+        const old = blurCards.get(card);
+        if (old) { blurRO.unobserve(old.img); blurRO.unobserve(card); }
+        card.setAttribute('data-blur-bg', img.src);
+        if (getComputedStyle(card).position === 'static') card.classList.add('vp-blur-rel');
+        card.classList.add('itd-blur-active');
+        // только свой слой: у поста с репостом внутри querySelector без :scope находил слой репоста
+        let box = card.querySelector(':scope > .itd-blur-container');
+        if (!box) {
+            box = document.createElement('div');
+            box.className = 'itd-blur-container';
+            box.innerHTML = '<div class="vp-blur-img"></div><div class="vp-blur-dim"></div>';
+            card.insertBefore(box, card.firstChild);
+        }
+        const layer = box.firstChild;
+        layer.style.backgroundImage = `url("${img.src}")`;
+        blurCards.set(card, { img, layer });
+        img._vpBlurCard = card;
+        blurRO.observe(img);
+        blurRO.observe(card);
+        placeBlur(card);
+    }
     function addBlurBackground() {
         // Идём от картинок, а не от всех постов: посты без картинки иначе перебирались на каждую правку страницы
         const cards = new Set();
@@ -6211,89 +6066,20 @@
         });
         // в карточку пришёл пост без картинки — старое размытие убираем
         document.querySelectorAll('[data-blur-bg]').forEach(card => {
-            if (card.querySelector('img.' + SELECTORS.postMedia)) return;
-            card.removeAttribute('data-blur-bg');
-            card.classList.remove('itd-blur-active');
-            const c = card.querySelector(':scope > .itd-blur-container');
-            if (c) c.remove();
+            if (!card.querySelector('img.' + SELECTORS.postMedia)) dropBlur(card);
         });
-        cards.forEach(article => {
-            const img = article.querySelector('img.' + SELECTORS.postMedia);
+        cards.forEach(card => {
+            const img = card.querySelector('img.' + SELECTORS.postMedia);
             if (!img || !img.src || img.src.includes('avatar')) return;
-
-            article.setAttribute('data-blur-bg', img.src);
-
-            if (getComputedStyle(article).position === 'static') {
-                article.style.position = 'relative';
+            // пост, у которого картинка только в репосте: фон — у репоста, сама карточка остаётся
+            // прозрачной без своего слоя (так выглядело всегда; свой слой красит её в серый)
+            const inner = img.closest('.' + SELECTORS.repost);
+            if (inner && inner !== card && card.contains(inner)) {
+                card.setAttribute('data-blur-bg', img.src);
+                card.classList.add('itd-blur-active');
+                return;
             }
-
-            article.classList.add('itd-blur-active');
-
-            let bgContainer = article.querySelector('.itd-blur-container');
-            if (!bgContainer) {
-                bgContainer = document.createElement('div');
-                bgContainer.className = 'itd-blur-container';
-                bgContainer.style.cssText = `
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    border-radius: inherit;
-                    overflow: hidden;
-                    z-index: -1;
-                    pointer-events: none;
-                    background: var(--block-bg, #1c1c1c);
-                `;
-                article.insertBefore(bgContainer, article.firstChild);
-            } else {
-                bgContainer.innerHTML = '';
-            }
-
-            // Свечение — ровно там, где картинка, и её размера: раньше размытая картинка растягивалась
-            // на всю карточку от центра, и пятно цвета оказывалось далеко от самой картинки
-            // (на широком экране — ещё дальше). Место пересчитываем, когда меняется картинка или карточка.
-            const blurLayer = document.createElement('div');
-            blurLayer.style.cssText = `
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 0;
-                height: 0;
-                background-image: url(${img.src});
-                background-size: cover;
-                background-position: center;
-                background-repeat: no-repeat;
-                filter: blur(34px) brightness(1.3) saturate(1.6);
-                transform: scale(1.3);
-            `;
-            const place = () => {
-                if (!img.isConnected || !article.isConnected) return;
-                const ar = article.getBoundingClientRect(), ir = img.getBoundingClientRect();
-                if (!ar.width || !ir.width) return;
-                const k = article.offsetWidth / ar.width;          // сцена ленты чуть масштабирует пост
-                Object.assign(blurLayer.style, {
-                    left: ((ir.left - ar.left) * k - article.clientLeft) + 'px', top: ((ir.top - ar.top) * k - article.clientTop) + 'px',
-                    width: ir.width * k + 'px', height: ir.height * k + 'px'
-                });
-            };
-            const ro = new ResizeObserver(place);
-            ro.observe(img);
-            ro.observe(article);
-            place();
-
-            const darkOverlay = document.createElement('div');
-            darkOverlay.style.cssText = `
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.45);
-            `;
-
-            bgContainer.appendChild(blurLayer);
-            bgContainer.appendChild(darkOverlay);
+            buildBlur(card, img);
         });
     }
 
@@ -6303,6 +6089,18 @@
             background: transparent !important;
             backdrop-filter: none !important;
         }
+        .vp-blur-rel { position: relative; }
+        .itd-blur-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: inherit; overflow: hidden;
+            z-index: -1; pointer-events: none; background: var(--block-bg, #1c1c1c);
+        }
+        /* свечение — ровно на месте картинки и её размера (место ставит placeBlur) */
+        .vp-blur-img {
+            position: absolute; left: 0; top: 0; width: 0; height: 0;
+            background: center / cover no-repeat;
+            filter: blur(34px) brightness(1.3) saturate(1.6); transform: scale(1.3);
+        }
+        .vp-blur-dim { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.45); }
         .itd-blur-active .vp-repost {
             background: rgba(0, 0, 0, 0.3) !important;
         }
@@ -6548,55 +6346,20 @@
 
     onDom(replaceNotificationTexts);
 
-    const emojiColors = new Map();
-    function getEmojiColor(emoji) {
-        if (!emojiColors.has(emoji)) emojiColors.set(emoji, measureEmojiColor(emoji));
-        return emojiColors.get(emoji);
-    }
-    function measureEmojiColor(emoji) {
-        const canvas = document.createElement('canvas');
-        canvas.width = 64;
-        canvas.height = 64;
-        const ctx = canvas.getContext('2d');
-
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, 64, 64);
-        ctx.font = '48px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(emoji, 32, 34);
-
-        const imageData = ctx.getImageData(0, 0, 64, 64);
-        const data = imageData.data;
-
-        let r = 0, g = 0, b = 0, count = 0;
-        for (let i = 0; i < data.length; i += 4) {
-            if (data[i + 3] > 128) {
-                r += data[i];
-                g += data[i + 1];
-                b += data[i + 2];
-                count++;
-            }
-        }
-
-        if (count === 0) return null;
-
-        r = Math.round(r / count);
-        g = Math.round(g / count);
-        b = Math.round(b / count);
-
-        return { r, g, b };
-    }
-
-    // Цвет эмодзи для оттенка карточки: средний цвет, поднятый по яркости и насыщенности,
-    // иначе тёмные и серые эмодзи давали мутно-бурую заливку. Возвращает «r, g, b».
+    // ==== цвет эмодзи
+    // Оттенок карточки по эмодзи-аватарке: рисуем эмодзи на белом холсте 64×64 и берём средний
+    // цвет всего холста (белый фон входит в среднее — отсюда мягкость), затем поднимаем яркость
+    // и насыщенность, иначе тёмные и серые эмодзи давали мутно-бурую заливку.
+    // Результат — строка «r, g, b» для --vp-emoji или null (эмодзи не нарисовалась);
+    // считается один раз на эмодзи, холст один на все.
     const emojiTints = new Map();
+    let emojiCanvas = null;
     function emojiTint(emoji) {
         if (emojiTints.has(emoji)) return emojiTints.get(emoji);
-        const c = getEmojiColor(emoji);
+        const c = measureEmojiColor(emoji);
         let tint = null;
         if (c) {
-            const [r, g, b] = [c.r, c.g, c.b].map(v => v / 255);
+            const [r, g, b] = c.map(v => v / 255);
             const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
             let hue = 0;
             if (d) hue = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
@@ -6607,6 +6370,29 @@
         }
         emojiTints.set(emoji, tint);
         return tint;
+    }
+    // средний цвет холста с эмодзи: [r, g, b] 0–255
+    function measureEmojiColor(emoji) {
+        if (!emojiCanvas) {
+            emojiCanvas = document.createElement('canvas');
+            emojiCanvas.width = emojiCanvas.height = 64;
+        }
+        const ctx = emojiCanvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, 64, 64);
+        ctx.font = '48px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(emoji, 32, 34);
+        const data = ctx.getImageData(0, 0, 64, 64).data;
+        const sum = [0, 0, 0];
+        let count = 0;
+        for (let i = 0; i < data.length; i += 4) {
+            if (data[i + 3] <= 128) continue;
+            sum[0] += data[i]; sum[1] += data[i + 1]; sum[2] += data[i + 2];
+            count++;
+        }
+        return count ? sum.map(v => Math.round(v / count)) : null;
     }
     function tintCard(el, emoji) {
         const tint = emoji && emojiTint(emoji);
@@ -7502,7 +7288,7 @@
         bannerQueued = false;
         const banner = document.querySelector('.' + SELECTORS.banner);
         const img = banner && banner.querySelector(':scope > img[alt="Banner"]');
-        if (!img || draggableImg) { bannerTop0 = null; return; }       // пока баннер двигают в редакторе — не мешаем
+        if (!img || bannerEdit.img) { bannerTop0 = null; return; }       // пока баннер двигают в редакторе — не мешаем
         banner.classList.add('vp-depth');
         // замер раскладки — только раз; дальше — по прокрутке (сайт крутит #root, а не окно), без замеров
         if (bannerTop0 === null || !bannerSc || !bannerSc.isConnected) {
