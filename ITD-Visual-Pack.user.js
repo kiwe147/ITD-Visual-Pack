@@ -6018,7 +6018,10 @@
         /* телефон: подсветку наведения сайта у лайка/коммента/репоста тоже снимаем, отклик — только при нажатии */
         @media (hover: none) {
             .vp-post-action:hover { background: transparent !important; transform: none !important; }
-            .vp-post-action:active { background: var(--bg-hover, rgba(255, 255, 255, .08)) !important; }
+            /* цвет при касании — тот же, что при наведении на компьютере, пока палец на кнопке */
+            .vp-post-action[aria-label="Нравится"]:active { background: rgba(249, 24, 128, 0.2) !important; color: #f91880 !important; }
+            .vp-post-action[aria-label="Комментировать"]:active { background: rgba(0, 186, 124, 0.2) !important; color: #00ba7c !important; }
+            .vp-post-action[aria-label="Репост"]:active { background: rgba(0, 128, 255, 0.2) !important; color: #0080FF !important; }
         }
         a[href*="/hashtag/"], a[href*="/tag/"], a:not([href^="/@"]):not([href*="/@"]):not([href^="#"]) {
             font-weight: 600 !important;
