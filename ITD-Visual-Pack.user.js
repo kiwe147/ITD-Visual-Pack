@@ -1742,12 +1742,26 @@
 
     // ================= Фоны (выбираются в таблетке у ника) =================
     // Рисуются в цвете стиля ника (у радуги — бегущим оттенком) на полупрозрачном слое под сайтом.
-    // Кадр ~30 раз в секунду, скорости заданы на 50 мс (dt), от частоты кадров не зависят.
-    // Свечение — заранее нарисованные спрайты, а не shadowBlur: тот считался бы каждый кадр.
+    // Кадр — в frame() (частота экрана, не чаще ~60 в секунду); скорости заданы на 50 мс (dt),
+    // от частоты кадров не зависят. Свечение — заранее нарисованные спрайты, а не shadowBlur:
+    // тот считался бы каждый кадр. Прозрачность слоя у каждого фона своя (opacity в BACKGROUNDS).
+    const styleBgCanvas = document.createElement('style');
+    styleBgCanvas.textContent = `
+        .vp-bg-canvas {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1;
+            opacity: 0.2; pointer-events: none; transition: opacity .4s ease;
+        }
+        .vp-bg-canvas.vp-bg-off { display: none; }
+    `;
+    document.head.appendChild(styleBgCanvas);
     const canvas = document.createElement('canvas');
     canvas.className = 'vp-bg-canvas';
-    canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;opacity:0.2;pointer-events:none;transition:opacity .4s ease;';
     document.body.appendChild(canvas);
+    // выключатель «Фон»: холст прячем, кадры фона не рисуются (frame смотрит backgroundEnabled)
+    function updateBackgroundVisibility() {
+        canvas.classList.toggle('vp-bg-off', !backgroundEnabled);
+    }
+    updateBackgroundVisibility();
     const ctx = canvas.getContext('2d');
     let W = 0, H = 0;
     let bg = null, bgName = '';                          // текущий фон и его состояние
@@ -2986,6 +3000,9 @@
         .vp-banner-buttons:not(.vp-banner-editing) :is(.custom-change-btn, .custom-cancel-btn, .custom-apply-btn),
         .vp-banner-buttons.vp-banner-editing > :not(.custom-change-btn, .custom-cancel-btn, .custom-apply-btn) { display: none !important; }
         .vp-banner.vp-banner-editing { position: relative; overflow: hidden; z-index: 0; }
+        /* ряд кнопок сайта бывает во весь баннер — в режиме правки он не должен ловить перетаскивание */
+        .vp-banner-buttons.vp-banner-editing { pointer-events: none; }
+        .vp-banner-buttons.vp-banner-editing > button { pointer-events: auto; }
         .vp-banner.vp-banner-editing > img:not(.vp-banner-drag) { position: relative; z-index: -3; }
         /* вес выше правил сайта для картинок баннера (там высота во весь баннер) — как раньше style.* */
         .vp-banner > img.vp-banner-drag {
@@ -3783,12 +3800,6 @@
     window.addEventListener('beforeunload', () => {
         if (verificationInterval) clearInterval(verificationInterval);
     });
-
-    function updateBackgroundVisibility() {
-        canvas.style.display = backgroundEnabled ? 'block' : 'none';
-    }
-
-    updateBackgroundVisibility();
 
     (function () {
         'use strict';

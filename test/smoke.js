@@ -126,7 +126,15 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     const top = () => p.$eval('.vp-banner-drag', i => Math.round(parseFloat(i.style.top)));
     const shown = () => p.$$eval('.vp-banner-buttons button', bs => bs.filter(b => getComputedStyle(b).display !== 'none').length);
     const t0 = await top();
-    const box = await p.$eval('.vp-banner', b => { const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+    // точка на баннере, где сверху сама картинка (на части снимков середину закрывает ряд кнопок)
+    const box = await p.$eval('.vp-banner', b => {
+      const r = b.getBoundingClientRect(), img = b.querySelector('.vp-banner-drag, img[draggable=false]:not([alt])');
+      for (const fy of [0.5, 0.3, 0.7, 0.2, 0.8]) for (const fx of [0.5, 0.25, 0.75, 0.1, 0.9]) {
+        const x = r.x + r.width * fx, y = r.y + r.height * fy;
+        if (document.elementFromPoint(x, y) === img) return { x, y };
+      }
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
     // палец: касания через CDP — браузер сам делает из них pointer-события, как на телефоне
     let t1 = t0;
     if (mode === 'phone') {
