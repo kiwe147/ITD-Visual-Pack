@@ -35,14 +35,16 @@ async function shoot(browser, src, name) {
     if (['image', 'stylesheet', 'font'].includes(t)) return r.continue();
     return r.fulfill({ status: 404, body: '' });
   });
-  await p.addInitScript(([m, s]) => {
+  await p.addInitScript(([m, s, v]) => {
     window.GM_getValue = (k, d) => k in s ? s[k] : d;
     window.GM_setValue = (k, v) => { s[k] = v; };
     window.GM_xmlhttpRequest = o => setTimeout(() => o.onerror && o.onerror('offline'), 0);
     window.GM_info = { script: { version: 'test' }, scriptMetaStr: m };
     window.unsafeWindow = window;
     Math.random = () => 0.5;                         // случайные узоры и значки — одинаковые в обоих прогонах
-  }, [src.slice(0, src.indexOf('==/UserScript==')), settings]);
+    // VERIFIED=ник1,ник2 — подложить список пользователей мода (их вериф-бейджи)
+    if (v) localStorage.setItem('itd_verified_users', JSON.stringify(Object.fromEntries(v.split(',').map(n => [n, { hasMod: true }]))));
+  }, [src.slice(0, src.indexOf('==/UserScript==')), settings, process.env.VERIFIED || '']);
   await p.goto(URL0);
   await p.evaluate(() => document.querySelectorAll('.vp-nav-blob, .vp-fab, .vp-fps, .settings-dropdown, .nick-controls-panel, .vp-itdx-btn, .vp-msgs, .itd-blur-container, .custom-image-btn, .custom-change-btn, .custom-cancel-btn, .custom-apply-btn').forEach(e => e.remove()));
   await p.addScriptTag({ content: src });
@@ -50,10 +52,11 @@ async function shoot(browser, src, name) {
   await p.waitForTimeout(2500);
   // анимации — на конечный кадр, мигающий курсор — прочь; правая колонка (клуб, змейка) и значки мода
   // догружаются в разное время и шумят в любом сравнении — прячем, место остаётся
-  await p.addStyleTag({ content: '*,*::before,*::after{animation-play-state:paused!important;caret-color:transparent!important} .vp-rail,.mod-badge-voronoi{visibility:hidden!important}' });
+  // BADGES=1 — значки не прятать (сравнение самих значков)
+  await p.addStyleTag({ content: '*,*::before,*::after{animation-play-state:paused!important;caret-color:transparent!important} .vp-rail' + (process.env.BADGES ? '' : ',.mod-badge-voronoi') + '{visibility:hidden!important}' });
   await p.waitForTimeout(300);
   // места карточек и слоёв мода — точнее пикселей: видно, сдвинулось ли что-то и на сколько
-  const rects = await p.evaluate(() => [...document.querySelectorAll('article, .itd-blur-container > *, .vp-emoji-tint')].map(e => {
+  const rects = await p.evaluate(() => [...document.querySelectorAll('article, .itd-blur-container > *, .vp-emoji-tint, .mod-badge-voronoi, .mod-badge-verify, .mod-badge-voronoi > svg')].map(e => {
     const r = e.getBoundingClientRect();
     const tint = e.style.getPropertyValue('--vp-emoji').replace(/\s/g, '');     // оттенок по эмодзи — тоже сравниваем
     return (e.className.baseVal ?? e.className).toString().split(' ').filter(c => /^(vp|itd)-/.test(c)).join('.') + ' ' + [r.x, r.y + scrollY, r.width, r.height].map(Math.round).join(',') + (tint ? '/' + tint : '');

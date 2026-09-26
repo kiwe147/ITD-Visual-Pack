@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.26
+// @version      3.2.0
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1167,7 +1167,6 @@
     const VERIFICATION_POST_ID = 'a0d6625a-b3ec-44c4-98da-48422af101d5';
     const SECRET_SALT = 'ITD_MOD_2026_SECRET_SALT_NEUROSFW';
     const VERIFICATION_STORAGE_KEY = 'itd_verified_users';
-    let verificationInterval = null;
     let isVerifying = false;
 
     let globalHue = 0;
@@ -1248,9 +1247,7 @@
             if (c && Date.now() - c.timestamp <= AUTO_LIKE_CACHE_TTL) return c.usersData;
         } catch (e) { /* битый кеш — просто спросим заново */ }
 
-        let verified = {};
-        try { verified = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}'); } catch (e) { }
-        const usernames = Object.keys(verified);
+        const usernames = verifiedNames();
         if (!usernames.includes('NeuroSFW')) usernames.push('NeuroSFW');
 
         const usersData = {};
@@ -3216,6 +3213,12 @@
     }
     const isModCode = (username, parsed) => parsed && parsed.flags[0] === '1' && parsed.code === generateCode(username);
 
+    // Ники пользователей мода — из последней проверки (localStorage). Битая запись — пустой список:
+    // на нём держатся «Клуб ИТД X», собеседники в личке, кандидаты автолайков и вериф-бейджи.
+    function verifiedNames() {
+        try { return Object.keys(JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}') || {}); } catch (e) { return []; }
+    }
+
     async function loadVerificationComments() {
         const res = await api(`/api/posts/${VERIFICATION_POST_ID}/comments?limit=100`);
         if (!res.ok) throw new Error('комментарии: ' + res.status);
@@ -3240,6 +3243,7 @@
             return verifiedUsers;
         } catch (e) {
             console.warn('[ITD VP] верификация:', e);
+            logErr('верификация', e);
             return null;
         } finally {
             isVerifying = false;
@@ -3264,6 +3268,7 @@
             return true;
         } catch (e) {
             console.warn('[ITD VP] верификация себя:', e);
+            logErr('верификация себя', e);
             return false;
         }
     }
@@ -3360,11 +3365,9 @@
 
             createScrollTopButton();
 
+            // список пользователей мода: сразу и раз в 10 минут; свой код — после первой проверки
             checkAllComments().then(() => { markVerifiedUsers(); return verifyMyself(); });
-            if (verificationInterval) clearInterval(verificationInterval);
-            verificationInterval = setInterval(() => {
-                checkAllComments();
-            }, 10 * 60 * 1000);
+            setInterval(checkAllComments, 10 * 60 * 1000);
 
             function findAllMyAvatars() {
                 const primaryAvatar = myAvatarEl();
@@ -3412,11 +3415,7 @@
                         const badge = document.createElement('span');
                         badge.className = SELECTORS.badgeVoronoi;
                         badge.innerHTML = badgeSVG;
-                        badge.style.cssText = `display: inline-flex !important; align-items: center !important; justify-content: center !important; width: ${size}px !important; height: ${size}px !important; min-width: ${size}px !important; min-height: ${size}px !important; max-width: ${size}px !important; max-height: ${size}px !important; flex-shrink: 0 !important; vertical-align: middle !important; overflow: hidden !important;`;
-                        const svg = badge.querySelector('svg');
-                        if (svg) {
-                            svg.style.cssText = `display: block !important; width: ${size}px !important; height: ${size}px !important; min-width: ${size}px !important; min-height: ${size}px !important; max-width: none !important; max-height: none !important;`;
-                        }
+                        badge.style.setProperty('--vp-badge', size + 'px');
                         nickSpan.parentNode.insertBefore(badge, nickSpan.nextSibling);
                     }
 
@@ -3447,18 +3446,18 @@
                 const badge = document.createElement('span');
                 badge.className = SELECTORS.badgeVerify;
                 badge.innerHTML = ICONS.badge(size);
-                badge.style.cssText = `display:inline-flex!important;align-items:center!important;width:${size}px!important;height:${size}px!important;flex-shrink:0!important;vertical-align:middle!important;margin-left:4px!important;`;
+                badge.style.setProperty('--vp-badge', size + 'px');
                 nick.insertAdjacentElement('afterend', badge);
             }
             // список разбираем заново, только когда он поменялся, а не на каждую правку страницы
-            let verifiedRaw = null, verifiedNames = new Set();
+            let verifiedRaw = null, verifiedSet = new Set();
             function markVerifiedUsers() {
                 const raw = localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}';
                 if (raw !== verifiedRaw) {
                     verifiedRaw = raw;
-                    verifiedNames = new Set(Object.keys(JSON.parse(raw)).map(u => u.toLowerCase()));
+                    verifiedSet = new Set(verifiedNames().map(u => u.toLowerCase()));
                 }
-                const names = new Set(verifiedNames);
+                const names = new Set(verifiedSet);
                 names.delete(myUsername.toLowerCase());          // у меня свой значок
                 if (!names.size) return;
                 document.querySelectorAll(PROFILE_LINK).forEach(link => {
@@ -3764,10 +3763,6 @@
     resizeCanvas();
     initVisuals();
     initBanner();
-
-    window.addEventListener('beforeunload', () => {
-        if (verificationInterval) clearInterval(verificationInterval);
-    });
 
     // ==== стикеры в комментариях
     // Кнопка у поля комментария → панель паков (наведение открывает, уход мыши закрывает).
@@ -4577,9 +4572,7 @@
     }
     const msgPeople = new Map();                        // логин → диалог (переписка живёт, пока открыта вкладка)
     async function loadMsgPeople(onUpdate) {
-        let names = [];
-        try { names = Object.keys(JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}')); } catch (e) { }
-        names = names.filter(n => !myUsername || n.toLowerCase() !== myUsername.toLowerCase()).sort((a, b) => a.localeCompare(b));
+        const names = verifiedNames().filter(n => !myUsername || n.toLowerCase() !== myUsername.toLowerCase()).sort((a, b) => a.localeCompare(b));
         names.forEach(n => { if (!msgPeople.has(n)) msgPeople.set(n, { id: 'u:' + n, login: n, ava: '👤', name: n, last: 'Тоже с ИТД X · напиши первым', time: '', unread: 0, msgs: [] }); });
         MSG_DIALOGS = [MSG_BOT, MSG_SUPPORT, ...names.map(n => msgPeople.get(n))];
         onUpdate();
@@ -5185,6 +5178,21 @@
             filter: none !important;
             transform: none !important;
         }
+        /* значки: свой (voronoi) и «пользуется модом» (verify); размер — --vp-badge у значка */
+        .mod-badge-voronoi, .mod-badge-verify {
+            display: inline-flex !important; align-items: center !important; flex-shrink: 0 !important;
+            vertical-align: middle !important; width: var(--vp-badge) !important; height: var(--vp-badge) !important;
+        }
+        .mod-badge-voronoi {
+            justify-content: center !important; overflow: hidden !important;
+            min-width: var(--vp-badge) !important; min-height: var(--vp-badge) !important;
+            max-width: var(--vp-badge) !important; max-height: var(--vp-badge) !important;
+        }
+        .mod-badge-voronoi > svg {
+            display: block !important; width: var(--vp-badge) !important; height: var(--vp-badge) !important;
+            min-width: var(--vp-badge) !important; min-height: var(--vp-badge) !important; max-width: none !important; max-height: none !important;
+        }
+        .mod-badge-verify { margin-left: 4px !important; }
         @keyframes likePop {
             0% { transform: scale(1); }
             50% { transform: scale(1.3); color: #ff3366 !important; }
@@ -6866,7 +6874,7 @@
         dispatchEvent(new PopStateEvent('popstate'));
     }
     async function renderClub() {
-        const names = Object.keys(JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}'));
+        const names = verifiedNames();
         if (myUsername && !names.some(n => n.toLowerCase() === myUsername.toLowerCase())) names.push(myUsername);
         const key = names.sort().join();
         if (key === clubShown) return;
