@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.20
+// @version      3.1.21
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6018,7 +6018,10 @@
         /* телефон: подсветку наведения сайта у лайка/коммента/репоста тоже снимаем, отклик — только при нажатии */
         @media (hover: none) {
             .vp-post-action:hover { background: transparent !important; transform: none !important; }
-            .vp-post-action:active { background: var(--bg-hover, rgba(255, 255, 255, .08)) !important; }
+            /* цвет при касании — тот же, что при наведении на компьютере, пока палец на кнопке */
+            .vp-post-action[aria-label="Нравится"]:active, .vp-post-action[aria-label="Нравится"].vp-pressed { background: rgba(249, 24, 128, 0.2) !important; color: #f91880 !important; }
+            .vp-post-action[aria-label="Комментировать"]:active, .vp-post-action[aria-label="Комментировать"].vp-pressed { background: rgba(0, 186, 124, 0.2) !important; color: #00ba7c !important; }
+            .vp-post-action[aria-label="Репост"]:active, .vp-post-action[aria-label="Репост"].vp-pressed { background: rgba(0, 128, 255, 0.2) !important; color: #0080FF !important; }
         }
         a[href*="/hashtag/"], a[href*="/tag/"], a:not([href^="/@"]):not([href*="/@"]):not([href^="#"]) {
             font-weight: 600 !important;
@@ -7179,6 +7182,18 @@
             if (box && !box.classList.contains('vp-clamp')) box.classList.add('vp-clamp');
         });
     });
+
+    // Телефон: цвет кнопки поста, пока палец на ней (класс — надёжнее :active, который не во всех браузерах
+    // срабатывает при касании); отпустил — через мгновение гаснет
+    document.addEventListener('pointerdown', e => {
+        if (e.pointerType !== 'touch') return;
+        const b = e.target.closest && e.target.closest('.vp-post-action');
+        if (!b) return;
+        b.classList.add('vp-pressed');
+        const off = () => { setTimeout(() => b.classList.remove('vp-pressed'), 180); removeEventListener('pointerup', off, true); removeEventListener('pointercancel', off, true); };
+        addEventListener('pointerup', off, true);
+        addEventListener('pointercancel', off, true);
+    }, true);
 
     // Кнопка «назад» на телефоне закрывает окна сайта (комментарии, создание поста и т.п.), а не уводит
     // на прошлую страницу. Сайт сам таких записей в историю не кладёт: открылось окно — кладём запись
