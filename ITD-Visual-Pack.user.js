@@ -1476,15 +1476,11 @@
             color: var(--text-primary, currentColor) !important;
         }
         .vp-pill-btn:hover { background: var(--accent-primary, rgba(0, 128, 255, 0.3)) !important; }
-        .vp-pill-btn.vp-hidden { display: none !important; }
-        .vp-pill-btn.vp-on { color: var(--accent-primary, #0080FF) !important; }
-        .vp-pill-btn.vp-on:hover { color: #fff !important; }
         .vp-pill-btn svg:not([width]) { width: 20px !important; height: 20px !important; }
         .vp-pill-btn svg:not([fill]) { fill: none !important; }
         .vp-menu-icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-primary, currentColor); }
         .vp-menu-note { padding: 20px; text-align: center; color: var(--text-secondary); }
         .vp-setting-label { display: flex; align-items: center; gap: 8px; }
-        .nick-style-dropdown.vp-like-menu { min-width: 240px !important; max-height: 400px; display: flex; flex-direction: column; overflow: hidden; z-index: 10002 !important; }
         .vp-like-list { overflow-y: auto; overflow-x: hidden; flex: 1; padding: 4px 0; display: flex; flex-direction: column; gap: 2px; max-height: 350px; }
         .vp-like-footer { padding: 8px 12px; text-align: center; font-size: 12px; color: var(--text-secondary); border-top: 1px solid var(--border-color); flex-shrink: 0; }
         .nick-style-option.vp-like-row { justify-content: space-between !important; }
@@ -1495,22 +1491,6 @@
         .vp-like-names { display: flex; flex-direction: column; min-width: 0; }
         .vp-like-name { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .vp-like-login { font-size: 11px; color: var(--text-secondary); }
-        .nick-style-dropdown {
-            background: var(--block-bg, #1e1e2e) !important;
-            border-radius: 24px !important;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3) !important;
-            padding: 8px !important;
-            min-width: 210px !important;
-            z-index: 10000 !important;
-            border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1)) !important;
-            backdrop-filter: blur(20px) !important;
-            -webkit-backdrop-filter: blur(20px) !important;
-            animation: dropdownFadeIn 0.15s ease !important;
-        }
-        @keyframes dropdownFadeIn {
-            from { opacity: 0; transform: translateY(-8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
         .nick-style-option {
             padding: 8px 12px !important;
             cursor: pointer !important;
@@ -1552,7 +1532,7 @@
         /* светлая тема сайта: светлые фоны (звёзды, снег, матрица) выворачиваем по яркости —
            белое станет тёмным, оттенки останутся свои */
         html.vp-light .vp-bg-canvas { filter: invert(1) hue-rotate(180deg); }
-        html.vp-light .nick-style-dropdown, html.vp-light .settings-dropdown { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important; }
+        html.vp-light .settings-dropdown { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important; }
         .nick-style-option:not(:last-child) {
             margin-bottom: 2px !important;
         }
@@ -2401,13 +2381,6 @@
         snow: { name: 'Снегопад', icon: svgIcon('<path d="M12 2v20M3.3 7l17.4 10M3.3 17 20.7 7"/><path d="m9 4 3 2 3-2M9 20l3-2 3 2"/>') }
     };
     // --- автолайки: список тех, кого лайкать
-    function updateAutoLikeButtons() {
-        const active = Object.keys(autoLikeUsers).length > 0;
-        document.querySelectorAll('.auto-like-toggle').forEach(b => {
-            b.classList.toggle('vp-on', active);
-            b.classList.toggle('vp-hidden', !autoLikeEnabled);
-        });
-    }
     function renderAutoLikeUsers(list, footer, usersData) {
         const users = Object.keys(usersData).sort((a, b) => a === 'NeuroSFW' ? -1 : b === 'NeuroSFW' ? 1 : a.localeCompare(b));
         const count = () => { footer.textContent = `Активно: ${Object.keys(autoLikeUsers).length}`; };
@@ -2434,7 +2407,6 @@
                 else delete autoLikeUsers[username];
                 saveAutoLikeUsers();
                 count();
-                updateAutoLikeButtons();
             };
             list.appendChild(row);
         }
@@ -2454,7 +2426,7 @@
     }
     // label совпадает с ключом ICONS.settings — оттуда значок пункта
     const SETTINGS = [
-        { label: 'Фон', get: () => backgroundEnabled, set: v => { backgroundEnabled = v; updateBackgroundVisibility(); updateBackgroundToggleButtons(); }, key: 'backgroundEnabled' },
+        { label: 'Фон', get: () => backgroundEnabled, set: v => { backgroundEnabled = v; updateBackgroundVisibility(); }, key: 'backgroundEnabled' },
         { label: 'Подсветка ника', get: () => nickGlowEnabled, set: v => { nickGlowEnabled = v; paint(); }, key: 'nickGlowEnabled' },
         { label: 'Подсветка аватарок', get: () => avatarGlowEnabled, set: v => { avatarGlowEnabled = v; paint(); }, key: 'avatarGlowEnabled' },
         { label: 'Подсветка постов', get: () => postBorderEnabled, set: v => { postBorderEnabled = v; paint(); }, key: 'postBorderEnabled' },
@@ -2463,7 +2435,7 @@
         { label: 'Анти цензура', get: () => antiCensorshipEnabled, set: v => { antiCensorshipEnabled = v; }, key: 'antiCensorshipEnabled' },
         {
             label: 'Автолайки', get: () => autoLikeEnabled, key: 'autoLikeEnabled',
-            set: v => { autoLikeEnabled = v; updateAutoLikeButtons(); }
+            set: v => { autoLikeEnabled = v; }
         },
         { label: 'Стекло', get: () => glassEnabled, set: v => { glassEnabled = v; applyGlass(); }, key: 'glassEnabled' },
         { label: 'Звуки интерфейса', get: () => uiSoundEnabled, set: v => { uiSoundEnabled = v; if (v) uiSound('toggle'); }, key: 'uiSoundEnabled' },
@@ -2918,7 +2890,7 @@
         setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
     }
 
-    // --- сама таблетка: четыре круглые кнопки справа от крупного ника в шапке профиля
+    // --- запасная круглая кнопка настроек у крупного ника (когда на сайте нет «ИТД НУКСТА», см. ниже)
     function pillButton(cls, title, icon, open) {
         const b = document.createElement('span');
         b.className = 'vp-pill-btn ' + cls;
@@ -2969,11 +2941,6 @@
         const nick = ru5n.querySelector('.' + SELECTORS.nickContainer);
         if (nick) nick.after(panel);
         else ru5n.appendChild(panel);
-    }
-
-    function updateBackgroundToggleButtons() {
-        // кнопка стиля фона — только когда фон включён (прятать классом: у кнопок display с !important)
-        document.querySelectorAll('.bg-style-toggle').forEach(b => b.classList.toggle('vp-hidden', !backgroundEnabled));
     }
 
     // ==== редактор баннера
@@ -3390,8 +3357,6 @@
             myDisplayName = me.displayName || me.username;
             tagAll();
             try { placeRail(); } catch (e) { /* панель ещё не собрана — встанет сама при первой перестройке */ }
-
-            updateAutoLikeButtons();
 
             createScrollTopButton();
 
@@ -6449,7 +6414,7 @@
             --block-bg: rgba(255, 255, 255, .92); --block-bg-secondary: rgba(240, 240, 240, .92); --block-hover-bg: rgba(245, 245, 245, .94);
             --modal-bg: rgba(255, 255, 255, .95); --glass-bg: rgba(255, 255, 255, .9);
         }
-        html.vp-glass .nick-style-dropdown, html.vp-glass .settings-dropdown {
+        html.vp-glass .settings-dropdown {
             backdrop-filter: var(--vp-glass-filter) !important; -webkit-backdrop-filter: var(--vp-glass-filter) !important;
         }
 

@@ -55,6 +55,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
 
   // окно «ИТД X»: все вкладки, одно место и размер
   const opener = await p.$('.vp-itdx-btn') || await p.$('.settings-toggle');
+  console.log('—    кнопка настроек: ' + (opener ? await opener.evaluate(b => b.className.includes('settings-toggle') ? 'запасная у ника' : 'ИТД X') : 'нет'));
   if (opener) {
     // кнопку может закрывать открытое на снимке окно сайта (например, список подписчиков) — жмём напрямую
     await opener.evaluate(b => { b.scrollIntoView({ block: 'center' }); b.click(); });
