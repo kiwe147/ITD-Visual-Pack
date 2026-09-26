@@ -56,12 +56,12 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   // окно «ИТД X»: все вкладки, одно место и размер
   const opener = await p.$('.vp-itdx-btn') || await p.$('.settings-toggle');
   if (opener) {
-    await opener.scrollIntoViewIfNeeded();
-    await opener.click();
+    // кнопку может закрывать открытое на снимке окно сайта (например, список подписчиков) — жмём напрямую
+    await opener.evaluate(b => { b.scrollIntoView({ block: 'center' }); b.click(); });
     await p.waitForTimeout(300);
     const boxes = [];
     for (const tab of await p.$$eval('.vp-stab', els => els.map(e => e.dataset.tab))) {
-      await p.click(`.vp-stab[data-tab="${tab}"]`);
+      await p.$eval(`.vp-stab[data-tab="${tab}"]`, b => b.click());
       await p.waitForTimeout(200);
       boxes.push(await p.evaluate(() => { const r = document.querySelector('.vp-settings-tabs').getBoundingClientRect(); return Math.round(r.top) + '/' + Math.round(r.height); }));
       await p.screenshot({ path: path.join(out, `${mode}-menu-${tab}.png`) });

@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.22
+// @version      3.1.23
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2331,11 +2331,6 @@
         option.onclick = (e) => { e.stopPropagation(); onPick(); closePopup(); };
         return option;
     }
-    function menuBox() {
-        const menu = document.createElement('div');
-        menu.className = 'nick-style-dropdown';
-        return menu;
-    }
 
     // --- стиль ника
     function getColorDot(styleKey) {
@@ -2426,11 +2421,7 @@
                 }
             });
             overrideFilePicker();
-            if (window._fileObserver) window._fileObserver.disconnect();
-            window._fileObserver = new MutationObserver(overrideFilePicker);
-            window._fileObserver.observe(document.body, { childList: true, subtree: true });
         } else {
-            if (window._fileObserver) window._fileObserver.disconnect();
             document.querySelectorAll('input[type="file"][data-overridden]').forEach(input => {
                 input.removeAttribute('data-overridden');
                 if (input._originalClick) {
@@ -6366,57 +6357,7 @@
         });
     }
 
-    /* function overridePasteHandler() {
-        const originalAddEventListener = EventTarget.prototype.addEventListener;
-        EventTarget.prototype.addEventListener = function (type, listener, options) {
-            if (type === 'paste') {
-                const wrappedListener = function (e) {
-                    const items = e.clipboardData?.items;
-                    if (!items) return;
 
-                    let hasImage = false;
-                    const imageFiles = [];
-
-                    for (const item of items) {
-                        if (item.type.startsWith('image/')) {
-                            hasImage = true;
-                            const file = item.getAsFile();
-                            if (file) {
-                                imageFiles.push(file);
-                            }
-                        }
-                    }
-
-                    if (!hasImage || !imageFiles.length) {
-                        return listener.call(this, e);
-                    }
-
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    const dt = new DataTransfer();
-                    for (const file of imageFiles) {
-                        let finalFile = file;
-                        if (file.type !== 'image/gif') {
-                            const newFileName = (file.name || 'pasted_image').replace(/\.[^.]+$/, '') + '.gif';
-                            finalFile = new File([file], newFileName, { type: 'image/gif' });
-                        }
-                        dt.items.add(finalFile);
-                    }
-
-                    const pasteEvent = new ClipboardEvent('paste', {
-                        clipboardData: dt,
-                        bubbles: true,
-                        cancelable: true
-                    });
-
-                    this.dispatchEvent(pasteEvent);
-                };
-                return originalAddEventListener.call(this, type, wrappedListener, options);
-            }
-            return originalAddEventListener.call(this, type, listener, options);
-        };
-    } */
 
     function overrideDragAndDrop() {
         document.addEventListener('drop', function (e) {
@@ -6495,57 +6436,27 @@
         };
     }
 
-    function overrideFileReader() {
-        const originalReadAsDataURL = FileReader.prototype.readAsDataURL;
-        FileReader.prototype.readAsDataURL = function (blob) {
-            if (blob instanceof File && blob.type !== 'image/gif' && blob.type.startsWith('image/')) {
-                const newFileName = blob.name.replace(/\.[^.]+$/, '') + '.gif';
-                const newFile = new File([blob], newFileName, { type: 'image/gif' });
-                return originalReadAsDataURL.call(this, newFile);
-            }
-            return originalReadAsDataURL.call(this, blob);
-        };
-    }
 
+    // новые поля выбора файла — через общий наблюдатель страницы (был отдельный на каждое изменение)
+    onDom(function antiCensorFiles() { if (antiCensorshipEnabled) overrideFilePicker(); });
     if (antiCensorshipEnabled) {
         setTimeout(overrideFilePicker, 500);
-        /* setTimeout(overridePasteHandler, 500); */
         setTimeout(overrideDragAndDrop, 500);
         setTimeout(overrideFetchAndXHR, 500);
 
-        window._fileObserver = new MutationObserver(() => {
-            overrideFilePicker();
-        });
-        window._fileObserver.observe(document.body, { childList: true, subtree: true });
     }
 
-    // Мобильная разметка ещё не сохранена, поэтому здесь последние классы сайта: они устарели
-    // и сейчас ничего не находят (правки просто не применяются, ошибок нет). Заменить на поиск
-    // по приметам, когда будет снимок страницы в мобильной ширине.
-    const MOBILE_OLD = {
-        container: '.yYHA',       // основной контейнер: на телефоне убираем верхний отступ
-        createBtn: '.JHRx',       // кнопка «создать пост» над нижней панелью
-        bordered: '.uDYw',        // элементы с нижней границей
-        toast: '.eqPa'            // всплывашка: на телефоне переносим наверх
-    };
-
+    // Телефон/компьютер: кнопка «наверх», скрытая полоса прокрутки, обёртка крупного ника.
+    // (Правки старых классов сайта — .yYHA, .JHRx, .uDYw, .eqPa — убраны: этих классов на сайте давно нет.)
     (function () {
         function applyFixes() {
             const isMobile = window.innerWidth <= 1172;
-            const container = document.querySelector(MOBILE_OLD.container);
-            const createBtn = document.querySelector(MOBILE_OLD.createBtn);
             const scrollBtn = document.querySelector('.itd-scroll-top-btn');
-            const uDYwElements = document.querySelectorAll(MOBILE_OLD.bordered);
-            const eqPa = document.querySelector(MOBILE_OLD.toast);
             const nickContainer = document.querySelector('.' + SELECTORS.nickLarge);
 
             if (!scrollBtn) return;
 
             if (isMobile) {
-                uDYwElements.forEach(el => {
-                    el.style.setProperty('border-bottom', 'none', 'important');
-                });
-
                 if (!document.querySelector('#itd-mobile-fixes')) {
                     const style = document.createElement('style');
                     style.id = 'itd-mobile-fixes';
@@ -6559,25 +6470,6 @@
                 scrollBtn.style.zIndex = '1';
                 scrollBtn.style.bottom = '100px';
                 scrollBtn.style.right = '16px';
-
-                if (container) {
-                    container.style.paddingTop = '0';
-                }
-
-                if (createBtn) {
-                    createBtn.style.position = 'absolute';
-                    createBtn.style.bottom = 'calc(100% - 1px)';
-                    createBtn.style.left = '50%';
-                    createBtn.style.transform = 'translateX(-50%)';
-                    createBtn.style.width = '120px';
-                    createBtn.style.height = '36px';
-                    createBtn.style.borderRadius = '24px 24px 0 0';
-                }
-
-                if (eqPa) {
-                    eqPa.style.bottom = 'auto';
-                    eqPa.style.top = '16px';
-                }
 
                 if (nickContainer) {
                     let wrapper = nickContainer.querySelector('.nick-wrapper');
@@ -6627,32 +6519,9 @@
                 }
 
             } else {
-                uDYwElements.forEach(el => {
-                    el.style.removeProperty('border-bottom');
-                });
-
                 scrollBtn.style.zIndex = '';
                 scrollBtn.style.bottom = '16px';
                 scrollBtn.style.right = '16px';
-
-                if (container) {
-                    container.style.paddingTop = '';
-                }
-
-                if (createBtn) {
-                    createBtn.style.position = '';
-                    createBtn.style.bottom = '';
-                    createBtn.style.left = '';
-                    createBtn.style.transform = '';
-                    createBtn.style.width = '';
-                    createBtn.style.height = '';
-                    createBtn.style.borderRadius = '';
-                }
-
-                if (eqPa) {
-                    eqPa.style.bottom = '';
-                    eqPa.style.top = '';
-                }
 
                 if (nickContainer) {
                     const wrapper = nickContainer.querySelector('.nick-wrapper');
@@ -6719,7 +6588,6 @@
                 const match = url.match(/\/api\/posts\/([^\/]+)\/comments/);
                 if (match) {
                     currentPostId = match[1];
-                    console.log('📌 Post ID сохранён:', currentPostId);
                 }
             }
             return originalFetch.apply(this, args);
