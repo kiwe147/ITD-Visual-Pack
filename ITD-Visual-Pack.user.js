@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.1.25
+// @version      3.1.26
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3301,82 +3301,85 @@
         }
     }
 
-    let scrollTopButton = null;
+    // ==== кнопка «наверх» и телефонная раскладка
+    // Кнопка появляется, когда прокрутили ниже 300px. Вид — в CSS (!important: кнопка берёт классы
+    // сайта у «Создать пост», см. newPostBump, и раньше их перебивал style.*).
+    // До ширины 1172px (телефон, планшет): кнопка выше нижней панели, у страницы нет полосы
+    // прокрутки и оттяжки; всё это — только после входа (html.vp-has-up), как было.
+    const styleScrollTop = document.createElement('style');
+    styleScrollTop.textContent = `
+        .itd-scroll-top-btn {
+            position: fixed !important; bottom: 16px !important; right: 16px !important;
+            width: 64px !important; height: 64px !important;
+            display: flex !important; align-items: center !important; justify-content: center !important;
+            background: var(--glass-bg) !important;
+            -webkit-backdrop-filter: blur(16px) !important; backdrop-filter: blur(16px) !important;
+            border: none !important; border-radius: 32px !important; cursor: pointer !important;
+            pointer-events: auto !important; color: var(--text-primary) !important;
+            box-shadow: var(--shadow-elevated) !important;
+            transition: opacity 0.2s ease, visibility 0.2s ease !important;
+            margin: 0 !important; padding: 0 !important;       /* z-index — от сайта (было так: style.zIndex сбрасывался) */
+            opacity: 0 !important; visibility: hidden !important;
+        }
+        .itd-scroll-top-btn.vp-shown { opacity: 1 !important; visibility: visible !important; }
+        .itd-scroll-top-btn::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(to bottom, #ffffff40, #ffffff0d);
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+        @media (max-width: 1172px) {
+            .itd-scroll-top-btn { z-index: 1 !important; bottom: 100px !important; }
+            html.vp-has-up, html.vp-has-up body { overscroll-behavior: none !important; }
+            html.vp-has-up ::-webkit-scrollbar { display: none !important; }
+            html.vp-has-up .vp-nick-large { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+            .nick-wrapper { display: flex !important; align-items: center !important; flex-wrap: wrap !important; gap: 4px !important; }
+        }
+    `;
+    document.head.appendChild(styleScrollTop);
 
+    let scrollTopButton = null;
     function createScrollTopButton() {
         if (scrollTopButton) return;
-
         scrollTopButton = document.createElement('button');
         scrollTopButton.className = 'itd-scroll-top-btn';
         scrollTopButton.innerHTML = ICONS.SCROLL_TOP;
-
-        scrollTopButton.style.cssText = `
-        position: fixed;
-        bottom: 16px;
-        right: 16px;
-        width: 64px;
-        height: 64px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: var(--glass-bg);
-        -webkit-backdrop-filter: blur(16px);
-        backdrop-filter: blur(16px);
-        border: none;
-        border-radius: 32px;
-        cursor: pointer;
-        pointer-events: auto;
-        color: var(--text-primary);
-        box-shadow: var(--shadow-elevated);
-        transition: opacity 0.2s ease, visibility 0.2s ease;
-        z-index: 99999;
-        margin: 0;
-        padding: 0;
-        opacity: 0;
-        visibility: hidden;
-    `;
-
-        const styleId = 'itd-scroll-top-styles';
-        if (!document.getElementById(styleId)) {
-            const style = document.createElement('style');
-            style.id = styleId;
-            style.textContent = `
-            .itd-scroll-top-btn::before {
-                content: "";
-                position: absolute;
-                inset: 0;
-                border-radius: inherit;
-                padding: 1px;
-                background: linear-gradient(to bottom, #ffffff40, #ffffff0d);
-                -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-                -webkit-mask-composite: xor;
-                mask-composite: exclude;
-                pointer-events: none;
-            }
-        `;
-            document.head.appendChild(style);
-        }
-
-        scrollTopButton.onclick = () => {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        };
-
+        scrollTopButton.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
         document.body.appendChild(scrollTopButton);
-
-        function toggleScrollButton() {
-            if (!scrollTopButton) return;
-            if (window.scrollY > 300) {
-                scrollTopButton.style.opacity = '1';
-                scrollTopButton.style.visibility = 'visible';
-            } else {
-                scrollTopButton.style.opacity = '0';
-                scrollTopButton.style.visibility = 'hidden';
-            }
-        }
-
-        window.addEventListener('scroll', toggleScrollButton);
-        toggleScrollButton();
+        document.documentElement.classList.add('vp-has-up');
+        const toggle = () => scrollTopButton.classList.toggle('vp-shown', window.scrollY > 300);
+        window.addEventListener('scroll', toggle, { passive: true });
+        toggle();
+        placeNickWrapper();
     }
+
+    // Крупный ник в шапке профиля на узком экране: его части — в обёртке .nick-wrapper (строка
+    // с переносом), сам блок — столбец по центру. На широком обёртку снимаем. Переключение —
+    // по смене ширины (matchMedia) и когда сайт перерисовал шапку (onDom).
+    const narrowScreen = matchMedia('(max-width: 1172px)');
+    function placeNickWrapper() {
+        const nick = document.querySelector('.' + SELECTORS.nickLarge);
+        if (!nick) return;
+        const wrapper = nick.querySelector(':scope > .nick-wrapper');
+        if (narrowScreen.matches && scrollTopButton) {
+            if (wrapper) return;
+            const w = document.createElement('span');
+            w.className = 'nick-wrapper';
+            const parts = [...nick.children];
+            nick.prepend(w);
+            w.append(...parts);
+        } else if (wrapper) {
+            wrapper.replaceWith(...wrapper.children);
+        }
+    }
+    narrowScreen.addEventListener('change', placeNickWrapper);
+    onDom(placeNickWrapper);
 
     async function initVisuals() {
         try {
@@ -6166,138 +6169,6 @@
             }
             return origSend.call(this, body);
         };
-    })();
-
-    // Телефон/компьютер: кнопка «наверх», скрытая полоса прокрутки, обёртка крупного ника.
-    // (Правки старых классов сайта — .yYHA, .JHRx, .uDYw, .eqPa — убраны: этих классов на сайте давно нет.)
-    (function () {
-        function applyFixes() {
-            const isMobile = window.innerWidth <= 1172;
-            const scrollBtn = document.querySelector('.itd-scroll-top-btn');
-            const nickContainer = document.querySelector('.' + SELECTORS.nickLarge);
-
-            if (!scrollBtn) return;
-
-            if (isMobile) {
-                if (!document.querySelector('#itd-mobile-fixes')) {
-                    const style = document.createElement('style');
-                    style.id = 'itd-mobile-fixes';
-                    style.textContent = `
-                        html, body { overscroll-behavior: none !important; }
-                        ::-webkit-scrollbar { display: none !important; }
-                    `;
-                    document.head.appendChild(style);
-                }
-
-                scrollBtn.style.zIndex = '1';
-                scrollBtn.style.bottom = '100px';
-                scrollBtn.style.right = '16px';
-
-                if (nickContainer) {
-                    let wrapper = nickContainer.querySelector('.nick-wrapper');
-
-                    if (!wrapper) {
-                        wrapper = document.createElement('span');
-                        wrapper.className = 'nick-wrapper';
-                        wrapper.style.cssText = `
-                            display: flex !important;
-                            align-items: center !important;
-                            flex-wrap: wrap !important;
-                            gap: 4px !important;
-                        `;
-
-                        const controls = nickContainer.querySelector('.nick-controls-panel');
-                        const children = [];
-
-                        for (const child of nickContainer.children) {
-                            if (child === controls) continue;
-                            children.push(child);
-                        }
-
-                        nickContainer.insertBefore(wrapper, nickContainer.firstChild);
-
-                        for (const child of children) {
-                            wrapper.appendChild(child);
-                        }
-                    }
-
-                    nickContainer.style.display = 'flex';
-                    nickContainer.style.flexDirection = 'column';
-                    nickContainer.style.alignItems = 'center';
-                    nickContainer.style.gap = '4px';
-                    nickContainer.style.width = '';
-
-                    const controls = nickContainer.querySelector('.nick-controls-panel');
-                    if (controls) {
-                        controls.style.display = 'flex';
-                        controls.style.flexWrap = 'wrap';
-                        controls.style.gap = '4px';
-                        controls.style.marginTop = '0';
-                        controls.style.marginLeft = '0';
-                        controls.style.marginRight = '0';
-                        controls.style.justifyContent = 'center';
-                        controls.style.width = '';
-                    }
-                }
-
-            } else {
-                scrollBtn.style.zIndex = '';
-                scrollBtn.style.bottom = '16px';
-                scrollBtn.style.right = '16px';
-
-                if (nickContainer) {
-                    const wrapper = nickContainer.querySelector('.nick-wrapper');
-                    if (wrapper) {
-                        const children = [...wrapper.children];
-                        for (const child of children) {
-                            nickContainer.insertBefore(child, wrapper);
-                        }
-                        wrapper.remove();
-                    }
-
-                    nickContainer.style.display = '';
-                    nickContainer.style.flexDirection = '';
-                    nickContainer.style.alignItems = '';
-                    nickContainer.style.gap = '';
-                    nickContainer.style.width = '';
-                }
-
-                const controls = document.querySelector('.nick-controls-panel');
-                if (controls) {
-                    controls.style.display = '';
-                    controls.style.flexWrap = '';
-                    controls.style.gap = '';
-                    controls.style.marginTop = '';
-                    controls.style.marginLeft = '';
-                    controls.style.marginRight = '';
-                    controls.style.justifyContent = '';
-                    controls.style.width = '';
-                }
-
-                const fixStyle = document.querySelector('#itd-mobile-fixes');
-                if (fixStyle) fixStyle.remove();
-            }
-        }
-
-        applyFixes();
-
-        onDom(function mobileFixes() {
-            if (!window._fixing) {
-                window._fixing = true;
-                applyFixes();
-                setTimeout(() => { window._fixing = false; }, 100);
-            }
-        });
-
-        let resizeTimer;
-        window.addEventListener('resize', () => {
-            clearTimeout(resizeTimer);
-            resizeTimer = setTimeout(() => {
-                window._fixing = true;
-                applyFixes();
-                setTimeout(() => { window._fixing = false; }, 100);
-            }, 200);
-        });
     })();
 
     let currentPostId = null;
