@@ -68,7 +68,7 @@ const page = n => ({ data: { posts: Array.from({ length: 20 }, (_, i) => {
   const heights = await p.$$eval('.vp-gal-col', cs => cs.map(c => Math.round(c.getBoundingClientRect().height)));
   check(Math.max(...heights) - Math.min(...heights) < 450, `колонки ровные по высоте: ${heights.join(', ')}`);
   await p.screenshot({ path: path.join(out, `gal-${mode}.png`) });
-  const vid = await p.$eval('.vp-gal-tile video', v => ({ muted: v.muted, loop: v.loop, badge: v.parentElement.querySelector('.vp-gal-badge').textContent }));
+  const vid = await p.$eval('.vp-gal-tile video', v => ({ muted: v.muted, loop: v.loop, badge: v.closest('.vp-gal-tile').querySelector('.vp-gal-badge').textContent }));
   check(vid.muted && vid.loop && vid.badge === '0:25', `видео без звука, по кругу, длительность ${vid.badge}`);
   await p.$eval('.vp-gal-body', b => { b.scrollTop = b.scrollHeight; b.dispatchEvent(new Event('scroll')); });
   await p.waitForTimeout(1200);
