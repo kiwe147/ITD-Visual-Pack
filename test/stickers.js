@@ -89,6 +89,35 @@ const square = c => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http
   await p.evaluate(() => document.querySelectorAll('.sticker-editing').forEach(e => e.style.animationPlayState = 'paused'));
   await shot('edit', '.sticker-panel');
 
+  // перестановка как на рабочем столе: первый стикер тащим на место четвёртого (мышь / палец);
+  // соседи разъезжаются с анимацией, порядок сохраняется
+  // нажать стикер по его id (картинка — у кнопки; номер в паке — по сохранённому порядку)
+  const pickId = id => p.evaluate(id => {
+    const ids = JSON.parse(localStorage.getItem('user_sticker_packs_v1'))[0].stickers.map(s => s.id);
+    document.querySelectorAll('.pack-grid[data-pack="user_1"] .vp-sticker-item')[ids.indexOf(id)].click();
+  }, id);
+  const cellsAt = () => p.$$eval('.pack-grid[data-pack="user_1"] .vp-sticker-item', bs => bs.map(b => { const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }));
+  const cells = await cellsAt();
+  let midAnims = 0;
+  if (mode === 'phone') {
+    const cdp = await p.context().newCDPSession(p);
+    const t = (type, pt) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [pt] });
+    await t('touchStart', cells[0]);
+    for (let k = 1; k <= 12; k++) await t('touchMove', { x: cells[0].x + (cells[3].x - cells[0].x) * k / 12, y: cells[0].y + (cells[3].y - cells[0].y) * k / 12 });
+    midAnims = await p.evaluate(() => [...document.querySelectorAll('.vp-sticker-ghost')].filter(g => { const r = g.getBoundingClientRect(); return getComputedStyle(g).position === 'fixed' && r.top >= 0 && r.bottom <= innerHeight; }).length * 100 + document.querySelector('.pack-grid[data-pack="user_1"]').getAnimations({ subtree: true }).filter(a => !(a instanceof CSSAnimation)).length);
+    await t('touchEnd');
+  } else {
+    await p.mouse.move(cells[0].x, cells[0].y); await p.mouse.down();
+    await p.mouse.move(cells[3].x, cells[3].y, { steps: 12 });
+    midAnims = await p.evaluate(() => [...document.querySelectorAll('.vp-sticker-ghost')].filter(g => { const r = g.getBoundingClientRect(); return getComputedStyle(g).position === 'fixed' && r.top >= 0 && r.bottom <= innerHeight; }).length * 100 + document.querySelector('.pack-grid[data-pack="user_1"]').getAnimations({ subtree: true }).filter(a => !(a instanceof CSSAnimation)).length);
+    await p.mouse.up();
+  }
+  await p.waitForTimeout(500);
+  const order = await p.evaluate(() => JSON.parse(localStorage.getItem('user_sticker_packs_v1'))[0].stickers.map(s => s.id).join());
+  check(midAnims >= 101, `во время перетаскивания стикер поднят (на экране) и соседи едут (${midAnims >= 100 ? 'поднят' : 'не на экране'}, анимаций ${midAnims % 100})`);
+  check(order === 's1,s2,s3,s0,s4,s5', `перестановка ${mode === 'phone' ? 'пальцем' : 'мышью'}: порядок ${order}`);
+  check(!(await p.$('.vp-sticker-ghost, .vp-hole')) && !(await p.$('#temp_sticker_preview')), 'после отпускания — ни «призрака», ни дырки, стикер не выбран');
+
   // обрезка нового стикера: окно, рамка во всю картинку, сдвиг рамки пальцем/мышью
   const big = await p.evaluate(async () => {
     const c = document.createElement('canvas'); c.width = 400; c.height = 200;
@@ -138,7 +167,7 @@ const square = c => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http
   });
   if (siteInput) {
     if (!(await p.$eval('.sticker-panel', e => getComputedStyle(e).display === 'flex'))) { await p.hover('.sticker-btn'); await p.waitForTimeout(400); }
-    await p.$$eval('.pack-grid[data-pack="user_1"] button', bs => bs[0].click());
+    await pickId('s0');
     await p.waitForTimeout(600);
     const got = await p.evaluate(() => window.__siteFile || '');
     check(/^sticker\.gif image\/gif \d+$/.test(got) && !(await p.$('#temp_sticker_preview')), `стикер ушёл в поле файла сайта (${got || 'нет'}), своего превью нет`);
@@ -148,7 +177,7 @@ const square = c => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http
 
   // выбрать стикер: превью над полем, микрофон спрятан; крестик снимает; «Отправить» после — не уносит стикер
   if (!(await p.$eval('.sticker-panel', e => getComputedStyle(e).display === 'flex'))) { await p.hover('.sticker-btn'); await p.waitForTimeout(400); }
-  await p.$$eval('.pack-grid[data-pack="user_1"] button', bs => bs[1].click());
+  await pickId('s1');
   await p.waitForTimeout(400);
   check(!!(await p.$('#temp_sticker_preview')), 'стикер прикреплён: превью есть');
   // как вложение сайта: над строкой ввода, слева вровень с полем; кнопки после поля (микрофон) спрятаны
@@ -179,7 +208,7 @@ const square = c => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http
   comments.length = 0;
   // снова прикрепить и отправить: запрос в пост из адреса, со стикером вложением
   await p.hover('.sticker-btn'); await p.waitForTimeout(400);
-  await p.$$eval('.pack-grid[data-pack="user_1"] button', bs => bs[2].click());
+  await pickId('s2');
   await p.waitForTimeout(300);
   await p.$eval('.vp-sticker-sendbtn', b => b.click());
   await p.waitForTimeout(600);
@@ -195,11 +224,11 @@ const square = c => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http
   await p.click('.vp-sticker-remove', { force: true }); await p.waitForTimeout(200);
   comments.length = 0;
   await p.hover('.sticker-btn'); await p.waitForTimeout(400);
-  await p.$$eval('.pack-grid[data-pack="user_1"] button', bs => bs[3].click());
+  await pickId('s3');
   await p.waitForTimeout(300);
   await p.$eval('.vp-sticker-sendbtn', b => b.click());
   await p.waitForTimeout(1200);
-  const saved = await p.evaluate(() => JSON.parse(localStorage.getItem('user_sticker_packs_v1'))[0].stickers[3].id);
+  const saved = await p.evaluate(() => { const ids = JSON.parse(localStorage.getItem('user_sticker_packs_v1'))[0].stickers.map(s => s.id); return ids.includes('up1') && !ids.includes('s3') ? 'up1' : ids.join(); });
   check(comments.length === 2 && comments[0].includes('"s3"') && comments[1].includes('"up1"') && saved === 'up1', `чужой файл: перезалив и повтор (${comments.map(c => c.match(/\["(\w+)"\]/)?.[1]).join(' → ')}, в паке ${saved})`);
 
   check(errors.length === 0, 'ошибок на странице нет' + (errors.length ? ': ' + errors.join(' | ') : ''));
