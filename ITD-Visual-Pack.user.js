@@ -851,19 +851,7 @@
         // на телефоне — нет. Поэтому на телефоне заставка ждёт касания: тёмный экран, в центре «дышит»
         // маленький логотип; коснулся — ролик идёт со звуком ровно в такт. Не коснулся за IDLE мс —
         // идёт сам, без звука (как раньше): на входе никого не держим.
-        let ctx = null, t0 = 0;
-        function startSound() {
-            try {
-                ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const go = () => {
-                    const base = ctx.currentTime - (performance.now() - t0) / 1000;
-                    introSound(ctx, ms => Math.max(ctx.currentTime, base + ms / 1000), variant);
-                };
-                if (ctx.state === 'running') go();
-                else ctx.resume().then(() => { if (performance.now() - t0 < 150) go(); else ctx.close(); }, () => {});
-            } catch (e) { ctx = null; }
-        }
-
+        let ctx = null;
         let done = false, started = false;
         const cleanup = () => {
             if (done) return;
@@ -887,25 +875,17 @@
         function begin(withSound) {
             if (started) return;
             started = true;
-            t0 = performance.now();
             for (const a of anims) { a.currentTime = 0; a.play(); }
-            if (withSound) startSound();
             afterStart();
+            if (withSound) syncSound();
         }
-        // Телефон, по касанию: звук выходит из динамика с задержкой (буфер вывода; в Bluetooth-наушниках
-        // — до ~0,3 с), и если пустить картинку сразу, удары слышны позже, чем видны. Поэтому сначала
-        // ставим звук в очередь, а картинку запускаем ровно на эту задержку позже — совпадают.
-        function beginSynced() {
-            // Звук подстраиваем под картинку, а не наоборот. Картинка стартует сразу; когда анимации
-            // реально пошли (ready → startTime), каждый удар ставим на то время звуковой карты, которое
-            // прозвучит из наушников ровно в момент кадра. Сопоставление времён даёт сам браузер
-            // (getOutputTimestamp — с учётом задержки вывода, и Bluetooth тоже). Так не важно, что
-            // картинка на старте может запоздать (сайт в этот момент грузится) — звук ждёт её.
-            if (started) return;
-            started = true;
-            t0 = performance.now();
-            for (const a of anims) { a.currentTime = 0; a.play(); }
-            afterStart();
+        // Звук подстраиваем под картинку, а не наоборот. Картинка стартует сразу, но первый кадр может
+        // запоздать на десятые доли секунды (сайт в этот момент грузится) — поэтому звук не считаем от
+        // нажатия «старт», а ждём, когда анимации реально пошли (ready → startTime), и каждый удар ставим
+        // на то время звуковой карты, которое прозвучит из динамика ровно в момент кадра. Сопоставление
+        // времён даёт сам браузер (getOutputTimestamp — с учётом задержки вывода, и Bluetooth тоже).
+        // Так и на компьютере, и на телефоне (там звук разрешён только по касанию — оно и запускает).
+        function syncSound() {
             let queued = false;
             try {
                 ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -921,8 +901,9 @@
                     introSound(ctx, ms => Math.max(ctx.currentTime + 0.01, toCtx(start + ms)), variant);
                 }, () => {});
             } catch (e) { ctx = null; }
-            // звук так и не завёлся — картинка уже идёт, просто без него
-            setTimeout(() => { if (!queued && ctx) { ctx.close().catch(() => {}); ctx = null; } }, 600);
+            // звук так и не завёлся за 0,6 с от старта картинки — она идёт без него (отсчёт от старта картинки:
+            // страница на входе может быть занята дольше, и звук иначе выключился бы, не успев начаться)
+            anims[0].ready.then(() => setTimeout(() => { if (!queued && ctx) { ctx.close().catch(() => {}); ctx = null; } }, 600), () => {});
         }
         function afterStart() {
             setTimeout(cleanup, EXIT + SPLIT + 2500);       // если анимации не доиграют (вкладка в фоне)
@@ -960,7 +941,7 @@
             ov.removeEventListener('click', tap, true);
             idle.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.9)' }], { duration: 220, fill: 'forwards' })
                 .finished.then(() => idle.remove(), () => idle.remove());
-            if (withSound) beginSynced(); else begin(false);
+            begin(withSound);
         }
         // звук включается только в обработчике самого касания (pointerup/click — они дают разрешение)
         function tap(e) { e.stopPropagation(); go(true); }
@@ -3791,7 +3772,7 @@
             'Галерея: кнопки крупнее, отзываются на нажатие, сердце «подпрыгивает» при лайке',
             'Магазин → «Сообщения»: окно открывается поверх магазина (раньше не было видно)',
             'Свой и живой фон видны в магазине и в «Сообщениях»',
-            'Заставка больше не расходится со звуком, если на фоне своё видео: фон включается сразу после заставки']],
+            'Заставка: звук точно в такт анимации (на компьютере опережал её), свой фон включается сразу после заставки']],
         ['3.2.21', '28 сентября 2026', [
             'Галерея: пост с несколькими картинками — одна плитка, картинки листаются внутри (телефон — свайп, компьютер — стрелки), лайк и репост — один на пост',
             '«Что нового»: страница за окном размыта сразу, а не после нажатия']],
