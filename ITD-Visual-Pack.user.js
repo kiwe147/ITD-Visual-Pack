@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.0
+// @version      3.2.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -5215,9 +5215,10 @@
             color: #0080FF !important;
         }
         }
+        /* прозрачность до появления задаёт сама анимация (both), а не opacity: 0 у пункта: иначе при
+           «меньше движения» (анимация выключена ниже) пункты оставались невидимыми — пустые уведомления */
         .vp-notif {
-            animation: notificationAppear 0.3s ease-out forwards !important;
-            opacity: 0;
+            animation: notificationAppear 0.3s ease-out both !important;
         }
         @keyframes notificationAppear {
             from { opacity: 0; transform: translateY(15px); }
