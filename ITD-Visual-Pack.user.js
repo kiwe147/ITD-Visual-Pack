@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.22
+// @version      3.2.22.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3786,8 +3786,8 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
-        ['3.2.22', '28 сентября 2026', [
-            'Галерея: кнопки на картинках сами подстраиваются — на светлом месте тёмные, на тёмном светлые (под каждой кнопкой своё место)',
+        ['3.2.22 – 3.2.22.1', '28 сентября 2026', [
+            'Галерея: кнопки на картинках — белые на тёмной стеклянной подложке, хорошо видны на любой картинке',
             'Галерея: кнопки крупнее, отзываются на нажатие, сердце «подпрыгивает» при лайке',
             'Магазин → «Сообщения»: окно открывается поверх магазина (раньше не было видно)',
             'Свой и живой фон видны в магазине и в «Сообщениях»',
@@ -7911,19 +7911,20 @@
            Правая кнопка — картинка на миг снова ловит мышь (vp-ctx): обычное меню «Сохранить / Копировать картинку» */
         .vp-gal-slide > img { pointer-events: none; -webkit-user-drag: none; user-select: none; }
         .vp-gal-tile.vp-ctx .vp-gal-slide > img { pointer-events: auto; }
-        /* кнопки поверх, как на постах: лайк, коммент, репост — контуры без фона; ПК — при наведении, телефон — всегда */
-        .vp-gal-acts { position: absolute; left: 6px; bottom: 6px; display: flex; gap: 2px; transition: opacity .15s; }
-        .vp-gal-act { width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: none; color: #fff; cursor: pointer;
+        /* кнопки поверх, как на постах: лайк, коммент, репост — белые на тёмной стеклянной подложке (отделяет от
+           картинки любой яркости); ПК — при наведении, телефон — всегда */
+        .vp-gal-acts { position: absolute; left: 8px; bottom: 8px; display: flex; gap: 2px; padding: 2px; border-radius: 999px;
+            background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4);
+            box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset; transition: opacity .15s; }
+        .vp-gal-act { width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%; background: none; color: #fff; cursor: pointer;
             display: inline-flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent;
-            filter: drop-shadow(0 0 1px rgba(0,0,0,.9)) drop-shadow(0 1px 3px rgba(0,0,0,.55));
-            transition: transform .12s ease, color .2s, filter .2s; }
-        .vp-gal-act.vp-ink { color: #111; filter: drop-shadow(0 0 1px rgba(255,255,255,.95)) drop-shadow(0 1px 3px rgba(255,255,255,.5)); }
+            transition: transform .12s ease, color .2s, background .2s; }
+        @media (hover: hover) and (pointer: fine) { .vp-gal-act:hover { background: rgba(255,255,255,.14); } }
         .vp-gal-act:active { transform: scale(.86); }
-        @media (hover: hover) and (pointer: fine) { .vp-gal-act:hover { transform: scale(1.12); } }
         .vp-gal-act:focus-visible { outline: 2px solid var(--vp-accent, #fff); outline-offset: -4px; }
         .vp-gal-act.vp-on[data-act="like"] svg { animation: vpGalPop .35s cubic-bezier(.3, 1.6, .5, 1); }
         @keyframes vpGalPop { 40% { transform: scale(1.35); } }
-        .vp-gal-act svg { width: 24px; height: 24px; }
+        .vp-gal-act svg { width: 22px; height: 22px; }
         .vp-gal-act.vp-on { color: var(--accent-liked, #f91880); }
         .vp-gal-act.vp-on[data-act="like"] path { fill: currentColor; }
         .vp-gal-act.vp-busy { opacity: .5; pointer-events: none; }
@@ -8037,11 +8038,11 @@
         galImgIO.observe(img);
         return img;
     }
-    // Кнопки поверх картинки — светлые на тёмном месте, тёмные на светлом, и под КАЖДОЙ кнопкой своё место
-    // (слева тёмное пятно, справа светлый фон — сердце светлое, репост тёмный). Пиксели картинки с сервера
+    // Метки и стрелки поверх картинки (счётчик, точки, стрелки) — светлые на тёмном месте, тёмные на светлом,
+    // под каждой своё место (кнопки лайк/коммент/репост всегда белые на подложке). Пиксели картинки с сервера
     // сайта читать нельзя (нет разрешения CORS), поэтому картинку загружает Tampermonkey (тот же канал, что у
     // стикеров): один раз, её же и показываем, а уменьшенную копию (64 точки по ширине) держим для замеров.
-    // Не вышло — обычная загрузка, кнопки светлые с обводкой (читаются на любом фоне).
+    // Не вышло — обычная загрузка, метки светлые (у них своя тёмная подложка).
     const galImgIO = new IntersectionObserver(es => es.forEach(e => {
         if (!e.isIntersecting) return;
         galImgIO.unobserve(e.target);
@@ -8069,7 +8070,7 @@
                     bmp.close && bmp.close();
                     img._vpLum = { w, h, d: g.getImageData(0, 0, w, h).data };
                     galTone(img.closest('.vp-gal-tile'));
-                } catch (e) { /* не картинка для холста — остаёмся со светлыми кнопками */ }
+                } catch (e) { /* не картинка для холста — метки остаются светлыми */ }
             },
             onerror: plain, ontimeout: plain
         });
@@ -8097,7 +8098,7 @@
         const i = strip ? Math.round(strip.scrollLeft / Math.max(1, strip.clientWidth)) : 0;
         const slide = strip && strip.children[i];
         const img = slide && slide.querySelector('img');
-        tile.querySelectorAll('.vp-gal-act, .vp-gal-count, .vp-gal-dots, .vp-gal-arrow, .vp-gal-badge').forEach(el => {
+        tile.querySelectorAll('.vp-gal-count, .vp-gal-dots, .vp-gal-arrow, .vp-gal-badge').forEach(el => {
             const lum = img && galLumAt(img, el.getBoundingClientRect());
             el.classList.toggle('vp-ink', lum !== null && lum !== undefined && lum > .62);   // светло под элементом — тёмный
         });
