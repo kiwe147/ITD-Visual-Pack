@@ -3585,7 +3585,8 @@
             'Уведомления, пришедшие пока открыт список, тоже окрашиваются',
             'Карточка профиля при наведении не остаётся висеть после перехода в профиль',
             'Баннер больше не бледнеет, если зайти в профиль из прокрученной ленты',
-            'Свечение за видео меняет цвет плавно, без скачков']],
+            'Свечение за видео меняет цвет плавно, без скачков',
+            'Форма «Ответить» в комментариях больше не тёмный прямоугольник']],
         ['3.2.11', '27 сентября 2026', ['Кнопки баннера — аккуратная «шторка» сверху по центру; на компьютере появляются при наведении']],
         ['3.2.10', '29 сентября 2026', ['Стикеры: при перетаскивании стикер больше не отстаёт от пальца']],
         ['3.2.9', '29 сентября 2026', [
@@ -6485,6 +6486,7 @@
             --block-bg: rgba(255, 255, 255, .92); --block-bg-secondary: rgba(240, 240, 240, .92); --block-hover-bg: rgba(245, 245, 245, .94);
             --modal-bg: rgba(255, 255, 255, .95); --glass-bg: rgba(255, 255, 255, .9);
         }
+        html.vp-glass .vp-nested { background-color: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-radius: 18px; }
         html.vp-glass .settings-dropdown {
             backdrop-filter: var(--vp-glass-filter) !important; -webkit-backdrop-filter: var(--vp-glass-filter) !important;
         }
@@ -6659,6 +6661,11 @@
                 const cs = getComputedStyle(n);
                 if (cs.position === 'fixed' || (cs.position === 'absolute' && +cs.zIndex >= 5)) { el.classList.add('vp-float'); return; }
             }
+            // Блок того же фона внутри такого же блока (форма ответа в карточке поста): без стекла цвет
+            // сплошной и сливается, а два полупрозрачных слоя дают тёмный прямоугольник — внутренний прозрачный
+            const outer = el.parentElement && el.parentElement.closest(`:is(${glassSel})`);
+            const bg = getComputedStyle(el).backgroundColor;
+            if (outer && !outer.classList.contains('vp-float') && getComputedStyle(outer).backgroundColor === bg && !/^rgba\(0, 0, 0, 0\)$/.test(bg)) el.classList.add('vp-nested');
         });
     });
     // Шторка комментариев (телефон): самый внешний закреплённый на экране блок вокруг поля комментария
