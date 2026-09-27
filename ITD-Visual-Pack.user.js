@@ -3787,7 +3787,7 @@
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
         ['3.2.22 – 3.2.22.1', '28 сентября 2026', [
-            'Галерея: кнопки на картинках — белые на тёмной стеклянной подложке, хорошо видны на любой картинке',
+            'Галерея: кнопки, стрелки и счётчик картинок — белые на тёмной стеклянной подложке, хорошо видны на любой картинке',
             'Галерея: кнопки крупнее, отзываются на нажатие, сердце «подпрыгивает» при лайке',
             'Магазин → «Сообщения»: окно открывается поверх магазина (раньше не было видно)',
             'Свой и живой фон видны в магазине и в «Сообщениях»',
@@ -7891,18 +7891,20 @@
         .vp-gal-slide { flex: 0 0 100%; height: 100%; scroll-snap-align: start; }
         .vp-gal-slide > img, .vp-gal-slide > video { display: block; width: 100%; height: 100%; object-fit: cover; }
         .vp-gal-count { position: absolute; right: 8px; top: 8px; padding: 3px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
-            background: rgba(0,0,0,.55); color: #fff; pointer-events: none; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: background .2s, color .2s; }
-        .vp-gal-count.vp-ink, .vp-gal-badge.vp-ink { background: rgba(255,255,255,.72); color: #111; }
+            color: #fff; pointer-events: none; background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4);
+            box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset; }
         .vp-gal-dots { position: absolute; left: 0; right: 0; top: 16px; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
         .vp-gal-dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.5); box-shadow: 0 0 3px rgba(0,0,0,.5); }
         .vp-gal-dots i.vp-on { background: #fff; }
         .vp-gal-dots.vp-ink i { background: rgba(0,0,0,.35); box-shadow: 0 0 3px rgba(255,255,255,.6); }
         .vp-gal-dots.vp-ink i.vp-on { background: #111; }
-        .vp-gal-arrow { position: absolute; top: 50%; width: 32px; height: 32px; margin-top: -16px; border: 0; border-radius: 50%; padding: 0;
-            display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
-            background: rgba(0,0,0,.45); color: #fff; opacity: 0; transition: opacity .15s; }
+        /* стрелки, счётчик и метка — та же тёмная стеклянная подложка, что у кнопок лайк/коммент/репост */
+        .vp-gal-arrow { position: absolute; top: 50%; width: 36px; height: 36px; margin-top: -18px; border: 0; border-radius: 50%; padding: 0;
+            display: inline-flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent;
+            color: #fff; opacity: 0; transition: opacity .15s, transform .12s ease;
+            background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4);
+            box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset; }
         .vp-gal-arrow.vp-prev { left: 8px; } .vp-gal-arrow.vp-next { right: 8px; }
-        .vp-gal-arrow.vp-ink { background: rgba(255,255,255,.75); color: #111; }
         .vp-gal-arrow:active { transform: scale(.9); }
         .vp-gal-arrow:disabled { visibility: hidden; }
         @media (hover: hover) and (pointer: fine) { .vp-gal-tile:hover .vp-gal-arrow { opacity: 1; } }
@@ -7933,7 +7935,8 @@
             .vp-gal-tile:hover .vp-gal-acts, .vp-gal-acts:focus-within { opacity: 1; }
         }
         .vp-gal-badge { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
-            background: rgba(0,0,0,.55); color: #fff; pointer-events: none; }
+            color: #fff; pointer-events: none; background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4);
+            box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset; }
         .vp-gal-more { text-align: center; padding: 18px; color: var(--text-secondary, #8a8a8a); font-size: 14px; }
         .vp-gal-btn svg { pointer-events: none; }
         /* ПК: поиск — в боковом меню, в полосе ленты его нет — там и «Галерея»; телефон — кнопка в полосе ленты */
@@ -8038,11 +8041,11 @@
         galImgIO.observe(img);
         return img;
     }
-    // Метки и стрелки поверх картинки (счётчик, точки, стрелки) — светлые на тёмном месте, тёмные на светлом,
-    // под каждой своё место (кнопки лайк/коммент/репост всегда белые на подложке). Пиксели картинки с сервера
+    // Точки листания поверх картинки — светлые на тёмном месте, тёмные на светлом (у них нет подложки; кнопки,
+    // стрелки и счётчик всегда белые на тёмной подложке). Пиксели картинки с сервера
     // сайта читать нельзя (нет разрешения CORS), поэтому картинку загружает Tampermonkey (тот же канал, что у
     // стикеров): один раз, её же и показываем, а уменьшенную копию (64 точки по ширине) держим для замеров.
-    // Не вышло — обычная загрузка, метки светлые (у них своя тёмная подложка).
+    // Не вышло — обычная загрузка, точки светлые (с тенью).
     const galImgIO = new IntersectionObserver(es => es.forEach(e => {
         if (!e.isIntersecting) return;
         galImgIO.unobserve(e.target);
@@ -8070,7 +8073,7 @@
                     bmp.close && bmp.close();
                     img._vpLum = { w, h, d: g.getImageData(0, 0, w, h).data };
                     galTone(img.closest('.vp-gal-tile'));
-                } catch (e) { /* не картинка для холста — метки остаются светлыми */ }
+                } catch (e) { /* не картинка для холста — точки остаются светлыми */ }
             },
             onerror: plain, ontimeout: plain
         });
@@ -8091,14 +8094,14 @@
         }
         return n ? sum / n : null;
     }
-    // тон каждого элемента поверх плитки — по месту под ним на текущей картинке
+    // тон точек листания — по месту под ними на текущей картинке
     function galTone(tile) {
         if (!tile || !tile.isConnected) return;
         const strip = tile.querySelector('.vp-gal-strip');
         const i = strip ? Math.round(strip.scrollLeft / Math.max(1, strip.clientWidth)) : 0;
         const slide = strip && strip.children[i];
         const img = slide && slide.querySelector('img');
-        tile.querySelectorAll('.vp-gal-count, .vp-gal-dots, .vp-gal-arrow, .vp-gal-badge').forEach(el => {
+        tile.querySelectorAll('.vp-gal-dots').forEach(el => {
             const lum = img && galLumAt(img, el.getBoundingClientRect());
             el.classList.toggle('vp-ink', lum !== null && lum !== undefined && lum > .62);   // светло под элементом — тёмный
         });
