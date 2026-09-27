@@ -7810,7 +7810,7 @@
     // иконка — залитая, как у пунктов меню сайта (контурная выбивалась)
     const galIcon = size => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="10" rx="2.5"/><rect x="13" y="3" width="8" height="6" rx="2.5"/><rect x="3" y="15" width="8" height="6" rx="2.5"/><rect x="13" y="11" width="8" height="10" rx="2.5"/></svg>`;
     const GAL_TABS = [['popular', 'Популярное'], ['clan', 'Кланы'], ['following', 'Подписки']];   // порядок — как у ленты
-    const gal = { acts: new Map(), el: null, tab: 'popular', cursor: null, loading: false, done: false, cols: [], heights: [], seen: new Set(), hist: false };
+    const gal = { urls: [], acts: new Map(), el: null, tab: 'popular', cursor: null, loading: false, done: false, cols: [], heights: [], seen: new Set(), hist: false };
     const galStyle = document.createElement('style');
     galStyle.textContent = `
         /* как лента: таблетка вкладок отдельно сверху (ПК — 36 от верха, высота 45), под ней через 16 —
@@ -7858,14 +7858,19 @@
         .vp-gal-slide { flex: 0 0 100%; height: 100%; scroll-snap-align: start; }
         .vp-gal-slide > img, .vp-gal-slide > video { display: block; width: 100%; height: 100%; object-fit: cover; }
         .vp-gal-count { position: absolute; right: 8px; top: 8px; padding: 3px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
-            background: rgba(0,0,0,.55); color: #fff; pointer-events: none; }
+            background: rgba(0,0,0,.55); color: #fff; pointer-events: none; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: background .2s, color .2s; }
+        .vp-gal-count.vp-ink, .vp-gal-badge.vp-ink { background: rgba(255,255,255,.72); color: #111; }
         .vp-gal-dots { position: absolute; left: 0; right: 0; top: 16px; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
         .vp-gal-dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.5); box-shadow: 0 0 3px rgba(0,0,0,.5); }
         .vp-gal-dots i.vp-on { background: #fff; }
+        .vp-gal-dots.vp-ink i { background: rgba(0,0,0,.35); box-shadow: 0 0 3px rgba(255,255,255,.6); }
+        .vp-gal-dots.vp-ink i.vp-on { background: #111; }
         .vp-gal-arrow { position: absolute; top: 50%; width: 32px; height: 32px; margin-top: -16px; border: 0; border-radius: 50%; padding: 0;
             display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
             background: rgba(0,0,0,.45); color: #fff; opacity: 0; transition: opacity .15s; }
         .vp-gal-arrow.vp-prev { left: 8px; } .vp-gal-arrow.vp-next { right: 8px; }
+        .vp-gal-arrow.vp-ink { background: rgba(255,255,255,.75); color: #111; }
+        .vp-gal-arrow:active { transform: scale(.9); }
         .vp-gal-arrow:disabled { visibility: hidden; }
         @media (hover: hover) and (pointer: fine) { .vp-gal-tile:hover .vp-gal-arrow { opacity: 1; } }
         @media not ((hover: hover) and (pointer: fine)) { .vp-gal-arrow { display: none; } }
@@ -7875,8 +7880,16 @@
         .vp-gal-tile.vp-ctx .vp-gal-slide > img { pointer-events: auto; }
         /* кнопки поверх, как на постах: лайк, коммент, репост — контуры без фона; ПК — при наведении, телефон — всегда */
         .vp-gal-acts { position: absolute; left: 6px; bottom: 6px; display: flex; gap: 2px; transition: opacity .15s; }
-        .vp-gal-act { width: 36px; height: 36px; padding: 0; border: 0; background: none; color: #fff; cursor: pointer;
-            display: inline-flex; align-items: center; justify-content: center; filter: drop-shadow(0 1px 2px rgba(0,0,0,.7)) drop-shadow(0 0 6px rgba(0,0,0,.35)); }
+        .vp-gal-act { width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: none; color: #fff; cursor: pointer;
+            display: inline-flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent;
+            filter: drop-shadow(0 0 1px rgba(0,0,0,.9)) drop-shadow(0 1px 3px rgba(0,0,0,.55));
+            transition: transform .12s ease, color .2s, filter .2s; }
+        .vp-gal-act.vp-ink { color: #111; filter: drop-shadow(0 0 1px rgba(255,255,255,.95)) drop-shadow(0 1px 3px rgba(255,255,255,.5)); }
+        .vp-gal-act:active { transform: scale(.86); }
+        @media (hover: hover) and (pointer: fine) { .vp-gal-act:hover { transform: scale(1.12); } }
+        .vp-gal-act:focus-visible { outline: 2px solid var(--vp-accent, #fff); outline-offset: -4px; }
+        .vp-gal-act.vp-on[data-act="like"] svg { animation: vpGalPop .35s cubic-bezier(.3, 1.6, .5, 1); }
+        @keyframes vpGalPop { 40% { transform: scale(1.35); } }
         .vp-gal-act svg { width: 24px; height: 24px; }
         .vp-gal-act.vp-on { color: var(--accent-liked, #f91880); }
         .vp-gal-act.vp-on[data-act="like"] path { fill: currentColor; }
@@ -7986,9 +7999,75 @@
             return v;
         }
         const img = document.createElement('img');
-        img.loading = 'lazy'; img.decoding = 'async'; img.alt = '';
-        img.src = att.url;
+        img.decoding = 'async'; img.alt = '';
+        img.dataset.src = att.url;
+        galImgIO.observe(img);
         return img;
+    }
+    // Кнопки поверх картинки — светлые на тёмном месте, тёмные на светлом, и под КАЖДОЙ кнопкой своё место
+    // (слева тёмное пятно, справа светлый фон — сердце светлое, репост тёмный). Пиксели картинки с сервера
+    // сайта читать нельзя (нет разрешения CORS), поэтому картинку загружает Tampermonkey (тот же канал, что у
+    // стикеров): один раз, её же и показываем, а уменьшенную копию (64 точки по ширине) держим для замеров.
+    // Не вышло — обычная загрузка, кнопки светлые с обводкой (читаются на любом фоне).
+    const galImgIO = new IntersectionObserver(es => es.forEach(e => {
+        if (!e.isIntersecting) return;
+        galImgIO.unobserve(e.target);
+        galLoadImg(e.target);
+    }), { rootMargin: '900px 0px' });
+    function galLoadImg(img) {
+        const url = img.dataset.src;
+        const plain = () => { if (!img.src) img.src = url; };
+        if (typeof GM_xmlhttpRequest !== 'function') return plain();
+        GM_xmlhttpRequest({
+            method: 'GET', url, responseType: 'blob', timeout: 30000,
+            onload: async r => {
+                const blob = r.status === 200 && r.response;
+                if (!blob || !blob.size) return plain();
+                const obj = URL.createObjectURL(blob);
+                gal.urls.push(obj);
+                img.src = obj;
+                try {
+                    const bmp = await createImageBitmap(blob);
+                    const w = 64, h = Math.max(1, Math.round(64 * bmp.height / bmp.width));
+                    const c = document.createElement('canvas');
+                    c.width = w; c.height = h;
+                    const g = c.getContext('2d', { willReadFrequently: true });
+                    g.drawImage(bmp, 0, 0, w, h);
+                    bmp.close && bmp.close();
+                    img._vpLum = { w, h, d: g.getImageData(0, 0, w, h).data };
+                    galTone(img.closest('.vp-gal-tile'));
+                } catch (e) { /* не картинка для холста — остаёмся со светлыми кнопками */ }
+            },
+            onerror: plain, ontimeout: plain
+        });
+    }
+    // яркость (0–1) картинки под прямоугольником r (в координатах экрана); картинка — object-fit: cover
+    function galLumAt(img, r) {
+        const L = img._vpLum, box = img.getBoundingClientRect();
+        if (!L || !box.width) return null;
+        const scale = Math.max(box.width / L.w, box.height / L.h);          // cover: картинка шире/выше рамки
+        const ox = (L.w * scale - box.width) / 2, oy = (L.h * scale - box.height) / 2;
+        const x0 = Math.max(0, Math.floor((r.left - box.left + ox) / scale)), x1 = Math.min(L.w - 1, Math.ceil((r.right - box.left + ox) / scale));
+        const y0 = Math.max(0, Math.floor((r.top - box.top + oy) / scale)), y1 = Math.min(L.h - 1, Math.ceil((r.bottom - box.top + oy) / scale));
+        let sum = 0, n = 0;
+        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+            const i = (y * L.w + x) * 4;
+            sum += (0.2126 * L.d[i] + 0.7152 * L.d[i + 1] + 0.0722 * L.d[i + 2]) / 255;
+            n++;
+        }
+        return n ? sum / n : null;
+    }
+    // тон каждого элемента поверх плитки — по месту под ним на текущей картинке
+    function galTone(tile) {
+        if (!tile || !tile.isConnected) return;
+        const strip = tile.querySelector('.vp-gal-strip');
+        const i = strip ? Math.round(strip.scrollLeft / Math.max(1, strip.clientWidth)) : 0;
+        const slide = strip && strip.children[i];
+        const img = slide && slide.querySelector('img');
+        tile.querySelectorAll('.vp-gal-act, .vp-gal-count, .vp-gal-dots, .vp-gal-arrow, .vp-gal-badge').forEach(el => {
+            const lum = img && galLumAt(img, el.getBoundingClientRect());
+            el.classList.toggle('vp-ink', lum !== null && lum !== undefined && lum > .62);   // светло под элементом — тёмный
+        });
     }
     function galTile(post, media) {
         const tile = document.createElement('div');
@@ -8030,6 +8109,7 @@
                 [...dots.children].forEach((d, k) => d.classList.toggle('vp-on', k === i));
                 prev.disabled = i === 0; next.disabled = i === media.length - 1;
                 strip.querySelectorAll('video').forEach((v, k) => { if (v.closest('.vp-gal-slide') !== strip.children[i]) v.pause(); });
+                galTone(tile);
             };
             strip.addEventListener('scroll', () => requestAnimationFrame(show), { passive: true });
             const go = d => e => { e.stopPropagation(); strip.scrollTo({ left: (at() + d) * strip.clientWidth, behavior: 'smooth' }); };
@@ -8042,6 +8122,7 @@
         tile.addEventListener('contextmenu', () => setTimeout(() => tile.classList.remove('vp-ctx'), 300));
         tile.addEventListener('mouseleave', () => tile.classList.remove('vp-ctx'));
         tile.appendChild(galActions(post));
+        tile.addEventListener('mouseenter', () => galTone(tile));
         tile.addEventListener('click', () => galOpenPost(post));
         return tile;
     }
@@ -8091,6 +8172,8 @@
         gal.el.querySelectorAll('.vp-gal-tab').forEach(b => b.classList.toggle('vp-on', b.dataset.tab === tab));
         galInd();
         gal.cols.forEach(c => c.querySelectorAll('video').forEach(v => galVideoIO.unobserve(v)));
+        gal.cols.forEach(c => c.querySelectorAll('img[data-src]').forEach(i => galImgIO.unobserve(i)));
+        gal.urls.splice(0).forEach(u => URL.revokeObjectURL(u));
         gal.cols = [];
         galLayout();
         gal.el.querySelector('.vp-gal-body').scrollTop = 0;
