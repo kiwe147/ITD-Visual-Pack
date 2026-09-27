@@ -495,6 +495,9 @@
         const t = document.documentElement.getAttribute('data-theme');
         return t ? t !== 'dark' : GM_getValue('siteTheme', 'dark') === 'light';
     }
+    // Пока идёт заставка — фон мода не рисуется и свой фон (картинка/видео) не грузится: иначе браузер
+    // тормозил анимацию, а звук шёл по своим часам — картинка и звук расходились (особенно с видео на фоне)
+    let introOn = false;
     function playIntro(mode, variant) {
         const root = document.documentElement;
         const rare = variant === true, asm = variant === 'assemble', twist = variant === 'twist';
@@ -536,6 +539,7 @@
             return e;
         };
         const ov = el('vpi-overlay' + (light ? ' vpi-light' : ''), root);
+        introOn = true;
         const halves = [0, 1].map(i => el('vpi-half vpi-half-' + i, ov));
         const worlds = halves.map(h => el('vpi-world', h));
         // X — за словом: неоновый контур (цветная линия, внутри чёрная), как на иконке
@@ -866,6 +870,8 @@
             done = true;
             ov.remove();
             css.remove();
+            introOn = false;
+            document.dispatchEvent(new CustomEvent('vp-intro-done'));
             root.style.overflow = prevOverflow;
             if (ctx) setTimeout(() => ctx.close().catch(() => {}), 3500);   // дать дотаять хвосту последнего удара
         };
@@ -2271,6 +2277,15 @@
     // свой фон — вместо холста слой с картинкой/видео
     function updateBackgroundVisibility() {
         const custom = backgroundStyle === 'custom';
+        // идёт заставка — свой фон включим после неё (загрузка и видео отнимали у неё кадры)
+        if (custom && backgroundEnabled && introOn) {
+            if (!updateBackgroundVisibility._wait) {
+                updateBackgroundVisibility._wait = true;
+                document.addEventListener('vp-intro-done', () => { updateBackgroundVisibility._wait = false; updateBackgroundVisibility(); }, { once: true });
+            }
+            canvas.classList.add('vp-bg-off');
+            return;
+        }
         canvas.classList.toggle('vp-bg-off', !backgroundEnabled || custom);
         bgMedia.classList.toggle('vp-bg-off', !backgroundEnabled || !custom);
         const v = bgMedia.querySelector('video');
@@ -3775,7 +3790,8 @@
             'Галерея: кнопки на картинках сами подстраиваются — на светлом месте тёмные, на тёмном светлые (под каждой кнопкой своё место)',
             'Галерея: кнопки крупнее, отзываются на нажатие, сердце «подпрыгивает» при лайке',
             'Магазин → «Сообщения»: окно открывается поверх магазина (раньше не было видно)',
-            'Свой и живой фон видны в магазине и в «Сообщениях»']],
+            'Свой и живой фон видны в магазине и в «Сообщениях»',
+            'Заставка больше не расходится со звуком, если на фоне своё видео: фон включается сразу после заставки']],
         ['3.2.21', '28 сентября 2026', [
             'Галерея: пост с несколькими картинками — одна плитка, картинки листаются внутри (телефон — свайп, компьютер — стрелки), лайк и репост — один на пост',
             '«Что нового»: страница за окном размыта сразу, а не после нажатия']],
@@ -4523,7 +4539,7 @@
         }
         const dt = Math.min(3, gap / 50);                // доля от 50 мс: скорости не зависят от частоты кадров
         if (currentStyle === 'rainbow') { stepHue(dt); paint(); }
-        if (backgroundEnabled) drawBackground(dt);
+        if (backgroundEnabled && !introOn) drawBackground(dt);
     }
     paint();
     requestAnimationFrame(frame);
