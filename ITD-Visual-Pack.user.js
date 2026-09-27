@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.16
+// @version      3.2.17
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3745,6 +3745,10 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.2.17', '28 сентября 2026', [
+            'Галерея: на компьютере — по центру, от меню до правой панели; вкладки как у ленты; стеклянный фон, как у постов; лента под ней больше не просвечивает; без крестика — обычная вкладка',
+            'Лента → Галерея → «Лента» больше не обновляет ленту (и с «Сообщениями» так же)',
+            'В профиле — «лайков» при любом числе']],
         ['3.2.16', '28 сентября 2026', [
             'Лайки за всё время — в своём профиле рядом с постами; в «Статистике» — сколько прибавилось за день и за месяц',
             'Галерея открывается как страница сайта: меню слева (на телефоне — снизу) остаётся, ширина — под экран; иконка в стиле сайта',
@@ -6077,7 +6081,8 @@
         document.addEventListener('click', e => {
             if (!root.classList.contains('vp-open')) return;
             const a = e.target.closest && e.target.closest('a.' + SELECTORS.navLink);
-            if (a && a.getAttribute('href') !== '#' && a.getAttribute('href') === location.pathname) close();
+            // тот же пункт — только закрыть личку: иначе сайт считает это повторным нажатием и обновляет страницу
+            if (a && a.getAttribute('href') !== '#' && a.getAttribute('href') === location.pathname) { e.preventDefault(); e.stopPropagation(); close(); }
         }, true);
         // перешли на другую страницу (пункт меню, ссылка) — «страница» лички закрывается
         onDom(function msgsLeft() { if (root.classList.contains('vp-open') && location.pathname !== openPath) close(true); });
@@ -7762,10 +7767,12 @@
     const galStyle = document.createElement('style');
     galStyle.textContent = `
         .vp-gal { position: fixed; z-index: 30; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden;
-            background: var(--bg-primary, #000); color: var(--text-primary, #fff); }
-        .vp-gal.vp-card { border-radius: 36px; border: 1px solid var(--border-color, rgba(255, 255, 255, .15)); background: #141414; }
-        html.vp-light .vp-gal { background: #f4f4f5; }
-        html.vp-light .vp-gal.vp-card { background: #fff; box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
+            background: var(--block-bg, #1c1c1c); color: var(--text-primary, #fff);
+            backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none); }
+        .vp-gal.vp-card { border-radius: 36px; border: 1px solid var(--border-color, rgba(255, 255, 255, .15)); }
+        html.vp-light .vp-gal.vp-card { box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
+        /* пока открыта галерея — лента под ней спрятана (иначе просвечивала сквозь стекло и в скруглённых углах) */
+        html.vp-gal-open .vp-gal-hidden { visibility: hidden !important; }
         .vp-gal-head { padding: 16px 20px 8px !important; }
         .vp-gal-head > b { font-size: 22px !important; font-weight: 700; }
         .vp-gal-tabs { padding: 0 20px 12px !important; }
@@ -7776,12 +7783,18 @@
         html.vp-gal-open .vp-gal-nav { color: var(--vp-on-c) !important; opacity: var(--vp-on-o) !important; background-color: var(--vp-on-b) !important; }
         .vp-gal-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; flex: 0 0 auto; }
         .vp-gal-head > b { font-size: 18px; margin-right: auto; }
-        .vp-gal-x { width: 38px; height: 38px; border: 0; border-radius: 50%; background: rgba(128,128,128,.18); color: inherit; cursor: pointer;
-            display: inline-flex; align-items: center; justify-content: center; }
-        .vp-gal-tabs { display: flex; gap: 6px; padding: 0 12px 10px; flex: 0 0 auto; overflow-x: auto; scrollbar-width: none; }
-        .vp-gal-tab { border: 0; border-radius: 99px; padding: 7px 14px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
-            background: rgba(128,128,128,.16); color: inherit; white-space: nowrap; }
-        .vp-gal-tab.vp-on { background: var(--accent-primary, #0080FF); color: #fff; }
+        /* вкладки — как у ленты («Для вас / Кланы / Подписки»): полоса-«таблетка», кнопки поровну,
+           под выбранной — бегунок с обводкой цвета ника (--vp-accent), переезжает плавно */
+        .vp-gal-tabs { position: relative; display: flex; flex: 0 0 auto; padding: 4px; margin: 0 16px 12px; border-radius: 9999px;
+            background: var(--glass-bg, rgba(35, 35, 35, .5)); }
+        html.vp-light .vp-gal-tabs { background: rgba(0, 0, 0, .06); }
+        .vp-gal-ind { position: absolute; top: 4px; bottom: 4px; left: 4px; border-radius: 9999px; pointer-events: none;
+            background: rgba(255, 255, 255, .08); box-shadow: inset 0 0 0 1px var(--vp-accent, #fff), 0 0 14px -4px var(--vp-accent, #fff);
+            transition: transform .3s cubic-bezier(.2,.8,.2,1), width .3s cubic-bezier(.2,.8,.2,1); }
+        html.vp-light .vp-gal-ind { background: #fff; }
+        .vp-gal-tab { position: relative; flex: 1 1 0; border: 0; border-radius: 9999px; padding: 8px 0; font: inherit; font-size: 14px; font-weight: 500;
+            cursor: pointer; background: transparent; color: var(--text-primary, #f5f5f5); opacity: .5; white-space: nowrap; transition: opacity .2s; }
+        .vp-gal-tab.vp-on { opacity: 1; font-weight: 600; }
         .vp-gal-body { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 24px; }
         .vp-gal-grid { display: flex; gap: 8px; align-items: flex-start; max-width: 1400px; margin: 0 auto; }
         .vp-gal-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -7890,9 +7903,17 @@
             gal.loading = false;
         }
     }
+    // бегунок — под выбранной вкладкой (и после смены ширины окна)
+    function galInd() {
+        const on = gal.el && gal.el.querySelector('.vp-gal-tab.vp-on'), ind = gal.el && gal.el.querySelector('.vp-gal-ind');
+        if (!on || !ind) return;
+        ind.style.width = on.offsetWidth + 'px';
+        ind.style.transform = `translateX(${on.offsetLeft - 4}px)`;
+    }
     function galSwitch(tab) {
         gal.tab = tab; gal.cursor = null; gal.done = false; gal.seen.clear(); galN = 0;
         gal.el.querySelectorAll('.vp-gal-tab').forEach(b => b.classList.toggle('vp-on', b.dataset.tab === tab));
+        galInd();
         gal.cols.forEach(c => c.querySelectorAll('video').forEach(v => galVideoIO.unobserve(v)));
         gal.cols = [];
         galLayout();
@@ -7906,26 +7927,48 @@
         const nav = document.querySelector('.' + SELECTORS.nav);
         const nr = nav && nav.getBoundingClientRect();
         const row = nav && navIsRow(nav) && nr.top > innerHeight / 2;
+        requestAnimationFrame(galInd);
         // телефон: окно до низа экрана, нижняя панель — поверх (иначе между ними просвечивала лента)
         document.querySelectorAll('.vp-gal-navwrap').forEach(w => w.classList.remove('vp-gal-navwrap'));
         if (row) {
             if (nav.parentElement) nav.parentElement.classList.add('vp-gal-navwrap');
             Object.assign(gal.el.style, { left: '0px', right: '0px', top: '0px', bottom: '0px', width: '', paddingBottom: Math.max(0, innerHeight - nr.top + BUMP_H + 8) + 'px' });
         } else {
-            const side = nav && nav.closest('aside') || nav;
-            const left = side ? Math.round(side.getBoundingClientRect().right + 20) : 20;
-            Object.assign(gal.el.style, { left: left + 'px', right: '20px', top: '12px', bottom: '12px', width: '', paddingBottom: '0px' });
+            // ПК: от левого меню до правого края правой панели (статистика, клуб) — по центру раскладки
+            // сайта и шире ленты; панели нет — справа тот же отступ, что у меню слева
+            const side = nav && nav.closest('aside') || nav, sr = side && side.getBoundingClientRect();
+            const left = sr ? Math.round(sr.right + 20) : 20;
+            const railEl = document.querySelector('.vp-rail.vp-on') || document.querySelector('.vp-rail');
+            const rr = railEl && railEl.getBoundingClientRect();
+            const rightEdge = rr && rr.width ? rr.right : innerWidth - (sr ? Math.max(20, sr.left) : 20);
+            Object.assign(gal.el.style, { left: left + 'px', right: Math.max(12, Math.round(innerWidth - rightEdge)) + 'px', top: '12px', bottom: '12px', width: '', paddingBottom: '0px' });
         }
         gal.el.classList.toggle('vp-card', !row);
     }
+    function galHideFeed(on) {
+        document.querySelectorAll('.vp-gal-hidden').forEach(e => { if (!on) e.classList.remove('vp-gal-hidden'); });
+        if (!on) return;
+        const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail, nav, .vp-gal';
+        const up = el => {
+            let top = el;
+            for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+                if (p.querySelector(side) || p.getBoundingClientRect().width >= innerWidth * 0.72) break;
+                top = p;
+            }
+            return top;
+        };
+        document.querySelectorAll('.' + [SELECTORS.tabs, SELECTORS.feedBar, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .'))
+            .forEach(e => { const t = up(e); if (!t.closest('.vp-gal, nav')) t.classList.add('vp-gal-hidden'); });
+    }
+    onDom(function galFeedHidden() { if (gal.el) galHideFeed(true); });
     function openGallery() {
         if (gal.el) return;
         const msgs = document.querySelector('.vp-msgs.vp-open');
         if (msgs && msgs.close) msgs.close();
         const el = document.createElement('div');
         el.className = 'vp-gal';
-        el.innerHTML = `<div class="vp-gal-head"><b>Галерея</b><button type="button" class="vp-gal-x" title="Закрыть">${svgIcon('<path d="M18 6 6 18M6 6l12 12"/>', 18)}</button></div>
-            <div class="vp-gal-tabs">${GAL_TABS.map(([id, name]) => `<button type="button" class="vp-gal-tab" data-tab="${id}">${name}</button>`).join('')}</div>
+        el.innerHTML = `<div class="vp-gal-head"><b>Галерея</b></div>
+            <div class="vp-gal-tabs"><div class="vp-gal-ind"></div>${GAL_TABS.map(([id, name]) => `<button type="button" class="vp-gal-tab" data-tab="${id}">${name}</button>`).join('')}</div>
             <div class="vp-gal-body"><div class="vp-gal-grid"></div><div class="vp-gal-more"></div></div>`;
         document.body.appendChild(el);
         gal.el = el;
@@ -7934,8 +7977,8 @@
         addEventListener('resize', galPosition);
         document.documentElement.classList.add('vp-gal-open');
         galOpen = true;
+        galHideFeed(true);
         markActiveNav(); moveNavBlob();
-        el.querySelector('.vp-gal-x').onclick = () => closeGallery();
         el.querySelectorAll('.vp-gal-tab').forEach(b => b.onclick = () => { if (b.dataset.tab !== gal.tab || !gal.seen.size) galSwitch(b.dataset.tab); });
         const body = el.querySelector('.vp-gal-body');
         body.addEventListener('scroll', () => { if (body.scrollTop + body.clientHeight > body.scrollHeight - 1200) galLoad(); }, { passive: true });
@@ -7951,16 +7994,22 @@
         removeEventListener('resize', galPosition);
         document.documentElement.classList.remove('vp-gal-open');
         galOpen = false;
+        galHideFeed(false);
         document.querySelectorAll('.vp-gal-navwrap').forEach(w => w.classList.remove('vp-gal-navwrap'));
         markActiveNav(); moveNavBlob();
         if (gal.hist) { gal.hist = false; if (!fromBack && history.state && history.state.vpGal) history.back(); }
     }
     addEventListener('popstate', () => { if (gal.el) { gal.hist = false; closeGallery(true); } });
     onDom(function galLeft() { if (gal.el && location.pathname !== gal.path) { closeGallery(true); } });
+    // пункт меню: другая страница — закрыть и перейти; пункт той же страницы (галерею открыли с ленты
+    // и жмут «Ленту») — только закрыть: адрес при галерее не менялся, и сайт считал это повторным
+    // нажатием на текущий пункт — прокручивал и обновлял ленту
     document.addEventListener('click', e => {
         if (!gal.el) return;
         const a = e.target.closest && e.target.closest('a.' + SELECTORS.navLink);
-        if (a && !a.classList.contains('vp-gal-nav')) closeGallery();
+        if (!a || a.classList.contains('vp-gal-nav')) return;
+        if (a.getAttribute('href') === gal.path) { e.preventDefault(); e.stopPropagation(); }
+        closeGallery();
     }, true);
     addEventListener('keydown', e => { if (e.key === 'Escape' && gal.el) closeGallery(); });
     let galCols = galColsCount();
@@ -8272,7 +8321,7 @@
                 const [ln, llabel] = lk.querySelectorAll('span');
                 ln.classList.remove('vp-count');
                 ln.textContent = likes;
-                llabel.textContent = plural(likes, 'лайк', 'лайка', 'лайков');
+                llabel.textContent = 'лайков';                 // всегда «лайков» (так попросил владелец: «5371 лайк» читается странно)
                 mine.after(lk);
                 if (!postsCounted.has(login + '|likes')) { postsCounted.add(login + '|likes'); countUpOnce(ln, likes); }
             });
