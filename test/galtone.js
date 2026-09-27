@@ -114,7 +114,11 @@ const svg = kind => kind === 'split'
   await p.$eval('.vp-gal-acts[data-post="multi"]', r => r.closest('.vp-gal-tile').click());
   await p.waitForTimeout(500);
   const inPost = new URL(p.url()).pathname;
+  // в посте лайкнули кнопкой сайта (его запрос) — после «назад» лайк виден на плитке
+  const liked = await p.evaluate(() => fetch('/api/posts/multi/like', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(r => r.ok));
   await p.goBack(); await p.waitForTimeout(900);
+  const likeOn = await p.$eval('.vp-gal-acts[data-post="multi"] .vp-gal-act[data-act="like"]', b => b.classList.contains('vp-on'));
+  check(liked && likeOn, 'лайк, поставленный в посте, виден на плитке галереи');
   const back = await p.$eval('.vp-gal-acts[data-post="multi"]', r => { const t = r.closest('.vp-gal-tile'), st = t.querySelector('.vp-gal-strip');
     return { cnt: t.querySelector('.vp-gal-count').textContent, at: Math.round(st.scrollLeft / st.clientWidth) + 1 }; });
   check(/\/post\/multi$/.test(inPost) && back.cnt === '2/3' && back.at === 2, `назад из поста: плитка на 2-й картинке (счётчик ${back.cnt}, на экране ${back.at}-я)`);

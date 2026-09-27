@@ -173,6 +173,12 @@
                     if (url && /^get$/i.test(method) && POSTS_URL.test(url)) {
                         res.then(r => r.ok && r.clone().text().then(keepSitePosts)).catch(() => { });
                     }
+                    // лайк/репост на сайте (в посте, в ленте) — сказать галерее: у неё своё состояние кнопок
+                    const act = url && /^(post|delete)$/i.test(method) && String(url).match(/\/api\/posts\/([\w-]+)\/(like|repost)\/?(?:[?#]|$)/);
+                    if (act) {
+                        const on = /^post$/i.test(method);
+                        res.then(r => { if (r.ok) document.dispatchEvent(new CustomEvent('vp-post-act', { detail: { id: act[1], act: act[2], on } })); }).catch(() => { });
+                    }
                     if (url && /\/auth\/refresh(?:[?#]|$)/.test(url)) {
                         res.then(r => r.ok && r.clone().json().then(d => { if (d && d.accessToken) { siteAuth.token = d.accessToken; siteAuth.at = Date.now(); } })).catch(() => { });
                     }
@@ -3771,7 +3777,9 @@
             'Галерея: если первые картинки не заполнили экран, следующие подгружаются сами (раньше внизу оставалась пустота)',
             'Галерея: кнопка «Скопировать картинку» рядом со ссылкой; правой кнопкой мыши картинка тоже копируется сразу',
             'Галерея: колонки под ширину окна галереи (маленький экран и телефон — меньше колонок, кнопки компактнее, не налезают)',
-            'Галерея: пока картинка грузится — заготовка со значком загрузки; не загрузилась — значок, нажми, чтобы повторить; картинки грузятся заранее',
+            'Галерея и картинки постов в ленте: пока картинка грузится — заготовка со значком загрузки; не загрузилась — значок, нажми, чтобы повторить; в галерее картинки грузятся заранее',
+            'Галерея: лайк и репост, поставленные в самом посте, видны и на картинке в галерее',
+            'Галерея и «Сообщения»: видео и звук страницы под ними ставятся на паузу (раньше звук играл дальше)',
             'Галерея: картинки поста листаются и перетаскиванием мышью; точки — на подложке; после возврата из поста — та же картинка; у края первой и последней нажатие не открывает пост',
             'Галерея: кнопки, стрелки и счётчик картинок — белые на тёмной стеклянной подложке, хорошо видны на любой картинке',
             'Галерея: справа внизу на картинке — кнопка «Скопировать ссылку» на пост',
@@ -7882,19 +7890,20 @@
         .vp-gal-strip::-webkit-scrollbar { display: none; }
         .vp-gal-slide { position: relative; flex: 0 0 100%; height: 100%; scroll-snap-align: start; }
         /* заготовка: грузится — мерцает, в середине крутится кольцо; не загрузилась — битая картинка и «нажми» */
-        .vp-gal-slide.vp-wait, .vp-gal-slide.vp-fail { background: rgba(128,128,128,.14); }
-        .vp-gal-slide.vp-wait > img, .vp-gal-slide.vp-fail > img { opacity: 0; }
-        .vp-gal-slide.vp-wait::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+        .vp-gal-slide.vp-wait, .vp-gal-slide.vp-fail, .vp-media-wait, .vp-media-fail { background: rgba(128,128,128,.14); }
+        .vp-gal-slide.vp-wait > img, .vp-gal-slide.vp-fail > img, .vp-media-wait > img, .vp-media-fail > img { opacity: 0; }
+        .vp-media-rel { position: relative; }
+        .vp-gal-slide.vp-wait::before, .vp-media-wait::before { content: ''; position: absolute; inset: 0; pointer-events: none;
             background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.09) 50%, transparent 70%) 0 0 / 250% 100%;
             animation: vpGalShine 1.4s linear infinite; }
-        .vp-gal-slide.vp-wait::after { content: ''; position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px;
+        .vp-gal-slide.vp-wait::after, .vp-media-wait::after { content: ''; position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px;
             border-radius: 50%; border: 2.5px solid rgba(255,255,255,.18); border-top-color: rgba(255,255,255,.75);
             animation: vpGalSpin .8s linear infinite; pointer-events: none; }
-        .vp-gal-slide.vp-fail::after { content: 'не загрузилось — нажми'; position: absolute; left: 0; right: 0; top: 50%; margin-top: -4px;
+        .vp-gal-slide.vp-fail::after, .vp-media-fail::after { content: 'не загрузилось — нажми'; position: absolute; left: 0; right: 0; top: 50%; margin-top: -4px;
             padding-top: 38px; text-align: center; font-size: 12px; color: var(--text-secondary, #8a8a8a); pointer-events: none;
             background: no-repeat center top / 30px 30px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8a8a' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='3'/%3E%3Cpath d='m3 16 5-5 4 4'/%3E%3Cpath d='m14 13 2-2 5 5'/%3E%3Cpath d='M3 3l18 18'/%3E%3C/svg%3E");
             transform: translateY(-50%); }
-        .vp-gal-slide.vp-fail { cursor: pointer; }
+        .vp-gal-slide.vp-fail, .vp-media-fail { cursor: pointer; }
         @keyframes vpGalShine { from { background-position: 125% 0; } to { background-position: -125% 0; } }
         @keyframes vpGalSpin { to { transform: rotate(360deg); } }
         .vp-gal-slide > img, .vp-gal-slide > video { display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -8115,6 +8124,15 @@
         out.append(row, right);
         return out;
     }
+    // лайк/репост поставили на сайте (открыли пост из галереи, лайкнули, вернулись) — плитки поста в галерее
+    // (и спрятанной, пока открыт пост) показывают то же
+    document.addEventListener('vp-post-act', e => {
+        const { id, act, on } = e.detail || {};
+        const st = gal.acts.get(id), root = gal.el || gal.kept;
+        if (!st || st[act + 'Busy'] || !root) return;              // своё нажатие в галерее — уже учтено
+        st[act] = on;
+        root.querySelectorAll(`.vp-gal-acts[data-post="${id}"] .vp-gal-act[data-act="${act}"]`).forEach(b => b.classList.toggle('vp-on', on));
+    });
     let galN = 0;
     // Плитка — один пост. Картинок несколько — листаются внутри плитки, как в Инстаграме: полоса со снимками
     // (телефон — свайп, ПК — стрелки при наведении), счётчик «1/4» и точки. Размер плитки — по первой картинке.
@@ -8344,9 +8362,22 @@
         }
         gal.el.classList.toggle('vp-card', !row);
     }
+    // Видео и звук страницы под окном мода (галерея, «Сообщения») — на паузу: окно прячет страницу, но не
+    // глушит её (открыл видео со звуком в профиле, открыл галерею — звук играл дальше). Своё не трогаем:
+    // видео галереи, фон мода, заставку
+    const OWN_MEDIA = '.vp-gal, .vp-msgs, .vp-bg-media, .vpi-overlay';
+    function pauseSiteMedia() {
+        document.querySelectorAll('video, audio').forEach(m => { if (!m.paused && !m.closest(OWN_MEDIA)) m.pause(); });
+    }
+    // пока окно открыто, страница под ним сама не заиграет (автозапуск видео в спрятанной ленте и т.п.)
+    document.addEventListener('play', e => {
+        const m = e.target;
+        if ((galOpen || msgsOpen) && m && m.pause && !m.closest(OWN_MEDIA)) m.pause();
+    }, true);
     function galHideFeed(on) {
         document.querySelectorAll('.vp-gal-hidden').forEach(e => { if (!on) e.classList.remove('vp-gal-hidden'); });
         if (!on) return;
+        pauseSiteMedia();
         const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail, nav, .vp-gal, .vp-msgs';
         const up = el => {
             let top = el;
@@ -8510,6 +8541,33 @@
         });
     }
     onDom(framePages);
+
+    // Картинки постов (ленты, профиля, поста): пока грузится — заготовка, как в галерее (мерцание и кольцо);
+    // не загрузилась — значок и «нажми»: нажатие грузит заново, а не открывает пост. Рамку картинки сайт
+    // ставит заранее нужного размера — заготовка рисуется в ней
+    function postMediaWait() {
+        document.querySelectorAll('img[data-post-media-image]:not([data-vp-wait])').forEach(img => {
+            const box = img.parentElement;
+            if (!box) return;
+            img.dataset.vpWait = '1';
+            if (getComputedStyle(box).position === 'static') box.classList.add('vp-media-rel');
+            const done = () => box.classList.remove('vp-media-wait', 'vp-media-fail');
+            const fail = () => { box.classList.remove('vp-media-wait'); box.classList.add('vp-media-fail'); };
+            img.addEventListener('load', done);
+            img.addEventListener('error', fail);
+            if (!img.complete) box.classList.add('vp-media-wait');
+            else if (!img.naturalWidth && img.getAttribute('src')) fail();
+            box.addEventListener('click', e => {
+                if (!box.classList.contains('vp-media-fail')) return;
+                e.stopPropagation(); e.preventDefault();
+                box.classList.replace('vp-media-fail', 'vp-media-wait');
+                const src = img.src;
+                img.removeAttribute('src');
+                img.src = src;
+            }, true);
+        });
+    }
+    onDom(postMediaWait);
 
     // --- Обновить пост: на своих постах слева от «…» — один запрос счётчиков (как у сайта, POST /api/posts/stats),
     // лайки, комменты, репосты и просмотры меняются на месте, без перезагрузки; изменившиеся — вспыхивают
