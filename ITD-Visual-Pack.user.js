@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.9
+// @version      3.2.10
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3544,6 +3544,7 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.2.10', '29 сентября 2026', ['Стикеры: при перетаскивании стикер больше не отстаёт от пальца']],
         ['3.2.9', '29 сентября 2026', [
             'Стикеры: в режиме правки их можно перетаскивать мышью и пальцем — как иконки на рабочем столе телефона, остальные плавно разъезжаются']],
         ['3.2.8', '29 сентября 2026', [
@@ -4272,6 +4273,8 @@
             .vp-sticker-item.vp-sticker-ghost { position: fixed; z-index: 10001; pointer-events: none; margin: 0; border-radius: 10px; overflow: hidden;
                 box-shadow: 0 12px 30px rgba(0, 0, 0, .45), 0 0 0 2px var(--accent-primary, #0080FF); }
             .vp-sticker-ghost .vp-sticker-del { display: none; }
+            .vp-sticker-item.vp-sticker-ghost { transition: none; animation: none; will-change: transform; transform-origin: 50% 50%; }
+            .sticker-panel.vp-drag .sticker-editing { animation-play-state: paused; }
             .vp-sticker-item.vp-hole { opacity: .25; animation: none; box-shadow: inset 0 0 0 2px var(--accent-primary, #0080FF); }
 
             /* кнопка у поля комментария */
@@ -4320,7 +4323,7 @@
                 padding: 0; align-items: center; justify-content: center; }
             .delete-pack-btn { background: #ff4444; }
             .vp-sp-done { background: var(--accent-primary,#0080FF); }
-            .pack-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 3px; padding: 0 10px 16px; }
+            .pack-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 3px; padding: 0 10px 16px; position: relative; }
             /* режим правки: виден только свой пак, у него — «удалить пак» и «готово» */
             .vp-sp-body.vp-editing > :not(.vp-cur) { display: none; }
             .vp-sp-body.vp-editing > .pack-header.vp-cur :is(.delete-pack-btn, .vp-sp-done) { display: flex; }
@@ -4705,40 +4708,58 @@
         // на его месте «дырка»; над другим стикером дырка переезжает туда, соседи разъезжаются;
         // отпустил — стикер ложится в дырку, порядок сохраняется. У края ленты — прокрутка.
         // Без сдвига — обычное нажатие (выбрать стикер).
+        // Скорость: «призрак» двигается через transform раз за кадр в последнюю точку пальца (без переходов —
+        // у ячеек transition: all, из-за него он догонял палец с задержкой); ячейка под пальцем — по
+        // запомненным местам ячеек (без elementFromPoint); дрожь и общий наблюдатель мода на это время стоят.
         function startStickerDrag(e, btn, key) {
             if (e.button > 0 || e.target.closest('.vp-sticker-del')) return;
             const grid = btn.parentElement, x0 = e.clientX, y0 = e.clientY;
-            let ghost = null, dx = 0, dy = 0, last = null;
+            let ghost = null, ox = 0, oy = 0, gx = 0, gy = 0, px = x0, py = y0, raf = 0, cells = [], box = null;
+            // места ячеек — по раскладке (offsetLeft/Top), а не по экрану: во время разъезда ячейки ещё в пути
+            const measure = () => {
+                const gr = grid.getBoundingClientRect();
+                cells = [...grid.querySelectorAll('.vp-sticker-item')].map(el => {
+                    const left = gr.left + grid.clientLeft + el.offsetLeft, top = gr.top + grid.clientTop + el.offsetTop;   // сетка — offsetParent
+                    return { el, r: { left, top, right: left + el.offsetWidth, bottom: top + el.offsetHeight } };
+                });
+                box = scrollContainer.getBoundingClientRect();
+            };
+            const frame = () => {
+                raf = 0;
+                ghost.style.transform = `translate3d(${px - ox - gx}px, ${py - oy - gy}px, 0) scale(1.12)`;
+                const hit = cells.find(c => px >= c.r.left && px <= c.r.right && py >= c.r.top && py <= c.r.bottom);
+                const target = hit && hit.el;
+                if (target && target !== btn) {
+                    const kids = [...grid.children];
+                    flipGrid(grid, () => grid.insertBefore(btn, kids.indexOf(target) > kids.indexOf(btn) ? target.nextSibling : target));
+                    measure();
+                }
+                // у края ленты — прокрутка (и места ячеек заново)
+                if (py < box.top + 36 || py > box.bottom - 36) {
+                    scrollContainer.scrollTop += py < box.top + 36 ? -10 : 10;
+                    measure();
+                    raf = raf || requestAnimationFrame(frame);
+                }
+            };
             const move = ev => {
                 if (ev.pointerId !== e.pointerId) return;
+                px = ev.clientX; py = ev.clientY;
                 if (!ghost) {
-                    if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
+                    if (Math.hypot(px - x0, py - y0) < 6) return;
                     const r = btn.getBoundingClientRect();
-                    dx = x0 - r.left; dy = y0 - r.top;
+                    ox = x0 - r.left; oy = y0 - r.top; gx = r.left; gy = r.top;
                     ghost = btn.cloneNode(true);
                     ghost.className = 'vp-sticker-item vp-sticker-ghost';
                     Object.assign(ghost.style, { width: r.width + 'px', height: r.height + 'px', left: r.left + 'px', top: r.top + 'px' });
+                    domObserver.disconnect();                          // свои перестановки не будят общий проход по странице
                     document.body.appendChild(ghost);
-                    ghost.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.12)' }], { duration: 140, fill: 'forwards', easing: 'ease-out' });
                     btn.classList.add('vp-hole');
                     btn._vpDragged = true;                                // клик после перетаскивания — не выбор
                     stickerPanel.classList.add('vp-drag');
+                    measure();
                 }
                 ev.preventDefault();
-                ghost.style.left = ev.clientX - dx + 'px';
-                ghost.style.top = ev.clientY - dy + 'px';
-                // ячейка под пальцем — туда переезжает дырка
-                const over = document.elementFromPoint(ev.clientX, ev.clientY);
-                const target = over && over.closest('.vp-sticker-item');
-                if (target && target !== btn && target !== last && target.parentElement === grid) {
-                    last = target;
-                    const kids = [...grid.children];
-                    flipGrid(grid, () => grid.insertBefore(btn, kids.indexOf(target) > kids.indexOf(btn) ? target.nextSibling : target));
-                } else if (target === btn) last = null;
-                // у края ленты — прокрутка
-                const sr = scrollContainer.getBoundingClientRect();
-                if (ev.clientY < sr.top + 36) scrollContainer.scrollTop -= 10;
-                else if (ev.clientY > sr.bottom - 36) scrollContainer.scrollTop += 10;
+                raf = raf || requestAnimationFrame(frame);
             };
             const up = ev => {
                 if (ev.pointerId !== e.pointerId) return;
@@ -4746,14 +4767,16 @@
                 document.removeEventListener('pointerup', up, true);
                 document.removeEventListener('pointercancel', up, true);
                 if (!ghost) return;
+                if (raf) { cancelAnimationFrame(raf); frame(); cancelAnimationFrame(raf); }   // последняя точка — тоже в счёт
+                raf = 0;
                 // ложится в дырку
                 const r = btn.getBoundingClientRect(), g = ghost.getBoundingClientRect();
-                ghost.getAnimations().forEach(a => a.cancel());
+                ghost.style.transform = '';
+                Object.assign(ghost.style, { left: r.left + 'px', top: r.top + 'px' });
                 const land = ghost.animate([
-                    { transform: `translate(${g.left - r.left - (g.width - r.width) / 2}px, ${g.top - r.top - (g.height - r.height) / 2}px) scale(1.12)` },
+                    { transform: `translate3d(${g.left - r.left + (g.width - r.width) / 2}px, ${g.top - r.top + (g.height - r.height) / 2}px, 0) scale(1.12)` },
                     { transform: 'none' }
                 ], { duration: 180, easing: 'cubic-bezier(.2,.8,.2,1)' });
-                Object.assign(ghost.style, { left: r.left + 'px', top: r.top + 'px' });
                 const finish = () => {
                     ghost.remove();
                     btn.classList.remove('vp-hole');
@@ -4765,6 +4788,7 @@
                     savePack(key);
                     updateTabButtons();
                     refreshPackGrid(key);
+                    domObserver.observe(document.body, DOM_WATCH);
                 };
                 land.finished.then(finish, finish);
             };
