@@ -3769,6 +3769,7 @@
     const CHANGELOG = [
         ['3.2.22 – 3.2.22.1', '28 сентября 2026', [
             'Галерея: кнопки, стрелки и счётчик картинок — белые на тёмной стеклянной подложке, хорошо видны на любой картинке',
+            'Галерея: справа внизу на картинке — кнопка «Скопировать ссылку» на пост',
             'Галерея: кнопки крупнее, отзываются на нажатие, сердце «подпрыгивает» при лайке',
             'Магазин → «Сообщения»: окно открывается поверх магазина (раньше не было видно)',
             'Свой и живой фон видны в магазине и в «Сообщениях»',
@@ -7903,6 +7904,8 @@
             display: inline-flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent;
             transition: transform .12s ease, color .2s, background .2s; }
         @media (hover: hover) and (pointer: fine) { .vp-gal-act:hover { background: rgba(255,255,255,.14); } }
+        .vp-gal-acts.vp-gal-acts-r { left: auto; right: 8px; }
+        .vp-gal-acts-r:empty { display: none; }
         .vp-gal-act:active { transform: scale(.86); }
         .vp-gal-act:focus-visible { outline: 2px solid var(--vp-accent, #fff); outline-offset: -4px; }
         .vp-gal-act.vp-on[data-act="like"] svg { animation: vpGalPop .35s cubic-bezier(.3, 1.6, .5, 1); }
@@ -7948,7 +7951,9 @@
     const GAL_ICONS = {
         like: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 4.6a3.7 3.7 0 0 0-5.2-.9C3.2 5 2.4 7.6 3.6 10.2 4.8 12.7 10 17 10 17s5.3-4.3 6.5-6.8c1.2-2.6 0-5.2-1.6-6.5s-4-.8-4.9.9"/>',
         comment: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 17a7 7 0 1 0-6.2-3.7L3 17l3.7-.8a7 7 0 0 0 3.3.8"/>',
-        repost: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 9V8a3 3 0 0 1 3-3h9m-3 3 3-3-3-3M16 11v1a3 3 0 0 1-3 3H4m3-3-3 3 3 3"/>'
+        repost: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 9V8a3 3 0 0 1 3-3h9m-3 3 3-3-3-3M16 11v1a3 3 0 0 1-3 3H4m3-3-3 3 3 3"/>',
+        link: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.5 11.5a3.5 3.5 0 0 0 5 0l2.5-2.5a3.5 3.5 0 0 0-5-5l-1 1M11.5 8.5a3.5 3.5 0 0 0-5 0L4 11a3.5 3.5 0 0 0 5 5l1-1"/>',
+        done: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="m4.5 10.5 3.5 3.5 7.5-8"/>'
     };
     // пост из галереи — новой записью поверх записи галереи: «назад» из поста вернёт в галерею (как была)
     function galOpenPost(post) {
@@ -8001,7 +8006,32 @@
         like.addEventListener('click', e => { e.stopPropagation(); toggle(like, `/api/posts/${post.id}/like`); });
         repost.addEventListener('click', e => { e.stopPropagation(); toggle(repost, `/api/posts/${post.id}/repost`, 'Сделать репост этого поста?'); });
         comment.addEventListener('click', e => { e.stopPropagation(); galOpenPost(post); });
-        return row;
+        // справа внизу — скопировать ссылку на пост; скопировалось — на секунду галочка
+        const right = document.createElement('div');
+        right.className = 'vp-gal-acts vp-gal-acts-r';
+        const user = post.author && post.author.username;
+        if (user) {
+            const link = document.createElement('button');
+            link.type = 'button';
+            link.className = 'vp-gal-act';
+            link.dataset.act = 'link';
+            link.title = 'Скопировать ссылку';
+            const icon = k => { link.innerHTML = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true">${GAL_ICONS[k]}</svg>`; };
+            icon('link');
+            link.addEventListener('click', e => {
+                e.stopPropagation();
+                copyText(`${location.origin}/@${user}/post/${post.id}`).then(ok => {
+                    icon(ok ? 'done' : 'link');
+                    link.title = ok ? 'Ссылка скопирована' : 'Не вышло скопировать';
+                    clearTimeout(link._vpT);
+                    link._vpT = setTimeout(() => { icon('link'); link.title = 'Скопировать ссылку'; }, 1400);
+                });
+            });
+            right.appendChild(link);
+        }
+        const out = document.createDocumentFragment();
+        out.append(row, right);
+        return out;
     }
     let galN = 0;
     // Плитка — один пост. Картинок несколько — листаются внутри плитки, как в Инстаграме: полоса со снимками

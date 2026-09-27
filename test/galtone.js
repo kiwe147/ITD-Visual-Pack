@@ -39,6 +39,7 @@ const svg = kind => kind === 'split'
     // «Tampermonkey»: скачать как blob
     window.GM_xmlhttpRequest = o => { fetch(o.url).then(r => r.blob().then(bl => o.onload({ status: r.status, response: bl }))).catch(e => o.onerror && o.onerror(e)); };
     window.GM_info = { script: { version: 't' }, scriptMetaStr: m }; window.unsafeWindow = window;
+    window.__copied = []; Object.defineProperty(navigator, 'clipboard', { value: { writeText: t => { window.__copied.push(t); return Promise.resolve(); } } });
   }, src.slice(0, src.indexOf('==/UserScript==')));
   await p.goto(ORIGIN + '/');
   await p.evaluate(() => document.querySelectorAll('.vp-rail, .vp-fab, .vp-gal-btn, .vp-nav-blob').forEach(e => e.remove()));
@@ -59,6 +60,14 @@ const svg = kind => kind === 'split'
     check(tones[id].acts === 'свет,свет,свет', `${id}: кнопки белые (${tones[id].acts})`);
     check(/rgba\(0, 0, 0, 0\.4/.test(tones[id].bg), `${id}: под кнопками тёмная подложка (${tones[id].bg})`);
   }
+  // справа внизу — «Скопировать ссылку»: в буфер ссылка на пост, на кнопке галочка, пост не открылся
+  const url0 = p.url();
+  await p.$eval('.vp-gal-acts[data-post="split"] ~ .vp-gal-acts-r .vp-gal-act[data-act="link"]', b => b.click());
+  await p.waitForTimeout(200);
+  const cp = await p.evaluate(() => ({ copied: window.__copied, done: document.querySelector('.vp-gal-acts[data-post="split"] ~ .vp-gal-acts-r .vp-gal-act').title }));
+  check(cp.copied.length === 1 && /\/@a\/post\/split$/.test(cp.copied[0]), `ссылка скопирована: ${cp.copied.join(', ')}`);
+  check(cp.done === 'Ссылка скопирована', 'на кнопке отметка «скопировано»');
+  check(p.url() === url0 && await p.$('.vp-gal-grid'), 'нажатие не открыло пост');
   await p.screenshot({ path: path.join(__dirname, 'out', 'galtone.png'), clip: await p.$eval('.vp-gal-grid', g => { const r = g.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: Math.min(r.height, 500) }; }) });
   check(!errors.length, 'ошибок нет' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await b.close();
