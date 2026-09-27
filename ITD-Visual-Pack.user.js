@@ -91,6 +91,9 @@
     // Ответы сайта про профили (/api/users/<ник>) подсматриваем и запоминаем: число постов,
     // подписчиков и прочее берём из них, а не шлём свой такой же запрос второй раз.
     const siteUsers = new Map(), siteUsersWait = new Map();
+    // Сайт сам берёт токен (auth/refresh) и спрашивает «кто я» (users/me) при каждой загрузке — мод
+    // раньше повторял оба запроса. Теперь подхватывает ответы сайта и свой делает, только если их не было.
+    const siteAuth = { token: null, at: 0, me: null, meWait: [] };
     const USER_URL = /\/api\/users\/([\w.]+)\/?(?:[?#]|$)/;
     function keepSiteUser(url, body) {
         const m = String(url).match(USER_URL);
@@ -128,6 +131,15 @@
                     const method = (init && init.method) || (input && input.method) || 'GET';
                     if (url && /^get$/i.test(method) && USER_URL.test(url)) {
                         res.then(r => r.ok && r.clone().text().then(t => keepSiteUser(url, t))).catch(() => { });
+                    }
+                    if (url && /\/auth\/refresh(?:[?#]|$)/.test(url)) {
+                        res.then(r => r.ok && r.clone().json().then(d => { if (d && d.accessToken) { siteAuth.token = d.accessToken; siteAuth.at = Date.now(); } })).catch(() => { });
+                    }
+                    if (url && /^get$/i.test(method) && /\/api\/users\/me\/?(?:[?#]|$)/.test(url)) {
+                        res.then(r => r.ok && r.clone().json().then(d => {
+                            const me = d && (d.data || d.user || d);
+                            if (me && me.username) { siteAuth.me = me; siteAuth.meWait.splice(0).forEach(done => done(me)); }
+                        })).catch(() => { });
                     }
                 } catch (e) { /* подсмотр не должен ломать запрос сайта */ }
                 return res;
@@ -1605,6 +1617,8 @@
 
         const usersData = {};
         await Promise.all(usernames.map(async username => {
+            const v = verifiedInfo(username);
+            if (v && (v.displayName || v.avatar)) { usersData[username] = { username, displayName: v.displayName, avatar: v.avatar }; return; }
             try {
                 const res = await api(`/api/users/${username}`);
                 if (res.ok) usersData[username] = await res.json();
@@ -3578,7 +3592,9 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
-        ['3.2.13', '27 сентября 2026', ['Форма «Ответить» в комментариях больше не тёмный прямоугольник']],
+        ['3.2.13', '27 сентября 2026', [
+            'Форма «Ответить» в комментариях больше не тёмный прямоугольник',
+            'Меньше запросов к сайту: «Клуб ИТД X» и автолайки не спрашивают профиль каждого участника, мод не повторяет запросы сайта при загрузке']],
         ['3.2.12', '27 сентября 2026', [
             'Ссылки в постах и комментариях (t.me/…, https://…) подсвечиваются и открываются по нажатию',
             'Иконка ИТД X в углу открывает меню: ТГК и донат',
@@ -3667,6 +3683,7 @@
     // (раньше автолайк обновлял токен на каждого пользователя разом), на 401 — берём свежий.
     let token = null, tokenTime = 0, tokenPending = null;
     function getAccessToken(force) {
+        if (!force && siteAuth.token && siteAuth.at > tokenTime && Date.now() - siteAuth.at < 4 * 60 * 1000) { token = siteAuth.token; tokenTime = siteAuth.at; }
         if (!force && token && Date.now() - tokenTime < 4 * 60 * 1000) return Promise.resolve(token);
         if (!tokenPending) {
             tokenPending = fetch('/api/v1/auth/refresh', { method: 'POST', credentials: 'include' })
@@ -3709,23 +3726,38 @@
         try { return Object.keys(JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}') || {}); } catch (e) { return []; }
     }
 
-    async function loadVerificationComments() {
-        const res = await api(`/api/posts/${VERIFICATION_POST_ID}/comments?limit=100`);
-        if (!res.ok) throw new Error('комментарии: ' + res.status);
-        const data = await res.json();
-        return data.data?.comments || data.comments || [];
+    // Служебный пост читают проверка всех и проверка себя подряд — это один и тот же ответ:
+    // держим его 20 с (fresh — после своего нового кода, нужен свежий)
+    let verifyLoad = null, verifyLoadAt = 0;
+    function loadVerificationComments(fresh) {
+        if (!fresh && verifyLoad && Date.now() - verifyLoadAt < 20000) return verifyLoad;
+        verifyLoadAt = Date.now();
+        verifyLoad = api(`/api/posts/${VERIFICATION_POST_ID}/comments?limit=100`).then(async res => {
+            if (!res.ok) throw new Error('комментарии: ' + res.status);
+            const data = await res.json();
+            return data.data?.comments || data.comments || [];
+        });
+        verifyLoad.catch(() => { verifyLoad = null; });
+        return verifyLoad;
+    }
+    // Ник и аватар участника — из его же комментария-кода: у комментария есть автор. Клубу и автолайкам
+    // так не нужен отдельный запрос профиля на каждого (при сотне участников это сотня запросов на вкладку)
+    function verifiedInfo(name) {
+        try { return (JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}') || {})[name] || null; } catch (e) { return null; }
     }
 
-    async function checkAllComments() {
+    async function checkAllComments(fresh) {
         if (isVerifying) return null;
         isVerifying = true;
         try {
             const verifiedUsers = {};
-            for (const c of await loadVerificationComments()) {
+            for (const c of await loadVerificationComments(fresh)) {
                 const name = c.author?.username;
                 const parsed = parseCode(c.content);
                 if (!name || verifiedUsers[name] || !isModCode(name, parsed)) continue;
-                verifiedUsers[name] = { code: parsed.code, commentId: c.id, hasMod: true, flags: parsed.flags };
+                const a = c.author, ava = a.avatar && (a.avatar.url || a.avatar) || a.avatarUrl || a.emoji;
+                verifiedUsers[name] = { code: parsed.code, commentId: c.id, hasMod: true, flags: parsed.flags,
+                    displayName: a.displayName || a.display_name || undefined, avatar: typeof ava === 'string' ? ava : undefined };
             }
             if (JSON.stringify(verifiedUsers) !== localStorage.getItem(VERIFICATION_STORAGE_KEY)) {
                 localStorage.setItem(VERIFICATION_STORAGE_KEY, JSON.stringify(verifiedUsers));
@@ -3754,7 +3786,7 @@
                 body: JSON.stringify({ content: generateCode(myUsername) + '1' })
             });
             if (!res.ok) return false;
-            await checkAllComments();
+            await checkAllComments(true);
             return true;
         } catch (e) {
             console.warn('[ITD VP] верификация себя:', e);
@@ -3845,7 +3877,8 @@
 
     async function initVisuals() {
         try {
-            const me = await (await api('/api/users/me')).json();
+            const me = siteAuth.me || await new Promise(done => { siteAuth.meWait.push(done); setTimeout(() => done(null), 3000); })
+                || await (await api('/api/users/me')).json();
             if (!me || !me.username) return;              // не вошли или API не ответил — свои ники искать не по чему
             meData = me;
             myUsername = me.username;
@@ -7689,7 +7722,10 @@
         clubShown = key;
         rail.querySelector('.vp-club-count').textContent = names.length || '';
         if (!names.length) { railClub.innerHTML = '<div class="vp-menu-note">Пока никого</div>'; return; }
-        const people = await Promise.all(names.map(async n => ({ n, d: await hcData(n) })));
+        const people = await Promise.all(names.map(async n => {
+            const v = verifiedInfo(n);
+            return { n, d: v && (v.displayName || v.avatar) ? v : n === myUsername && meData ? meData : await hcData(n) };
+        }));
         railClub.innerHTML = '';
         people.sort((a, b) => (a.n === myUsername ? -1 : b.n === myUsername ? 1 : a.n.localeCompare(b.n))).forEach(({ n, d }) => {
             const row = document.createElement('div');
