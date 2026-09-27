@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.19
+// @version      3.2.20
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -94,6 +94,24 @@
     // Сайт сам берёт токен (auth/refresh) и спрашивает «кто я» (users/me) при каждой загрузке — мод
     // раньше повторял оба запроса. Теперь подхватывает ответы сайта и свой делает, только если их не было.
     const siteAuth = { token: null, at: 0, me: null, meWait: [] };
+    // Окна мода (галерея, личка) — запись в истории браузера: «назад» закрывает окно, «назад»/«вперёд» на
+    // такую запись — открывает. Второе окно не добавляет запись, а занимает запись первого (иначе «назад»
+    // пришлось бы жать дважды). Переход по меню историю не трогает — только сайт.
+    const OVERLAY_KEYS = ['vpGal', 'vpMsgs'];
+    function overlayEnter(key) {
+        const st = Object.assign({}, history.state);
+        const had = OVERLAY_KEYS.some(k => st[k]);
+        OVERLAY_KEYS.forEach(k => delete st[k]);
+        st[key] = 1;
+        history[had ? 'replaceState' : 'pushState'](st, '', location.href);
+    }
+    const overlayAt = key => !!(history.state && history.state[key]);
+    // после перезагрузки запись окна осталась, а окна нет — «назад» ничего бы не делал: чистим
+    if (OVERLAY_KEYS.some(overlayAt)) {
+        const st = Object.assign({}, history.state);
+        OVERLAY_KEYS.forEach(k => delete st[k]);
+        history.replaceState(st, '', location.href);
+    }
     // Номера постов: в карточке ленты ссылки на пост нет — берём из ответов сайта (лента, профиль, пост)
     // и узнаём карточку по картинке вложения или по автору и тексту
     const postIndex = { byMedia: new Map(), byUser: new Map() };
@@ -167,6 +185,14 @@
                 } catch (e) { /* подсмотр не должен ломать запрос сайта */ }
                 return res;
             };
+            for (const m of ['pushState', 'replaceState']) {
+                const orig = w.history[m];
+                w.history[m] = function () {
+                    const r = orig.apply(this, arguments);
+                    try { document.dispatchEvent(new CustomEvent('vp-loc')); } catch (e) { }
+                    return r;
+                };
+            }
             const X = w.XMLHttpRequest.prototype, origOpen = X.open;
             X.open = function (method, url) {
                 if (/^get$/i.test(method) && USER_URL.test(String(url))) {
@@ -3745,6 +3771,9 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.2.20', '28 сентября 2026', [
+            'Кнопка «назад» и переходы с открытой галереей и «Сообщениями» работают как на обычных страницах: переход по меню больше не возвращает обратно, «назад» из поста — снова в галерею, «вперёд» открывает окно снова',
+            'Галерея и «Сообщения» сменяют друг друга без лишних нажатий «назад»']],
         ['3.2.19', '28 сентября 2026', ['Вкладки галереи — 1 в 1 как у ленты: отдельная таблетка сверху, тот же порядок; на телефоне слева — логотип']],
         ['3.2.18', '28 сентября 2026', [
             'Галерея на компьютере — на всю ширину: меню у левого края, «Статистика» и клуб — у правого, картинки между ними',
@@ -6067,7 +6096,7 @@
             under.classList.toggle('vp-on', !row);
             if (!row) Object.assign(under.style, { left: root.style.left, width: root.style.width });
         }
-        let pushed = false, openPath = '';
+        let openPath = '';
         function onKey(e) { if (e.key === 'Escape' && root.classList.contains('vp-open')) { e.stopPropagation(); current ? closeChat() : close(); } }
         function close(fromHistory) {
             if (!root.classList.contains('vp-open')) return;
@@ -6079,10 +6108,14 @@
             removeEventListener('resize', place);
             msgsOpen = false;
             markActiveNav(); moveNavBlob();
-            if (pushed && !fromHistory) { pushed = false; history.back(); }
-            pushed = false;
+            if (!fromHistory && overlayAt('vpMsgs')) history.back();
         }
-        addEventListener('popstate', () => { if (root.classList.contains('vp-open')) close(true); });
+        // «назад»/«вперёд»: запись лички — открыть, другая — закрыть
+        addEventListener('popstate', () => {
+            const open = root.classList.contains('vp-open');
+            if (overlayAt('vpMsgs')) { if (!open) root.open(true); }
+            else if (open) close(true);
+        });
         // нажали другой пункт меню той же страницы (открыли личку на ленте и жмут «Ленту») — сайт никуда
         // не переходит, а личку закрыть надо; на другую страницу — закроет msgsLeft ниже
         document.addEventListener('click', e => {
@@ -6092,9 +6125,12 @@
             if (a && a.getAttribute('href') !== '#' && a.getAttribute('href') === location.pathname) { e.preventDefault(); e.stopPropagation(); close(); }
         }, true);
         // перешли на другую страницу (пункт меню, ссылка) — «страница» лички закрывается
-        onDom(function msgsLeft() { if (root.classList.contains('vp-open') && location.pathname !== openPath) close(true); });
-        root.open = () => {
+        const msgsLeft = () => { if (root.classList.contains('vp-open') && location.pathname !== openPath) close(true); };
+        onDom(msgsLeft);
+        document.addEventListener('vp-loc', msgsLeft);
+        root.open = fromHistory => {
             if (root.classList.contains('vp-open')) { if (current) closeChat(); return; }
+            if (galOpen) closeGallery(true);                  // одно окно за раз: галерея уступает запись в истории
             openPath = location.pathname;
             msgsOpen = true;
             closeChat();
@@ -6104,8 +6140,7 @@
             document.documentElement.classList.add('vp-msgs-open');
             document.addEventListener('keydown', onKey, true);
             addEventListener('resize', place);
-            history.pushState({ vpMsgs: 1 }, '', location.href);
-            pushed = true;
+            if (fromHistory !== true) overlayEnter('vpMsgs');
             markActiveNav(); moveNavBlob();
         };
         root.close = close;
@@ -7863,13 +7898,12 @@
         comment: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 17a7 7 0 1 0-6.2-3.7L3 17l3.7-.8a7 7 0 0 0 3.3.8"/>',
         repost: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 9V8a3 3 0 0 1 3-3h9m-3 3 3-3-3-3M16 11v1a3 3 0 0 1-3 3H4m3-3-3 3 3 3"/>'
     };
+    // пост из галереи — новой записью поверх записи галереи: «назад» из поста вернёт в галерею (как была)
     function galOpenPost(post) {
         const user = post.author && post.author.username;
         if (!user) return;
-        const hadHist = gal.hist;
-        gal.hist = false;
         closeGallery(true);
-        history[hadHist ? 'replaceState' : 'pushState']({}, '', `/@${user}/post/${post.id}`);
+        history.pushState({}, '', `/@${user}/post/${post.id}`);
         dispatchEvent(new PopStateEvent('popstate'));
     }
     function galActions(post) {
@@ -7940,15 +7974,7 @@
         tile.addEventListener('contextmenu', () => setTimeout(() => tile.classList.remove('vp-ctx'), 300));
         tile.addEventListener('mouseleave', () => tile.classList.remove('vp-ctx'));
         tile.appendChild(galActions(post));
-        tile.addEventListener('click', () => {
-            if (!user) return;
-            // запись галереи в истории заменяем постом: «назад» из поста — в ленту, а не в пустую галерею
-            const hadHist = gal.hist;
-            gal.hist = false;
-            closeGallery(true);
-            history[hadHist ? 'replaceState' : 'pushState']({}, '', `/@${user}/post/${post.id}`);
-            dispatchEvent(new PopStateEvent('popstate'));
-        });
+        tile.addEventListener('click', () => galOpenPost(post));
         return tile;
     }
     async function galLoad() {
@@ -8051,10 +8077,10 @@
     onDom(function galFeedHidden() { if (gal.el) galHideFeed(true); });
     // Открыть: окно, закрытое раньше, возвращается как было (картинки, вкладка, место прокрутки) — без
     // новой загрузки; обновить — повторное нажатие на «Галерею», как у ленты (galRefresh)
-    function openGallery() {
+    function openGallery(fromHistory) {
         if (gal.el) return;
         const msgs = document.querySelector('.vp-msgs.vp-open');
-        if (msgs && msgs.close) msgs.close();
+        if (msgs && msgs.close) msgs.close(true);         // одно окно за раз: личка уступает запись в истории
         const kept = gal.kept;
         const el = kept || document.createElement('div');
         if (!kept) {
@@ -8073,7 +8099,7 @@
         galOpen = true;
         galHideFeed(true);
         markActiveNav(); moveNavBlob();
-        if (!gal.hist) { history.pushState(Object.assign({}, history.state, { vpGal: true }), '', location.href); gal.hist = true; }
+        if (fromHistory !== true) overlayEnter('vpGal');
         const logo = document.querySelector('.' + SELECTORS.feedBar + ' .my-nav-block');
         const top = el.querySelector('.vp-gal-top'), old = top.querySelector('.my-nav-block');
         if (logo && !old) {
@@ -8113,10 +8139,16 @@
         placeSidebar(); placeRail();
         document.querySelectorAll('.vp-gal-navwrap').forEach(w => w.classList.remove('vp-gal-navwrap'));
         markActiveNav(); moveNavBlob();
-        if (gal.hist) { gal.hist = false; if (!fromBack && history.state && history.state.vpGal) history.back(); }
+        if (!fromBack && overlayAt('vpGal')) history.back();
     }
-    addEventListener('popstate', () => { if (gal.el) { gal.hist = false; closeGallery(true); } });
-    onDom(function galLeft() { if (gal.el && location.pathname !== gal.path) { closeGallery(true); } });
+    // «назад»/«вперёд»: запись галереи — открыть (как была), другая — закрыть
+    addEventListener('popstate', () => {
+        if (overlayAt('vpGal')) { if (!gal.el) openGallery(true); }
+        else if (gal.el) closeGallery(true);
+    });
+    const galLeft = () => { if (gal.el && location.pathname !== gal.path) closeGallery(true); };
+    onDom(galLeft);
+    document.addEventListener('vp-loc', galLeft);
     // пункт меню: другая страница — закрыть и перейти; пункт той же страницы (галерею открыли с ленты
     // и жмут «Ленту») — только закрыть: адрес при галерее не менялся, и сайт считал это повторным
     // нажатием на текущий пункт — прокручивал и обновлял ленту
@@ -8124,8 +8156,9 @@
         if (!gal.el) return;
         const a = e.target.closest && e.target.closest('a.' + SELECTORS.navLink);
         if (!a || a.classList.contains('vp-gal-nav')) return;
-        if (a.getAttribute('href') === gal.path) { e.preventDefault(); e.stopPropagation(); }
-        closeGallery();
+        // та же страница — закрыть с «назад» (запись галереи уходит); другая — закрыть, историю ведёт сайт
+        if (a.getAttribute('href') === gal.path) { e.preventDefault(); e.stopPropagation(); closeGallery(); }
+        else closeGallery(true);
     }, true);
     addEventListener('keydown', e => { if (e.key === 'Escape' && gal.el) closeGallery(); });
     let galCols = galColsCount();
