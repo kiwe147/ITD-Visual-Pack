@@ -7768,7 +7768,7 @@
     // подгрузке). Видео — без звука и играют, только пока их видно. Нажатие — открыть пост; «назад» закрывает.
     // иконка — залитая, как у пунктов меню сайта (контурная выбивалась)
     const galIcon = size => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="10" rx="2.5"/><rect x="13" y="3" width="8" height="6" rx="2.5"/><rect x="3" y="15" width="8" height="6" rx="2.5"/><rect x="13" y="11" width="8" height="10" rx="2.5"/></svg>`;
-    const GAL_TABS = [['popular', 'Популярное'], ['following', 'Подписки'], ['clan', 'Кланы']];
+    const GAL_TABS = [['popular', 'Популярное'], ['clan', 'Кланы'], ['following', 'Подписки']];   // порядок — как у ленты
     const gal = { el: null, tab: 'popular', cursor: null, loading: false, done: false, cols: [], heights: [], seen: new Set(), hist: false };
     const galStyle = document.createElement('style');
     galStyle.textContent = `
@@ -7780,7 +7780,11 @@
             backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none); }
         .vp-gal.vp-card .vp-gal-card { border: 1px solid var(--border-color, rgba(255, 255, 255, .15)); }
         html.vp-light .vp-gal.vp-card .vp-gal-card { box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
-        .vp-gal:not(.vp-card) .vp-gal-tabs { margin: 9px 12px 0 !important; }
+        .vp-gal-top { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+        .vp-gal-top > .vp-gal-tabs { flex: 1 1 auto; min-width: 0; }
+        .vp-gal.vp-card .vp-gal-logo { display: none !important; }       /* ПК: логотип и так слева, в меню */
+        .vp-gal-logo { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+        .vp-gal:not(.vp-card) .vp-gal-top { margin: 9px 12px 0 6px; }
         .vp-gal:not(.vp-card) .vp-gal-card { margin-top: 9px; border-radius: 36px 36px 0 0; }
         /* пока открыта галерея — лента под ней спрятана (иначе просвечивала сквозь стекло и в скруглённых углах) */
         html.vp-gal-open .vp-gal-hidden { visibility: hidden !important; }
@@ -8054,8 +8058,8 @@
         const el = kept || document.createElement('div');
         if (!kept) {
             el.className = 'vp-gal';
-            el.innerHTML = `<div class="vp-gal-tabs"><div class="vp-gal-ind"></div>${GAL_TABS.map(([id, name]) => `<button type="button" class="vp-gal-tab" data-tab="${id}">${name}</button>`).join('')}</div>
-            <div class="vp-gal-card"><div class="vp-gal-body"><div class="vp-gal-grid"></div><div class="vp-gal-more"></div></div></div>`;
+            el.innerHTML = `<div class="vp-gal-top"><div class="vp-gal-tabs"><div class="vp-gal-ind"></div>${GAL_TABS.map(([id, name]) => `<button type="button" class="vp-gal-tab" data-tab="${id}">${name}</button>`).join('')}</div>
+            </div><div class="vp-gal-card"><div class="vp-gal-body"><div class="vp-gal-grid"></div><div class="vp-gal-more"></div></div></div>`;
         }
         document.body.appendChild(el);
         gal.el = el;
@@ -8069,6 +8073,14 @@
         galHideFeed(true);
         markActiveNav(); moveNavBlob();
         if (!gal.hist) { history.pushState(Object.assign({}, history.state, { vpGal: true }), '', location.href); gal.hist = true; }
+        const logo = document.querySelector('.' + SELECTORS.feedBar + ' .my-nav-block');
+        const top = el.querySelector('.vp-gal-top'), old = top.querySelector('.my-nav-block');
+        if (logo && !old) {
+            const copy = logo.cloneNode(true);
+            copy.classList.add('vp-gal-logo');
+            copy.style.cssText = '';
+            top.prepend(copy);
+        }
         const body = el.querySelector('.vp-gal-body');
         if (kept) {                                                  // как было: место прокрутки и видео
             body.scrollTop = gal.scroll || 0;
