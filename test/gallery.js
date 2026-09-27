@@ -49,7 +49,7 @@ const page = n => ({ data: { posts: Array.from({ length: 20 }, (_, i) => {
     window.GM_info = { script: { version: 't' }, scriptMetaStr: m }; window.unsafeWindow = window;
   }, src.slice(0, src.indexOf('==/UserScript==')));
   await p.goto(URL0);
-  await p.evaluate(() => document.querySelectorAll('.vp-rail, .vp-fab, .vp-gal-btn').forEach(e => e.remove()));
+  await p.evaluate(() => document.querySelectorAll('.vp-rail, .vp-fab, .vp-gal-btn, .vp-nav-blob').forEach(e => e.remove()));
   await p.addScriptTag({ content: src });
   await p.waitForTimeout(2500);
   const sel = mode === 'desktop' ? '.vp-gal-nav' : '.vp-gal-btn';
@@ -58,6 +58,7 @@ const page = n => ({ data: { posts: Array.from({ length: 20 }, (_, i) => {
   if (btn && mode !== 'desktop') await p.screenshot({ path: path.join(out, `gal-${mode}-bar.png`), clip: await p.$eval('.vp-gal-btn', b => { const r = b.closest('.vp-feed-bar').getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; }) });
   await btn.click();
   await p.waitForTimeout(1500);
+  if (process.env.NAVDBG) console.log(await p.evaluate(() => [...document.querySelectorAll('nav .vp-nav-link, nav .vp-nav-blob')].map(a => { const cs = getComputedStyle(a), r = a.getBoundingClientRect(); return (a.getAttribute('href') || 'BLOB') + ' ' + a.className + ' bg=' + cs.backgroundColor + ' op=' + cs.opacity + ' sh=' + cs.boxShadow.slice(0, 30) + ' y=' + Math.round(r.y); }).join(' || ')));
   const cols = await p.$$eval('.vp-gal-col', c => c.length);
   check(cols === (mode === 'desktop' ? 4 : 3 - 1), `колонок: ${cols}`);
   let tiles = await p.$$eval('.vp-gal-tile', t => t.length);

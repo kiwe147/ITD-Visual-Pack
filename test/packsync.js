@@ -9,7 +9,7 @@ const path = require('path');
 const snap = fs.readFileSync(process.argv[2], 'utf8');
 let src = fs.readFileSync(path.join(__dirname, '..', 'ITD-Visual-Pack.user.js'), 'utf8');
 const STICKER_POST = '11111111-2222-4333-8444-555555555555';
-src = src.replace("const STICKER_POST_ID = '';", `const STICKER_POST_ID = '${STICKER_POST}';`);
+src = src.replace(/const STICKER_POST_ID = '[^']*';/, `const STICKER_POST_ID = '${STICKER_POST}';`);
 const VERIFY_POST = src.match(/VERIFICATION_POST_ID = '([^']+)'/)[1];
 const info = (snap.match(/id="vp-snapshot-info">([\s\S]*?)<\/script>/) || [])[1];
 const URL0 = 'https://xn--d1ah4a.com' + (info ? new URL(JSON.parse(info).url).pathname : '/');
