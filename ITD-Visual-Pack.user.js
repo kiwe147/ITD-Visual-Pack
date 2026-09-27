@@ -851,19 +851,7 @@
         // на телефоне — нет. Поэтому на телефоне заставка ждёт касания: тёмный экран, в центре «дышит»
         // маленький логотип; коснулся — ролик идёт со звуком ровно в такт. Не коснулся за IDLE мс —
         // идёт сам, без звука (как раньше): на входе никого не держим.
-        let ctx = null, t0 = 0;
-        function startSound() {
-            try {
-                ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const go = () => {
-                    const base = ctx.currentTime - (performance.now() - t0) / 1000;
-                    introSound(ctx, ms => Math.max(ctx.currentTime, base + ms / 1000), variant);
-                };
-                if (ctx.state === 'running') go();
-                else ctx.resume().then(() => { if (performance.now() - t0 < 150) go(); else ctx.close(); }, () => {});
-            } catch (e) { ctx = null; }
-        }
-
+        let ctx = null;
         let done = false, started = false;
         const cleanup = () => {
             if (done) return;
@@ -887,25 +875,17 @@
         function begin(withSound) {
             if (started) return;
             started = true;
-            t0 = performance.now();
             for (const a of anims) { a.currentTime = 0; a.play(); }
-            if (withSound) startSound();
             afterStart();
+            if (withSound) syncSound();
         }
-        // Телефон, по касанию: звук выходит из динамика с задержкой (буфер вывода; в Bluetooth-наушниках
-        // — до ~0,3 с), и если пустить картинку сразу, удары слышны позже, чем видны. Поэтому сначала
-        // ставим звук в очередь, а картинку запускаем ровно на эту задержку позже — совпадают.
-        function beginSynced() {
-            // Звук подстраиваем под картинку, а не наоборот. Картинка стартует сразу; когда анимации
-            // реально пошли (ready → startTime), каждый удар ставим на то время звуковой карты, которое
-            // прозвучит из наушников ровно в момент кадра. Сопоставление времён даёт сам браузер
-            // (getOutputTimestamp — с учётом задержки вывода, и Bluetooth тоже). Так не важно, что
-            // картинка на старте может запоздать (сайт в этот момент грузится) — звук ждёт её.
-            if (started) return;
-            started = true;
-            t0 = performance.now();
-            for (const a of anims) { a.currentTime = 0; a.play(); }
-            afterStart();
+        // Звук подстраиваем под картинку, а не наоборот. Картинка стартует сразу, но первый кадр может
+        // запоздать на десятые доли секунды (сайт в этот момент грузится) — поэтому звук не считаем от
+        // нажатия «старт», а ждём, когда анимации реально пошли (ready → startTime), и каждый удар ставим
+        // на то время звуковой карты, которое прозвучит из динамика ровно в момент кадра. Сопоставление
+        // времён даёт сам браузер (getOutputTimestamp — с учётом задержки вывода, и Bluetooth тоже).
+        // Так и на компьютере, и на телефоне (там звук разрешён только по касанию — оно и запускает).
+        function syncSound() {
             let queued = false;
             try {
                 ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -921,8 +901,9 @@
                     introSound(ctx, ms => Math.max(ctx.currentTime + 0.01, toCtx(start + ms)), variant);
                 }, () => {});
             } catch (e) { ctx = null; }
-            // звук так и не завёлся — картинка уже идёт, просто без него
-            setTimeout(() => { if (!queued && ctx) { ctx.close().catch(() => {}); ctx = null; } }, 600);
+            // звук так и не завёлся за 0,6 с от старта картинки — она идёт без него (отсчёт от старта картинки:
+            // страница на входе может быть занята дольше, и звук иначе выключился бы, не успев начаться)
+            anims[0].ready.then(() => setTimeout(() => { if (!queued && ctx) { ctx.close().catch(() => {}); ctx = null; } }, 600), () => {});
         }
         function afterStart() {
             setTimeout(cleanup, EXIT + SPLIT + 2500);       // если анимации не доиграют (вкладка в фоне)
@@ -960,7 +941,7 @@
             ov.removeEventListener('click', tap, true);
             idle.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.9)' }], { duration: 220, fill: 'forwards' })
                 .finished.then(() => idle.remove(), () => idle.remove());
-            if (withSound) beginSynced(); else begin(false);
+            begin(withSound);
         }
         // звук включается только в обработчике самого касания (pointerup/click — они дают разрешение)
         function tap(e) { e.stopPropagation(); go(true); }
@@ -3787,11 +3768,15 @@
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
         ['3.2.22 – 3.2.22.1', '28 сентября 2026', [
-            'Галерея: кнопки на картинках — белые на тёмной стеклянной подложке, хорошо видны на любой картинке',
+            'Галерея: кнопки, стрелки и счётчик картинок — белые на тёмной стеклянной подложке, хорошо видны на любой картинке',
+            'Галерея: справа внизу на картинке — кнопка «Скопировать ссылку» на пост',
+            'Галерея: стрелки листания крупнее; кнопки на картинке прячутся, когда уводишь мышь после лайка или репоста',
+            'Галерея: правая кнопка мыши — «Копировать картинку» снова копирует, «Сохранить как» — с нормальным именем файла',
+            'Магазин → «Сообщения»: меню и правая панель стоят как на ленте (раньше разъезжались по краям, панель сужалась)',
             'Галерея: кнопки крупнее, отзываются на нажатие, сердце «подпрыгивает» при лайке',
             'Магазин → «Сообщения»: окно открывается поверх магазина (раньше не было видно)',
             'Свой и живой фон видны в магазине и в «Сообщениях»',
-            'Заставка больше не расходится со звуком, если на фоне своё видео: фон включается сразу после заставки']],
+            'Заставка: звук точно в такт анимации (на компьютере опережал её), свой фон включается сразу после заставки']],
         ['3.2.21', '28 сентября 2026', [
             'Галерея: пост с несколькими картинками — одна плитка, картинки листаются внутри (телефон — свайп, компьютер — стрелки), лайк и репост — один на пост',
             '«Что нового»: страница за окном размыта сразу, а не после нажатия']],
@@ -6138,6 +6123,7 @@
             document.removeEventListener('keydown', onKey, true);
             removeEventListener('resize', place);
             msgsOpen = false;
+            placeSidebar(); placeRail();
             if (!galOpen) galHideFeed(false);
             markActiveNav(); moveNavBlob();
             if (!fromHistory && overlayAt('vpMsgs')) history.back();
@@ -6168,6 +6154,7 @@
             closeChat();
             loadMsgPeople(() => { if (!current) renderList(); });
             place();
+            placeSidebar(); placeRail();
             root.classList.add('vp-open');
             document.documentElement.classList.add('vp-msgs-open');
             document.addEventListener('keydown', onKey, true);
@@ -7891,18 +7878,21 @@
         .vp-gal-slide { flex: 0 0 100%; height: 100%; scroll-snap-align: start; }
         .vp-gal-slide > img, .vp-gal-slide > video { display: block; width: 100%; height: 100%; object-fit: cover; }
         .vp-gal-count { position: absolute; right: 8px; top: 8px; padding: 3px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
-            background: rgba(0,0,0,.55); color: #fff; pointer-events: none; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: background .2s, color .2s; }
-        .vp-gal-count.vp-ink, .vp-gal-badge.vp-ink { background: rgba(255,255,255,.72); color: #111; }
+            color: #fff; pointer-events: none; background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4);
+            box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset; }
         .vp-gal-dots { position: absolute; left: 0; right: 0; top: 16px; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
         .vp-gal-dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.5); box-shadow: 0 0 3px rgba(0,0,0,.5); }
         .vp-gal-dots i.vp-on { background: #fff; }
         .vp-gal-dots.vp-ink i { background: rgba(0,0,0,.35); box-shadow: 0 0 3px rgba(255,255,255,.6); }
         .vp-gal-dots.vp-ink i.vp-on { background: #111; }
-        .vp-gal-arrow { position: absolute; top: 50%; width: 32px; height: 32px; margin-top: -16px; border: 0; border-radius: 50%; padding: 0;
-            display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
-            background: rgba(0,0,0,.45); color: #fff; opacity: 0; transition: opacity .15s; }
+        /* стрелки, счётчик и метка — та же тёмная стеклянная подложка, что у кнопок лайк/коммент/репост */
+        .vp-gal-arrow { position: absolute; top: 50%; width: 44px; height: 44px; margin-top: -22px; border: 0; border-radius: 50%; padding: 0;
+            display: inline-flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent;
+            color: #fff; opacity: 0; transition: opacity .15s, transform .12s ease;
+            background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4);
+            box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset; }
         .vp-gal-arrow.vp-prev { left: 8px; } .vp-gal-arrow.vp-next { right: 8px; }
-        .vp-gal-arrow.vp-ink { background: rgba(255,255,255,.75); color: #111; }
+        .vp-gal-arrow svg { stroke-width: 2.2; }
         .vp-gal-arrow:active { transform: scale(.9); }
         .vp-gal-arrow:disabled { visibility: hidden; }
         @media (hover: hover) and (pointer: fine) { .vp-gal-tile:hover .vp-gal-arrow { opacity: 1; } }
@@ -7920,6 +7910,8 @@
             display: inline-flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent;
             transition: transform .12s ease, color .2s, background .2s; }
         @media (hover: hover) and (pointer: fine) { .vp-gal-act:hover { background: rgba(255,255,255,.14); } }
+        .vp-gal-acts.vp-gal-acts-r { left: auto; right: 8px; }
+        .vp-gal-acts-r:empty { display: none; }
         .vp-gal-act:active { transform: scale(.86); }
         .vp-gal-act:focus-visible { outline: 2px solid var(--vp-accent, #fff); outline-offset: -4px; }
         .vp-gal-act.vp-on[data-act="like"] svg { animation: vpGalPop .35s cubic-bezier(.3, 1.6, .5, 1); }
@@ -7930,10 +7922,11 @@
         .vp-gal-act.vp-busy { opacity: .5; pointer-events: none; }
         @media (hover: hover) and (pointer: fine) {
             .vp-gal-acts { opacity: 0; }
-            .vp-gal-tile:hover .vp-gal-acts, .vp-gal-acts:focus-within { opacity: 1; }
+            .vp-gal-tile:hover .vp-gal-acts, .vp-gal-acts:has(:focus-visible) { opacity: 1; }   /* фокус с клавиатуры, не после нажатия мышью */
         }
         .vp-gal-badge { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
-            background: rgba(0,0,0,.55); color: #fff; pointer-events: none; }
+            color: #fff; pointer-events: none; background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4);
+            box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset; }
         .vp-gal-more { text-align: center; padding: 18px; color: var(--text-secondary, #8a8a8a); font-size: 14px; }
         .vp-gal-btn svg { pointer-events: none; }
         /* ПК: поиск — в боковом меню, в полосе ленты его нет — там и «Галерея»; телефон — кнопка в полосе ленты */
@@ -7964,7 +7957,9 @@
     const GAL_ICONS = {
         like: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 4.6a3.7 3.7 0 0 0-5.2-.9C3.2 5 2.4 7.6 3.6 10.2 4.8 12.7 10 17 10 17s5.3-4.3 6.5-6.8c1.2-2.6 0-5.2-1.6-6.5s-4-.8-4.9.9"/>',
         comment: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 17a7 7 0 1 0-6.2-3.7L3 17l3.7-.8a7 7 0 0 0 3.3.8"/>',
-        repost: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 9V8a3 3 0 0 1 3-3h9m-3 3 3-3-3-3M16 11v1a3 3 0 0 1-3 3H4m3-3-3 3 3 3"/>'
+        repost: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 9V8a3 3 0 0 1 3-3h9m-3 3 3-3-3-3M16 11v1a3 3 0 0 1-3 3H4m3-3-3 3 3 3"/>',
+        link: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.5 11.5a3.5 3.5 0 0 0 5 0l2.5-2.5a3.5 3.5 0 0 0-5-5l-1 1M11.5 8.5a3.5 3.5 0 0 0-5 0L4 11a3.5 3.5 0 0 0 5 5l1-1"/>',
+        done: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="m4.5 10.5 3.5 3.5 7.5-8"/>'
     };
     // пост из галереи — новой записью поверх записи галереи: «назад» из поста вернёт в галерею (как была)
     function galOpenPost(post) {
@@ -8017,7 +8012,32 @@
         like.addEventListener('click', e => { e.stopPropagation(); toggle(like, `/api/posts/${post.id}/like`); });
         repost.addEventListener('click', e => { e.stopPropagation(); toggle(repost, `/api/posts/${post.id}/repost`, 'Сделать репост этого поста?'); });
         comment.addEventListener('click', e => { e.stopPropagation(); galOpenPost(post); });
-        return row;
+        // справа внизу — скопировать ссылку на пост; скопировалось — на секунду галочка
+        const right = document.createElement('div');
+        right.className = 'vp-gal-acts vp-gal-acts-r';
+        const user = post.author && post.author.username;
+        if (user) {
+            const link = document.createElement('button');
+            link.type = 'button';
+            link.className = 'vp-gal-act';
+            link.dataset.act = 'link';
+            link.title = 'Скопировать ссылку';
+            const icon = k => { link.innerHTML = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true">${GAL_ICONS[k]}</svg>`; };
+            icon('link');
+            link.addEventListener('click', e => {
+                e.stopPropagation();
+                copyText(`${location.origin}/@${user}/post/${post.id}`).then(ok => {
+                    icon(ok ? 'done' : 'link');
+                    link.title = ok ? 'Ссылка скопирована' : 'Не вышло скопировать';
+                    clearTimeout(link._vpT);
+                    link._vpT = setTimeout(() => { icon('link'); link.title = 'Скопировать ссылку'; }, 1400);
+                });
+            });
+            right.appendChild(link);
+        }
+        const out = document.createDocumentFragment();
+        out.append(row, right);
+        return out;
     }
     let galN = 0;
     // Плитка — один пост. Картинок несколько — листаются внутри плитки, как в Инстаграме: полоса со снимками
@@ -8038,11 +8058,11 @@
         galImgIO.observe(img);
         return img;
     }
-    // Метки и стрелки поверх картинки (счётчик, точки, стрелки) — светлые на тёмном месте, тёмные на светлом,
-    // под каждой своё место (кнопки лайк/коммент/репост всегда белые на подложке). Пиксели картинки с сервера
+    // Точки листания поверх картинки — светлые на тёмном месте, тёмные на светлом (у них нет подложки; кнопки,
+    // стрелки и счётчик всегда белые на тёмной подложке). Пиксели картинки с сервера
     // сайта читать нельзя (нет разрешения CORS), поэтому картинку загружает Tampermonkey (тот же канал, что у
     // стикеров): один раз, её же и показываем, а уменьшенную копию (64 точки по ширине) держим для замеров.
-    // Не вышло — обычная загрузка, метки светлые (у них своя тёмная подложка).
+    // Не вышло — обычная загрузка, точки светлые (с тенью).
     const galImgIO = new IntersectionObserver(es => es.forEach(e => {
         if (!e.isIntersecting) return;
         galImgIO.unobserve(e.target);
@@ -8070,7 +8090,7 @@
                     bmp.close && bmp.close();
                     img._vpLum = { w, h, d: g.getImageData(0, 0, w, h).data };
                     galTone(img.closest('.vp-gal-tile'));
-                } catch (e) { /* не картинка для холста — метки остаются светлыми */ }
+                } catch (e) { /* не картинка для холста — точки остаются светлыми */ }
             },
             onerror: plain, ontimeout: plain
         });
@@ -8091,14 +8111,14 @@
         }
         return n ? sum / n : null;
     }
-    // тон каждого элемента поверх плитки — по месту под ним на текущей картинке
+    // тон точек листания — по месту под ними на текущей картинке
     function galTone(tile) {
         if (!tile || !tile.isConnected) return;
         const strip = tile.querySelector('.vp-gal-strip');
         const i = strip ? Math.round(strip.scrollLeft / Math.max(1, strip.clientWidth)) : 0;
         const slide = strip && strip.children[i];
         const img = slide && slide.querySelector('img');
-        tile.querySelectorAll('.vp-gal-count, .vp-gal-dots, .vp-gal-arrow, .vp-gal-badge').forEach(el => {
+        tile.querySelectorAll('.vp-gal-dots').forEach(el => {
             const lum = img && galLumAt(img, el.getBoundingClientRect());
             el.classList.toggle('vp-ink', lum !== null && lum !== undefined && lum > .62);   // светло под элементом — тёмный
         });
@@ -8133,7 +8153,7 @@
             const prev = document.createElement('button'), next = document.createElement('button');
             prev.type = next.type = 'button';
             prev.className = 'vp-gal-arrow vp-prev'; next.className = 'vp-gal-arrow vp-next';
-            prev.innerHTML = svgIcon('<path d="m14.5 6-6 6 6 6"/>', 18); next.innerHTML = svgIcon('<path d="m9.5 6 6 6-6 6"/>', 18);
+            prev.innerHTML = svgIcon('<path d="m14.5 6-6 6 6 6"/>', 28); next.innerHTML = svgIcon('<path d="m9.5 6 6 6-6 6"/>', 28);
             prev.setAttribute('aria-label', 'Назад'); next.setAttribute('aria-label', 'Дальше');
             tile.append(count, dots, prev, next);
             const at = () => Math.round(strip.scrollLeft / Math.max(1, strip.clientWidth));
@@ -8152,7 +8172,13 @@
             show();
         }
         // правая кнопка по картинке — меню самой картинки (сохранить, копировать)
-        tile.addEventListener('mousedown', e => { if (e.button === 2) tile.classList.add('vp-ctx'); });
+        // правая кнопка: картинка показана из копии, загруженной Tampermonkey (blob:), — с неё браузер не копирует
+        // картинку, а «Сохранить как» даёт файл без имени. Возвращаем обычную ссылку сайта: меню работает как на постах
+        tile.addEventListener('mousedown', e => {
+            if (e.button !== 2) return;
+            tile.classList.add('vp-ctx');
+            tile.querySelectorAll('img[data-src]').forEach(i => { if (i.src.startsWith('blob:')) i.src = i.dataset.src; });
+        });
         tile.addEventListener('contextmenu', () => setTimeout(() => tile.classList.remove('vp-ctx'), 300));
         tile.addEventListener('mouseleave', () => tile.classList.remove('vp-ctx'));
         tile.appendChild(galActions(post));
@@ -8838,6 +8864,7 @@
             const r = el.getBoundingClientRect();
             if (r.width > 300) { left = Math.min(left, r.left); right = Math.max(right, r.right); }
         });
+        if (right) feedCb = { left, right, w: innerWidth };
         if (!right) {
             // магазин — отдельная страница в рамке (iframe) во весь экран: своей колонки нет, и меню с панелью
             // встают как при открытии с нуля (меню на месте сайта, панель — в правую колонку), а не по прошлой странице
@@ -8845,7 +8872,7 @@
                 const r = f.getBoundingClientRect();
                 return r.width >= innerWidth * 0.72 && r.height >= innerHeight * 0.6;
             });
-            if (frame) return { left: 0, right: 0 };
+            if (frame) return msgsOpen ? frameColumn() : { left: 0, right: 0 };
             // страница без ленты, вкладок и постов: колонка — то, что лежит в середине
             // экрана, поднятое до обёртки без боковых колонок. Иначе меню и панель стояли по прошлой странице
             const skip = side + ', nav, .vp-hc, .vp-msgs, .vpi-overlay';
@@ -8862,6 +8889,21 @@
         return right ? { left, right } : null;
     }
     let lastCb = null;
+    // Колонка ленты с последней страницы, где она была (и ширина экрана тогда)
+    let feedCb = null;
+    // «Сообщения» поверх магазина: колонки у страницы нет, и меню с панелью разъезжались по краям (панель ещё и
+    // сужалась). Пока окно открыто, колонка — где лента стоит на обычных страницах: меню и панель встают вокруг
+    // окна как на ленте; закрыли — снова по раскладке магазина
+    function frameColumn() {
+        if (feedCb && feedCb.w === innerWidth) return { left: feedCb.left, right: feedCb.right };
+        const side = document.querySelector('.' + SELECTORS.sidebar);
+        const sw = side ? side.getBoundingClientRect().width : 0;
+        const siteLeft = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-gap')) || 36;
+        const w = Math.min(650, innerWidth - 32);
+        let left = Math.round(innerWidth / 2 - w / 2);
+        if (sw && left - sw - 24 <= siteLeft + 8) left = Math.round(siteLeft + sw + 24);   // меню не сдвинуть — окно правее него
+        return { left, right: Math.min(innerWidth - 16, left + w) };
+    }
     function placeRail() {
         // лента на миг пропала (переход страницы) — остаёмся на прежнем месте, а не прыгаем
         const cb = contentBox() || lastCb;

@@ -39,6 +39,7 @@ const svg = kind => kind === 'split'
     // «Tampermonkey»: скачать как blob
     window.GM_xmlhttpRequest = o => { fetch(o.url).then(r => r.blob().then(bl => o.onload({ status: r.status, response: bl }))).catch(e => o.onerror && o.onerror(e)); };
     window.GM_info = { script: { version: 't' }, scriptMetaStr: m }; window.unsafeWindow = window;
+    window.__copied = []; Object.defineProperty(navigator, 'clipboard', { value: { writeText: t => { window.__copied.push(t); return Promise.resolve(); } } });
   }, src.slice(0, src.indexOf('==/UserScript==')));
   await p.goto(ORIGIN + '/');
   await p.evaluate(() => document.querySelectorAll('.vp-rail, .vp-fab, .vp-gal-btn, .vp-nav-blob').forEach(e => e.remove()));
@@ -59,6 +60,37 @@ const svg = kind => kind === 'split'
     check(tones[id].acts === 'свет,свет,свет', `${id}: кнопки белые (${tones[id].acts})`);
     check(/rgba\(0, 0, 0, 0\.4/.test(tones[id].bg), `${id}: под кнопками тёмная подложка (${tones[id].bg})`);
   }
+  // лайк мышью и увели мышь — таблетка прячется (раньше оставалась: кнопка держала фокус)
+  await p.evaluate(() => document.querySelectorAll('.vp-gal-acts').forEach(r => r.style.opacity = ''));
+  await p.route('**/api/posts/*/like', r => r.fulfill({ contentType: 'application/json', body: '{}' }));
+  await p.hover('.vp-gal-acts[data-post="white"]');
+  await p.click('.vp-gal-acts[data-post="white"] .vp-gal-act[data-act="like"]');
+  await p.mouse.move(5, 5);
+  await p.waitForTimeout(400);
+  const hid = await p.$eval('.vp-gal-acts[data-post="white"]', r => getComputedStyle(r).opacity);
+  check(hid === '0', `после лайка и ухода мыши таблетка спрятана (opacity ${hid})`);
+  // то же у репоста (с окном «Сделать репост?» — соглашаемся)
+  await p.route('**/api/posts/*/repost', r => r.fulfill({ contentType: 'application/json', body: '{}' }));
+  p.once('dialog', d => d.accept());
+  await p.hover('.vp-gal-acts[data-post="black"]');
+  await p.click('.vp-gal-acts[data-post="black"] .vp-gal-act[data-act="repost"]');
+  await p.mouse.move(5, 5);
+  await p.waitForTimeout(400);
+  const rep = await p.$eval('.vp-gal-acts[data-post="black"]', r => [getComputedStyle(r).opacity, r.querySelector('[data-act="repost"]').classList.contains('vp-on')]);
+  check(rep[1] && rep[0] === '0', `после репоста и ухода мыши таблетка спрятана (репост ${rep[1] ? 'есть' : 'нет'}, opacity ${rep[0]})`);
+  // правая кнопка — у картинки снова обычная ссылка сайта (копирование и «Сохранить как» из меню браузера)
+  const box = await p.$eval('.vp-gal-acts[data-post="white"]', r => { const b = r.closest('.vp-gal-tile').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + 30 }; });
+  await p.mouse.move(box.x, box.y); await p.mouse.down({ button: 'right' }); await p.mouse.up({ button: 'right' });
+  const rsrc = await p.$eval('.vp-gal-acts[data-post="white"]', r => r.closest('.vp-gal-tile').querySelector('img').src);
+  check(/^https:\/\/cdn\./.test(rsrc), `после правой кнопки у картинки ссылка сайта (${rsrc.slice(0, 50)})`);
+  // справа внизу — «Скопировать ссылку»: в буфер ссылка на пост, на кнопке галочка, пост не открылся
+  const url0 = p.url();
+  await p.$eval('.vp-gal-acts[data-post="split"] ~ .vp-gal-acts-r .vp-gal-act[data-act="link"]', b => b.click());
+  await p.waitForTimeout(200);
+  const cp = await p.evaluate(() => ({ copied: window.__copied, done: document.querySelector('.vp-gal-acts[data-post="split"] ~ .vp-gal-acts-r .vp-gal-act').title }));
+  check(cp.copied.length === 1 && /\/@a\/post\/split$/.test(cp.copied[0]), `ссылка скопирована: ${cp.copied.join(', ')}`);
+  check(cp.done === 'Ссылка скопирована', 'на кнопке отметка «скопировано»');
+  check(p.url() === url0 && await p.$('.vp-gal-grid'), 'нажатие не открыло пост');
   await p.screenshot({ path: path.join(__dirname, 'out', 'galtone.png'), clip: await p.$eval('.vp-gal-grid', g => { const r = g.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: Math.min(r.height, 500) }; }) });
   check(!errors.length, 'ошибок нет' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await b.close();
