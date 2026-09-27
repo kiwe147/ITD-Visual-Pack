@@ -124,6 +124,28 @@ const square = c => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http
     check(added === 7, `после «Готово» стикер добавлен в пак (${added})`);
   }
 
+  // выбрать стикер — как картинка через скрепку: файл стикера ложится в поле выбора файла сайта
+  // («Анти цензура» по умолчанию включена — файл приходит сайту .gif, как и при выборе скрепкой)
+  // и сайт получает change (дальше превью и отправку делает сам сайт — на снимке его кода нет)
+  const siteInput = await p.evaluate(() => {
+    const row = document.querySelector('.vp-comment-row');
+    let input = null;
+    for (let e = row, i = 0; e && !input && i < 5; e = e.parentElement, i++) input = e.querySelector('input[type="file"]');
+    if (!input) return false;
+    input.classList.add('vpTestSiteInput');
+    input.addEventListener('change', () => { window.__siteFile = [...input.files].map(f => f.name + ' ' + f.type + ' ' + f.size).join(); });
+    return true;
+  });
+  if (siteInput) {
+    if (!(await p.$eval('.sticker-panel', e => getComputedStyle(e).display === 'flex'))) { await p.hover('.sticker-btn'); await p.waitForTimeout(400); }
+    await p.$$eval('.pack-grid[data-pack="user_1"] button', bs => bs[0].click());
+    await p.waitForTimeout(600);
+    const got = await p.evaluate(() => window.__siteFile || '');
+    check(/^sticker\.gif image\/gif \d+$/.test(got) && !(await p.$('#temp_sticker_preview')), `стикер ушёл в поле файла сайта (${got || 'нет'}), своего превью нет`);
+    // дальше — запасной путь: поля файла нет
+    await p.evaluate(() => document.querySelectorAll('.vpTestSiteInput').forEach(e => e.remove()));
+  } else console.log('—    поля файла сайта у комментария нет — только запасной путь');
+
   // выбрать стикер: превью над полем, микрофон спрятан; крестик снимает; «Отправить» после — не уносит стикер
   if (!(await p.$eval('.sticker-panel', e => getComputedStyle(e).display === 'flex'))) { await p.hover('.sticker-btn'); await p.waitForTimeout(400); }
   await p.$$eval('.pack-grid[data-pack="user_1"] button', bs => bs[1].click());

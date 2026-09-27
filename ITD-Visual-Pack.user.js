@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.2
+// @version      3.2.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3970,12 +3970,18 @@
         // Сайт пускает во вложения только свои файлы («Некоторые файлы не принадлежат вам»): стикер,
         // загруженный с другого аккаунта, грузим заново от своего имени и запоминаем новый номер в паках.
         // Картинку качает Tampermonkey (у хранилища картинок нет CORS — fetch страницы её не получит).
-        function ownStickerCopy(sticker) {
+        function stickerFile(sticker) {
             return new Promise((resolve, reject) => GM_xmlhttpRequest({
                 method: 'GET', url: sticker.url, responseType: 'blob',
                 onload: r => r.status === 200 && r.response ? resolve(r.response) : reject(new Error('картинка стикера: ' + r.status)),
                 onerror: () => reject(new Error('картинка стикера: сеть'))
-            })).then(blob => uploadImageToServer(new File([blob], 'sticker.' + ((blob.type || 'image/png').split('/')[1] || 'png'), { type: blob.type || 'image/png' })))
+            })).then(blob => {
+                const type = blob.type || 'image/png';
+                return new File([blob], 'sticker.' + (type.split('/')[1] || 'png').replace(/\+.*/, ''), { type });
+            });
+        }
+        function ownStickerCopy(sticker) {
+            return stickerFile(sticker).then(uploadImageToServer)
                 .then(data => {
                     const oldId = sticker.id;
                     [recentStickers, ...userPacks.map(p => p.stickers)].forEach(list => list.forEach(s => { if (s.id === oldId) Object.assign(s, data); }));
@@ -4286,10 +4292,32 @@
             if (scrollContainer) allPackKeys().forEach(refreshPackGrid);
         }
 
+        // Стикер — как картинка через скрепку: кладём файл в поле выбора файла сайта рядом с полем
+        // комментария, дальше сайт всё делает сам — превью, отправка, комментарий в списке без
+        // перезагрузки, файл грузится от своего имени (чужие файлы сайт во вложения не пускает).
+        // Поля нет или картинка не скачалась — прикрепляем по-своему (insertStickerToComment).
+        async function attachAsSiteFile(sticker) {
+            const row = stickerBtn && stickerBtn.closest('.' + SELECTORS.stickerContainer);
+            let input = null;
+            for (let e = row, i = 0; e && !input && i < 5; e = e.parentElement, i++) input = e.querySelector('input[type="file"]');
+            if (!input) return false;
+            const file = await stickerFile(sticker);
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+        }
         function pickSticker(sticker) {
             if (sticker && sticker.id && sticker.url) {
                 addToRecent(sticker);
-                try { insertStickerToComment(sticker); } catch (e) { console.warn('[ITD VP] стикер', e); logErr('стикер', e); }
+                const fallback = e => {
+                    if (e) { console.warn('[ITD VP] стикер через сайт', e); logErr('стикер через сайт', e); }
+                    try { insertStickerToComment(sticker); } catch (err) { console.warn('[ITD VP] стикер', err); logErr('стикер', err); }
+                };
+                if (stickerBtn) stickerBtn.innerHTML = ICONS.LOADING;
+                attachAsSiteFile(sticker).then(ok => { if (!ok) fallback(); }, fallback)
+                    .finally(() => { if (stickerBtn) stickerBtn.innerHTML = ICONS.STICKER_BUTTON; });
             }
             stickerPanel.classList.remove('vp-open');
             exitEditMode();
