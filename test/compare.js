@@ -46,6 +46,8 @@ async function shoot(browser, src, name) {
     if (v) localStorage.setItem('itd_verified_users', JSON.stringify(Object.fromEntries(v.split(',').map(n => [n, { hasMod: true }]))));
   }, [src.slice(0, src.indexOf('==/UserScript==')), settings, process.env.VERIFIED || '']);
   await p.goto(URL0);
+  // LIGHT=1 — светлая тема сайта
+  if (process.env.LIGHT) await p.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));
   await p.evaluate(() => document.querySelectorAll('.vp-nav-blob, .vp-fab, .vp-fps, .settings-dropdown, .nick-controls-panel, .vp-itdx-btn, .vp-msgs, .itd-blur-container, .custom-image-btn, .custom-change-btn, .custom-cancel-btn, .custom-apply-btn').forEach(e => e.remove()));
   await p.addScriptTag({ content: src });
   await p.waitForLoadState('networkidle').catch(() => { });

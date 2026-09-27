@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.3
+// @version      3.2.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4660,9 +4660,17 @@
         .vp-msgs.vp-open { display: flex; animation: vpMsgsIn .22s cubic-bezier(.2, .8, .2, 1); }
         html.vp-msgs-open .vp-msgs-navwrap { z-index: 10 !important; }
         html.vp-msgs-open .itd-scroll-top-btn { opacity: 0 !important; visibility: hidden !important; }
-        /* сайт всё ещё считает текущим свой пункт (профиль, ленту) — пока открыта личка, он как обычный */
-        html.vp-msgs-open nav .vp-nav-link:not(.vp-active) { color: var(--text-secondary) !important; }
-        html.vp-msgs-open nav .vp-nav-link.vp-active { color: var(--text-primary) !important; }
+        /* поле комментария страницы поста закреплено поверх всего (z-index 100) и лежало на окне лички */
+        html.vp-msgs-open .vp-comments-sheet { visibility: hidden !important; }
+        /* сайт всё ещё считает текущим свой пункт (ленту, профиль): пока открыта личка, у него вид обычного
+           пункта, у «Сообщений» — вид текущего. Вид снимаем с самих пунктов (msgsNavLook): у сайта он разный —
+           на компьютере неактивные полупрозрачные, на телефоне серые; раньше всё красилось серым и тускнело */
+        html.vp-msgs-open .vp-nav-link.vp-site-cur { color: var(--vp-off-c) !important; opacity: var(--vp-off-o) !important; background-color: var(--vp-off-b) !important; }
+        html.vp-msgs-open .vp-nav-link[href="#"] { color: var(--vp-on-c) !important; opacity: var(--vp-on-o) !important; background-color: var(--vp-on-b) !important; }
+        /* компьютер: окно — карточка, как блоки сайта, а не кусок страницы того же цвета */
+        .vp-msgs.vp-card { border-radius: 36px; border: 1px solid var(--border-color, rgba(255, 255, 255, .15));
+            background: #141414; box-shadow: 0 16px 48px rgba(0, 0, 0, .45); }
+        html.vp-light .vp-msgs.vp-card { background: #fff; box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
         .vp-msgs-view { display: flex; flex-direction: column; min-height: 0; flex: 1; }
         .vp-msgs-view[hidden] { display: none; }
         .vp-msgs-top { display: flex; align-items: center; gap: 10px; padding: 18px 16px 10px; }
@@ -4744,6 +4752,14 @@
         const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
         const root = document.createElement('div');
         root.className = 'vp-msgs';
+        // Колесо и палец над окном крутят только список и переписку. Где крутить нечего (короткий список,
+        // шапка, поле ввода) — никуда: раньше прокрутка уходила странице, и лента с тенями ехала за окном.
+        const blockOuterScroll = e => {
+            const area = e.target.closest && e.target.closest('.vp-msgs-list, .vp-msgs-feed, textarea');
+            if (!area || area.scrollHeight <= area.clientHeight) e.preventDefault();
+        };
+        root.addEventListener('wheel', blockOuterScroll, { passive: false });
+        root.addEventListener('touchmove', blockOuterScroll, { passive: false });
         root.setAttribute('role', 'region');          // это «страница», не всплывающее окно: без затемнения сайта под окнами
         root.setAttribute('aria-label', 'Сообщения');
         root.innerHTML = `
@@ -4937,8 +4953,9 @@
             } else {
                 const cb = contentBox() || lastCb;
                 const left = cb ? cb.left : Math.max(0, innerWidth / 2 - 300), width = cb ? cb.right - cb.left : Math.min(600, innerWidth);
-                Object.assign(root.style, { left: left + 'px', width: width + 'px', right: '', top: '0px', bottom: '0px', borderRadius: '', paddingBottom: '0px' });
+                Object.assign(root.style, { left: left + 'px', width: width + 'px', right: '', top: '12px', bottom: '12px', borderRadius: '', paddingBottom: '0px' });
             }
+            root.classList.toggle('vp-card', !row);
         }
         let pushed = false, openPath = '';
         function onKey(e) { if (e.key === 'Escape' && root.classList.contains('vp-open')) { e.stopPropagation(); current ? closeChat() : close(); } }
@@ -5514,6 +5531,9 @@
         .itd-blur-active .vp-repost {
             background: rgba(0, 0, 0, 0.3) !important;
         }
+        /* светлая тема: вуаль светлая — тёмная делала карточку серой на светлой странице */
+        html.vp-light .vp-blur-dim { background: rgba(255, 255, 255, 0.55); }
+        html.vp-light .itd-blur-active .vp-repost { background: rgba(255, 255, 255, 0.35) !important; }
         .vp-post .blur-bg-layer, .vp-post .blur-overlay,
         .vp-repost .blur-bg-layer, .vp-repost .blur-overlay {
             display: none !important;
@@ -5808,6 +5828,22 @@
                 : href.startsWith('/') && (href === path || (href !== '/' && path.startsWith(href + '/')));
             a.classList.toggle('vp-active', active);
         });
+        msgsNavLook();
+    }
+    // Пока открыта личка: какой пункт сайт считает текущим и как у него выглядят текущий и обычный пункты
+    // (цвет, прозрачность, фон — считываем до своих правил и кладём в переменные у меню)
+    function msgsNavLook() {
+        const links = [...document.querySelectorAll('.' + SELECTORS.navLink)];
+        if (!msgsOpen) { links.forEach(a => a.classList.remove('vp-site-cur')); return; }
+        const path = location.pathname;
+        const cur = links.find(a => { const h = a.getAttribute('href') || ''; return h.startsWith('/') && (h === path || (h !== '/' && path.startsWith(h + '/'))); });
+        const other = links.find(a => a !== cur && a.getAttribute('href') !== '#' && a.getAttribute('href') !== path);
+        const nav = (cur || other) && (cur || other).closest('nav');
+        if (!nav || !other || (cur && cur.classList.contains('vp-site-cur'))) return;
+        const look = (a, k) => { const g = getComputedStyle(a); nav.style.setProperty(`--vp-${k}-c`, g.color); nav.style.setProperty(`--vp-${k}-o`, g.opacity); nav.style.setProperty(`--vp-${k}-b`, g.backgroundColor); };
+        look(other, 'off');
+        look(cur || other, 'on');
+        if (cur) cur.classList.add('vp-site-cur');
     }
     markActiveNav();
     onDom(markActiveNav);
