@@ -3771,6 +3771,7 @@
             'Галерея: кнопки, стрелки и счётчик картинок — белые на тёмной стеклянной подложке, хорошо видны на любой картинке',
             'Галерея: справа внизу на картинке — кнопка «Скопировать ссылку» на пост',
             'Галерея: стрелки листания крупнее; кнопки на картинке прячутся, когда уводишь мышь после лайка или репоста',
+            'Магазин → «Сообщения»: меню и правая панель стоят как на ленте (раньше разъезжались по краям, панель сужалась)',
             'Галерея: кнопки крупнее, отзываются на нажатие, сердце «подпрыгивает» при лайке',
             'Магазин → «Сообщения»: окно открывается поверх магазина (раньше не было видно)',
             'Свой и живой фон видны в магазине и в «Сообщениях»',
@@ -6121,6 +6122,7 @@
             document.removeEventListener('keydown', onKey, true);
             removeEventListener('resize', place);
             msgsOpen = false;
+            placeSidebar(); placeRail();
             if (!galOpen) galHideFeed(false);
             markActiveNav(); moveNavBlob();
             if (!fromHistory && overlayAt('vpMsgs')) history.back();
@@ -6151,6 +6153,7 @@
             closeChat();
             loadMsgPeople(() => { if (!current) renderList(); });
             place();
+            placeSidebar(); placeRail();
             root.classList.add('vp-open');
             document.documentElement.classList.add('vp-msgs-open');
             document.addEventListener('keydown', onKey, true);
@@ -8854,6 +8857,7 @@
             const r = el.getBoundingClientRect();
             if (r.width > 300) { left = Math.min(left, r.left); right = Math.max(right, r.right); }
         });
+        if (right) feedCb = { left, right, w: innerWidth };
         if (!right) {
             // магазин — отдельная страница в рамке (iframe) во весь экран: своей колонки нет, и меню с панелью
             // встают как при открытии с нуля (меню на месте сайта, панель — в правую колонку), а не по прошлой странице
@@ -8861,7 +8865,7 @@
                 const r = f.getBoundingClientRect();
                 return r.width >= innerWidth * 0.72 && r.height >= innerHeight * 0.6;
             });
-            if (frame) return { left: 0, right: 0 };
+            if (frame) return msgsOpen ? frameColumn() : { left: 0, right: 0 };
             // страница без ленты, вкладок и постов: колонка — то, что лежит в середине
             // экрана, поднятое до обёртки без боковых колонок. Иначе меню и панель стояли по прошлой странице
             const skip = side + ', nav, .vp-hc, .vp-msgs, .vpi-overlay';
@@ -8878,6 +8882,21 @@
         return right ? { left, right } : null;
     }
     let lastCb = null;
+    // Колонка ленты с последней страницы, где она была (и ширина экрана тогда)
+    let feedCb = null;
+    // «Сообщения» поверх магазина: колонки у страницы нет, и меню с панелью разъезжались по краям (панель ещё и
+    // сужалась). Пока окно открыто, колонка — где лента стоит на обычных страницах: меню и панель встают вокруг
+    // окна как на ленте; закрыли — снова по раскладке магазина
+    function frameColumn() {
+        if (feedCb && feedCb.w === innerWidth) return { left: feedCb.left, right: feedCb.right };
+        const side = document.querySelector('.' + SELECTORS.sidebar);
+        const sw = side ? side.getBoundingClientRect().width : 0;
+        const siteLeft = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-gap')) || 36;
+        const w = Math.min(650, innerWidth - 32);
+        let left = Math.round(innerWidth / 2 - w / 2);
+        if (sw && left - sw - 24 <= siteLeft + 8) left = Math.round(siteLeft + sw + 24);   // меню не сдвинуть — окно правее него
+        return { left, right: Math.min(innerWidth - 16, left + w) };
+    }
     function placeRail() {
         // лента на миг пропала (переход страницы) — остаёмся на прежнем месте, а не прыгаем
         const cb = contentBox() || lastCb;
