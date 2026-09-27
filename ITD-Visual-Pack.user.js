@@ -171,6 +171,14 @@
     // План по времени. Редкая — та же классика, но поставлена круче: «Д» летит в замедлении
     // (влетает, почти зависает, врезается), X влетает целиком и врезается, после — пауза на логотипе.
     function introPlan(rare) {
+        // «Обманка»: И — как в классике, Т — как будто тоже, но отскакивает; Д в свой срок не прилетает —
+        // пауза, потом падает сверху наковальней (И и Т подпрыгивают от удара); буквы подпрыгивают волной;
+        // X не рисуется, а влетает сбоку сюрикеном, втыкается за словом и дрожит, как нож
+        if (rare === 'twist') {
+            const LOCK = [620, 1020, 1760], FLY = [520, 520, 230];
+            const BOUNCE = LOCK[1] + 250, WAVE = LOCK[2] + 330, X = WAVE + 420, STICK = X + 430;
+            return { LOCK, FLY, BOUNCE, WAVE, X, STICK, X_DRAW: 0, X_GAP: 0, EXIT: STICK + 480 };
+        }
         // «Сборка»: буквы собираются из тысяч осколков (трещотка), X прочерчивается как обычно и крутится,
         // как вентиль сейфа — щелчками по 30°: оборот вправо, пол-оборота назад, пол-оборота вправо; клац
         if (rare === 'assemble') {
@@ -350,6 +358,47 @@
             src.start(t, Math.random() * 0.5);
             src.stop(t + 0.05);
         }
+        if (rare === 'twist') {
+            whoosh(at(P.LOCK[0] - P.FLY[0]), P.FLY[0] / 1000); clank(at(P.LOCK[0]), false);
+            whoosh(at(P.LOCK[1] - P.FLY[1]), P.FLY[1] / 1000); clank(at(P.LOCK[1]), false);
+            tick(at(P.BOUNCE), 0.5, 900); clank(at(P.BOUNCE + 10), false);        // Т приземлилась после отскока
+            // Д: свист падения сверху (тон вниз), наковальня
+            const fall = ctx.createOscillator(), fg = ctx.createGain();
+            fall.type = 'sine';
+            fall.frequency.setValueAtTime(1500, at(P.LOCK[2] - P.FLY[2]));
+            fall.frequency.exponentialRampToValueAtTime(260, at(P.LOCK[2]));
+            fg.gain.setValueAtTime(0.0001, at(P.LOCK[2] - P.FLY[2]));
+            fg.gain.exponentialRampToValueAtTime(0.18, at(P.LOCK[2] - 20));
+            fg.gain.exponentialRampToValueAtTime(0.0001, at(P.LOCK[2] + 10));
+            fall.connect(fg).connect(master);
+            fall.start(at(P.LOCK[2] - P.FLY[2])); fall.stop(at(P.LOCK[2] + 40));
+            clank(at(P.LOCK[2]), true);
+            subDrop(at(P.LOCK[2]));
+            [0, 80, 160].forEach(d => tick(at(P.WAVE + d + 60), 0.25, 1200));  // волна: мягкие стуки
+            // X: жужжание вращения (шум с «рубленой» громкостью), удар, звон дрожащего ножа
+            const whir = ctx.createBufferSource(), wbp = ctx.createBiquadFilter(), wg = ctx.createGain();
+            whir.buffer = noise; whir.loop = true;
+            wbp.type = 'bandpass'; wbp.Q.value = 2; wbp.frequency.value = 1800;
+            wg.gain.setValueAtTime(0.0001, at(P.X));
+            const dur = (P.STICK - P.X) / 1000;
+            for (let k = 0, n = 26; k < n; k++) {                  // лопасти: всё реже к удару
+                const tt = at(P.X) + dur * Math.pow(k / n, 0.8);
+                wg.gain.setValueAtTime(0.35 * (0.4 + 0.6 * k / n), tt);
+                wg.gain.setValueAtTime(0.02, tt + 0.012);
+            }
+            whir.connect(wbp).connect(wg).connect(master);
+            whir.start(at(P.X)); whir.stop(at(P.STICK));
+            clank(at(P.STICK), false);
+            const tw = ctx.createOscillator(), vib = ctx.createOscillator(), vg = ctx.createGain(), tg = ctx.createGain();
+            tw.type = 'triangle'; tw.frequency.value = 190;
+            vib.frequency.value = 24; vg.gain.value = 14;
+            vib.connect(vg).connect(tw.frequency);
+            env(tg.gain, at(P.STICK), 0.35, 0.005, 0.55);
+            tw.connect(tg).connect(master); tg.connect(echo);
+            tw.start(at(P.STICK)); vib.start(at(P.STICK)); tw.stop(at(P.STICK + 700)); vib.stop(at(P.STICK + 700));
+            whoosh(at(P.EXIT - 200), 0.26);
+            return;
+        }
         if (rare === 'assemble') {
             P.LOCK.forEach((lock, i) => {
                 // «тррррр»: щелчки всё чаще и громче к моменту, когда буква сложилась
@@ -386,7 +435,7 @@
     }
     function playIntro(mode, variant) {
         const root = document.documentElement;
-        const rare = variant === true, asm = variant === 'assemble';
+        const rare = variant === true, asm = variant === 'assemble', twist = variant === 'twist';
         const light = introIsLight();
         const css = document.createElement('style');
         css.textContent = `
@@ -497,6 +546,7 @@
             burst(lock, lr.left - wr.left + lr.width / 2, lr.top - wr.top + lr.height / 2, lr.height * (i === 2 ? 1.8 : 1.3), i === 2);
         });
         if (!asm) letters[0].forEach((box, i) => {
+            if (twist && i === 2) return;                     // Д у «Обманки» — своя, ниже
             const lock = LOCK[i], f = FROM[i], fly = FLY[i];
             const lr = box.getBoundingClientRect();
             const cx = lr.left - wr.left + lr.width / 2, cy = lr.top - wr.top + lr.height / 2;
@@ -535,16 +585,67 @@
             burst(lock, cx, cy, lr.height * (i === 2 ? 2.2 : 1.5), i === 2);
         });
 
+        if (twist) {
+            const all = i => letters.map(l => l[i]);
+            const hop = (i, at, h, dur) => playBoth(all(i), [
+                { transform: 'translateY(0)' },
+                { transform: `translateY(${-h}px) scale(.96, 1.05)`, offset: .45, easing: 'cubic-bezier(.3,0,.7,1)' },
+                { transform: 'translateY(0) scale(1.05, .95)', offset: .85 },
+                { transform: 'translateY(0)' }
+            ], { delay: at, duration: dur, easing: 'cubic-bezier(.2,.7,.3,1)', composite: 'add', fill: 'none' });
+            // Т: после удара отскакивает с наклоном и приземляется второй раз
+            const tb = letters[0][1].getBoundingClientRect();
+            playBoth(all(1), [
+                { transform: 'translateY(0) rotate(0deg)' },
+                { transform: `translateY(${-tb.height * .42}px) rotate(-9deg)`, offset: .5, easing: 'cubic-bezier(.3,0,.7,1)' },
+                { transform: 'translateY(0) rotate(0deg) scale(1.06, .92)', offset: .9 },
+                { transform: 'translateY(0) rotate(0deg)' }
+            ], { delay: LOCK[1] + 30, duration: PLAN.BOUNCE - LOCK[1] + 30, easing: 'cubic-bezier(.2,.7,.3,1)', composite: 'add', fill: 'none' });
+            shake(PLAN.BOUNCE, 3);
+            // Д: в свой (классический) срок — ничего; потом падает сверху наковальней
+            const db = letters[0][2].getBoundingClientRect();
+            playBoth(all(2), [
+                // до падения — целиком за верхним краем и невидима: сюрприз не должен выглядывать
+                { transform: `translateY(${-(db.bottom + db.height * 1.5)}px) scale(.94, 1.25)`, opacity: 0, filter: `blur(7px) drop-shadow(0 0 0 rgba(${GLOW},0))`, easing: 'cubic-bezier(.55,0,1,.45)' },
+                { opacity: 1, offset: .04 },
+                { transform: 'translateY(0) scale(1.18, .78)', opacity: 1, filter: `blur(0px) drop-shadow(0 0 40px rgba(${GLOW},1))`, offset: .55, easing: 'cubic-bezier(.2,.9,.3,1)' },
+                { transform: 'translateY(-6px) scale(.97, 1.04)', opacity: 1, offset: .78 },
+                { transform: 'none', opacity: 1, filter: `blur(0px) drop-shadow(0 0 10px rgba(${GLOW},.3))` }
+            ], { delay: LOCK[2] - FLY[2], duration: FLY[2] / .55 });
+            shake(LOCK[2], 20);
+            burst(LOCK[2], db.left - wr.left + db.width / 2, db.bottom - wr.top - db.height * .15, db.height * 2.2, true);
+            play(flash, [{ opacity: 0 }, { opacity: .2, offset: .1 }, { opacity: 0 }], { delay: LOCK[2], duration: 380, fill: 'none' });
+            [0, 1].forEach(i => hop(i, LOCK[2] + 20, 30, 300));               // ударная волна подбрасывает И и Т
+            [0, 1, 2].forEach(i => hop(i, PLAN.WAVE + i * 80, 22, 280));      // волна
+            // X: сюрикен — влетает справа, вращаясь, втыкается и дрожит
+            const T = PLAN.STICK - PLAN.X;
+            playBoth(xMarks, [
+                { transform: `translate(calc(-50% + ${innerWidth * .75}px), -50%) rotate(1440deg) scale(.5)`, opacity: 0 },
+                { opacity: 1, offset: .12 },
+                { transform: 'translate(-50%, -50%) rotate(0deg) scale(1)', opacity: 1 }
+            ], { delay: PLAN.X, duration: T, easing: 'cubic-bezier(.15,.6,.35,1)' });
+            playBoth(xMarks, [
+                { transform: 'rotate(0deg)' }, { transform: 'rotate(8deg)' }, { transform: 'rotate(-6deg)' },
+                { transform: 'rotate(4deg)' }, { transform: 'rotate(-2deg)' }, { transform: 'rotate(1deg)' }, { transform: 'rotate(0deg)' }
+            ], { delay: PLAN.STICK, duration: 460, easing: 'ease-out', composite: 'add', fill: 'none' });
+            shake(PLAN.STICK, 7);
+            play(flash, [{ opacity: 0 }, { opacity: .06, offset: .3 }, { opacity: 0 }], { delay: PLAN.STICK, duration: 200, fill: 'none' });
+            playBoth(xMarks, [
+                { filter: 'drop-shadow(0 0 6px rgba(124,77,255,.5))' },
+                { filter: 'drop-shadow(0 0 28px rgba(124,77,255,1))', offset: .3 },
+                { filter: 'drop-shadow(0 0 12px rgba(124,77,255,.55))' }
+            ], { delay: PLAN.STICK, duration: 520 });
+        }
         // X: два росчерка крест-накрест за буквами, потом вспышка свечения
-        ['.vpi-x1', '.vpi-x2'].forEach((sel, i) => {
+        if (!twist) ['.vpi-x1', '.vpi-x2'].forEach((sel, i) => {
             xMarks.forEach(xm => xm.querySelectorAll(sel).forEach(path => play(path, [
                 { strokeDasharray: '1 1', strokeDashoffset: 1 },
                 { strokeDasharray: '1 1', strokeDashoffset: 0 }
             ], { delay: X + i * X_GAP, duration: X_DRAW, easing: 'cubic-bezier(.7,0,.3,1)' })));
             play(flash, [{ opacity: 0 }, { opacity: .05, offset: .5 }, { opacity: 0 }], { delay: X + i * X_GAP + X_DRAW * .6, duration: 160, fill: 'none' });
         });
-        shake(X + X_GAP + X_DRAW * .8, rare ? 10 : 3);
-        playBoth(xMarks, [
+        if (!twist) shake(X + X_GAP + X_DRAW * .8, rare ? 10 : 3);
+        if (!twist) playBoth(xMarks, [
             { filter: 'drop-shadow(0 0 0 rgba(124,77,255,0))' },
             { filter: 'drop-shadow(0 0 26px rgba(124,77,255,.95))', offset: .35 },
             { filter: 'drop-shadow(0 0 12px rgba(124,77,255,.55))' }
@@ -3032,6 +3133,7 @@
                 <button type="button" data-act="diag">${svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4M8.5 11l1.8 1.8 3.4-3.6"/>', 18)}<span>Диагностика</span></button>
                 <button type="button" data-act="rare">${svgIcon('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.3 6L12 16.4 6.6 19.4l1.3-6L3.4 9.3l6-.7z"/>', 18)}<span>Редкая заставка</span></button>
                 <button type="button" data-act="assemble">${svgIcon('<path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z"/>', 18)}<span>Заставка «сборка»</span></button>
+                <button type="button" data-act="twist">${svgIcon('<path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/>', 18)}<span>Заставка «обманка»</span></button>
                 <button type="button" data-act="fps">${svgIcon('<path d="M3 17l5-6 4 3 5-7 4 4"/>', 18)}<span>Счётчик FPS</span></button>
                 <button type="button" data-act="face">${svgIcon('<rect x="4" y="4" width="16" height="16" rx="8"/><path d="M8 15l2.5-3 2 2 1.5-2 2 3"/>', 18)}<span>Своя картинка кнопки</span></button>
                 <button type="button" data-act="off">${svgIcon('<path d="M12 3v8"/><path d="M6.3 7a8 8 0 1 0 11.4 0"/>', 18)}<span>Мод выкл (до закрытия вкладки)</span></button></div>`;
@@ -3090,6 +3192,7 @@
         act('fps', toggleFps);
         act('rare', () => playIntro(IS_PHONE ? 'silent' : 'desk', true));
         act('assemble', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'assemble'));
+        act('twist', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'twist'));
         // своя картинка кнопки — хранится только у тебя (в настройках скрипта), 96 px; пустой выбор — вернуть «A»
         act('face', () => {
             if (GM_getValue('fabFace', '') && confirm('Вернуть обычную «A»? (Отмена — выбрать другую картинку)')) {
