@@ -53,6 +53,7 @@ const page = n => ({ data: { posts: Array.from({ length: 20 }, (_, i) => {
   await p.evaluate(() => document.querySelectorAll('.vp-rail, .vp-fab, .vp-gal-btn, .vp-nav-blob').forEach(e => e.remove()));
   await p.addScriptTag({ content: src });
   await p.waitForTimeout(2500);
+  await p.screenshot({ path: path.join(out, `gal-${mode}-feed.png`) });    // лента до галереи — для сравнения
   const sel = mode === 'desktop' ? '.vp-gal-nav' : '.vp-gal-btn';
   const btn = await p.$(sel);
   check(!!btn && await btn.isVisible(), mode === 'desktop' ? 'пункт «Галерея» в боковом меню' : 'кнопка «Галерея» в полосе ленты');
