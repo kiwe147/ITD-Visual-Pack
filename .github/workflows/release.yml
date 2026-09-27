@@ -1,8 +1,8 @@
-name: Add userscript to release
+name: Update userscript in release
 
 on:
   release:
-    types: [published]
+    types: [published, edited]
 
 permissions:
   contents: write
@@ -12,15 +12,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Get files from main
+      - name: Get latest script from main
         uses: actions/checkout@v4
         with:
           ref: main
 
-      - name: Upload userscript to release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.event.release.tag_name }}
-          files: ITD-Visual-Pack.user.js
+      - name: Upload script to release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            "ITD-Visual-Pack.user.js" \
+            --clobber
