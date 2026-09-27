@@ -22,6 +22,9 @@ const URL0 = 'https://xn--d1ah4a.com/';
     window.GM_getValue = (k, d) => k in s ? s[k] : d; window.GM_setValue = (k, v) => { s[k] = v; };
     window.GM_xmlhttpRequest = o => setTimeout(() => o.onerror && o.onerror('x'), 0);
     window.GM_info = { script: { version: 't' }, scriptMetaStr: m }; window.unsafeWindow = window;
+    // кадры снимаются медленнее настоящего времени — страховочный таймер заставки (убрать её, если
+    // анимации не доиграли) не должен сработать посреди записи
+    const st = window.setTimeout; window.setTimeout = (f, ms, ...r) => ms >= 2500 ? 0 : st(f, ms, ...r);
   }, [src.slice(0, src.indexOf('==/UserScript==')), kind === 'normal' ? '' : kind]);
   await p.goto(URL0);
   await p.evaluate(th => { document.documentElement.setAttribute('data-theme', th); document.querySelectorAll('.vpi-overlay').forEach(e => e.remove()); }, theme);
