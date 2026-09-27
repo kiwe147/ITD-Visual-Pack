@@ -78,6 +78,11 @@ const svg = kind => kind === 'split'
   await p.waitForTimeout(400);
   const rep = await p.$eval('.vp-gal-acts[data-post="black"]', r => [getComputedStyle(r).opacity, r.querySelector('[data-act="repost"]').classList.contains('vp-on')]);
   check(rep[1] && rep[0] === '0', `после репоста и ухода мыши таблетка спрятана (репост ${rep[1] ? 'есть' : 'нет'}, opacity ${rep[0]})`);
+  // правая кнопка — у картинки снова обычная ссылка сайта (копирование и «Сохранить как» из меню браузера)
+  const box = await p.$eval('.vp-gal-acts[data-post="white"]', r => { const b = r.closest('.vp-gal-tile').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + 30 }; });
+  await p.mouse.move(box.x, box.y); await p.mouse.down({ button: 'right' }); await p.mouse.up({ button: 'right' });
+  const rsrc = await p.$eval('.vp-gal-acts[data-post="white"]', r => r.closest('.vp-gal-tile').querySelector('img').src);
+  check(/^https:\/\/cdn\./.test(rsrc), `после правой кнопки у картинки ссылка сайта (${rsrc.slice(0, 50)})`);
   // справа внизу — «Скопировать ссылку»: в буфер ссылка на пост, на кнопке галочка, пост не открылся
   const url0 = p.url();
   await p.$eval('.vp-gal-acts[data-post="split"] ~ .vp-gal-acts-r .vp-gal-act[data-act="link"]', b => b.click());
