@@ -4671,6 +4671,9 @@
         .vp-msgs.vp-card { border-radius: 36px; border: 1px solid var(--border-color, rgba(255, 255, 255, .15));
             background: #141414; box-shadow: 0 16px 48px rgba(0, 0, 0, .45); }
         html.vp-light .vp-msgs.vp-card { background: #fff; box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
+        /* под карточкой — вся колонка цветом страницы: в отступах сверху и снизу не видно ленты */
+        .vp-msgs-under { position: fixed; top: 0; bottom: 0; z-index: 4; display: none; background: var(--bg-primary, #000); pointer-events: none; }
+        html.vp-msgs-open .vp-msgs-under.vp-on { display: block; }
         .vp-msgs-view { display: flex; flex-direction: column; min-height: 0; flex: 1; }
         .vp-msgs-view[hidden] { display: none; }
         .vp-msgs-top { display: flex; align-items: center; gap: 10px; padding: 18px 16px 10px; }
@@ -4781,6 +4784,9 @@
                     <button type="submit" class="vp-msgs-send" title="Отправить" disabled>${MSG_ICON.send}</button></form>
             </section>`;
         document.body.appendChild(root);
+        const under = document.createElement('div');
+        under.className = 'vp-msgs-under';
+        document.body.appendChild(under);
 
         const $ = s => root.querySelector(s);
         const list = $('.vp-msgs-list'), home = $('.vp-msgs-home'), chat = $('.vp-msgs-chat'), feed = $('.vp-msgs-feed');
@@ -4956,6 +4962,8 @@
                 Object.assign(root.style, { left: left + 'px', width: width + 'px', right: '', top: '12px', bottom: '12px', borderRadius: '', paddingBottom: '0px' });
             }
             root.classList.toggle('vp-card', !row);
+            under.classList.toggle('vp-on', !row);
+            if (!row) Object.assign(under.style, { left: root.style.left, width: root.style.width });
         }
         let pushed = false, openPath = '';
         function onKey(e) { if (e.key === 'Escape' && root.classList.contains('vp-open')) { e.stopPropagation(); current ? closeChat() : close(); } }
