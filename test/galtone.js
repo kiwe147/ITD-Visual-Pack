@@ -60,6 +60,24 @@ const svg = kind => kind === 'split'
     check(tones[id].acts === 'свет,свет,свет', `${id}: кнопки белые (${tones[id].acts})`);
     check(/rgba\(0, 0, 0, 0\.4/.test(tones[id].bg), `${id}: под кнопками тёмная подложка (${tones[id].bg})`);
   }
+  // лайк мышью и увели мышь — таблетка прячется (раньше оставалась: кнопка держала фокус)
+  await p.evaluate(() => document.querySelectorAll('.vp-gal-acts').forEach(r => r.style.opacity = ''));
+  await p.route('**/api/posts/*/like', r => r.fulfill({ contentType: 'application/json', body: '{}' }));
+  await p.hover('.vp-gal-acts[data-post="white"]');
+  await p.click('.vp-gal-acts[data-post="white"] .vp-gal-act[data-act="like"]');
+  await p.mouse.move(5, 5);
+  await p.waitForTimeout(400);
+  const hid = await p.$eval('.vp-gal-acts[data-post="white"]', r => getComputedStyle(r).opacity);
+  check(hid === '0', `после лайка и ухода мыши таблетка спрятана (opacity ${hid})`);
+  // то же у репоста (с окном «Сделать репост?» — соглашаемся)
+  await p.route('**/api/posts/*/repost', r => r.fulfill({ contentType: 'application/json', body: '{}' }));
+  p.once('dialog', d => d.accept());
+  await p.hover('.vp-gal-acts[data-post="black"]');
+  await p.click('.vp-gal-acts[data-post="black"] .vp-gal-act[data-act="repost"]');
+  await p.mouse.move(5, 5);
+  await p.waitForTimeout(400);
+  const rep = await p.$eval('.vp-gal-acts[data-post="black"]', r => [getComputedStyle(r).opacity, r.querySelector('[data-act="repost"]').classList.contains('vp-on')]);
+  check(rep[1] && rep[0] === '0', `после репоста и ухода мыши таблетка спрятана (репост ${rep[1] ? 'есть' : 'нет'}, opacity ${rep[0]})`);
   // справа внизу — «Скопировать ссылку»: в буфер ссылка на пост, на кнопке галочка, пост не открылся
   const url0 = p.url();
   await p.$eval('.vp-gal-acts[data-post="split"] ~ .vp-gal-acts-r .vp-gal-act[data-act="link"]', b => b.click());

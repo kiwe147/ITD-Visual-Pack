@@ -3770,6 +3770,7 @@
         ['3.2.22 – 3.2.22.1', '28 сентября 2026', [
             'Галерея: кнопки, стрелки и счётчик картинок — белые на тёмной стеклянной подложке, хорошо видны на любой картинке',
             'Галерея: справа внизу на картинке — кнопка «Скопировать ссылку» на пост',
+            'Галерея: стрелки листания крупнее; кнопки на картинке прячутся, когда уводишь мышь после лайка или репоста',
             'Галерея: кнопки крупнее, отзываются на нажатие, сердце «подпрыгивает» при лайке',
             'Магазин → «Сообщения»: окно открывается поверх магазина (раньше не было видно)',
             'Свой и живой фон видны в магазине и в «Сообщениях»',
@@ -7881,12 +7882,13 @@
         .vp-gal-dots.vp-ink i { background: rgba(0,0,0,.35); box-shadow: 0 0 3px rgba(255,255,255,.6); }
         .vp-gal-dots.vp-ink i.vp-on { background: #111; }
         /* стрелки, счётчик и метка — та же тёмная стеклянная подложка, что у кнопок лайк/коммент/репост */
-        .vp-gal-arrow { position: absolute; top: 50%; width: 36px; height: 36px; margin-top: -18px; border: 0; border-radius: 50%; padding: 0;
+        .vp-gal-arrow { position: absolute; top: 50%; width: 44px; height: 44px; margin-top: -22px; border: 0; border-radius: 50%; padding: 0;
             display: inline-flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent;
             color: #fff; opacity: 0; transition: opacity .15s, transform .12s ease;
             background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4);
             box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset; }
         .vp-gal-arrow.vp-prev { left: 8px; } .vp-gal-arrow.vp-next { right: 8px; }
+        .vp-gal-arrow svg { stroke-width: 2.2; }
         .vp-gal-arrow:active { transform: scale(.9); }
         .vp-gal-arrow:disabled { visibility: hidden; }
         @media (hover: hover) and (pointer: fine) { .vp-gal-tile:hover .vp-gal-arrow { opacity: 1; } }
@@ -7916,7 +7918,7 @@
         .vp-gal-act.vp-busy { opacity: .5; pointer-events: none; }
         @media (hover: hover) and (pointer: fine) {
             .vp-gal-acts { opacity: 0; }
-            .vp-gal-tile:hover .vp-gal-acts, .vp-gal-acts:focus-within { opacity: 1; }
+            .vp-gal-tile:hover .vp-gal-acts, .vp-gal-acts:has(:focus-visible) { opacity: 1; }   /* фокус с клавиатуры, не после нажатия мышью */
         }
         .vp-gal-badge { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
             color: #fff; pointer-events: none; background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4);
@@ -8147,7 +8149,7 @@
             const prev = document.createElement('button'), next = document.createElement('button');
             prev.type = next.type = 'button';
             prev.className = 'vp-gal-arrow vp-prev'; next.className = 'vp-gal-arrow vp-next';
-            prev.innerHTML = svgIcon('<path d="m14.5 6-6 6 6 6"/>', 18); next.innerHTML = svgIcon('<path d="m9.5 6 6 6-6 6"/>', 18);
+            prev.innerHTML = svgIcon('<path d="m14.5 6-6 6 6 6"/>', 28); next.innerHTML = svgIcon('<path d="m9.5 6 6 6-6 6"/>', 28);
             prev.setAttribute('aria-label', 'Назад'); next.setAttribute('aria-label', 'Дальше');
             tile.append(count, dots, prev, next);
             const at = () => Math.round(strip.scrollLeft / Math.max(1, strip.clientWidth));
