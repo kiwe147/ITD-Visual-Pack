@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.22.2
+// @version      3.2.22.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3767,7 +3767,8 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
-        ['3.2.22 – 3.2.22.1', '28 сентября 2026', [
+        ['3.2.22 – 3.2.22.3', '28 сентября 2026', [
+            'Галерея: если первые картинки не заполнили экран, следующие подгружаются сами (раньше внизу оставалась пустота)',
             'Галерея: кнопки, стрелки и счётчик картинок — белые на тёмной стеклянной подложке, хорошо видны на любой картинке',
             'Галерея: справа внизу на картинке — кнопка «Скопировать ссылку» на пост',
             'Галерея: стрелки листания крупнее; кнопки на картинке прячутся, когда уводишь мышь после лайка или репоста',
@@ -8186,6 +8187,11 @@
         tile.addEventListener('click', () => galOpenPost(post));
         return tile;
     }
+    // до низа ленты плиток меньше 1200 px — пора грузить следующую страницу (окно скрыто — не грузим)
+    function galNeedMore() {
+        const b = gal.el && gal.el.querySelector('.vp-gal-body');
+        return !!b && b.clientHeight > 0 && b.scrollTop + b.clientHeight > b.scrollHeight - 1200;
+    }
     async function galLoad() {
         if (!gal.el || gal.loading || gal.done) return;
         gal.loading = true;
@@ -8212,8 +8218,9 @@
             gal.done = !gal.cursor || !posts.length;
             more.textContent = gal.done ? (gal.seen.size ? 'Это всё' : 'Пусто') : '';
             gal.loading = false;
-            // страница без картинок (одни тексты) — сразу следующая
-            if (!gal.done && added < 4) galLoad();                                          // страница почти без картинок — сразу следующая
+            // плитки не заполнили экран (страница почти без картинок или картинки мелкие) — прокручивать нечего,
+            // и подгрузка по прокрутке не сработает: сразу следующая, пока экран не заполнится с запасом
+            if (!gal.done && (added < 4 || galNeedMore())) galLoad();
         } catch (e) {
             logErr('галерея', e);
             more.textContent = 'Не загрузилось — нажми, чтобы повторить';
@@ -8325,7 +8332,7 @@
             return;
         }
         el.querySelectorAll('.vp-gal-tab').forEach(b => b.onclick = () => { if (b.dataset.tab !== gal.tab || !gal.seen.size) galSwitch(b.dataset.tab); });
-        body.addEventListener('scroll', () => { if (body.scrollTop + body.clientHeight > body.scrollHeight - 1200) galLoad(); }, { passive: true });
+        body.addEventListener('scroll', () => { if (galNeedMore()) galLoad(); }, { passive: true });
         for (const t of ['wheel', 'touchmove']) el.addEventListener(t, e => e.stopPropagation(), { passive: true });
         galSwitch(gal.tab);
     }
@@ -8372,7 +8379,7 @@
     }, true);
     addEventListener('keydown', e => { if (e.key === 'Escape' && gal.el) closeGallery(); });
     let galCols = galColsCount();
-    addEventListener('resize', () => { if (gal.el && galColsCount() !== galCols) { galCols = galColsCount(); galLayout(); } });
+    addEventListener('resize', () => { if (gal.el && galColsCount() !== galCols) { galCols = galColsCount(); galLayout(); } if (galNeedMore()) galLoad(); });
     // кнопка — в полосе ленты, перед поиском (круглая кнопка с иконкой у сайта), с её же классами
     onDom(function galleryButton() {
         const bar = document.querySelector('.' + SELECTORS.feedBar);
