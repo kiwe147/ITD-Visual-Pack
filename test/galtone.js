@@ -1,6 +1,5 @@
-// Галерея: цвет кнопок поверх картинки — по яркости под КАЖДОЙ кнопкой. Картинка: слева чёрная полоса,
-// дальше белое (как «чёрный круг слева, светлый фон справа»): лайк на чёрном — светлый, коммент и репост
-// на белом — тёмные (vp-ink). Картинку грузит «Tampermonkey» (заглушка GM_xmlhttpRequest через fetch).
+// Галерея: кнопки лайк/коммент/репост — всегда белые на тёмной подложке, на любой картинке (слева чёрная
+// полоса и белое, белая, чёрная). Картинку грузит «Tampermonkey» (заглушка GM_xmlhttpRequest через fetch).
 // Запуск:  node test/galtone.js снимок-ленты.html
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -47,16 +46,19 @@ const svg = kind => kind === 'split'
   await p.waitForTimeout(2500);
   await p.$eval('.vp-gal-nav', a => a.click());
   await p.waitForTimeout(2000);
+  await p.evaluate(() => document.querySelectorAll('.vp-gal-acts').forEach(r => r.style.opacity = 1));
   const tones = await p.evaluate(() => Object.fromEntries(['split', 'white', 'black'].map(id => {
     const row = document.querySelector(`.vp-gal-acts[data-post="${id}"]`);
     const img = row.closest('.vp-gal-tile').querySelector('img');
-    return [id, { blob: img.src.startsWith('blob:'), acts: [...row.querySelectorAll('.vp-gal-act')].map(b => b.classList.contains('vp-ink') ? 'тёмн' : 'свет').join(',') }];
+    const white = b => getComputedStyle(b).color === 'rgb(255, 255, 255)';
+    return [id, { blob: img.src.startsWith('blob:'), bg: getComputedStyle(row).backgroundColor, acts: [...row.querySelectorAll('.vp-gal-act')].map(b => white(b) ? 'свет' : 'тёмн').join(',') }];
   })));
   console.log('—    ' + JSON.stringify(tones));
   check(tones.split.blob && tones.white.blob, 'картинки загружены через Tampermonkey (blob) — одна загрузка, пиксели читаются');
-  check(tones.split.acts === 'свет,тёмн,тёмн', `чёрное слева, белое справа: лайк светлый, коммент и репост тёмные (${tones.split.acts})`);
-  check(tones.white.acts === 'тёмн,тёмн,тёмн', `светлая картинка — все тёмные (${tones.white.acts})`);
-  check(tones.black.acts === 'свет,свет,свет', `тёмная картинка — все светлые (${tones.black.acts})`);
+  for (const id of ['split', 'white', 'black']) {
+    check(tones[id].acts === 'свет,свет,свет', `${id}: кнопки белые (${tones[id].acts})`);
+    check(/rgba\(0, 0, 0, 0\.4/.test(tones[id].bg), `${id}: под кнопками тёмная подложка (${tones[id].bg})`);
+  }
   await p.screenshot({ path: path.join(__dirname, 'out', 'galtone.png'), clip: await p.$eval('.vp-gal-grid', g => { const r = g.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: Math.min(r.height, 500) }; }) });
   check(!errors.length, 'ошибок нет' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await b.close();
