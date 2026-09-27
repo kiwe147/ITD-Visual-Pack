@@ -32,7 +32,13 @@ const square = c => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http
     if (u.includes('/auth/refresh')) return r.fulfill({ contentType: 'application/json', body: '{"accessToken":"t"}' });
     if (u.endsWith('/api/users/me')) return r.fulfill({ contentType: 'application/json', body: '{"username":"NeuroSFW","displayName":"NeuroSFW"}' });
     if (u.endsWith('/api/files/upload')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ id: 'up1', url: square('#e91e63') }) });
-    if (/\/api\/posts\/[^/]+\/comments$/.test(u) && r.request().method() === 'POST') { comments.push(u.split('/api/posts/')[1].split('/')[0] + ' ' + r.request().postData()); return r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"test"}' }); }
+    if (/\/api\/posts\/[^/]+\/comments$/.test(u) && r.request().method() === 'POST') {
+      const body = r.request().postData();
+      comments.push(u.split('/api/posts/')[1].split('/')[0] + ' ' + body);
+      // s3 — «чужой» файл: сайт пускает во вложения только свои
+      if (body.includes('"s3"')) return r.fulfill({ status: 403, contentType: 'application/json', body: '{"error":{"code":"FORBIDDEN","message":"Некоторые файлы не принадлежат вам"}}' });
+      return r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"test"}' });
+    }
     if (u === URL0) return r.fulfill({ contentType: 'text/html; charset=utf-8', body: snap });
     return r.fulfill({ status: 404, body: '' });
   });
@@ -44,7 +50,10 @@ const square = c => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http
     const s = { introEnabled: false, introMobile: 'off', backgroundEnabled: false };
     window.GM_getValue = (k, d) => k in s ? s[k] : d;
     window.GM_setValue = (k, v) => { s[k] = v; };
-    window.GM_xmlhttpRequest = o => setTimeout(() => o.onerror && o.onerror('offline'), 0);
+    // картинки стикеров (data:) Tampermonkey «скачивает» — остальное офлайн
+    window.GM_xmlhttpRequest = o => o.url.startsWith('data:')
+      ? setTimeout(() => { const [h, d] = o.url.split(','); const bin = atob(d); o.onload({ status: 200, response: new Blob([Uint8Array.from(bin, c => c.charCodeAt(0))], { type: h.slice(5).split(';')[0] }) }); }, 0)
+      : setTimeout(() => o.onerror && o.onerror('offline'), 0);
     window.GM_info = { script: { version: 'test' }, scriptMetaStr: m };
     window.unsafeWindow = window;
     localStorage.setItem('user_sticker_packs_v1', JSON.stringify(packs));
@@ -119,13 +128,28 @@ const square = c => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http
   if (!(await p.$eval('.sticker-panel', e => getComputedStyle(e).display === 'flex'))) { await p.hover('.sticker-btn'); await p.waitForTimeout(400); }
   await p.$$eval('.pack-grid[data-pack="user_1"] button', bs => bs[1].click());
   await p.waitForTimeout(400);
-  check(!!(await p.$('#temp_sticker_preview')), 'стикер прикреплён: превью над полем');
-  await shot('attached', '#temp_sticker_preview');
+  check(!!(await p.$('#temp_sticker_preview')), 'стикер прикреплён: превью есть');
+  // как вложение сайта: над строкой ввода, слева вровень с полем; кнопки после поля (микрофон) спрятаны
+  const lay = await p.evaluate(() => {
+    const pv = document.getElementById('temp_sticker_preview'), box = document.querySelector('.vp-comment-box');
+    const th = pv && pv.querySelector('.vp-sticker-thumb, img'), r = th && th.getBoundingClientRect(), b = box && box.getBoundingClientRect();
+    const shown = el => el && getComputedStyle(el).display !== 'none';
+    const line = box && box.parentElement;
+    const after = line ? [...line.querySelectorAll(':scope > button')].filter(x => box.compareDocumentPosition(x) & 4) : [];
+    return { above: !!(r && b && r.bottom <= b.top + 1), dx: r && b ? Math.round(r.left - b.left) : null,
+      afterShown: after.filter(shown).length, siteSend: shown(document.querySelector('.vp-comment-send')), ourSend: shown(document.querySelector('.vp-sticker-sendbtn')) };
+  });
+  console.log('—    раскладка: ' + JSON.stringify(lay));
+  check(lay.above && lay.dx === 0 && lay.afterShown === 0 && !lay.siteSend && lay.ourSend, 'превью над строкой вровень с полем, микрофон и кнопка сайта спрятаны, наша «Отправить» видна');
+  check(!(await p.$('.sticker-btn .spin')), 'кнопка стикеров не крутится после прикрепления');
+  // превью вместе со строкой ввода — чтобы видеть, как оно встало
+  await p.evaluate(() => document.getElementById('temp_sticker_preview')?.parentElement.classList.add('vpTestAttachHost'));
+  await shot('attached', '.vpTestAttachHost');
   const wheelBlocked = await p.evaluate(() => { const r = document.getElementById('root'); if (!r) return 'нет #root'; const e = new WheelEvent('wheel', { deltaY: 50, cancelable: true, bubbles: true }); r.dispatchEvent(e); return e.defaultPrevented; });
   console.log('—    колесо страницы после выбора стикера заблокировано: ' + wheelBlocked);
   await p.click('.vp-sticker-remove, #temp_sticker_preview button', { force: true });
   await p.waitForTimeout(300);
-  check(!(await p.$('#temp_sticker_preview')), 'крестик снимает стикер');
+  check(!(await p.$('#temp_sticker_preview')) && !(await p.$('.vp-sticker-sendbtn')) && !(await p.$('.vp-sticker-hide')), 'крестик снимает стикер и возвращает кнопки сайта');
   // сайт включает «Отправить», когда в поле есть текст — как будто написали обычный комментарий
   await p.$eval('.vp-comment-send', b => { b.disabled = false; b.click(); });
   await p.waitForTimeout(500);
@@ -135,9 +159,26 @@ const square = c => 'data:image/svg+xml;base64,' + Buffer.from(`<svg xmlns="http
   await p.hover('.sticker-btn'); await p.waitForTimeout(400);
   await p.$$eval('.pack-grid[data-pack="user_1"] button', bs => bs[2].click());
   await p.waitForTimeout(300);
-  await p.$eval('.vp-comment-send', b => b.click());
+  await p.$eval('.vp-sticker-sendbtn', b => b.click());
   await p.waitForTimeout(600);
-  check(comments.length === 1 && comments[0].startsWith('p123 ') && comments[0].includes('"attachmentIds":["s2"]'), `отправка: ${comments.join(' | ')}`);
+  check(comments.length === 1 && comments[0].startsWith('p123 ') && comments[0].includes('"attachmentIds":["s2"]'), `отправка кнопкой: ${comments.join(' | ')}`);
+  // Enter в поле — тоже отправка стикера
+  comments.length = 0;
+  await p.focus('[contenteditable="true"][data-placeholder]');
+  await p.keyboard.press('Enter');
+  await p.waitForTimeout(600);
+  check(comments.length === 1 && comments[0].includes('"attachmentIds":["s2"]'), `отправка Enter: ${comments.join(' | ') || 'запросов нет'}`);
+  // чужой файл (FORBIDDEN): стикер перезаливается от своего имени, отправка повторяется с новым номером,
+  // новый номер — в паке
+  await p.click('.vp-sticker-remove', { force: true }); await p.waitForTimeout(200);
+  comments.length = 0;
+  await p.hover('.sticker-btn'); await p.waitForTimeout(400);
+  await p.$$eval('.pack-grid[data-pack="user_1"] button', bs => bs[3].click());
+  await p.waitForTimeout(300);
+  await p.$eval('.vp-sticker-sendbtn', b => b.click());
+  await p.waitForTimeout(1200);
+  const saved = await p.evaluate(() => JSON.parse(localStorage.getItem('user_sticker_packs_v1'))[0].stickers[3].id);
+  check(comments.length === 2 && comments[0].includes('"s3"') && comments[1].includes('"up1"') && saved === 'up1', `чужой файл: перезалив и повтор (${comments.map(c => c.match(/\["(\w+)"\]/)?.[1]).join(' → ')}, в паке ${saved})`);
 
   check(errors.length === 0, 'ошибок на странице нет' + (errors.length ? ': ' + errors.join(' | ') : ''));
   console.log(`—    кнопок в панели: ${tabs}`);

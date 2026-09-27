@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.1
+// @version      3.2.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -13,6 +13,7 @@
 // @grant        GM_getValue
 // @grant        unsafeWindow
 // @connect      raw.githubusercontent.com
+// @connect      cdn.xn--d1ah4a.com
 // @run-at       document-start
 // @noframes
 // @downloadURL  https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js
@@ -753,7 +754,7 @@
         }
         return null;
     }
-    const siteButtons = root => $$('button', root).filter(b => !b.classList.contains('sticker-btn'));
+    const siteButtons = root => $$('button', root).filter(b => !b.classList.contains('sticker-btn') && !b.classList.contains('vp-sticker-sendbtn'));
 
     // Порядок важен: ник и аватар учатся на постах, остальные роли пользуются результатом
     const ROLE_ORDER = ['post', 'repost', 'postMedia', 'postAction', 'postText', 'avatarLink', 'avatar',
@@ -3824,18 +3825,19 @@
                 display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary);
                 margin-right: 5px; width: 36px; height: 36px; }
             .sticker-btn:hover { background-color: var(--bg-hover, rgba(255,255,255,0.08)); }
-            .sticker-btn.vp-busy { opacity: 0.6; pointer-events: none; }
 
-            /* прикреплённый стикер над полем: превью и правки строки сайта на это время */
-            #temp_sticker_preview { padding: 12px 16px; background: var(--block-bg); }
-            .vp-sticker-attach { margin-left: 52px; display: flex; gap: 8px; flex-wrap: wrap; }
+            /* прикреплённый стикер — как вложение сайта (картинка через скрепку): блок над строкой ввода,
+               слева вровень с полем (отступ ставит attachSticker), квадрат 80 со скруглением 8 и крестиком */
+            #temp_sticker_preview { padding: 0 0 8px; }
+            .vp-sticker-attach { display: flex; gap: 8px; flex-wrap: wrap; }
             .vp-sticker-thumb { width: 80px; height: 80px; position: relative; border-radius: 8px; overflow: hidden; }
             .vp-sticker-thumb > img { width: 100%; height: 100%; object-fit: cover; }
             .vp-sticker-remove { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; background: rgba(0,0,0,0.6);
                 border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; }
             .vp-sticker-hide { display: none !important; }
-            .vp-sticker-box { border-top: none !important; padding-top: 0 !important; }
-            .vp-sticker-send { margin: 6px !important; transform: translate(0) !important; }
+            /* наша «Отправить» — классы кнопки сайта, а та по умолчанию стоит за краем капсулы и выезжает,
+               только когда у сайта есть вложение или текст: ставим её на место, как сайт при вложении */
+            .vp-sticker-sendbtn { margin: 6px !important; transform: translate(0) !important; }
 
             /* панель */
             .sticker-panel { position: fixed; display: none; flex-direction: column; background: var(--block-bg,#1e1e2e);
@@ -3950,80 +3952,107 @@
             return lm ? lm[1] : null;
         }
 
-        // Прикреплённый стикер: превью над полем, «Отправить» уходит нашим запросом
-        // (текст поля + стикер вложением), потом страница перезагружается — так сайт показывает
-        // новый комментарий. Крестик снимает всё, включая перехват «Отправить».
-        let attached = null;          // { box, send, mic, preview }
+        // Прикреплённый стикер. Сайт о нём не знает: его «Отправить» включается только от своего текста
+        // или своего вложения, по выключенной кнопке нажатие не проходит. Поэтому на это время кнопка
+        // сайта спрятана, на её месте — наша такая же: текст поля + стикер вложением нашим запросом,
+        // потом перезагрузка (так сайт покажет новый комментарий). Enter в поле — то же, что наша кнопка.
+        // Кнопки строки после поля (микрофон) прячем, как сайт при своём вложении.
+        // Крестик возвращает всё как было.
+        let attached = null;          // { preview, send, hidden: [...] }
         function detachSticker() {
             if (!attached) return;
-            const { box, send, mic, preview } = attached;
+            const { preview, send, hidden } = attached;
             attached = null;
             preview.remove();
-            box.classList.remove('vp-sticker-box');
-            send.classList.remove('vp-sticker-send');
-            if (mic) mic.classList.remove('vp-sticker-hide');
-            send.onclick = null;                                  // раньше оставался — и уносил снятый стикер с обычным комментарием
-            send.disabled = true;
-            if (stickerBtn) { stickerBtn.innerHTML = ICONS.STICKER_BUTTON; stickerBtn.classList.remove('vp-busy'); }
+            send.remove();
+            hidden.forEach(b => b.classList.remove('vp-sticker-hide'));
         }
-        function insertStickerToComment(stickerId, stickerUrl) {
+        // Сайт пускает во вложения только свои файлы («Некоторые файлы не принадлежат вам»): стикер,
+        // загруженный с другого аккаунта, грузим заново от своего имени и запоминаем новый номер в паках.
+        // Картинку качает Tampermonkey (у хранилища картинок нет CORS — fetch страницы её не получит).
+        function ownStickerCopy(sticker) {
+            return new Promise((resolve, reject) => GM_xmlhttpRequest({
+                method: 'GET', url: sticker.url, responseType: 'blob',
+                onload: r => r.status === 200 && r.response ? resolve(r.response) : reject(new Error('картинка стикера: ' + r.status)),
+                onerror: () => reject(new Error('картинка стикера: сеть'))
+            })).then(blob => uploadImageToServer(new File([blob], 'sticker.' + ((blob.type || 'image/png').split('/')[1] || 'png'), { type: blob.type || 'image/png' })))
+                .then(data => {
+                    const oldId = sticker.id;
+                    [recentStickers, ...userPacks.map(p => p.stickers)].forEach(list => list.forEach(s => { if (s.id === oldId) Object.assign(s, data); }));
+                    Object.assign(sticker, data);
+                    saveRecent();
+                    saveUserPacks();
+                    return data;
+                });
+        }
+        async function postStickerComment(postId, stickerId, content) {
+            const accessToken = await getAccessToken();
+            const response = await fetch(`/api/posts/${postId}/comments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+                body: JSON.stringify({ content, attachmentIds: [stickerId] }),
+                credentials: 'include'
+            });
+            return { response, result: await response.json().catch(() => ({})) };
+        }
+        async function sendSticker(postId, sticker, btn) {
+            btn.disabled = true;
+            const icon = btn.innerHTML;
+            btn.innerHTML = ICONS.LOADING;
+            try {
+                const field = btn.closest('.' + SELECTORS.commentPreviewContainer)?.querySelector('[contenteditable="true"]')
+                    || document.querySelector('[contenteditable="true"][data-placeholder*="комментарий"]');
+                const content = field ? (field.innerText || field.textContent || '').trim() : '';
+                let { response, result } = await postStickerComment(postId, sticker.id, content);
+                if (response.status === 403 || (result.error && result.error.code === 'FORBIDDEN')) {
+                    ({ response, result } = await postStickerComment(postId, (await ownStickerCopy(sticker)).id, content));
+                }
+                if (response.ok) { location.reload(); return; }
+                alert('Ошибка: ' + JSON.stringify(result.error || response.status));
+            } catch (err) {
+                alert('Ошибка: ' + err.message);
+            }
+            btn.disabled = false;
+            btn.innerHTML = icon;
+        }
+        function insertStickerToComment(sticker) {
             const postId = stickerPostId();
             if (!postId) throw new Error('Post ID not found');
             detachSticker();                                      // прошлый прикреплённый — снять целиком
-            if (stickerBtn) { stickerBtn.innerHTML = ICONS.LOADING; stickerBtn.classList.add('vp-busy'); }
+            const row = stickerBtn && stickerBtn.closest('.' + SELECTORS.stickerContainer);
+            const box = (row && row.closest('.' + SELECTORS.commentPreviewContainer)) || document.querySelector('.' + SELECTORS.commentPreviewContainer);
+            const siteSend = (row && row.querySelector('.' + SELECTORS.stickerSendBtn)) || document.querySelector('.' + SELECTORS.stickerSendBtn);
+            if (!box || !siteSend) return;
+            document.getElementById('temp_sticker_preview')?.remove();
 
-            const box = document.querySelector('.' + SELECTORS.commentPreviewContainer);
-            const send = document.querySelector('.' + SELECTORS.stickerSendBtn);
-            const mic = document.querySelector('.' + SELECTORS.stickerMicBtn);
-            if (!box || !send) {
-                if (stickerBtn) { stickerBtn.innerHTML = ICONS.STICKER_BUTTON; stickerBtn.classList.remove('vp-busy'); }
-                return;
-            }
-            const old = document.getElementById('temp_sticker_preview');
-            if (old) old.remove();
-
-            const preview = el('div', '', `<div class="vp-sticker-attach"><div class="vp-sticker-thumb"><img><button class="vp-sticker-remove">${svgIcon('<path d="M18 6 6 18M6 6l12 12"/>', 14)}</button></div></div>`);
+            // строка ввода: поле в капсуле + кнопки вокруг (скрепка, микрофон); превью — над ней
+            const line = box.parentElement && box.parentElement.querySelector(':scope > button') ? box.parentElement : box;
+            const preview = el('div', '', `<div class="vp-sticker-attach"><div class="vp-sticker-thumb"><img><button type="button" class="vp-sticker-remove">${svgIcon('<path d="M18 6 6 18M6 6l12 12"/>', 14)}</button></div></div>`);
             preview.id = 'temp_sticker_preview';
-            preview.querySelector('img').src = stickerUrl;
-            preview.querySelector('.vp-sticker-remove').onclick = e => { e.stopPropagation(); detachSticker(); };
+            preview.querySelector('img').src = sticker.url;
+            preview.querySelector('.vp-sticker-remove').onclick = e => { e.preventDefault(); e.stopPropagation(); detachSticker(); };
+            line.before(preview);
+            preview.firstChild.style.marginLeft = Math.max(0, box.getBoundingClientRect().left - preview.getBoundingClientRect().left) + 'px';
 
-            attached = { box, send, mic, preview };
-            box.classList.add('vp-sticker-box');
-            send.classList.add('vp-sticker-send');
-            if (mic) mic.classList.add('vp-sticker-hide');
-            send.disabled = false;
-            send.onclick = async e => {
-                e.preventDefault();
-                e.stopPropagation();
-                send.disabled = true;
-                send.innerHTML = ICONS.LOADING;
-                try {
-                    const field = document.querySelector('[contenteditable="true"][data-placeholder*="комментарий"]');
-                    const content = field ? (field.innerText || field.textContent || '').trim() : '';
-                    const accessToken = await getAccessToken();
-                    const response = await fetch(`/api/posts/${postId}/comments`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-                        body: JSON.stringify({ content, attachmentIds: [stickerId] }),
-                        credentials: 'include'
-                    });
-                    const result = await response.json();
-                    if (response.ok) {
-                        preview.remove();
-                        location.reload();
-                    } else {
-                        alert('Ошибка: ' + JSON.stringify(result.error));
-                        send.disabled = false;
-                        send.innerHTML = '';
-                    }
-                } catch (err) {
-                    alert('Ошибка: ' + err.message);
-                    send.disabled = false;
-                    send.innerHTML = '';
-                }
-            };
-            box.insertBefore(preview, box.firstChild);
+            const send = el('button', siteClasses(siteSend) + ' vp-sticker-sendbtn', siteSend.innerHTML);
+            send.type = 'button';
+            send.onclick = e => { e.preventDefault(); e.stopPropagation(); sendSticker(postId, sticker, send); };
+            siteSend.after(send);
+            const hidden = [siteSend];
+            if (line !== box) [...line.querySelectorAll(':scope > button')]
+                .filter(b => box.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING).forEach(b => hidden.push(b));
+            else { const mic = row && row.querySelector('.' + SELECTORS.stickerMicBtn); if (mic && mic !== siteSend) hidden.push(mic); }
+            hidden.forEach(b => b.classList.add('vp-sticker-hide'));
+            attached = { preview, send, hidden };
         }
+        // Enter в поле при прикреплённом стикере — отправить стикер (Shift+Enter — новая строка, как у сайта)
+        document.addEventListener('keydown', e => {
+            if (!attached || e.key !== 'Enter' || e.shiftKey || !e.target.isContentEditable) return;
+            if (!e.target.closest('.' + SELECTORS.commentPreviewContainer)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            attached.send.click();
+        }, true);
 
         // ---- панель
         let stickerPanel = null, scrollContainer = null, tabsRow = null, recentBtn = null;
@@ -4260,7 +4289,7 @@
         function pickSticker(sticker) {
             if (sticker && sticker.id && sticker.url) {
                 addToRecent(sticker);
-                try { insertStickerToComment(sticker.id, sticker.url); } catch (e) { console.warn('[ITD VP] стикер', e); logErr('стикер', e); }
+                try { insertStickerToComment(sticker); } catch (e) { console.warn('[ITD VP] стикер', e); logErr('стикер', e); }
             }
             stickerPanel.classList.remove('vp-open');
             exitEditMode();
