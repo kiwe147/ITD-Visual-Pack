@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.10
+// @version      3.2.11
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1997,8 +1997,19 @@
         /* свёрнутый длинный пост: низ текста тает сам, без полосы цвета обычной карточки */
         .vp-clamp::after { display: none !important; }
         .vp-clamp { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); }
-        /* кнопки на баннере — к верхнему краю: снизу их закрывает аватарка */
-        .vp-banner-buttons { top: 12px !important; bottom: auto !important; }
+        /* кнопки на баннере — «шторка»: плашка свисает с верхнего края по центру (снизу закрывает аватарка);
+           на компьютере выезжает при наведении на баннер, на телефоне видна всегда */
+        .vp-banner-buttons { inset: 0 auto auto 50% !important; width: auto !important; height: auto !important;
+            transform: translateX(-50%); display: flex !important; gap: 2px !important; padding: 4px 12px 7px !important;
+            border-radius: 0 0 22px 22px; background: rgba(12, 12, 16, .82); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            z-index: 3; transition: transform .25s cubic-bezier(.2,.8,.2,1), opacity .2s; }
+        html.vp-light .vp-banner-buttons { background: rgba(255, 255, 255, .85); }
+        .vp-banner-buttons > button { background: transparent !important; box-shadow: none !important; }
+        .vp-banner-buttons > button:hover { background: rgba(128, 128, 128, .22) !important; }
+        @media (hover: hover) and (pointer: fine) {
+            .vp-banner-buttons:not(.vp-banner-editing) { opacity: 0; transform: translate(-50%, -100%); }
+            .vp-banner:hover .vp-banner-buttons, .vp-banner-buttons:focus-within { opacity: 1; transform: translateX(-50%); }
+        }
         /* заставка на телефоне: три варианта */
         .toggle-switch.vp-tri { width: 58px !important; }
         .toggle-switch.vp-tri[data-s="1"]::after { left: 20px !important; }
@@ -3544,6 +3555,7 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.2.11', '27 сентября 2026', ['Кнопки баннера — аккуратная «шторка» сверху по центру; на компьютере появляются при наведении']],
         ['3.2.10', '29 сентября 2026', ['Стикеры: при перетаскивании стикер больше не отстаёт от пальца']],
         ['3.2.9', '29 сентября 2026', [
             'Стикеры: в режиме правки их можно перетаскивать мышью и пальцем — как иконки на рабочем столе телефона, остальные плавно разъезжаются']],
