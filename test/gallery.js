@@ -23,7 +23,7 @@ const page = n => ({ data: { posts: Array.from({ length: 20 }, (_, i) => {
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const p = await b.newPage(mode === 'desktop' ? { viewport: { width: 1400, height: 900 } } : { viewport: { width: 392, height: 812 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
-  const errors = [], feed = [];
+  const errors = [], feed = [], likes = [];
   p.on('pageerror', e => errors.push(e.message));
   await p.route('**/*', r => {
     const u = new URL(r.request().url()), t = r.request().resourceType();
@@ -36,6 +36,7 @@ const page = n => ({ data: { posts: Array.from({ length: 20 }, (_, i) => {
     if (['image', 'stylesheet', 'font'].includes(t)) return r.continue();
     if (u.pathname.includes('/auth/refresh')) return r.fulfill({ contentType: 'application/json', body: '{"accessToken":"t"}' });
     if (u.pathname === '/api/users/me') return r.fulfill({ contentType: 'application/json', body: '{"username":"NeuroSFW","id":"u1"}' });
+    if (/\/api\/posts\/[^/]+\/like$/.test(u.pathname)) { likes.push(r.request().method() + ' ' + u.pathname); return r.fulfill({ contentType: 'application/json', body: '{}' }); }
     if (u.pathname === '/api/posts') {
       feed.push(u.searchParams.get('tab') + (u.searchParams.get('cursor') ? '+' + u.searchParams.get('cursor') : ''));
       return r.fulfill({ contentType: 'application/json', body: JSON.stringify(page(u.searchParams.get('cursor') ? 1 : 0)) });
@@ -78,7 +79,7 @@ const page = n => ({ data: { posts: Array.from({ length: 20 }, (_, i) => {
   await p.waitForTimeout(800);
   check(feed[feed.length - 1] === 'following', `вкладка «Подписки» грузит свою ленту (${feed.join(' ')})`);
   const url0 = await p.evaluate(() => location.pathname);
-  await p.click('.vp-gal-tile img');
+  await p.click('.vp-gal-tile:has(img)');
   await p.waitForTimeout(400);
   const after = await p.evaluate(() => ({ path: location.pathname, open: !!document.querySelector('.vp-gal') }));
   check(/^\/@user\d\/post\/p-\d+$/.test(after.path) && !after.open, `нажатие открывает пост (${after.path}), галерея закрыта`);
@@ -88,6 +89,31 @@ const page = n => ({ data: { posts: Array.from({ length: 20 }, (_, i) => {
   await p.goBack();
   await p.waitForTimeout(500);
   check(!(await p.$('.vp-gal')) && (await p.evaluate(() => location.pathname)) === url0, '«назад» закрывает галерею и не уводит со страницы');
+  // повторное открытие — как было (без запросов), повторное нажатие на «Галерею» — обновить
+  await p.evaluate(u => { history.pushState({}, '', u); dispatchEvent(new PopStateEvent('popstate')); }, url0);
+  const n0 = feed.length;
+  await p.click(sel); await p.waitForTimeout(600);
+  const t1 = await p.$$eval('.vp-gal-tile', t => t.length);
+  await p.goBack(); await p.waitForTimeout(300);
+  await p.click(sel); await p.waitForTimeout(600);
+  const t2 = await p.$$eval('.vp-gal-tile', t => t.length), n1 = feed.length;
+  await p.$eval(sel, b => b.click()); await p.waitForTimeout(800);
+  const n2 = feed.length;
+  check(t2 === t1 && n1 === n0 && n2 === n1 + 1, `открытие — как было (${t1}→${t2} плиток, запросов +${n1 - n0}), повторное нажатие — обновление (+${n2 - n1})`);
+  const imgHover = await p.$eval('.vp-gal-tile img', i => getComputedStyle(i).pointerEvents);
+  check(imgHover === 'none', 'картинка не ловит наведение (панель браузера не вешается)');
+  const likeBefore = likes.length;
+  await p.$eval('.vp-gal-tile:has(img) .vp-gal-act[data-act="like"]', b => b.click());
+  await p.waitForTimeout(500);
+  const liked = await p.$eval('.vp-gal-tile:has(img) .vp-gal-act[data-act="like"]', b => b.classList.contains('vp-on'));
+  check(likes.length === likeBefore + 1 && liked && (await p.evaluate(() => !!document.querySelector('.vp-gal'))), `лайк с плитки: запрос ${likes.slice(-1)[0]}, сердце залито, галерея открыта`);
+  const ctx = await p.$eval('.vp-gal-tile:has(img)', t => {
+    const r = t.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + 20;
+    t.dispatchEvent(new MouseEvent('mousedown', { button: 2, bubbles: true, clientX: x, clientY: y }));
+    return document.elementFromPoint(x, y).tagName;
+  });
+  check(ctx === 'IMG', `правая кнопка — меню самой картинки (под мышью ${ctx})`);
+  await p.goBack(); await p.waitForTimeout(300);
   // Лента → Галерея → «Лента»: галерея закрылась, а сайт нажатия не получил (не обновлял ленту)
   const navLink = mode === 'desktop' ? 'nav a[href="/"]' : 'nav a[href="/"]';
   await p.evaluate(u => { history.pushState({}, '', u); dispatchEvent(new PopStateEvent('popstate')); }, url0);

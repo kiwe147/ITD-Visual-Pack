@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.17
+// @version      3.2.18
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3745,6 +3745,12 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.2.18', '28 сентября 2026', [
+            'Галерея на компьютере — на всю ширину: меню у левого края, «Статистика» и клуб — у правого, картинки между ними',
+            'Вкладки галереи — как у ленты, без заголовка',
+            'На картинках галереи — лайк, комментарии и репост (на компьютере — при наведении)',
+            'Галерея открывается как была; повторное нажатие на «Галерею» — обновить',
+            'В галерее не всплывает панель браузера над картинками; правая кнопка по-прежнему сохраняет и копирует картинку']],
         ['3.2.17', '28 сентября 2026', [
             'Галерея: на компьютере — по центру, от меню до правой панели; вкладки как у ленты; стеклянный фон, как у постов; лента под ней больше не просвечивает; без крестика — обычная вкладка',
             'Лента → Галерея → «Лента» больше не обновляет ленту (и с «Сообщениями» так же)',
@@ -7773,33 +7779,46 @@
         html.vp-light .vp-gal.vp-card { box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
         /* пока открыта галерея — лента под ней спрятана (иначе просвечивала сквозь стекло и в скруглённых углах) */
         html.vp-gal-open .vp-gal-hidden { visibility: hidden !important; }
-        .vp-gal-head { padding: 16px 20px 8px !important; }
-        .vp-gal-head > b { font-size: 22px !important; font-weight: 700; }
-        .vp-gal-tabs { padding: 0 20px 12px !important; }
         .vp-gal-body { padding: 0 12px 24px !important; }
-        html.vp-gal-open .vp-rail { visibility: hidden; }
         html.vp-gal-open .vp-gal-navwrap { z-index: 40 !important; }
         html.vp-gal-open .vp-nav-link.vp-site-cur { color: var(--vp-off-c) !important; opacity: var(--vp-off-o) !important; background-color: var(--vp-off-b) !important; }
         html.vp-gal-open .vp-gal-nav { color: var(--vp-on-c) !important; opacity: var(--vp-on-o) !important; background-color: var(--vp-on-b) !important; }
-        .vp-gal-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; flex: 0 0 auto; }
-        .vp-gal-head > b { font-size: 18px; margin-right: auto; }
-        /* вкладки — как у ленты («Для вас / Кланы / Подписки»): полоса-«таблетка», кнопки поровну,
-           под выбранной — бегунок с обводкой цвета ника (--vp-accent), переезжает плавно */
-        .vp-gal-tabs { position: relative; display: flex; flex: 0 0 auto; padding: 4px; margin: 0 16px 12px; border-radius: 9999px;
+        /* вкладки — 1 в 1 как у ленты («Для вас / Кланы / Подписки»; значения сняты с вкладок сайта):
+           таблетка с отступом 4, кнопки поровну, под выбранной — бегунок с обводкой цвета ника.
+           Бегунок — в долях ширины (треть и сдвиг на свою ширину): совпадает с кнопкой при любой ширине окна */
+        .vp-gal-tabs { position: relative; display: flex; flex: 0 0 auto; padding: 4px; margin: 16px 16px 12px; border-radius: 9999px;
             background: var(--glass-bg, rgba(35, 35, 35, .5)); }
         html.vp-light .vp-gal-tabs { background: rgba(0, 0, 0, .06); }
-        .vp-gal-ind { position: absolute; top: 4px; bottom: 4px; left: 4px; border-radius: 9999px; pointer-events: none;
+        .vp-gal-ind { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / 3); border-radius: 9999px; pointer-events: none;
             background: rgba(255, 255, 255, .08); box-shadow: inset 0 0 0 1px var(--vp-accent, #fff), 0 0 14px -4px var(--vp-accent, #fff);
-            transition: transform .3s cubic-bezier(.2,.8,.2,1), width .3s cubic-bezier(.2,.8,.2,1); }
+            transition: transform .3s cubic-bezier(.2,.8,.2,1); }
         html.vp-light .vp-gal-ind { background: #fff; }
-        .vp-gal-tab { position: relative; flex: 1 1 0; border: 0; border-radius: 9999px; padding: 8px 0; font: inherit; font-size: 14px; font-weight: 500;
-            cursor: pointer; background: transparent; color: var(--text-primary, #f5f5f5); opacity: .5; white-space: nowrap; transition: opacity .2s; }
-        .vp-gal-tab.vp-on { opacity: 1; font-weight: 600; }
+        .vp-gal-tab { position: relative; flex: 1 1 0; min-width: 0; border: 0; border-radius: 9999px; padding: 8px 0; margin: 0;
+            font: inherit; font-size: 14px; font-weight: 500; line-height: 21px; cursor: pointer; background: transparent;
+            color: rgba(255, 255, 255, .5); white-space: nowrap; transition: color .2s; }
+        html.vp-light .vp-gal-tab { color: rgba(0, 0, 0, .5); }
+        .vp-gal-tab.vp-on { color: var(--text-primary, #f5f5f5); }
         .vp-gal-body { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 24px; }
         .vp-gal-grid { display: flex; gap: 8px; align-items: flex-start; max-width: 1400px; margin: 0 auto; }
         .vp-gal-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
         .vp-gal-tile { position: relative; border-radius: 16px; overflow: hidden; background: rgba(128,128,128,.15); cursor: pointer; }
         .vp-gal-tile > img, .vp-gal-tile > video { display: block; width: 100%; height: 100%; object-fit: cover; }
+        /* картинка не ловит наведение — браузер не вешает на неё свою панель (Яндекс: Алиса, лупа…); нажатие — у плитки.
+           Правая кнопка — картинка на миг снова ловит мышь (vp-ctx): обычное меню «Сохранить / Копировать картинку» */
+        .vp-gal-tile > img { pointer-events: none; -webkit-user-drag: none; user-select: none; }
+        .vp-gal-tile.vp-ctx > img { pointer-events: auto; }
+        /* кнопки поверх, как на постах: лайк, коммент, репост — контуры без фона; ПК — при наведении, телефон — всегда */
+        .vp-gal-acts { position: absolute; left: 6px; bottom: 6px; display: flex; gap: 2px; transition: opacity .15s; }
+        .vp-gal-act { width: 36px; height: 36px; padding: 0; border: 0; background: none; color: #fff; cursor: pointer;
+            display: inline-flex; align-items: center; justify-content: center; filter: drop-shadow(0 1px 2px rgba(0,0,0,.7)) drop-shadow(0 0 6px rgba(0,0,0,.35)); }
+        .vp-gal-act svg { width: 24px; height: 24px; }
+        .vp-gal-act.vp-on { color: var(--accent-liked, #f91880); }
+        .vp-gal-act.vp-on[data-act="like"] path { fill: currentColor; }
+        .vp-gal-act.vp-busy { opacity: .5; pointer-events: none; }
+        @media (hover: hover) and (pointer: fine) {
+            .vp-gal-acts { opacity: 0; }
+            .vp-gal-tile:hover .vp-gal-acts, .vp-gal-acts:focus-within { opacity: 1; }
+        }
         .vp-gal-badge { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
             background: rgba(0,0,0,.55); color: #fff; pointer-events: none; }
         .vp-gal-more { text-align: center; padding: 18px; color: var(--text-secondary, #8a8a8a); font-size: 14px; }
@@ -7827,6 +7846,56 @@
         gal.heights.forEach((h, i) => { if (h < gal.heights[k]) k = i; });
         gal.cols[k].appendChild(tile);
         gal.heights[k] += tile._vpRatio + .05;
+    }
+    // Кнопки поверх плитки: иконки — те же, что у сайта на постах (контуры 20x20), своё состояние у каждой
+    const GAL_ICONS = {
+        like: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 4.6a3.7 3.7 0 0 0-5.2-.9C3.2 5 2.4 7.6 3.6 10.2 4.8 12.7 10 17 10 17s5.3-4.3 6.5-6.8c1.2-2.6 0-5.2-1.6-6.5s-4-.8-4.9.9"/>',
+        comment: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 17a7 7 0 1 0-6.2-3.7L3 17l3.7-.8a7 7 0 0 0 3.3.8"/>',
+        repost: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 9V8a3 3 0 0 1 3-3h9m-3 3 3-3-3-3M16 11v1a3 3 0 0 1-3 3H4m3-3-3 3 3 3"/>'
+    };
+    function galOpenPost(post) {
+        const user = post.author && post.author.username;
+        if (!user) return;
+        const hadHist = gal.hist;
+        gal.hist = false;
+        closeGallery(true);
+        history[hadHist ? 'replaceState' : 'pushState']({}, '', `/@${user}/post/${post.id}`);
+        dispatchEvent(new PopStateEvent('popstate'));
+    }
+    function galActions(post) {
+        const row = document.createElement('div');
+        row.className = 'vp-gal-acts';
+        const btn = (act, title, on) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'vp-gal-act' + (on ? ' vp-on' : '');
+            b.dataset.act = act;
+            b.title = title;
+            b.innerHTML = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true">${GAL_ICONS[act]}</svg>`;
+            row.appendChild(b);
+            return b;
+        };
+        const like = btn('like', 'Нравится', post.isLiked === true);
+        const comment = btn('comment', 'Комментарии');
+        const repost = btn('repost', 'Репост', post.isReposted === true);
+        // лайк и репост — тем же запросом, что у сайта; состояние меняем сразу, не вышло — возвращаем
+        const toggle = async (b, path, confirmText) => {
+            const on = b.classList.contains('vp-on');
+            if (confirmText && !on && !confirm(confirmText)) return;
+            b.classList.add('vp-busy');
+            b.classList.toggle('vp-on', !on);
+            try {
+                const res = await api(path, on ? { method: 'DELETE' } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                if (!res.ok) throw new Error(path + ': ' + res.status);
+            } catch (e) {
+                b.classList.toggle('vp-on', on);
+                logErr('галерея: ' + b.dataset.act, e);
+            } finally { b.classList.remove('vp-busy'); }
+        };
+        like.addEventListener('click', e => { e.stopPropagation(); toggle(like, `/api/posts/${post.id}/like`); });
+        repost.addEventListener('click', e => { e.stopPropagation(); toggle(repost, `/api/posts/${post.id}/repost`, 'Сделать репост этого поста?'); });
+        comment.addEventListener('click', e => { e.stopPropagation(); galOpenPost(post); });
+        return row;
     }
     let galN = 0;
     function galTile(post, att) {
@@ -7856,6 +7925,11 @@
             tile.appendChild(img);
         }
         const user = post.author && post.author.username;
+        // правая кнопка по картинке — меню самой картинки (сохранить, копировать)
+        tile.addEventListener('mousedown', e => { if (e.button === 2) tile.classList.add('vp-ctx'); });
+        tile.addEventListener('contextmenu', () => setTimeout(() => tile.classList.remove('vp-ctx'), 300));
+        tile.addEventListener('mouseleave', () => tile.classList.remove('vp-ctx'));
+        tile.appendChild(galActions(post));
         tile.addEventListener('click', () => {
             if (!user) return;
             // запись галереи в истории заменяем постом: «назад» из поста — в ленту, а не в пустую галерею
@@ -7905,10 +7979,9 @@
     }
     // бегунок — под выбранной вкладкой (и после смены ширины окна)
     function galInd() {
-        const on = gal.el && gal.el.querySelector('.vp-gal-tab.vp-on'), ind = gal.el && gal.el.querySelector('.vp-gal-ind');
-        if (!on || !ind) return;
-        ind.style.width = on.offsetWidth + 'px';
-        ind.style.transform = `translateX(${on.offsetLeft - 4}px)`;
+        const ind = gal.el && gal.el.querySelector('.vp-gal-ind');
+        const i = GAL_TABS.findIndex(([id]) => id === gal.tab);
+        if (ind && i >= 0) ind.style.transform = `translateX(${i * 100}%)`;
     }
     function galSwitch(tab) {
         gal.tab = tab; gal.cursor = null; gal.done = false; gal.seen.clear(); galN = 0;
@@ -7934,13 +8007,15 @@
             if (nav.parentElement) nav.parentElement.classList.add('vp-gal-navwrap');
             Object.assign(gal.el.style, { left: '0px', right: '0px', top: '0px', bottom: '0px', width: '', paddingBottom: Math.max(0, innerHeight - nr.top + BUMP_H + 8) + 'px' });
         } else {
-            // ПК: от левого меню до правого края правой панели (статистика, клуб) — по центру раскладки
-            // сайта и шире ленты; панели нет — справа тот же отступ, что у меню слева
-            const side = nav && nav.closest('aside') || nav, sr = side && side.getBoundingClientRect();
-            const left = sr ? Math.round(sr.right + 20) : 20;
-            const railEl = document.querySelector('.vp-rail.vp-on') || document.querySelector('.vp-rail');
-            const rr = railEl && railEl.getBoundingClientRect();
-            const rightEdge = rr && rr.width ? rr.right : innerWidth - (sr ? Math.max(20, sr.left) : 20);
+            // ПК — три колонки на всю ширину: меню у левого края (как ставит сайт), панель «Статистика/клуб»
+            // у правого, галерея — между ними с зазорами 24; панели нет — до правого края с отступом, как у меню
+            placeSidebar(); placeRail();
+            const side = document.querySelector('.' + SELECTORS.sidebar) || (nav && nav.closest('aside')) || nav;
+            const sr = side && side.getBoundingClientRect();
+            const margin = sr ? Math.max(12, Math.round(sr.left)) : 20;
+            const left = sr ? Math.round(sr.right + 24) : 20;
+            const railEl = document.querySelector('.vp-rail.vp-on');
+            const rightEdge = railEl ? parseFloat(railEl.style.left) - 24 : innerWidth - margin;
             Object.assign(gal.el.style, { left: left + 'px', right: Math.max(12, Math.round(innerWidth - rightEdge)) + 'px', top: '12px', bottom: '12px', width: '', paddingBottom: '0px' });
         }
         gal.el.classList.toggle('vp-card', !row);
@@ -7961,17 +8036,23 @@
             .forEach(e => { const t = up(e); if (!t.closest('.vp-gal, nav')) t.classList.add('vp-gal-hidden'); });
     }
     onDom(function galFeedHidden() { if (gal.el) galHideFeed(true); });
+    // Открыть: окно, закрытое раньше, возвращается как было (картинки, вкладка, место прокрутки) — без
+    // новой загрузки; обновить — повторное нажатие на «Галерею», как у ленты (galRefresh)
     function openGallery() {
         if (gal.el) return;
         const msgs = document.querySelector('.vp-msgs.vp-open');
         if (msgs && msgs.close) msgs.close();
-        const el = document.createElement('div');
-        el.className = 'vp-gal';
-        el.innerHTML = `<div class="vp-gal-head"><b>Галерея</b></div>
-            <div class="vp-gal-tabs"><div class="vp-gal-ind"></div>${GAL_TABS.map(([id, name]) => `<button type="button" class="vp-gal-tab" data-tab="${id}">${name}</button>`).join('')}</div>
+        const kept = gal.kept;
+        const el = kept || document.createElement('div');
+        if (!kept) {
+            el.className = 'vp-gal';
+            el.innerHTML = `<div class="vp-gal-tabs"><div class="vp-gal-ind"></div>${GAL_TABS.map(([id, name]) => `<button type="button" class="vp-gal-tab" data-tab="${id}">${name}</button>`).join('')}</div>
             <div class="vp-gal-body"><div class="vp-gal-grid"></div><div class="vp-gal-more"></div></div>`;
+        }
         document.body.appendChild(el);
         gal.el = el;
+        gal.kept = null;
+        galOpen = true;
         gal.path = location.pathname;
         galPosition();
         addEventListener('resize', galPosition);
@@ -7979,22 +8060,36 @@
         galOpen = true;
         galHideFeed(true);
         markActiveNav(); moveNavBlob();
-        el.querySelectorAll('.vp-gal-tab').forEach(b => b.onclick = () => { if (b.dataset.tab !== gal.tab || !gal.seen.size) galSwitch(b.dataset.tab); });
+        if (!gal.hist) { history.pushState(Object.assign({}, history.state, { vpGal: true }), '', location.href); gal.hist = true; }
         const body = el.querySelector('.vp-gal-body');
+        if (kept) {                                                  // как было: место прокрутки и видео
+            body.scrollTop = gal.scroll || 0;
+            galInd();
+            return;
+        }
+        el.querySelectorAll('.vp-gal-tab').forEach(b => b.onclick = () => { if (b.dataset.tab !== gal.tab || !gal.seen.size) galSwitch(b.dataset.tab); });
         body.addEventListener('scroll', () => { if (body.scrollTop + body.clientHeight > body.scrollHeight - 1200) galLoad(); }, { passive: true });
         for (const t of ['wheel', 'touchmove']) el.addEventListener(t, e => e.stopPropagation(), { passive: true });
-        if (!gal.hist) { history.pushState(Object.assign({}, history.state, { vpGal: true }), '', location.href); gal.hist = true; }
         galSwitch(gal.tab);
     }
+    // обновить (повторное нажатие на «Галерею»): та же вкладка заново, наверх
+    function galRefresh() {
+        if (!gal.el) return openGallery();
+        galSwitch(gal.tab);
+    }
+    // закрыть: окно убираем со страницы, но держим (gal.kept) — следующее открытие покажет его как было
     function closeGallery(fromBack) {
         if (!gal.el) return;
-        gal.el.querySelectorAll('video').forEach(v => { galVideoIO.unobserve(v); v.pause(); v.removeAttribute('src'); v.load(); });
+        gal.el.querySelectorAll('video').forEach(v => v.pause());
+        gal.scroll = gal.el.querySelector('.vp-gal-body').scrollTop;
         gal.el.remove();
-        gal.el = null; gal.cols = [];
+        gal.kept = gal.el;
+        gal.el = null;
         removeEventListener('resize', galPosition);
         document.documentElement.classList.remove('vp-gal-open');
         galOpen = false;
         galHideFeed(false);
+        placeSidebar(); placeRail();
         document.querySelectorAll('.vp-gal-navwrap').forEach(w => w.classList.remove('vp-gal-navwrap'));
         markActiveNav(); moveNavBlob();
         if (gal.hist) { gal.hist = false; if (!fromBack && history.state && history.state.vpGal) history.back(); }
@@ -8027,7 +8122,7 @@
         b.title = 'Галерея';
         b.setAttribute('aria-label', 'Галерея');
         b.innerHTML = galIcon(22);
-        b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openGallery(); });
+        b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); gal.el ? galRefresh() : openGallery(); });
         search.before(b);
     });
     // ПК: пункт «Галерея» в боковом меню, после «Поиска» — копия его разметки со своей иконкой и подписью
@@ -8041,7 +8136,7 @@
         const icon = a.querySelector('svg'), label = [...a.querySelectorAll('span')].find(sp => !sp.children.length && sp.textContent.trim());
         if (icon) icon.outerHTML = galIcon(24);
         if (label) label.textContent = 'Галерея';
-        a.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openGallery(); }, true);
+        a.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); gal.el ? galRefresh() : openGallery(); }, true);
         search.after(a);
     });
 
@@ -8514,7 +8609,12 @@
         const gap = right - edge;
         let box = null;
         const on = railEnabled && !!myUsername;             // не вошли (страница входа) — панели не место
-        if (on && edge > 0 && gap >= 240) {
+        // открыта галерея — панель у правого края экрана, с тем же отступом, что меню у левого
+        const sideEl = document.querySelector('.' + SELECTORS.sidebar);
+        if (on && galOpen && sideEl && innerWidth >= 1173) {
+            const margin = Math.max(12, Math.round(sideEl.getBoundingClientRect().left)), width = 300;
+            box = { left: innerWidth - margin - width, width, maxH: innerHeight - RAIL_TOP - 24 };
+        } else if (on && edge > 0 && gap >= 240) {
             const width = Math.min(300, gap - 48);
             box = { left: Math.round(edge + 24), width, maxH: innerHeight - 48 };
         } else if (on && side) {
@@ -8526,7 +8626,7 @@
         rail.style.top = RAIL_TOP + 'px';
         // высота во весь экран — только у панели рядом с лентой; в правой колонке сайта (магазин, узкий экран)
         // панель кончается над ссылками сайта, иначе закрывала «Статус серверов» и остальные
-        if (box && edge > 0 && gap >= 240) box.maxH = innerHeight - RAIL_TOP - 24;
+        if (box && edge > 0 && gap >= 240 && !galOpen) box.maxH = innerHeight - RAIL_TOP - 24;
         rail.classList.toggle('vp-on', !!box);
         if (!box) { snakePause(); return; }
         rail.style.width = box.width + 'px';
@@ -8541,6 +8641,8 @@
     // Отступ задаём правилом стилей (переменная на <html>), а не у самого меню: сайт при смене
     // страницы рисует меню заново, и правило действует на новое сразу — без «прыжка» на 0,2 с.
     function placeSidebar() {
+        // открыта галерея — меню на своём месте у сайта (у левого края): галерея растягивается до него
+        if (galOpen) { document.documentElement.classList.remove('vp-side-moved'); return; }
         const side = document.querySelector('.' + SELECTORS.sidebar);
         const cb = contentBox();
         if (!side || !cb) return;                                   // ленты пока нет — оставляем как было
