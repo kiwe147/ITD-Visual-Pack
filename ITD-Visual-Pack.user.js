@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.4
+// @version      3.2.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -161,14 +161,16 @@
         X_DRAW: 170,                         // один росчерк, мс
         X_GAP: 150,                          // между росчерками
         SPLIT: 380,                          // уход: экран делится пополам и разъезжается
-        IDLE: 3000                           // телефон: ждём касания (со звуком), потом играем сами без звука
+        IDLE: 3000,                          // телефон: ждём касания (со звуком), потом играем сами без звука
+        RARE: 0.01,                          // шанс редкой заставки (золото, лучи, кольца, аккорд)
+        RARE_HOLD: 700                       // редкая держится дольше перед уходом, мс
     };
     INTRO.X = INTRO.LOCK[2] + 220;           // первый росчерк
     INTRO.EXIT = INTRO.X + INTRO.X_GAP + INTRO.X_DRAW + 380;
 
     // Звук синтезом, без файлов: свист полёта, металлический лязг стыковки, в конце — тяжёлый удар.
     // at(мс от начала ролика) → время звуковой карты.
-    function introSound(ctx, at) {
+    function introSound(ctx, at, rare) {
         const out = ctx.createDynamicsCompressor();
         out.connect(ctx.destination);
         const master = ctx.createGain();
@@ -295,35 +297,95 @@
             zing.start(t + dur * 0.5);
             zing.stop(t + dur + 0.3);
         }
+        // редкая: глубокий суббас под последним ударом и звенящий аккорд после X
+        function subDrop(t) {
+            const o = ctx.createOscillator();
+            o.frequency.setValueAtTime(70, t);
+            o.frequency.exponentialRampToValueAtTime(32, t + 1.2);
+            const g = ctx.createGain();
+            tailEnv(g.gain, t, 0.9, 0.01);
+            o.connect(g).connect(master);
+            o.start(t);
+            o.stop(t + 0.3 + TAIL + 0.2);
+        }
+        function chord(t) {
+            [523.25, 659.25, 783.99, 987.77, 1318.5].forEach((f, i) => {
+                const o = ctx.createOscillator();
+                o.type = 'sine';
+                o.frequency.value = f;
+                const g = ctx.createGain();
+                env(g.gain, t + i * 0.06, 0.09 / (1 + i * 0.3), 0.03, 1.6);
+                o.connect(g).connect(master);
+                g.connect(echo);
+                o.start(t + i * 0.06);
+                o.stop(t + i * 0.06 + 1.8);
+            });
+        }
         INTRO.LOCK.forEach((lock, i) => {
             whoosh(at(lock - INTRO.FLY), INTRO.FLY / 1000);
             clank(at(lock), i === 2);
         });
         [0, INTRO.X_GAP].forEach(d => slash(at(INTRO.X + d), INTRO.X_DRAW / 1000));
-        whoosh(at(INTRO.EXIT - 200), 0.26);                  // створки разъезжаются
+        if (rare) {
+            subDrop(at(INTRO.LOCK[2]));
+            chord(at(INTRO.X + INTRO.X_GAP + INTRO.X_DRAW));
+        }
+        whoosh(at(INTRO.EXIT + (rare ? INTRO.RARE_HOLD : 0) - 200), 0.26);   // створки разъезжаются
     }
 
-    function playIntro(mode) {
+    // Тема сайта для заставки: заставка стартует раньше, чем сайт ставит тему, поэтому мод запоминает
+    // последнюю (siteTheme, пишет applySiteTheme); если сайт уже успел — берём его.
+    function introIsLight() {
+        const t = document.documentElement.getAttribute('data-theme');
+        return t ? t !== 'dark' : GM_getValue('siteTheme', 'dark') === 'light';
+    }
+    function playIntro(mode, rare) {
         const root = document.documentElement;
+        const light = introIsLight();
         const css = document.createElement('style');
         css.textContent = `
-            .vpi-overlay { position: fixed; inset: 0; z-index: 2147483647; overflow: hidden; cursor: pointer; }
+            /* цвета: тёмная тема — чёрный фон и белые буквы, светлая — светлый фон и тёмные буквы */
+            .vpi-overlay { position: fixed; inset: 0; z-index: 2147483647; overflow: hidden; cursor: pointer;
+                --vpi-bg: #000; --vpi-ink: #fff; --vpi-hole: #000; --vpi-hint: rgba(255, 255, 255, .38); }
+            .vpi-overlay.vpi-light { --vpi-bg: #f5f5f5; --vpi-ink: #141414; --vpi-hole: #f5f5f5; --vpi-hint: rgba(0, 0, 0, .42); }
             /* две одинаковые половины: каждая — весь кадр, обрезанный по своей стороне; в конце разъезжаются */
-            .vpi-half { position: absolute; inset: 0; background: #000; overflow: hidden; will-change: transform; }
+            .vpi-half { position: absolute; inset: 0; background: var(--vpi-bg); overflow: hidden; will-change: transform; }
             .vpi-half-0 { clip-path: inset(0 50% 0 0); }
             .vpi-half-1 { clip-path: inset(0 0 0 50%); }
             .vpi-world { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
-            .vpi-word { position: relative; display: flex; gap: .05em; color: #fff; user-select: none; line-height: 1;
+            .vpi-word { position: relative; display: flex; gap: .05em; color: var(--vpi-ink); user-select: none; line-height: 1;
                 font: 900 min(24vw, 36vh)/1 "Arial Black", "Segoe UI Black", "Helvetica Neue", Arial, sans-serif; }
             .vpi-letter { display: inline-block; will-change: transform, opacity, filter; }
             .vpi-fx { position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; }
             .vpi-spark { width: 2px; height: 16px; margin: -8px 0 0 -1px; border-radius: 1px;
-                background: linear-gradient(#fff, rgba(255,255,255,0)); }
+                background: linear-gradient(var(--vpi-ink), transparent); }
             .vpi-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
             .vpi-x { position: absolute; left: 50%; top: 50%; width: min(46vw, 70vh); height: min(46vw, 70vh);
                 transform: translate(-50%, -50%); overflow: visible; pointer-events: none; will-change: filter; }
             .vpi-seam { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; opacity: 0; pointer-events: none;
                 background: linear-gradient(transparent, #fff 30%, #fff 70%, transparent); box-shadow: 0 0 18px 2px #7c4dff; }
+            .vpi-hole { stroke: var(--vpi-hole); }
+
+            /* редкая (1%): глубокий фон с лучами, золотые буквы, кольца ударов, цветные искры, подпись */
+            .vpi-rare .vpi-half { background: radial-gradient(circle at 50% 50%, #2a0f4a 0%, #0b0614 55%, #000 100%); }
+            .vpi-rare.vpi-light .vpi-half { background: radial-gradient(circle at 50% 50%, #fff7dc 0%, #f3e9ff 55%, #f5f5f5 100%); }
+            .vpi-rays { position: absolute; left: 50%; top: 50%; width: 220vmax; height: 220vmax; margin: -110vmax 0 0 -110vmax;
+                pointer-events: none; opacity: 0; mix-blend-mode: screen;
+                background: repeating-conic-gradient(from 0deg, rgba(255, 210, 90, .16) 0deg 6deg, transparent 6deg 18deg); }
+            .vpi-light .vpi-rays { mix-blend-mode: multiply; background: repeating-conic-gradient(from 0deg, rgba(255, 170, 0, .14) 0deg 6deg, transparent 6deg 18deg); }
+            .vpi-rare .vpi-letter { color: transparent; -webkit-background-clip: text; background-clip: text;
+                background-image: linear-gradient(180deg, #fffbe6 0%, #ffe07a 30%, #ffb300 55%, #c77800 72%, #ffe9a8 100%); }
+            /* на светлом — тёмное золото, иначе буквы сливаются с фоном */
+            .vpi-rare.vpi-light .vpi-letter { background-image: linear-gradient(180deg, #d99a00 0%, #a86a00 35%, #6b3f00 60%, #9a5c00 78%, #e0a800 100%); }
+            /* кольцо — сразу своего размера (--r), растёт из точки: обводка не раздувается */
+            .vpi-ring { width: var(--r); height: var(--r); margin: calc(var(--r) / -2) 0 0 calc(var(--r) / -2); border-radius: 50%;
+                border: 3px solid #ffd54a; box-shadow: 0 0 24px #ff9d00, inset 0 0 12px #ffd54a; box-sizing: border-box; }
+            .vpi-light .vpi-ring { border-color: #e09a00; box-shadow: 0 0 18px rgba(255, 150, 0, .6); }
+            .vpi-spark.vpi-hue { background: linear-gradient(hsl(var(--h) 100% 65%), transparent); }
+            .vpi-rare-tag { position: absolute; left: 0; right: 0; top: calc(50% + min(23vw, 35vh) + 18px); text-align: center; opacity: 0;
+                font: 800 min(3.2vw, 18px)/1 system-ui, sans-serif; letter-spacing: .5em; text-transform: uppercase; color: #ffd54a;
+                text-shadow: 0 0 14px rgba(255, 170, 0, .8); pointer-events: none; }
+            .vpi-light .vpi-rare-tag { color: #b86e00; text-shadow: 0 0 10px rgba(255, 190, 60, .6); }
         `;
         const el = (cls, parent, text) => {
             const e = document.createElement('div');
@@ -332,20 +394,22 @@
             parent.appendChild(e);
             return e;
         };
-        const ov = el('vpi-overlay', root);
+        const ov = el('vpi-overlay' + (light ? ' vpi-light' : '') + (rare ? ' vpi-rare' : ''), root);
         const halves = [0, 1].map(i => el('vpi-half vpi-half-' + i, ov));
         const worlds = halves.map(h => el('vpi-world', h));
+        const rays = rare ? worlds.map(w => el('vpi-rays', w)) : [];
         // X — за словом: неоновый контур (цветная линия, внутри чёрная), как на иконке
         const xMarks = worlds.map((w, n) => {
             w.insertAdjacentHTML('beforeend', `<svg class="vpi-x" viewBox="0 0 100 100">
                 <defs><linearGradient id="vpiX${n}" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0" stop-color="#00e5ff"/><stop offset=".5" stop-color="#7c4dff"/><stop offset="1" stop-color="#ff3d9a"/>
+                    ${rare ? '<stop offset="0" stop-color="#ffd54a"/><stop offset=".35" stop-color="#ff3d9a"/><stop offset=".7" stop-color="#7c4dff"/><stop offset="1" stop-color="#00e5ff"/>'
+                    : '<stop offset="0" stop-color="#00e5ff"/><stop offset=".5" stop-color="#7c4dff"/><stop offset="1" stop-color="#ff3d9a"/>'}
                 </linearGradient></defs>
                 <g fill="none" stroke-linecap="round">
                     <path class="vpi-x1" d="M14 14L86 86" pathLength="1" stroke="url(#vpiX${n})" stroke-width="12"/>
-                    <path class="vpi-x1" d="M14 14L86 86" pathLength="1" stroke="#000" stroke-width="7"/>
+                    <path class="vpi-x1 vpi-hole" d="M14 14L86 86" pathLength="1" stroke-width="7"/>
                     <path class="vpi-x2" d="M86 14L14 86" pathLength="1" stroke="url(#vpiX${n})" stroke-width="12"/>
-                    <path class="vpi-x2" d="M86 14L14 86" pathLength="1" stroke="#000" stroke-width="7"/>
+                    <path class="vpi-x2 vpi-hole" d="M86 14L14 86" pathLength="1" stroke-width="7"/>
                 </g></svg>`);
             return w.lastElementChild;
         });
@@ -356,7 +420,11 @@
         const prevOverflow = root.style.overflow;
         root.style.overflow = 'hidden';
 
-        const { LOCK, FLY, SETTLE, SHAKE, FROM, EXIT, X, X_DRAW, X_GAP, SPLIT } = INTRO;
+        const { LOCK, FLY, SETTLE, FROM, X, X_DRAW, X_GAP, SPLIT } = INTRO;
+        const EXIT = INTRO.EXIT + (rare ? INTRO.RARE_HOLD : 0);
+        const SHAKE = INTRO.SHAKE.map(v => rare ? v * 1.8 : v);
+        // свечение букв при ударе: на тёмном — белое, на светлом — фиолетовое, у редкой — золотое
+        const GLOW = rare ? '255,170,0' : light ? '124,77,255' : '255,255,255';
         const vmax = Math.max(innerWidth, innerHeight);
         const rnd = (a, b) => a + Math.random() * (b - a);
         const anims = [];
@@ -374,16 +442,29 @@
         }
         function burst(at, x, y, size, strong) {
             // искры — от края буквы наружу; до удара их нет
-            for (let i = 0, n = strong ? 20 : 10; i < n; i++) {
-                const ang = rnd(0, Math.PI * 2), r0 = size * .22, dist = size * rnd(.3, strong ? .75 : .55);
+            for (let i = 0, n = (strong ? 20 : 10) * (rare ? 2 : 1); i < n; i++) {
+                const ang = rnd(0, Math.PI * 2), r0 = size * .22, dist = size * rnd(.3, strong ? .75 : .55) * (rare ? 1.4 : 1);
                 const rot = ang * 180 / Math.PI + 90, c = Math.cos(ang), sn = Math.sin(ang);
-                playBoth(worlds.map(w => el('vpi-fx vpi-spark', w)), [
+                const hue = rare ? Math.round(rnd(0, 360)) : null;
+                const sparks = worlds.map(w => el('vpi-fx vpi-spark' + (rare ? ' vpi-hue' : ''), w));
+                if (rare) sparks.forEach(sp => sp.style.setProperty('--h', hue));
+                playBoth(sparks, [
                     { transform: `translate(${x + c * r0}px, ${y + sn * r0}px) rotate(${rot}deg)`, opacity: 1 },
                     { transform: `translate(${x + c * (r0 + dist)}px, ${y + sn * (r0 + dist)}px) rotate(${rot}deg) scaleY(.2)`, opacity: 0 }
                 ], { delay: at, duration: rnd(300, 560), easing: 'cubic-bezier(.1,.8,.3,1)', fill: 'forwards' });
             }
             play(flash, [{ opacity: 0 }, { opacity: strong ? .14 : .06, offset: .12 }, { opacity: 0 }],
                 { delay: at, duration: strong ? 380 : 220, fill: 'none' });
+            if (rare) {                                   // ударное кольцо (у последнего — два)
+                for (let k = 0; k < (strong ? 2 : 1); k++) {
+                    const rings = worlds.map(w => el('vpi-fx vpi-ring', w));
+                    rings.forEach(r => r.style.setProperty('--r', Math.round(size * (strong ? 1.8 : 1.2)) + 'px'));
+                    playBoth(rings, [
+                        { transform: `translate(${x}px, ${y}px) scale(.08)`, opacity: .95 },
+                        { transform: `translate(${x}px, ${y}px) scale(1)`, opacity: 0 }
+                    ], { delay: at + k * 110, duration: 620, easing: 'cubic-bezier(.1,.7,.3,1)', fill: 'forwards' });
+                }
+            }
         }
 
         const letters = words.map(w => [...'ИТД'].map(ch => el('vpi-letter', w, ch)));
@@ -397,10 +478,10 @@
             const hit = FLY / (FLY + SETTLE);
             // разгон до самого касания, затем проскок чуть дальше и сжатие от удара
             playBoth([letters[0][i], letters[1][i]], [
-                { transform: `translate(${dx}px, ${dy}px) rotate(${f.rot}deg) scale(${f.sc})`, opacity: 0, filter: 'blur(10px) drop-shadow(0 0 0 rgba(255,255,255,0))', easing: 'cubic-bezier(.6,0,.9,.35)' },
+                { transform: `translate(${dx}px, ${dy}px) rotate(${f.rot}deg) scale(${f.sc})`, opacity: 0, filter: `blur(10px) drop-shadow(0 0 0 rgba(${GLOW},0))`, easing: 'cubic-bezier(.6,0,.9,.35)' },
                 { opacity: 1, offset: hit * .25 },
-                { transform: `translate(${-dx * .012}px, ${-dy * .012}px) scale(1.07, .93)`, opacity: 1, filter: 'blur(0px) drop-shadow(0 0 30px rgba(255,255,255,.9))', offset: hit, easing: 'cubic-bezier(.2,.9,.3,1)' },
-                { transform: 'none', opacity: 1, filter: 'blur(0px) drop-shadow(0 0 10px rgba(255,255,255,.3))' }
+                { transform: `translate(${-dx * .012}px, ${-dy * .012}px) scale(1.07, .93)`, opacity: 1, filter: `blur(0px) drop-shadow(0 0 30px rgba(${GLOW},.9))`, offset: hit, easing: 'cubic-bezier(.2,.9,.3,1)' },
+                { transform: 'none', opacity: 1, filter: `blur(0px) drop-shadow(0 0 10px rgba(${GLOW},.3))` }
             ], { delay: lock - FLY, duration: FLY + SETTLE });
             shake(lock, SHAKE[i]);
             burst(lock, cx, cy, lr.height * (i === 2 ? 2.2 : 1.5), i === 2);
@@ -415,11 +496,34 @@
             play(flash, [{ opacity: 0 }, { opacity: .05, offset: .5 }, { opacity: 0 }], { delay: X + i * X_GAP + X_DRAW * .6, duration: 160, fill: 'none' });
         });
         shake(X + X_GAP + X_DRAW * .8, 3);
+        const XG = rare ? '255,170,0' : '124,77,255';
         playBoth(xMarks, [
-            { filter: 'drop-shadow(0 0 0 rgba(124,77,255,0))' },
-            { filter: 'drop-shadow(0 0 26px rgba(124,77,255,.95))', offset: .35 },
-            { filter: 'drop-shadow(0 0 12px rgba(124,77,255,.55))' }
+            { filter: `drop-shadow(0 0 0 rgba(${XG},0))` },
+            { filter: `drop-shadow(0 0 ${rare ? 40 : 26}px rgba(${XG},.95))`, offset: .35 },
+            { filter: `drop-shadow(0 0 ${rare ? 20 : 12}px rgba(${XG},.55))` }
         ], { delay: X + X_GAP + X_DRAW, duration: 520 });
+
+        if (rare) {
+            // лучи: проявляются с первым ударом и медленно вращаются до ухода
+            playBoth(rays, [
+                { opacity: 0, transform: 'rotate(0deg) scale(.8)' },
+                { opacity: 1, transform: 'rotate(20deg) scale(1)', offset: .25 },
+                { opacity: 1, transform: 'rotate(60deg) scale(1.05)' }
+            ], { delay: LOCK[0], duration: EXIT - LOCK[0] + SPLIT, easing: 'linear' });
+            // последний удар: буквы на миг расслаиваются на красный и голубой
+            letters.flat().forEach(l => play(l, [
+                { filter: `drop-shadow(0 0 10px rgba(${GLOW},.3))` },
+                { filter: 'drop-shadow(-7px 0 0 rgba(255,0,90,.85)) drop-shadow(7px 0 0 rgba(0,229,255,.85))', offset: .2 },
+                { filter: 'drop-shadow(4px 0 0 rgba(255,0,90,.6)) drop-shadow(-4px 0 0 rgba(0,229,255,.6))', offset: .45 },
+                { filter: `drop-shadow(0 0 18px rgba(${GLOW},.55))` }
+            ], { delay: LOCK[2] + SETTLE, duration: 360, fill: 'forwards' }));
+            // подпись
+            const tags = worlds.map(w => el('vpi-rare-tag', w, '✦ редкая заставка · 1% ✦'));
+            playBoth(tags, [
+                { opacity: 0, transform: 'translateY(12px)', letterSpacing: '.9em' },
+                { opacity: 1, transform: 'none', letterSpacing: '.5em' }
+            ], { delay: X + X_GAP + X_DRAW + 120, duration: 520, easing: 'cubic-bezier(.2,.8,.2,1)' });
+        }
 
         // Уход: по центру вспыхивает щель, экран делится ровно пополам — левая половина
         // уезжает влево, правая вправо, под ними уже сайт.
@@ -444,7 +548,7 @@
                 ctx = new (window.AudioContext || window.webkitAudioContext)();
                 const go = () => {
                     const base = ctx.currentTime - (performance.now() - t0) / 1000;
-                    introSound(ctx, ms => Math.max(ctx.currentTime, base + ms / 1000));
+                    introSound(ctx, ms => Math.max(ctx.currentTime, base + ms / 1000), rare);
                 };
                 if (ctx.state === 'running') go();
                 else ctx.resume().then(() => { if (performance.now() - t0 < 150) go(); else ctx.close(); }, () => {});
@@ -503,7 +607,7 @@
                         if (ts && ts.performanceTime > 0) return ts.contextTime + (perf - ts.performanceTime) / 1000;
                         return ctx.currentTime + (perf - performance.now()) / 1000 - (ctx.outputLatency || 0);
                     };
-                    introSound(ctx, ms => Math.max(ctx.currentTime + 0.01, toCtx(start + ms)));
+                    introSound(ctx, ms => Math.max(ctx.currentTime + 0.01, toCtx(start + ms)), rare);
                 }, () => {});
             } catch (e) { ctx = null; }
             // звук так и не завёлся — картинка уже идёт, просто без него
@@ -524,15 +628,15 @@
         idle.innerHTML = `<div class="vpi-idle-logo"><svg viewBox="0 0 100 100"><defs><linearGradient id="vpiXi" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stop-color="#00e5ff"/><stop offset=".5" stop-color="#7c4dff"/><stop offset="1" stop-color="#ff3d9a"/></linearGradient></defs>
             <g fill="none" stroke-linecap="round"><path d="M14 14L86 86M86 14L14 86" stroke="url(#vpiXi)" stroke-width="12"/>
-            <path d="M14 14L86 86M86 14L14 86" stroke="#000" stroke-width="7"/></g></svg><span>ИТД</span></div><div class="vpi-idle-hint">коснись</div>`;
+            <path class="vpi-hole" d="M14 14L86 86M86 14L14 86" stroke-width="7"/></g></svg><span>ИТД</span></div><div class="vpi-idle-hint">коснись</div>`;
         ov.appendChild(idle);
         css.textContent += `
             .vpi-idle { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; }
             .vpi-idle-logo { position: relative; width: 96px; height: 96px; display: flex; align-items: center; justify-content: center;
                 animation: vpiBreath 2.6s ease-in-out infinite; }
             .vpi-idle-logo svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-            .vpi-idle-logo span { position: relative; color: #fff; font: 900 30px/1 "Arial Black", "Segoe UI Black", Arial, sans-serif; }
-            .vpi-idle-hint { color: rgba(255, 255, 255, .38); font: 500 13px/1 system-ui, sans-serif; letter-spacing: .28em; text-transform: lowercase;
+            .vpi-idle-logo span { position: relative; color: var(--vpi-ink); font: 900 30px/1 "Arial Black", "Segoe UI Black", Arial, sans-serif; }
+            .vpi-idle-hint { color: var(--vpi-hint); font: 500 13px/1 system-ui, sans-serif; letter-spacing: .28em; text-transform: lowercase;
                 opacity: 0; animation: vpiHint .8s ease 1.1s forwards; }
             @keyframes vpiBreath { 0%, 100% { opacity: .55; transform: scale(.96); filter: drop-shadow(0 0 0 rgba(124,77,255,0)); }
                 50% { opacity: 1; transform: scale(1.03); filter: drop-shadow(0 0 16px rgba(124,77,255,.55)); } }
@@ -562,7 +666,7 @@
         : GM_getValue('introEnabled', true) ? 'desk' : 'off';
     if (window.top === window.self && introMode() !== 'off'
         && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        try { playIntro(introMode()); } catch (e) { console.warn('[ITD VP] заставка', e); }
+        try { playIntro(introMode(), Math.random() < INTRO.RARE); } catch (e) { console.warn('[ITD VP] заставка', e); }
     }
 
     // Остальное — когда страница разобрана (раньше весь скрипт и запускался на document-idle);
@@ -2218,8 +2322,15 @@
     function isDarkTheme() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
     function applySiteTheme() {
         document.documentElement.classList.toggle('vp-light', !isDarkTheme());
+        rememberSiteTheme();
         paint();
     }
+    // заставка следующего входа возьмёт цвета темы отсюда (она стартует раньше, чем сайт ставит тему)
+    function rememberSiteTheme() {
+        const t = document.documentElement.getAttribute('data-theme');
+        if (t && GM_getValue('siteTheme', '') !== (t === 'dark' ? 'dark' : 'light')) GM_setValue('siteTheme', t === 'dark' ? 'dark' : 'light');
+    }
+    rememberSiteTheme();
     document.documentElement.classList.toggle('vp-light', !isDarkTheme());   // первая покраска — ниже, paint()
     new MutationObserver(applySiteTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
@@ -2775,6 +2886,7 @@
             <div class="vp-fab-menu"><button type="button" data-act="snap">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 18)}<span>Снимок для Claude</span></button>
                 <button type="button" data-act="report">${svgIcon('<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h4"/>', 18)}<span>Скопировать отчёт</span></button>
                 <button type="button" data-act="diag">${svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4M8.5 11l1.8 1.8 3.4-3.6"/>', 18)}<span>Диагностика</span></button>
+                <button type="button" data-act="rare">${svgIcon('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.3 6L12 16.4 6.6 19.4l1.3-6L3.4 9.3l6-.7z"/>', 18)}<span>Редкая заставка</span></button>
                 <button type="button" data-act="fps">${svgIcon('<path d="M3 17l5-6 4 3 5-7 4 4"/>', 18)}<span>Счётчик FPS</span></button>
                 <button type="button" data-act="face">${svgIcon('<rect x="4" y="4" width="16" height="16" rx="8"/><path d="M8 15l2.5-3 2 2 1.5-2 2 3"/>', 18)}<span>Своя картинка кнопки</span></button>
                 <button type="button" data-act="off">${svgIcon('<path d="M12 3v8"/><path d="M6.3 7a8 8 0 1 0 11.4 0"/>', 18)}<span>Мод выкл (до закрытия вкладки)</span></button></div>`;
@@ -2831,6 +2943,7 @@
         act('report', () => copyText(adminReport()).then(ok => adminToast(ok ? 'Отчёт скопирован — вставь его Claude' : 'Не вышло скопировать')));
         act('diag', adminDiag);
         act('fps', toggleFps);
+        act('rare', () => playIntro(IS_PHONE ? 'silent' : 'desk', true));
         // своя картинка кнопки — хранится только у тебя (в настройках скрипта), 96 px; пустой выбор — вернуть «A»
         act('face', () => {
             if (GM_getValue('fabFace', '') && confirm('Вернуть обычную «A»? (Отмена — выбрать другую картинку)')) {
@@ -3173,6 +3286,80 @@
         onDom(function bannerButtons() { createAllButtons(); });
     }
 
+    // ================= Что нового =================
+    // Плашка версии мода (под логотипом) открывает журнал обновлений — как «Что нового» у сайта.
+    // Пока новую версию не открывали, на плашке точка (changelogSeen — последняя просмотренная).
+    const CHANGELOG = [
+        ['3.2.6', '28 сентября 2026', ['Плашка версии открывает «Что нового» — вот это окно', 'На компьютере плашка версии стоит ровно по центру под иконкой']],
+        ['3.2.5', '27 сентября 2026', ['Заставка в светлой теме — светлый фон и тёмные буквы',
+            'Редкая заставка: выпадает с шансом 1% — золото, лучи, кольца ударов и свой звук',
+            'Пост с картинкой только в репосте больше не прозрачный']],
+        ['3.2.4', '27 сентября 2026', ['Светлая тема: размытый фон постов светлый, а не серый',
+            '«Сообщения» на компьютере — отдельная карточка, не сливается со страницей',
+            'Прокрутка в «Сообщениях» не двигает страницу за окном',
+            'Меню не тускнеет, пока открыты «Сообщения»']],
+        ['3.2.3', '27 сентября 2026', ['Стикеры отправляются без перезагрузки страницы — как обычная картинка через скрепку',
+            'Стикеры, загруженные с другого аккаунта, снова отправляются']],
+        ['3.2.1', '27 сентября 2026', ['Уведомления на телефоне снова видны при уменьшенных анимациях']],
+        ['3.2.0', '26 сентября 2026', ['Стикеры: обрезку можно двигать пальцем, снятый крестиком стикер больше не уходит с комментарием',
+            '«Клуб ИТД X» не ломается от испорченных данных',
+            'Большая уборка кода: всё работает как раньше, только надёжнее']],
+        ['3.1.26', '26 сентября 2026', ['Кнопка «наверх» и раскладка телефона переписаны без дёрганий',
+            'Подмена текста ошибок срабатывает и на повторной ошибке']],
+        ['3.1.25', '26 сентября 2026', ['Баннер: картинку можно двигать пальцем',
+            'Размытый фон постов больше не копит нагрузку на длинной ленте']],
+        ['3.1.24', '26 сентября 2026', ['«Анти цензура» выключается сразу, без перезагрузки']],
+        ['3.1.20', '25 сентября 2026', ['Планшет боком — версия для компьютера (настройка «Версия для ПК на планшете»)']],
+        ['3.1.14', '25 сентября 2026', ['Админ-островок: снимок страницы, отчёт, диагностика, счётчик FPS']],
+        ['3.1.4', '25 сентября 2026', ['Заставка на телефоне ждёт касания и играет со звуком']],
+        ['3.0.24', '25 сентября 2026', ['«Сообщения» — первая версия лички']],
+        ['3.0.23', '25 сентября 2026', ['«Создать пост» — бугорок по центру нижней панели']]
+    ];
+    function markChangelogChips() {
+        const unseen = GM_getValue('changelogSeen', '') !== CHANGELOG[0][0];
+        document.querySelectorAll('.vp-version-chip').forEach(c => {
+            c.classList.toggle('vp-news', unseen);
+            if (!c.hasAttribute('role')) { c.setAttribute('role', 'button'); c.tabIndex = 0; c.title = 'Что нового в ИТД X'; }
+        });
+    }
+    function openChangelog() {
+        if (document.querySelector('.vp-news-back')) return;
+        const back = document.createElement('div');
+        back.className = 'vp-news-back';
+        back.innerHTML = `<div class="vp-news-box" role="dialog" aria-label="Что нового в ИТД X"><div class="vp-news-head"><b>Что нового в ИТД X</b>
+            <button type="button" class="vp-news-x" aria-label="Закрыть">${svgIcon('<path d="M18 6 6 18M6 6l12 12"/>', 18)}</button></div><div class="vp-news-list"></div></div>`;
+        const list = back.querySelector('.vp-news-list');
+        for (const [v, date, items] of CHANGELOG) {
+            const sec = document.createElement('section');
+            sec.className = 'vp-news-ver';
+            sec.innerHTML = '<div class="vp-news-tag"><span></span><em></em></div><ul></ul>';
+            sec.querySelector('span').textContent = 'v' + v;
+            sec.querySelector('em').textContent = date;
+            sec.querySelector('em').style.fontStyle = 'normal';
+            for (const t of items) { const li = document.createElement('li'); li.textContent = t; sec.lastChild.appendChild(li); }
+            list.appendChild(sec);
+        }
+        const close = () => { back.remove(); removeEventListener('keydown', onKey, true); };
+        const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+        back.addEventListener('click', e => { if (e.target === back) close(); });
+        back.querySelector('.vp-news-x').onclick = close;
+        addEventListener('keydown', onKey, true);
+        document.body.appendChild(back);
+        GM_setValue('changelogSeen', CHANGELOG[0][0]);
+        markChangelogChips();
+    }
+    document.addEventListener('click', e => {
+        const chip = e.target.closest && e.target.closest('.vp-version-chip');
+        if (!chip) return;
+        e.preventDefault();
+        e.stopPropagation();
+        openChangelog();
+    }, true);
+    document.addEventListener('keydown', e => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('vp-version-chip')) { e.preventDefault(); openChangelog(); }
+    });
+    onDom(function changelogChips() { if (document.querySelector('.vp-version-chip:not([role])')) markChangelogChips(); });
+
     // ================= API сайта =================
     // Токен доступа живёт недолго: держим его 4 минуты, одновременные запросы ждут одно обновление
     // (раньше автолайк обновлял токен на каждого пользователя разом), на 401 — берём свежий.
@@ -3483,7 +3670,7 @@
             });
 
             function replaceIcon() {
-                const container = document.querySelector('.' + SELECTORS.logoContainer);
+                let container = document.querySelector('.' + SELECTORS.logoContainer);
                 if (!container) return;
                 const customLink = container.querySelector('a[href="https://t.me/NeuroSFW"]');
                 if (customLink) return;
@@ -3502,25 +3689,25 @@
                 let bottomBlock = container.querySelector('.vp-version-row');
                 container.innerHTML = '';
                 container.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; gap: 4px;';
+                // слева колонка: иконка и под ней, по её центру, плашка версии мода; справа — версия сайта
+                // на уровне иконки (раньше плашка стояла от левого края и уезжала вправо от центра иконки)
                 const topRow = document.createElement('div');
-                topRow.style.cssText = 'display: flex; flex-direction: row; align-items: center; gap: 10px;';
-                topRow.appendChild(link);
-                if (versionBtn) {
-                    versionBtn.style.margin = '0';
-                    versionBtn.style.padding = '0';
-                    topRow.appendChild(versionBtn);
-                } else {
-                    const fallbackBtn = document.createElement('button');
-                    fallbackBtn.className = SELECTORS.versionBtn;
-                    fallbackBtn.textContent = 'v1.1.1';
-                    fallbackBtn.style.margin = '0';
-                    fallbackBtn.style.padding = '0';
-                    topRow.appendChild(fallbackBtn);
-                }
+                topRow.className = 'vp-logo-top';
+                const iconCol = document.createElement('div');
+                iconCol.className = 'vp-logo-col';
+                iconCol.appendChild(link);
+                topRow.appendChild(iconCol);
+                const siteVer = versionBtn || document.createElement('button');
+                if (!versionBtn) { siteVer.className = SELECTORS.versionBtn; siteVer.textContent = 'v1.1.1'; }
+                siteVer.style.margin = '0';
+                siteVer.style.padding = '0';
+                topRow.appendChild(siteVer);
                 container.appendChild(topRow);
+                const container0 = container;
+                container = iconCol;                      // плашку версии ниже кладём в колонку иконки
                 if (bottomBlock) {
                     bottomBlock.style.margin = '0';
-                    bottomBlock.style.justifyContent = 'flex-start';
+                    bottomBlock.style.justifyContent = 'center';
                     container.appendChild(bottomBlock);
                 } else {
                     const newBottom = document.createElement('div');
@@ -3531,8 +3718,9 @@
                     versionSpan.textContent = 'v' + GM_info.script.version;
                     newBottom.appendChild(versionSpan);
                     container.appendChild(newBottom);
-                    container._bottomBlock = newBottom;
+                    container0._bottomBlock = newBottom;
                 }
+                markChangelogChips();
             }
 
             replaceIcon();
@@ -3655,6 +3843,7 @@
 
                 wrapper.appendChild(bottomRow);
                 block.appendChild(wrapper);
+                markChangelogChips();
 
                 nav.prepend(block);
                 fixNavLayout();
@@ -5506,14 +5695,8 @@
         cards.forEach(card => {
             const img = card.querySelector('img.' + SELECTORS.postMedia);
             if (!img || !img.src || img.src.includes('avatar')) return;
-            // пост, у которого картинка только в репосте: фон — у репоста, сама карточка остаётся
-            // прозрачной без своего слоя (так выглядело всегда; свой слой красит её в серый)
-            const inner = img.closest('.' + SELECTORS.repost);
-            if (inner && inner !== card && card.contains(inner)) {
-                card.setAttribute('data-blur-bg', img.src);
-                card.classList.add('itd-blur-active');
-                return;
-            }
+            // пост, у которого картинка только в репосте, тоже получает свой слой от неё: без слоя карточка
+            // была прозрачной насквозь (просвечивал фон страницы)
             buildBlur(card, img);
         });
     }
@@ -5794,7 +5977,41 @@
             font: 600 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
             color: var(--text-secondary, #8a8a8a); letter-spacing: 0.02em;
             padding: 3px 6px; border-radius: 6px; background: var(--bg-hover, rgba(255, 255, 255, 0.08));
+            cursor: pointer; position: relative; transition: color .15s ease, background-color .15s ease;
         }
+        .vp-version-chip:hover { color: var(--text-primary, #fff); background: var(--block-bg-secondary, rgba(255, 255, 255, 0.14)); }
+        /* новая версия, «Что нового» ещё не открывали — точка на плашке */
+        .vp-version-chip.vp-news::after { content: ""; position: absolute; top: -3px; right: -3px; width: 7px; height: 7px;
+            border-radius: 50%; background: #2a8cff; box-shadow: 0 0 0 2px var(--bg-primary, #000); }
+        .vp-logo-top { display: flex; align-items: flex-start; gap: 10px; }
+        .vp-logo-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .vp-logo-col > a { height: 36px; }
+        .vp-logo-top > :not(.vp-logo-col) { height: 36px; display: inline-flex; align-items: center; }
+
+        /* «Что нового в ИТД X» — как окно «Что нового» сайта */
+        .vp-news-back { position: fixed; inset: 0; z-index: 10050; background: rgba(0, 0, 0, .5); display: flex;
+            align-items: center; justify-content: center; padding: 16px; animation: vpNewsFade .18s ease; }
+        .vp-news-box { width: min(780px, 100%); max-height: min(82vh, 900px); display: flex; flex-direction: column; overflow: hidden;
+            background: var(--modal-bg, var(--block-bg, #1c1c1c)); color: var(--text-primary, #fff); border-radius: 28px;
+            border: 1px solid var(--border-color, rgba(255, 255, 255, .12)); box-shadow: 0 24px 64px rgba(0, 0, 0, .45);
+            backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none);
+            animation: vpNewsIn .22s cubic-bezier(.2, .8, .2, 1); }
+        .vp-news-head { display: flex; align-items: center; justify-content: space-between; padding: 20px 20px 16px 24px;
+            border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, .1)); }
+        .vp-news-head b { font-size: 20px; font-weight: 700; }
+        .vp-news-x { width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer; display: flex; align-items: center;
+            justify-content: center; background: var(--block-bg-secondary, rgba(255, 255, 255, .1)); color: var(--text-primary, #fff); }
+        .vp-news-list { overflow-y: auto; padding: 8px 28px 20px; overscroll-behavior: contain; }
+        .vp-news-ver { padding: 18px 0; border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, .1)); }
+        .vp-news-ver:last-child { border-bottom: 0; }
+        .vp-news-tag { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; color: var(--text-secondary, #8a8a8a); font-size: 15px; }
+        .vp-news-tag span { padding: 5px 12px; border-radius: 8px; font-weight: 600; color: #2a8cff; background: rgba(42, 140, 255, .14); }
+        .vp-news-ver ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+        .vp-news-ver li { position: relative; padding-left: 24px; font-size: 16px; line-height: 1.45; }
+        .vp-news-ver li::before { content: ""; position: absolute; left: 2px; top: .6em; width: 6px; height: 6px; border-radius: 50%; background: #2a8cff; }
+        @keyframes vpNewsFade { from { opacity: 0; } }
+        @keyframes vpNewsIn { from { opacity: 0; transform: translateY(12px) scale(.98); } }
+        @media (prefers-reduced-motion: reduce) { .vp-news-back, .vp-news-box { animation: none; } }
         .itd-update-sidebar-btn {
             display: inline-flex; align-items: center; gap: 4px; border: 0; cursor: pointer;
             font-family: inherit; font-size: 10px; font-weight: 700; line-height: 1; color: #fff; white-space: nowrap;
