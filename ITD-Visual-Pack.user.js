@@ -7772,21 +7772,26 @@
     const gal = { el: null, tab: 'popular', cursor: null, loading: false, done: false, cols: [], heights: [], seen: new Set(), hist: false };
     const galStyle = document.createElement('style');
     galStyle.textContent = `
-        .vp-gal { position: fixed; z-index: 30; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden;
-            background: var(--block-bg, #1c1c1c); color: var(--text-primary, #fff);
+        /* как лента: таблетка вкладок отдельно сверху (ПК — 36 от верха, высота 45), под ней через 16 —
+           карточка с картинками (скругление 36, стекло, как у постов); телефон — таблетка в полосе высотой 63 */
+        .vp-gal { position: fixed; z-index: 30; display: flex; flex-direction: column; box-sizing: border-box; color: var(--text-primary, #fff); }
+        .vp-gal-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; margin-top: 16px;
+            border-radius: 36px; background: var(--block-bg, #1c1c1c);
             backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none); }
-        .vp-gal.vp-card { border-radius: 36px; border: 1px solid var(--border-color, rgba(255, 255, 255, .15)); }
-        html.vp-light .vp-gal.vp-card { box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
+        .vp-gal.vp-card .vp-gal-card { border: 1px solid var(--border-color, rgba(255, 255, 255, .15)); }
+        html.vp-light .vp-gal.vp-card .vp-gal-card { box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
+        .vp-gal:not(.vp-card) .vp-gal-tabs { margin: 9px 12px 0 !important; }
+        .vp-gal:not(.vp-card) .vp-gal-card { margin-top: 9px; border-radius: 36px 36px 0 0; }
         /* пока открыта галерея — лента под ней спрятана (иначе просвечивала сквозь стекло и в скруглённых углах) */
         html.vp-gal-open .vp-gal-hidden { visibility: hidden !important; }
-        .vp-gal-body { padding: 0 12px 24px !important; }
+        .vp-gal-body { padding: 12px 12px var(--vp-gal-pb, 24px) !important; }
         html.vp-gal-open .vp-gal-navwrap { z-index: 40 !important; }
         html.vp-gal-open .vp-nav-link.vp-site-cur { color: var(--vp-off-c) !important; opacity: var(--vp-off-o) !important; background-color: var(--vp-off-b) !important; }
         html.vp-gal-open .vp-gal-nav { color: var(--vp-on-c) !important; opacity: var(--vp-on-o) !important; background-color: var(--vp-on-b) !important; }
         /* вкладки — 1 в 1 как у ленты («Для вас / Кланы / Подписки»; значения сняты с вкладок сайта):
            таблетка с отступом 4, кнопки поровну, под выбранной — бегунок с обводкой цвета ника.
            Бегунок — в долях ширины (треть и сдвиг на свою ширину): совпадает с кнопкой при любой ширине окна */
-        .vp-gal-tabs { position: relative; display: flex; flex: 0 0 auto; padding: 4px; margin: 16px 16px 12px; border-radius: 9999px;
+        .vp-gal-tabs { position: relative; display: flex; flex: 0 0 auto; box-sizing: border-box; height: 45px; padding: 4px; margin: 0; border-radius: 9999px;
             background: var(--glass-bg, rgba(35, 35, 35, .5)); }
         html.vp-light .vp-gal-tabs { background: rgba(0, 0, 0, .06); }
         .vp-gal-ind { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / 3); border-radius: 9999px; pointer-events: none;
@@ -8005,7 +8010,9 @@
         document.querySelectorAll('.vp-gal-navwrap').forEach(w => w.classList.remove('vp-gal-navwrap'));
         if (row) {
             if (nav.parentElement) nav.parentElement.classList.add('vp-gal-navwrap');
-            Object.assign(gal.el.style, { left: '0px', right: '0px', top: '0px', bottom: '0px', width: '', paddingBottom: Math.max(0, innerHeight - nr.top + BUMP_H + 8) + 'px' });
+            // карточка — до низа экрана (под панелью), а последние картинки не прячутся под ней: отступ — у ленты картинок
+            Object.assign(gal.el.style, { left: '0px', right: '0px', top: '0px', bottom: '0px', width: '', paddingBottom: '0px' });
+            gal.el.style.setProperty('--vp-gal-pb', Math.max(24, innerHeight - nr.top + BUMP_H + 8) + 'px');
         } else {
             // ПК — три колонки на всю ширину: меню у левого края (как ставит сайт), панель «Статистика/клуб»
             // у правого, галерея — между ними с зазорами 24; панели нет — до правого края с отступом, как у меню
@@ -8016,7 +8023,8 @@
             const left = sr ? Math.round(sr.right + 24) : 20;
             const railEl = document.querySelector('.vp-rail.vp-on');
             const rightEdge = railEl ? parseFloat(railEl.style.left) - 24 : innerWidth - margin;
-            Object.assign(gal.el.style, { left: left + 'px', right: Math.max(12, Math.round(innerWidth - rightEdge)) + 'px', top: '12px', bottom: '12px', width: '', paddingBottom: '0px' });
+            Object.assign(gal.el.style, { left: left + 'px', right: Math.max(12, Math.round(innerWidth - rightEdge)) + 'px', top: '36px', bottom: '12px', width: '', paddingBottom: '0px' });
+            gal.el.style.removeProperty('--vp-gal-pb');
         }
         gal.el.classList.toggle('vp-card', !row);
     }
@@ -8047,7 +8055,7 @@
         if (!kept) {
             el.className = 'vp-gal';
             el.innerHTML = `<div class="vp-gal-tabs"><div class="vp-gal-ind"></div>${GAL_TABS.map(([id, name]) => `<button type="button" class="vp-gal-tab" data-tab="${id}">${name}</button>`).join('')}</div>
-            <div class="vp-gal-body"><div class="vp-gal-grid"></div><div class="vp-gal-more"></div></div>`;
+            <div class="vp-gal-card"><div class="vp-gal-body"><div class="vp-gal-grid"></div><div class="vp-gal-more"></div></div></div>`;
         }
         document.body.appendChild(el);
         gal.el = el;
