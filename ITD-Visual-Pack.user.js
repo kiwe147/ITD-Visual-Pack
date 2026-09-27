@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.8
+// @version      3.2.9
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3544,6 +3544,8 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.2.9', '29 сентября 2026', [
+            'Стикеры: в режиме правки их можно перетаскивать мышью и пальцем — как иконки на рабочем столе телефона, остальные плавно разъезжаются']],
         ['3.2.8', '29 сентября 2026', [
             'Кнопка «Обновить» больше не сдвигает плашку версии']],
         ['3.2.5 – 3.2.7', '27–28 сентября 2026', [
@@ -4263,6 +4265,14 @@
             .sticker-shake-7{animation-name:stickerShake7}
             .sticker-shake-8{animation-name:stickerShake8}
             .sticker-editing:active{cursor:grabbing}
+            /* перетаскивание (как иконки на рабочем столе телефона): стикер поднят и едет за пальцем,
+               на его месте — «дырка», соседи плавно разъезжаются */
+            .sticker-editing { touch-action: none; }
+            /* вес выше .vp-sticker-item (там position: relative, и «призрак» уезжал вниз страницы) */
+            .vp-sticker-item.vp-sticker-ghost { position: fixed; z-index: 10001; pointer-events: none; margin: 0; border-radius: 10px; overflow: hidden;
+                box-shadow: 0 12px 30px rgba(0, 0, 0, .45), 0 0 0 2px var(--accent-primary, #0080FF); }
+            .vp-sticker-ghost .vp-sticker-del { display: none; }
+            .vp-sticker-item.vp-hole { opacity: .25; animation: none; box-shadow: inset 0 0 0 2px var(--accent-primary, #0080FF); }
 
             /* кнопка у поля комментария */
             .sticker-btn { background: transparent; border: none; cursor: pointer; padding: 8px; border-radius: 9999px;
@@ -4508,7 +4518,6 @@
         let stickerPanel = null, scrollContainer = null, tabsRow = null, recentBtn = null;
         let stickerBtn = null, hideTimeout = null;
         let editPack = null;                                   // ключ пака в режиме правки
-        let drag = null;                                       // { packKey, index } — перетаскиваемый стикер
 
         // колесо над панелью не крутит страницу (сайт крутит #root)
         let blockWheel = null;
@@ -4587,7 +4596,7 @@
         function rebuildPanel() {
             if (stickerPanel) stickerPanel.remove();
             stickerPanel = scrollContainer = tabsRow = recentBtn = null;
-            editPack = drag = null;
+            editPack = null;
             createStickerPanel();
             renderAllContent();
         }
@@ -4654,14 +4663,13 @@
         function enterEditMode(key) {
             if (key === 'recent') return;
             editPack = key;
-            drag = null;
             markEditing();
             refreshAllPackGrids();
             const header = scrollContainer.querySelector(`.pack-header[data-pack="${key}"]`);
             if (header) header.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
         function exitEditMode() {
-            editPack = drag = null;
+            editPack = null;
             if (!scrollContainer) return;
             markEditing();
             refreshAllPackGrids();
@@ -4682,11 +4690,87 @@
             refreshAllPackGrids();
             updateTabButtons();
         }
-        function moveSticker(key, from, to) {
-            const list = packStickers(key);
-            list.splice(to, 0, list.splice(from, 1)[0]);
-            savePack(key);
-            updateTabButtons();
+        // Плавная перестановка (FLIP): запоминаем места ячеек, меняем порядок, и каждая, что сдвинулась,
+        // едет со старого места на новое
+        function flipGrid(grid, mutate) {
+            const items = [...grid.children], before = new Map(items.map(e => [e, e.getBoundingClientRect()]));
+            mutate();
+            items.forEach(e => {
+                const a = before.get(e), b = e.getBoundingClientRect(), dx = a.left - b.left, dy = a.top - b.top;
+                if (dx || dy) e.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
+                    { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' });
+            });
+        }
+        // Перетаскивание в режиме правки: сдвинул стикер на 6px — он поднимается и едет за мышью/пальцем,
+        // на его месте «дырка»; над другим стикером дырка переезжает туда, соседи разъезжаются;
+        // отпустил — стикер ложится в дырку, порядок сохраняется. У края ленты — прокрутка.
+        // Без сдвига — обычное нажатие (выбрать стикер).
+        function startStickerDrag(e, btn, key) {
+            if (e.button > 0 || e.target.closest('.vp-sticker-del')) return;
+            const grid = btn.parentElement, x0 = e.clientX, y0 = e.clientY;
+            let ghost = null, dx = 0, dy = 0, last = null;
+            const move = ev => {
+                if (ev.pointerId !== e.pointerId) return;
+                if (!ghost) {
+                    if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
+                    const r = btn.getBoundingClientRect();
+                    dx = x0 - r.left; dy = y0 - r.top;
+                    ghost = btn.cloneNode(true);
+                    ghost.className = 'vp-sticker-item vp-sticker-ghost';
+                    Object.assign(ghost.style, { width: r.width + 'px', height: r.height + 'px', left: r.left + 'px', top: r.top + 'px' });
+                    document.body.appendChild(ghost);
+                    ghost.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.12)' }], { duration: 140, fill: 'forwards', easing: 'ease-out' });
+                    btn.classList.add('vp-hole');
+                    btn._vpDragged = true;                                // клик после перетаскивания — не выбор
+                    stickerPanel.classList.add('vp-drag');
+                }
+                ev.preventDefault();
+                ghost.style.left = ev.clientX - dx + 'px';
+                ghost.style.top = ev.clientY - dy + 'px';
+                // ячейка под пальцем — туда переезжает дырка
+                const over = document.elementFromPoint(ev.clientX, ev.clientY);
+                const target = over && over.closest('.vp-sticker-item');
+                if (target && target !== btn && target !== last && target.parentElement === grid) {
+                    last = target;
+                    const kids = [...grid.children];
+                    flipGrid(grid, () => grid.insertBefore(btn, kids.indexOf(target) > kids.indexOf(btn) ? target.nextSibling : target));
+                } else if (target === btn) last = null;
+                // у края ленты — прокрутка
+                const sr = scrollContainer.getBoundingClientRect();
+                if (ev.clientY < sr.top + 36) scrollContainer.scrollTop -= 10;
+                else if (ev.clientY > sr.bottom - 36) scrollContainer.scrollTop += 10;
+            };
+            const up = ev => {
+                if (ev.pointerId !== e.pointerId) return;
+                document.removeEventListener('pointermove', move, true);
+                document.removeEventListener('pointerup', up, true);
+                document.removeEventListener('pointercancel', up, true);
+                if (!ghost) return;
+                // ложится в дырку
+                const r = btn.getBoundingClientRect(), g = ghost.getBoundingClientRect();
+                ghost.getAnimations().forEach(a => a.cancel());
+                const land = ghost.animate([
+                    { transform: `translate(${g.left - r.left - (g.width - r.width) / 2}px, ${g.top - r.top - (g.height - r.height) / 2}px) scale(1.12)` },
+                    { transform: 'none' }
+                ], { duration: 180, easing: 'cubic-bezier(.2,.8,.2,1)' });
+                Object.assign(ghost.style, { left: r.left + 'px', top: r.top + 'px' });
+                const finish = () => {
+                    ghost.remove();
+                    btn.classList.remove('vp-hole');
+                    stickerPanel.classList.remove('vp-drag');
+                    // новый порядок — по ячейкам в сетке (у каждой — её прежний номер)
+                    const list = packStickers(key);
+                    const order = [...grid.querySelectorAll('.vp-sticker-item')].map(b => list[+b.dataset.stickerIndex]);
+                    list.splice(0, list.length, ...order);
+                    savePack(key);
+                    updateTabButtons();
+                    refreshPackGrid(key);
+                };
+                land.finished.then(finish, finish);
+            };
+            document.addEventListener('pointermove', move, true);
+            document.addEventListener('pointerup', up, true);
+            document.addEventListener('pointercancel', up, true);
         }
 
         function addStickerToPack(key) {
@@ -4773,47 +4857,17 @@
             btn.dataset.stickerIndex = index;
             if (sticker && sticker.url) { const img = el('img'); img.src = sticker.url; btn.appendChild(img); }
             else btn.appendChild(el('div', 'vp-sticker-empty'));
-            btn.onclick = () => pickSticker(sticker);
+            btn.onclick = () => { if (btn._vpDragged) { btn._vpDragged = false; return; } pickSticker(sticker); };
             if (!editing) return btn;
 
-            // правка: дрожь, крестик, перетаскивание внутри пака
+            // правка: дрожь, крестик, перетаскивание внутри пака (мышь и палец)
             btn.classList.add('sticker-editing', `sticker-shake-${(index % 8) + 1}`);
-            btn.draggable = true;
-            if (drag && drag.packKey === key && drag.index === index) btn.classList.add('sticker-dragging');
+            btn.draggable = false;
             const del = el('div', 'vp-sticker-del', ICONS.DELETE);
             del.onmousedown = e => { e.stopPropagation(); e.preventDefault(); };
             del.onclick = e => { e.stopPropagation(); e.preventDefault(); deleteSticker(key, index); };
             btn.appendChild(del);
-            const endDrag = () => {
-                drag = null;
-                stickerPanel.classList.remove('vp-drag');
-                refreshPackGrid(key);
-            };
-            btn.addEventListener('dragstart', e => {
-                if (drag) return;
-                drag = { packKey: key, index };
-                stickerPanel.classList.add('vp-drag');
-                e.dataTransfer.setData('text/plain', '');
-                e.dataTransfer.effectAllowed = 'move';
-                setTimeout(() => { if (drag && drag.packKey === key) refreshPackGrid(key); }, 0);
-            });
-            btn.addEventListener('dragend', () => { if (drag && drag.packKey === key) endDrag(); });
-            btn.addEventListener('dragover', e => { if (drag && drag.packKey === key) e.preventDefault(); });
-            btn.addEventListener('dragenter', e => {
-                if (!drag || drag.packKey !== key) return;
-                e.preventDefault();
-                const to = +btn.dataset.stickerIndex;
-                if (to === drag.index) return;
-                moveSticker(key, drag.index, to);
-                drag.index = to;
-                refreshPackGrid(key);
-            });
-            btn.addEventListener('drop', e => {
-                if (!drag || drag.packKey !== key) return;
-                e.preventDefault();
-                endDrag();
-                updateTabButtons();
-            });
+            btn.addEventListener('pointerdown', e => startStickerDrag(e, btn, key));
             return btn;
         }
 
@@ -4849,6 +4903,7 @@
             clearTimeout(hideTimeout);
             hideTimeout = setTimeout(() => {
                 if (!stickerPanel || !stickerPanel.classList.contains('vp-open')) return;
+                if (stickerPanel.classList.contains('vp-drag')) return hidePanel(delay);   // тащат стикер — не закрывать
                 stickerPanel.classList.remove('vp-open');
                 exitEditMode();
                 enablePageScroll();
