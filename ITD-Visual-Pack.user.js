@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.14
+// @version      3.2.15
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1479,6 +1479,7 @@
         RECENT: svgIcon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/>', 18),
         // квадрат с плюсом — новый набор
         ADD_PACK: svgIcon('<rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M12 8.5v7M8.5 12h7"/>', 18),
+        ZIP_PACK: svgIcon('<path d="M4 8h16v11.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19.5z"/><path d="M3 4.5h18V8H3z"/><path d="M10 12h4"/>', 18),
         ADD: svgIcon('<path d="M12 5v14M5 12h14"/>', 24),
         EDIT: svgIcon('<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>', 14),
         DELETE: svgIcon('<path d="M18 6 6 18M6 6l12 12"/>', 12),
@@ -3618,6 +3619,11 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.2.15', '27 сентября 2026', [
+            'Паки стикеров из архива: папка в .zip = пак, картинки встают как есть (правила — у кнопки в панели стикеров)',
+            'Паки стикеров одинаковые на всех устройствах одного аккаунта',
+            'Галочка ИТД X держится за аккаунт, а не за ник — смена ника её не снимает',
+            'Фон рисуется на частоте экрана (90, 120, 144 Гц) и сам возвращается к ней после подтормаживаний']],
         ['3.2.14', '27 сентября 2026', [
             'На своих постах — кнопка «обновить» слева от «…»: лайки, комменты и просмотры обновляются без перезагрузки страницы',
             'Меньше запросов к сайту: «Клуб ИТД X» и автолайки не спрашивают профиль каждого участника, мод не повторяет запросы сайта при загрузке']],
@@ -4526,6 +4532,126 @@
             setInterval(() => syncPacks(false), 10 * 60 * 1000);
         })();
 
+        // ---- Паки из архива (.zip): папка = пак (имя папки — название), внутри — картинки, как есть (без обрезки).
+        // Картинки прямо в корне архива — пак с именем архива. Одна общая папка сверху («Мои стикеры/Коты/…»)
+        // пропускается. ZIP разбираем сами: оглавление в конце файла, сжатие — deflate (DecompressionStream).
+        // Имена: флаг UTF-8 — UTF-8; иначе UTF-8, если читается, иначе кодировка DOS (архивы Windows с кириллицей)
+        const ZIP_IMG = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+        const ZIP_LIMITS = { packs: 20, perPack: 120, total: 300, bytes: 5 * 1024 * 1024 };
+        async function readZip(file) {
+            const buf = new Uint8Array(await file.arrayBuffer()), dv = new DataView(buf.buffer);
+            let eocd = -1;
+            for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+            if (eocd < 0) throw new Error('это не zip-архив');
+            const count = dv.getUint16(eocd + 10, true);
+            let at = dv.getUint32(eocd + 16, true);
+            const utf8 = new TextDecoder('utf-8', { fatal: true }), dos = new TextDecoder('ibm866');
+            const entries = [];
+            for (let k = 0; k < count; k++) {
+                if (dv.getUint32(at, true) !== 0x02014b50) throw new Error('архив повреждён');
+                const flags = dv.getUint16(at + 8, true), method = dv.getUint16(at + 10, true);
+                const csize = dv.getUint32(at + 20, true), size = dv.getUint32(at + 24, true);
+                const nlen = dv.getUint16(at + 28, true), xlen = dv.getUint16(at + 30, true), clen = dv.getUint16(at + 32, true);
+                const local = dv.getUint32(at + 42, true), raw = buf.subarray(at + 46, at + 46 + nlen);
+                let name;
+                try { name = flags & 0x800 ? new TextDecoder().decode(raw) : utf8.decode(raw); } catch (e) { name = dos.decode(raw); }
+                entries.push({ name: name.replace(/\\/g, '/'), method, csize, size, local });
+                at += 46 + nlen + xlen + clen;
+            }
+            entries.data = async e => {
+                const start = e.local + 30 + dv.getUint16(e.local + 26, true) + dv.getUint16(e.local + 28, true);
+                const bytes = buf.slice(start, start + e.csize);
+                if (e.method === 0) return bytes;
+                if (e.method !== 8) throw new Error('неизвестное сжатие');
+                return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+            };
+            return entries;
+        }
+        // архив → [{ name, files: [entry] }] по правилам выше
+        function zipPacks(entries, zipName) {
+            const imgs = entries.filter(e => {
+                const parts = e.name.split('/');
+                return !e.name.endsWith('/') && !parts.some(p => p.startsWith('.') || p === '__MACOSX') && ZIP_IMG[(parts.pop().split('.').pop() || '').toLowerCase()];
+            });
+            let paths = imgs.map(e => e.name.split('/'));
+            // одна общая папка сверху, а в ней ещё папки — пропускаем её
+            while (paths.length && paths.every(p => p.length > 2 && p[0] === paths[0][0])) paths = paths.map(p => p.slice(1));
+            const groups = new Map();
+            imgs.forEach((e, i) => {
+                const p = paths[i], pack = p.length > 1 ? p[0] : zipName.replace(/\.zip$/i, '');
+                if (!groups.has(pack)) groups.set(pack, []);
+                groups.get(pack).push(e);
+            });
+            return [...groups].map(([name, files]) => ({ name: name.trim().slice(0, MAX_NAME_LENGTH) || DEFAULT_PACK_NAME, files: files.sort((a, b) => a.name.localeCompare(b.name, 'ru', { numeric: true })) }));
+        }
+        function openZipImport() {
+            if (!stickerPanel || stickerPanel.querySelector('.vp-sp-import')) return;
+            exitEditMode();
+            const card = el('div', 'vp-sp-import', `<b>Паки из архива</b>
+                <ul>
+                    <li>Архив <b style="font-size:inherit">.zip</b></li>
+                    <li>Папка в архиве = пак, имя папки = название пака</li>
+                    <li>В папке — картинки png, jpg, gif, webp (до 5 МБ); встают как есть, без обрезки</li>
+                    <li>Картинки прямо в архиве, без папки, — пак с именем архива</li>
+                </ul>
+                <pre>стикеры.zip
+├ Коты/
+│  ├ 1.png
+│  └ 2.gif
+└ Мемы/
+   └ шрек.jpg</pre>
+                <div class="vp-imp-status"></div>
+                <div class="vp-imp-btns"><button type="button" class="vp-imp-cancel">Отмена</button><button type="button" class="vp-imp-go">Выбрать архив</button></div>`);
+            stickerPanel.appendChild(card);
+            const status = card.querySelector('.vp-imp-status'), go = card.querySelector('.vp-imp-go'), cancel = card.querySelector('.vp-imp-cancel');
+            let busy = false, stop = false;
+            cancel.onclick = () => { if (busy) { stop = true; cancel.disabled = true; status.textContent = 'Останавливаю…'; } else card.remove(); };
+            go.onclick = () => {
+                const input = el('input');
+                input.type = 'file';
+                input.accept = '.zip,application/zip';
+                input.onchange = async () => {
+                    const file = input.files[0];
+                    if (!file) return;
+                    busy = true; go.disabled = true;
+                    try {
+                        status.textContent = 'Читаю архив…';
+                        const entries = await readZip(file);
+                        const packs = zipPacks(entries, file.name).slice(0, ZIP_LIMITS.packs);
+                        const total = Math.min(ZIP_LIMITS.total, packs.reduce((n, pk) => n + Math.min(pk.files.length, ZIP_LIMITS.perPack), 0));
+                        if (!total) throw new Error('в архиве нет картинок по правилам');
+                        let done = 0, skipped = 0;
+                        for (const pk of packs) {
+                            if (stop || done >= total) break;
+                            const pack = { id: 'user_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), name: pk.name, stickers: [] };
+                            for (const e of pk.files.slice(0, ZIP_LIMITS.perPack)) {
+                                if (stop || done >= total) break;
+                                status.textContent = `Загружаю «${pk.name}»: ${done + 1} из ${total}…`;
+                                try {
+                                    if (e.size > ZIP_LIMITS.bytes) throw new Error('больше 5 МБ');
+                                    const base = e.name.split('/').pop(), type = ZIP_IMG[base.split('.').pop().toLowerCase()];
+                                    const data = await uploadImageToServer(new File([await entries.data(e)], base, { type }));
+                                    pack.stickers.push(data);
+                                } catch (err) { skipped++; }
+                                done++;
+                            }
+                            if (pack.stickers.length) { userPacks.push(pack); saveUserPacks(); }
+                        }
+                        rebuildPanel();
+                        const left = stickerPanel.querySelector('.vp-sp-import');
+                        if (left) left.remove();
+                        showPanel();
+                        if (skipped) alert(`Готово. Не загрузились: ${skipped} (слишком большие или битые картинки)`);
+                    } catch (err) {
+                        status.textContent = 'Не вышло: ' + (err && err.message || err);
+                        logErr('паки из архива', err);
+                        busy = false; go.disabled = false;
+                    }
+                };
+                input.click();
+            };
+        }
+
         function addToRecent(sticker) {
             recentStickers = [sticker, ...recentStickers.filter(s => s.id !== sticker.id)].slice(0, 30);
             saveRecent();
@@ -4590,6 +4716,20 @@
                 border-radius: 20px; border: 1px solid var(--border-color,rgba(255,255,255,0.1)); z-index: 10000;
                 width: ${PANEL_WIDTH}px; height: 440px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); overflow: hidden; }
             .sticker-panel.vp-open { display: flex; }
+            .vp-sp-import { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; gap: 10px; padding: 16px;
+                background: var(--block-bg,#1e1e2e); border-radius: inherit; font-size: 13px; line-height: 1.4; color: var(--text-primary,#fff); overflow: auto; }
+            html.vp-glass .vp-sp-import { background: rgba(24,24,24,.96); }
+            html.vp-glass.vp-light .vp-sp-import { background: rgba(255,255,255,.97); }
+            .vp-sp-import b { font-size: 15px; }
+            .vp-sp-import ul { margin: 0; padding-left: 18px; list-style: disc; color: var(--text-secondary,rgba(255,255,255,.7)); }
+            .vp-sp-import li + li { margin-top: 4px; }
+            .vp-sp-import pre { margin: 0; padding: 8px 10px; border-radius: 10px; background: rgba(128,128,128,.14); font-size: 12px; line-height: 1.35; white-space: pre; }
+            .vp-sp-import .vp-imp-btns { display: flex; gap: 8px; margin-top: auto; }
+            .vp-sp-import button { flex: 1; height: 38px; border: 0; border-radius: 12px; cursor: pointer; font: inherit; font-weight: 600;
+                background: rgba(128,128,128,.18); color: inherit; }
+            .vp-sp-import button.vp-imp-go { background: var(--accent-primary,#0080FF); color: #fff; }
+            .vp-sp-import button:disabled { opacity: .5; cursor: default; }
+            .vp-sp-import .vp-imp-status { min-height: 18px; color: var(--text-secondary,rgba(255,255,255,.7)); }
             .vp-sp-head { display: flex; align-items: center; padding: 8px; border-bottom: 1px solid var(--border-color,rgba(255,255,255,0.1));
                 gap: 4px; flex-shrink: 0; }
             .vp-sp-tab { background: transparent; border: none; width: 32px; height: 32px; border-radius: 12px; cursor: pointer;
@@ -4870,7 +5010,10 @@
                 enterEditMode(pack.id);
                 showPanel();
             };
-            header.append(recentBtn, tabsRow, addPackBtn);
+            const zipBtn = el('button', 'vp-sp-tab', ICONS.ZIP_PACK);
+            zipBtn.title = 'Паки из архива';
+            zipBtn.onclick = () => openZipImport();
+            header.append(recentBtn, tabsRow, addPackBtn, zipBtn);
 
             scrollContainer = el('div', 'vp-sp-body');
             scrollContainer.addEventListener('wheel', e => e.stopPropagation(), { passive: true });
@@ -5217,6 +5360,7 @@
             hideTimeout = setTimeout(() => {
                 if (!stickerPanel || !stickerPanel.classList.contains('vp-open')) return;
                 if (stickerPanel.classList.contains('vp-drag')) return hidePanel(delay);   // тащат стикер — не закрывать
+                if (stickerPanel.querySelector('.vp-sp-import')) return hidePanel(delay);   // импорт архива — тоже
                 stickerPanel.classList.remove('vp-open');
                 exitEditMode();
                 enablePageScroll();
