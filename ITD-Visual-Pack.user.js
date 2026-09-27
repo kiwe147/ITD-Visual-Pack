@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.9
+// @version      3.2.8
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -171,14 +171,6 @@
     // План по времени. Редкая — та же классика, но поставлена круче: «Д» летит в замедлении
     // (влетает, почти зависает, врезается), X влетает целиком и врезается, после — пауза на логотипе.
     function introPlan(rare) {
-        // «Разрез»: тишина с гулом → слово обрушивается и впечатывается, по экрану трещины → два удара
-        // клинком: неоновый X режет весь экран из угла в угол → экран распадается на четыре куска
-        if (rare === 'cut') {
-            const SLAM = 460, CUT = [1180, 1360], CUT_DRAW = 170;
-            const EXIT = CUT[1] + CUT_DRAW + 330;
-            // LOCK/FLY/X — для общего кода (удар слова = «замок» всех букв)
-            return { SLAM, CUT, CUT_DRAW, LOCK: [SLAM, SLAM, SLAM], FLY: [0, 0, 0], X: CUT[0], X_DRAW: CUT_DRAW, X_GAP: CUT[1] - CUT[0], EXIT };
-        }
         // «Сборка»: буквы собираются из тысяч осколков (трещотка), X прочерчивается как обычно и крутится,
         // как вентиль сейфа — щелчками по 30°: оборот вправо, пол-оборота назад, пол-оборота вправо; клац
         if (rare === 'assemble') {
@@ -358,45 +350,6 @@
             src.start(t, Math.random() * 0.5);
             src.stop(t + 0.05);
         }
-        if (rare === 'cut') {
-            // гул нарастает до удара
-            const rum = ctx.createBufferSource();
-            rum.buffer = noise; rum.loop = true;
-            const rlp = ctx.createBiquadFilter();
-            rlp.type = 'lowpass';
-            rlp.frequency.setValueAtTime(60, at(0));
-            rlp.frequency.exponentialRampToValueAtTime(420, at(P.SLAM));
-            const rg = ctx.createGain();
-            rg.gain.setValueAtTime(0.0001, at(0));
-            rg.gain.exponentialRampToValueAtTime(0.7, at(P.SLAM - 10));
-            rg.gain.exponentialRampToValueAtTime(0.0001, at(P.SLAM + 40));
-            rum.connect(rlp).connect(rg).connect(master);
-            rum.start(at(0)); rum.stop(at(P.SLAM + 60));
-            // удар: тяжёлый лязг, бас и треск стекла
-            clank(at(P.SLAM), true);
-            subDrop(at(P.SLAM));
-            for (let k = 0; k < 16; k++) tick(at(P.SLAM + 10 + Math.pow(k / 16, 1.6) * 260), 0.5 * (1 - k / 20), 1500 + Math.random() * 3500);
-            // два удара клинком
-            P.CUT.forEach(t => { slash(at(t), P.CUT_DRAW / 1000); whoosh(at(t - 60), 0.18); });
-            // экран рассыпается: хлопок и звон осколков
-            const sh = ctx.createBufferSource();
-            sh.buffer = noise;
-            const sbp = ctx.createBiquadFilter();
-            sbp.type = 'bandpass'; sbp.Q.value = 0.8; sbp.frequency.value = 2800;
-            const sg = ctx.createGain();
-            env(sg.gain, at(P.EXIT), 0.8, 0.004, 0.5);
-            sh.connect(sbp).connect(sg).connect(master); sg.connect(echo);
-            sh.start(at(P.EXIT)); sh.stop(at(P.EXIT + 700));
-            for (let k = 0; k < 22; k++) {
-                const o = ctx.createOscillator(), og = ctx.createGain(), t = at(P.EXIT + 20 + Math.random() * 520);
-                o.type = 'sine'; o.frequency.value = 3000 + Math.random() * 4000;
-                env(og.gain, t, 0.05, 0.001, 0.08 + Math.random() * 0.12);
-                o.connect(og).connect(master); og.connect(echo);
-                o.start(t); o.stop(t + 0.3);
-            }
-            whoosh(at(P.EXIT + 40), 0.4);
-            return;
-        }
         if (rare === 'assemble') {
             P.LOCK.forEach((lock, i) => {
                 // «тррррр»: щелчки всё чаще и громче к моменту, когда буква сложилась
@@ -433,7 +386,7 @@
     }
     function playIntro(mode, variant) {
         const root = document.documentElement;
-        const rare = variant === true, asm = variant === 'assemble', cut = variant === 'cut';
+        const rare = variant === true, asm = variant === 'assemble';
         const light = introIsLight();
         const css = document.createElement('style');
         css.textContent = `
@@ -463,12 +416,6 @@
             .vpi-xpulse { opacity: 0; }
             /* «сборка»: осколки букв рисуются на холсте поверх половин */
             .vpi-shards { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-            /* «Разрез»: фон под кусками, трещины, X через весь экран */
-            .vpi-cracks, .vpi-cutx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
-            .vpi-cracks { filter: drop-shadow(0 0 3px rgba(255, 255, 255, .5)); }
-            .vpi-light .vpi-cracks { filter: none; }
-            .vpi-cracks path { fill: none; stroke: var(--vpi-ink); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: .8; }
-            .vpi-cutx { filter: drop-shadow(0 0 14px rgba(124, 77, 255, .9)); }
         `;
         const el = (cls, parent, text) => {
             const e = document.createElement('div');
@@ -478,13 +425,7 @@
             return e;
         };
         const ov = el('vpi-overlay' + (light ? ' vpi-light' : ''), root);
-        // «Разрез»: не две створки, а четыре треугольника по диагоналям экрана (по линиям X);
-        // под ними — сплошной фон, чтобы стыки кусков не просвечивали до распада
-        // поверх кусков до распада — цельный слой (последний в halves): стыки по диагоналям не просвечивают
-        const halves = cut
-            ? ['0 0,100% 0,50% 50%', '100% 0,100% 100%,50% 50%', '0 100%,100% 100%,50% 50%', '0 0,0 100%,50% 50%', '']
-                .map(pts => { const h = el('vpi-half', ov); if (pts) h.style.clipPath = `polygon(${pts})`; return h; })
-            : [0, 1].map(i => el('vpi-half vpi-half-' + i, ov));
+        const halves = [0, 1].map(i => el('vpi-half vpi-half-' + i, ov));
         const worlds = halves.map(h => el('vpi-world', h));
         // X — за словом: неоновый контур (цветная линия, внутри чёрная), как на иконке
         const xMarks = worlds.map((w, n) => {
@@ -545,73 +486,6 @@
 
         const letters = words.map(w => [...'ИТД'].map(ch => el('vpi-letter', w, ch)));
         const wr = worlds[0].getBoundingClientRect();
-        if (cut) {
-            // места слова и букв — до «удара из камеры» (после него они на старте в 3.6 раза больше)
-            const wb = words[0].getBoundingClientRect();
-            const lrs = letters[0].map(box => box.getBoundingClientRect());
-            // слово целиком — из огромного размытого к своему месту с ускорением, удар, сжатие
-            playBoth(words, [
-                { transform: 'scale(3.6)', opacity: 0, filter: `blur(8px) drop-shadow(0 0 0 rgba(${GLOW},0))`, easing: 'cubic-bezier(.7,0,1,.5)' },
-                { opacity: 1, offset: .35 },
-                { transform: 'scale(1.1, .88)', opacity: 1, filter: `blur(0px) drop-shadow(0 0 40px rgba(${GLOW},1))`, offset: .72, easing: 'cubic-bezier(.2,.9,.3,1)' },
-                { transform: 'none', opacity: 1, filter: `blur(0px) drop-shadow(0 0 12px rgba(${GLOW},.35))` }
-            ], { delay: PLAN.SLAM - 330, duration: 460 });
-            shake(PLAN.SLAM, 22);
-            play(flash, [{ opacity: 0 }, { opacity: .35, offset: .08 }, { opacity: 0 }], { delay: PLAN.SLAM, duration: 420, fill: 'none' });
-            lrs.forEach((lr, i) => {
-                burst(PLAN.SLAM, lr.left - wr.left + lr.width / 2, lr.top - wr.top + lr.height / 2, lr.height * 1.6, i === 1);
-            });
-            // трещины от места удара: ломаные лучи с ответвлениями (одни и те же во всех кусках)
-            const W = innerWidth, H = innerHeight, cx = wb.left + wb.width / 2, cy = wb.top + wb.height / 2;
-            let d = '';
-            for (let k = 0; k < 14; k++) {
-                let ang = k / 14 * Math.PI * 2 + rnd(-.18, .18), r = Math.max(wb.width, wb.height) * .32;
-                let x = cx + Math.cos(ang) * r, y = cy + Math.sin(ang) * r;
-                d += `M${x.toFixed(1)} ${y.toFixed(1)}`;
-                const len = vmax * rnd(.25, .65), n = 6 + Math.floor(rnd(0, 4));
-                for (let j = 0; j < n; j++) {
-                    ang += rnd(-.35, .35);
-                    x += Math.cos(ang) * len / n; y += Math.sin(ang) * len / n;
-                    d += `L${x.toFixed(1)} ${y.toFixed(1)}`;
-                    if (j === 2 && rnd(0, 1) < .6) {                // ответвление
-                        const b = ang + rnd(.5, .9) * (rnd(0, 1) < .5 ? -1 : 1), bl = len * rnd(.15, .3);
-                        d += `M${x.toFixed(1)} ${y.toFixed(1)}L${(x + Math.cos(b) * bl).toFixed(1)} ${(y + Math.sin(b) * bl).toFixed(1)}M${x.toFixed(1)} ${y.toFixed(1)}`;
-                    }
-                }
-            }
-            const cracks = worlds.map(w => {
-                w.insertAdjacentHTML('afterbegin', `<svg class="vpi-cracks" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path pathLength="1" d="${d}"/></svg>`);
-                return w.firstElementChild.firstElementChild;
-            });
-            playBoth(cracks, [{ strokeDasharray: '1 1', strokeDashoffset: 1 }, { strokeDasharray: '1 1', strokeDashoffset: 0 }],
-                { delay: PLAN.SLAM + 10, duration: 260, easing: 'cubic-bezier(.1,.8,.3,1)' });
-            // X через весь экран — из угла в угол (линии совпадают со стыками кусков)
-            const e = 30, d1 = `M${-e} ${-e}L${W + e} ${H + e}`, d2 = `M${W + e} ${-e}L${-e} ${H + e}`;
-            const cutx = worlds.map((w, n) => {
-                w.insertAdjacentHTML('beforeend', `<svg class="vpi-cutx" viewBox="0 0 ${W} ${H}">
-                    <defs><linearGradient id="vpiC${n}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${W}" y2="${H}">
-                        <stop offset="0" stop-color="#00e5ff"/><stop offset=".5" stop-color="#7c4dff"/><stop offset="1" stop-color="#ff3d9a"/>
-                    </linearGradient></defs><g fill="none" stroke-linecap="round">
-                    <path class="vpi-c1" d="${d1}" pathLength="1" stroke="url(#vpiC${n})" stroke-width="14"/>
-                    <path class="vpi-c1 vpi-hole" d="${d1}" pathLength="1" stroke-width="6"/>
-                    <path class="vpi-c2" d="${d2}" pathLength="1" stroke="url(#vpiC${n})" stroke-width="14"/>
-                    <path class="vpi-c2 vpi-hole" d="${d2}" pathLength="1" stroke-width="6"/></g></svg>`);
-                return w.lastElementChild;
-            });
-            ['.vpi-c1', '.vpi-c2'].forEach((sel, i) => {
-                cutx.forEach(c => c.querySelectorAll(sel).forEach(path => play(path, [
-                    { strokeDasharray: '1 1', strokeDashoffset: 1 }, { strokeDasharray: '1 1', strokeDashoffset: 0 }
-                ], { delay: PLAN.CUT[i], duration: PLAN.CUT_DRAW, easing: 'cubic-bezier(.8,0,.2,1)' })));
-                play(flash, [{ opacity: 0 }, { opacity: .12, offset: .4 }, { opacity: 0 }], { delay: PLAN.CUT[i] + PLAN.CUT_DRAW * .5, duration: 200, fill: 'none' });
-                shake(PLAN.CUT[i] + PLAN.CUT_DRAW * .8, 9);
-            });
-            playBoth(cutx, [
-                { filter: 'drop-shadow(0 0 14px rgba(124,77,255,.9))' },
-                { filter: 'drop-shadow(0 0 34px rgba(124,77,255,1)) brightness(1.4)', offset: .6 },
-                { filter: 'drop-shadow(0 0 24px rgba(124,77,255,1)) brightness(1.2)' }
-            ], { delay: PLAN.CUT[1] + PLAN.CUT_DRAW, duration: EXIT - PLAN.CUT[1] - PLAN.CUT_DRAW, fill: 'forwards' });
-            xMarks.forEach(x => x.remove());               // маленький X за словом здесь не нужен
-        }
         if (asm) letters[0].forEach((box, i) => {
             const lock = LOCK[i], lr = box.getBoundingClientRect();
             playBoth([letters[0][i], letters[1][i]], [
@@ -622,7 +496,7 @@
             shake(lock, SHAKE[i]);
             burst(lock, lr.left - wr.left + lr.width / 2, lr.top - wr.top + lr.height / 2, lr.height * (i === 2 ? 1.8 : 1.3), i === 2);
         });
-        if (!asm && !cut) letters[0].forEach((box, i) => {
+        if (!asm) letters[0].forEach((box, i) => {
             const lock = LOCK[i], f = FROM[i], fly = FLY[i];
             const lr = box.getBoundingClientRect();
             const cx = lr.left - wr.left + lr.width / 2, cy = lr.top - wr.top + lr.height / 2;
@@ -662,15 +536,15 @@
         });
 
         // X: два росчерка крест-накрест за буквами, потом вспышка свечения
-        if (!cut) ['.vpi-x1', '.vpi-x2'].forEach((sel, i) => {
+        ['.vpi-x1', '.vpi-x2'].forEach((sel, i) => {
             xMarks.forEach(xm => xm.querySelectorAll(sel).forEach(path => play(path, [
                 { strokeDasharray: '1 1', strokeDashoffset: 1 },
                 { strokeDasharray: '1 1', strokeDashoffset: 0 }
             ], { delay: X + i * X_GAP, duration: X_DRAW, easing: 'cubic-bezier(.7,0,.3,1)' })));
             play(flash, [{ opacity: 0 }, { opacity: .05, offset: .5 }, { opacity: 0 }], { delay: X + i * X_GAP + X_DRAW * .6, duration: 160, fill: 'none' });
         });
-        if (!cut) shake(X + X_GAP + X_DRAW * .8, rare ? 10 : 3);
-        if (!cut) playBoth(xMarks, [
+        shake(X + X_GAP + X_DRAW * .8, rare ? 10 : 3);
+        playBoth(xMarks, [
             { filter: 'drop-shadow(0 0 0 rgba(124,77,255,0))' },
             { filter: 'drop-shadow(0 0 26px rgba(124,77,255,.95))', offset: .35 },
             { filter: 'drop-shadow(0 0 12px rgba(124,77,255,.55))' }
@@ -795,27 +669,16 @@
 
         // Уход: по центру вспыхивает щель, экран делится ровно пополам — левая половина
         // уезжает влево, правая вправо, под ними уже сайт.
-        let out;
-        if (cut) {
-            // четыре куска разлетаются от центра с поворотом, под ними — сайт
-            play(halves[4], [{ opacity: 1 }, { opacity: 0 }], { delay: EXIT, duration: 1, fill: 'forwards' });
-            const fly = [[0, -62, -9], [62, 0, 11], [0, 62, 8], [-62, 0, -12]];
-            out = halves.slice(0, 4).map((h, i) => play(h, [
-                { transform: 'none' },
-                { transform: `translate(${fly[i][0]}%, ${fly[i][1]}%) rotate(${fly[i][2]}deg) scale(1.04)` }
-            ], { delay: EXIT, duration: 620, easing: 'cubic-bezier(.45,0,.8,.3)', fill: 'forwards' }))[3];
-        } else {
-            play(seam, [
-                { opacity: 0, transform: 'scaleY(0)' },
-                { opacity: 1, transform: 'scaleY(1)', offset: .55 },
-                { opacity: 0, transform: 'scaleY(1)' }
-            ], { delay: EXIT - 140, duration: 260, easing: 'ease-out', fill: 'none' });
-            const doors = [-1, 1].map((dir, i) => play(halves[i], [
-                { transform: 'translateX(0)' },
-                { transform: `translateX(${dir * 52}%)` }
-            ], { delay: EXIT, duration: SPLIT, easing: 'cubic-bezier(.7,0,.3,1)', fill: 'forwards' }));
-            out = doors[1];
-        }
+        play(seam, [
+            { opacity: 0, transform: 'scaleY(0)' },
+            { opacity: 1, transform: 'scaleY(1)', offset: .55 },
+            { opacity: 0, transform: 'scaleY(1)' }
+        ], { delay: EXIT - 140, duration: 260, easing: 'ease-out', fill: 'none' });
+        const doors = [-1, 1].map((dir, i) => play(halves[i], [
+            { transform: 'translateX(0)' },
+            { transform: `translateX(${dir * 52}%)` }
+        ], { delay: EXIT, duration: SPLIT, easing: 'cubic-bezier(.7,0,.3,1)', fill: 'forwards' }));
+        const out = doors[1];
 
         // Звук: браузер пускает его только после касания страницы. На компьютере обычно пускает сразу,
         // на телефоне — нет. Поэтому на телефоне заставка ждёт касания: тёмный экран, в центре «дышит»
@@ -3169,7 +3032,6 @@
                 <button type="button" data-act="diag">${svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4M8.5 11l1.8 1.8 3.4-3.6"/>', 18)}<span>Диагностика</span></button>
                 <button type="button" data-act="rare">${svgIcon('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.3 6L12 16.4 6.6 19.4l1.3-6L3.4 9.3l6-.7z"/>', 18)}<span>Редкая заставка</span></button>
                 <button type="button" data-act="assemble">${svgIcon('<path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z"/>', 18)}<span>Заставка «сборка»</span></button>
-                <button type="button" data-act="cut">${svgIcon('<path d="M4 4l16 16M20 4 4 20"/>', 18)}<span>Заставка «разрез»</span></button>
                 <button type="button" data-act="fps">${svgIcon('<path d="M3 17l5-6 4 3 5-7 4 4"/>', 18)}<span>Счётчик FPS</span></button>
                 <button type="button" data-act="face">${svgIcon('<rect x="4" y="4" width="16" height="16" rx="8"/><path d="M8 15l2.5-3 2 2 1.5-2 2 3"/>', 18)}<span>Своя картинка кнопки</span></button>
                 <button type="button" data-act="off">${svgIcon('<path d="M12 3v8"/><path d="M6.3 7a8 8 0 1 0 11.4 0"/>', 18)}<span>Мод выкл (до закрытия вкладки)</span></button></div>`;
@@ -3228,7 +3090,6 @@
         act('fps', toggleFps);
         act('rare', () => playIntro(IS_PHONE ? 'silent' : 'desk', true));
         act('assemble', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'assemble'));
-        act('cut', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'cut'));
         // своя картинка кнопки — хранится только у тебя (в настройках скрипта), 96 px; пустой выбор — вернуть «A»
         act('face', () => {
             if (GM_getValue('fabFace', '') && confirm('Вернуть обычную «A»? (Отмена — выбрать другую картинку)')) {
