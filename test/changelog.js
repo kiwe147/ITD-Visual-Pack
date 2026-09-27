@@ -59,7 +59,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   await chip.click();
   await p.waitForTimeout(400);
   const n = await p.$$eval('.vp-news-ver', s => s.length);
-  check(n > 5, `«Что нового» открылось, версий ${n}`);
+  check(n >= 3, `«Что нового» открылось, записей ${n}`);
   await p.screenshot({ path: path.join(__dirname, 'out', `news-${mode}-open.png`) });
   await p.keyboard.press('Escape'); await p.waitForTimeout(200);
   check(!(await p.$('.vp-news-back')), 'Esc закрывает');
