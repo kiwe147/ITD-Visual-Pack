@@ -1558,7 +1558,7 @@
     const VERIFICATION_STORAGE_KEY = 'itd_verified_users';
     // Пост, под которым хранятся паки стикеров (синхронизация между устройствами одного аккаунта).
     // Пусто — синхронизация выключена, паки живут только в этом браузере
-    const STICKER_POST_ID = '';
+    const STICKER_POST_ID = '92f2913c-18be-499a-bc03-97aed0947b34';   // старый пост владельца «Гань Юй», 25.02.2026
     let isVerifying = false;
 
     let globalHue = 0;
@@ -1602,10 +1602,42 @@
         GM_setValue('itd_auto_like_users', JSON.stringify(autoLikeUsers));
     }
 
+    // Список автолайков — по никам, а ник можно сменить: тогда старый ник даёт 404 (раньше — каждые
+    // 2–5 минут, бесконечно). Номер аккаунта каждого запоминаем (из данных галочек); ник пропал —
+    // ищем по номеру новый и переносим отметку; не нашли — до перезагрузки этот ник не трогаем.
+    const autoLikeIds = JSON.parse(GM_getValue('itd_auto_like_ids', '{}') || '{}');
+    const autoLikeGone = new Set();
+    function rememberAutoLikeId(username) {
+        const id = (verifiedInfo(username) || {}).id;
+        if (id && autoLikeIds[username] !== id) { autoLikeIds[username] = id; GM_setValue('itd_auto_like_ids', JSON.stringify(autoLikeIds)); }
+    }
+    function renamedAutoLike(username) {
+        const id = autoLikeIds[username];
+        if (!id) return null;
+        let all = {};
+        try { all = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}') || {}; } catch (e) { }
+        const now = Object.keys(all).find(n => all[n] && all[n].id === id && n !== username);
+        if (!now) return null;
+        autoLikeUsers[now] = true;
+        delete autoLikeUsers[username];
+        autoLikeIds[now] = id;
+        delete autoLikeIds[username];
+        saveAutoLikeUsers();
+        GM_setValue('itd_auto_like_ids', JSON.stringify(autoLikeIds));
+        return now;
+    }
     // лайкнуть посты пользователя за последние сутки, которые ещё не лайкнуты
     async function likePostsForUser(username) {
+        if (autoLikeGone.has(username)) return;
+        rememberAutoLikeId(username);
         try {
             const res = await api(`/api/posts/user/${username}?limit=7`);
+            if (res.status === 404) {
+                const now = renamedAutoLike(username);
+                if (now) return likePostsForUser(now);
+                autoLikeGone.add(username);
+                return;
+            }
             if (!res.ok) return;
             const data = await res.json();
             const posts = (data.data?.posts || data.posts || [])
@@ -3719,7 +3751,8 @@
             'Паки стикеров из архива: папка в .zip = пак, картинки встают как есть (правила — у кнопки в панели стикеров)',
             'Паки стикеров одинаковые на всех устройствах одного аккаунта',
             'Галочка ИТД X держится за аккаунт, а не за ник — смена ника её не снимает',
-            'Фон рисуется на частоте экрана (90, 120, 144 Гц) и сам возвращается к ней после подтормаживаний']],
+            'Фон рисуется на частоте экрана (90, 120, 144 Гц) и сам возвращается к ней после подтормаживаний',
+            'Автолайки не теряют человека, если он сменил ник']],
         ['3.2.14', '27 сентября 2026', [
             'На своих постах — кнопка «обновить» слева от «…»: лайки, комменты и просмотры обновляются без перезагрузки страницы',
             'Меньше запросов к сайту: «Клуб ИТД X» и автолайки не спрашивают профиль каждого участника, мод не повторяет запросы сайта при загрузке']],
@@ -6715,7 +6748,7 @@
             emojiCanvas = document.createElement('canvas');
             emojiCanvas.width = emojiCanvas.height = 64;
         }
-        const ctx = emojiCanvas.getContext('2d');
+        const ctx = emojiCanvas.getContext('2d', { willReadFrequently: true });
         ctx.fillStyle = '#fff';
         ctx.fillRect(0, 0, 64, 64);
         ctx.font = '48px serif';
