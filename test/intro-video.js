@@ -1,5 +1,5 @@
 // Видео заставки: кадры по времени анимаций (30 к/с) + звук тем же кодом (OfflineAudioContext) → mp4.
-// Запуск:  node test/intro-video.js снимок.html [normal|rare] [dark|light] [выход.mp4]
+// Запуск:  node test/intro-video.js снимок.html [normal|rare|assemble] [dark|light] [выход.mp4]
 // Нужен ffmpeg (FFMPEG=путь). Кадры и звук — во временной папке test/out/_vid.
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -18,12 +18,14 @@ const URL0 = 'https://xn--d1ah4a.com/';
   const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
   await p.route('**/*', r => r.request().url() === URL0 ? r.fulfill({ contentType: 'text/html', body: snap }) : r.fulfill({ status: 404, body: '' }));
   await p.addInitScript(([m, rare]) => {
-    const s = { introEnabled: true, backgroundEnabled: false };
+    const s = { introEnabled: true, backgroundEnabled: false, introPreview: rare };
     window.GM_getValue = (k, d) => k in s ? s[k] : d; window.GM_setValue = (k, v) => { s[k] = v; };
     window.GM_xmlhttpRequest = o => setTimeout(() => o.onerror && o.onerror('x'), 0);
     window.GM_info = { script: { version: 't' }, scriptMetaStr: m }; window.unsafeWindow = window;
-    if (rare) { const r = Math.random; let first = true; Math.random = () => first ? (first = false, 0.001) : r(); }
-  }, [src.slice(0, src.indexOf('==/UserScript==')), kind === 'rare']);
+    // кадры снимаются медленнее настоящего времени — страховочный таймер заставки (убрать её, если
+    // анимации не доиграли) не должен сработать посреди записи
+    const st = window.setTimeout; window.setTimeout = (f, ms, ...r) => ms >= 2500 ? 0 : st(f, ms, ...r);
+  }, [src.slice(0, src.indexOf('==/UserScript==')), kind === 'normal' ? '' : kind]);
   await p.goto(URL0);
   await p.evaluate(th => { document.documentElement.setAttribute('data-theme', th); document.querySelectorAll('.vpi-overlay').forEach(e => e.remove()); }, theme);
   await p.addScriptTag({ content: src });
@@ -35,6 +37,7 @@ const URL0 = 'https://xn--d1ah4a.com/';
   for (let i = 0; i < n; i++) {
     const t = i * 1000 / 30;
     await p.evaluate(t => document.getAnimations().forEach(a => { if (a.effect?.target?.closest?.('.vpi-overlay')) { a.pause(); a.currentTime = t; } }), t);
+    await p.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));   // холст «сборки» рисует в кадре
     await p.screenshot({ path: path.join(dir, `f${String(i).padStart(4, '0')}.png`) });
   }
   // звук: тот же introSound, отрисованный заранее
@@ -43,7 +46,7 @@ const URL0 = 'https://xn--d1ah4a.com/';
     const f = new Function('GM_getValue', code + '; return introSound;');
     const introSound = f((k, d) => d);
     const ctx = new OfflineAudioContext(2, Math.ceil(44100 * secs), 44100);
-    introSound(ctx, ms => Math.max(0, ms / 1000), rare);
+    introSound(ctx, ms => Math.max(0, ms / 1000), rare === 'rare' ? true : rare || false);
     const buf = await ctx.startRendering();
     const ch = [buf.getChannelData(0), buf.getChannelData(1)], len = buf.length;
     const dv = new DataView(new ArrayBuffer(44 + len * 4));
@@ -54,7 +57,7 @@ const URL0 = 'https://xn--d1ah4a.com/';
     for (let i = 0; i < len; i++) for (let c = 0; c < 2; c++) dv.setInt16(44 + i * 4 + c * 2, Math.max(-1, Math.min(1, ch[c][i] * 6)) * 32767, true);
     let bin = ''; const u8 = new Uint8Array(dv.buffer); for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode(...u8.subarray(i, i + 0x8000));
     return btoa(bin);
-  }, [code, kind === 'rare', total / 1000 + 1.8]);
+  }, [code, kind === 'normal' ? '' : kind, total / 1000 + 1.8]);
   fs.writeFileSync(path.join(dir, 'a.wav'), Buffer.from(wav, 'base64'));
   await b.close();
   execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-framerate', '30', '-i', path.join(dir, 'f%04d.png'), '-i', path.join(dir, 'a.wav'),

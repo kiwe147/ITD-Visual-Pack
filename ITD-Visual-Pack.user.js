@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.7
+// @version      3.2.8
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -162,8 +162,9 @@
         X_GAP: 150,                          // между росчерками
         SPLIT: 380,                          // уход: экран делится пополам и разъезжается
         IDLE: 3000,                          // телефон: ждём касания (со звуком), потом играем сами без звука
-        RARE: 0,                             // шанс редкой заставки (классика с постановкой, introPlan); 0 — пока не выпадает,
-                                             // владелец смотрит её из админ-островка; включать — 0.01
+        // редкие заставки: кинематографичная (true), «сборка», «обманка» (introPlan) — общий шанс 1%,
+        // внутри — любая из трёх поровну (у каждой по трети процента)
+        RARE: [[true, 0.01 / 3], ['assemble', 0.01 / 3], ['twist', 0.01 / 3]],
         RARE_HOLD: 550                       // редкая: пауза на готовом логотипе перед уходом, мс
     };
     INTRO.X = INTRO.LOCK[2] + 220;           // первый росчерк
@@ -171,6 +172,32 @@
     // План по времени. Редкая — та же классика, но поставлена круче: «Д» летит в замедлении
     // (влетает, почти зависает, врезается), X влетает целиком и врезается, после — пауза на логотипе.
     function introPlan(rare) {
+        // «Обманка»: И — как в классике, Т — как будто тоже, но отскакивает; Д в свой срок не прилетает —
+        // пауза, потом падает сверху наковальней (И и Т подпрыгивают от удара); буквы подпрыгивают волной;
+        // X не рисуется, а влетает сбоку сюрикеном, втыкается за словом и дрожит, как нож
+        if (rare === 'twist') {
+            const LOCK = [620, 1020, 1760], FLY = [520, 520, 230];
+            const BOUNCE = LOCK[1] + 250, WAVE = LOCK[2] + 330, X = WAVE + 420, STICK = X + 430;
+            return { LOCK, FLY, BOUNCE, WAVE, X, STICK, X_DRAW: 0, X_GAP: 0, EXIT: STICK + 480 };
+        }
+        // «Сборка»: буквы собираются из тысяч осколков (трещотка), X прочерчивается как обычно и крутится,
+        // как вентиль сейфа — щелчками по 30°: оборот вправо, пол-оборота назад, пол-оборота вправо; клац
+        if (rare === 'assemble') {
+            const LOCK = [1150, 1500, 1850], ASM = 950;
+            const X = LOCK[2] + 280, X_DRAW = INTRO.X_DRAW, X_GAP = INTRO.X_GAP;
+            const TICKS = [];
+            let t = X + X_GAP + X_DRAW + 260, a = 0;
+            [[12, 1], [6, -1], [6, 1]].forEach(([n, dir]) => {
+                for (let k = 0; k < n; k++) {
+                    t += 28 + 40 * Math.pow(k / (n - 1), 2);          // к концу поворота — медленнее
+                    a += 30 * dir;
+                    TICKS.push({ t: Math.round(t), a });
+                }
+                t += 150;                                          // смена направления
+            });
+            const LOCKED = TICKS[TICKS.length - 1].t + 90;
+            return { LOCK, ASM, FLY: LOCK.map(() => ASM), X, X_DRAW, X_GAP, TICKS, LOCKED, EXIT: LOCKED + 560 };
+        }
         if (!rare) return { LOCK: INTRO.LOCK, FLY: INTRO.LOCK.map(() => INTRO.FLY), X: INTRO.X, X_DRAW: INTRO.X_DRAW, X_GAP: INTRO.X_GAP, EXIT: INTRO.EXIT };
         const LOCK = [620, 1020, 1960], FLY = [520, 520, 1040];
         const X = LOCK[2] + 300, X_DRAW = 300, X_GAP = 70;
@@ -318,6 +345,77 @@
             o.stop(t + 0.3 + TAIL + 0.2);
         }
         const P = introPlan(rare);
+        // мелкий металлический щелчок: осколок встал / зубец вентиля
+        function tick(t, gain, freq) {
+            const src = ctx.createBufferSource();
+            src.buffer = noise;
+            const bp = ctx.createBiquadFilter();
+            bp.type = 'bandpass';
+            bp.Q.value = 6;
+            bp.frequency.value = freq;
+            const g = ctx.createGain();
+            env(g.gain, t, gain, 0.001, 0.02);
+            src.connect(bp).connect(g).connect(master);
+            src.start(t, Math.random() * 0.5);
+            src.stop(t + 0.05);
+        }
+        if (rare === 'twist') {
+            whoosh(at(P.LOCK[0] - P.FLY[0]), P.FLY[0] / 1000); clank(at(P.LOCK[0]), false);
+            whoosh(at(P.LOCK[1] - P.FLY[1]), P.FLY[1] / 1000); clank(at(P.LOCK[1]), false);
+            tick(at(P.BOUNCE), 0.5, 900); clank(at(P.BOUNCE + 10), false);        // Т приземлилась после отскока
+            // Д: свист падения сверху (тон вниз), наковальня
+            const fall = ctx.createOscillator(), fg = ctx.createGain();
+            fall.type = 'sine';
+            fall.frequency.setValueAtTime(1500, at(P.LOCK[2] - P.FLY[2]));
+            fall.frequency.exponentialRampToValueAtTime(260, at(P.LOCK[2]));
+            fg.gain.setValueAtTime(0.0001, at(P.LOCK[2] - P.FLY[2]));
+            fg.gain.exponentialRampToValueAtTime(0.18, at(P.LOCK[2] - 20));
+            fg.gain.exponentialRampToValueAtTime(0.0001, at(P.LOCK[2] + 10));
+            fall.connect(fg).connect(master);
+            fall.start(at(P.LOCK[2] - P.FLY[2])); fall.stop(at(P.LOCK[2] + 40));
+            clank(at(P.LOCK[2]), true);
+            subDrop(at(P.LOCK[2]));
+            [0, 80, 160].forEach(d => tick(at(P.WAVE + d + 60), 0.25, 1200));  // волна: мягкие стуки
+            // X: жужжание вращения (шум с «рубленой» громкостью), удар, звон дрожащего ножа
+            const whir = ctx.createBufferSource(), wbp = ctx.createBiquadFilter(), wg = ctx.createGain();
+            whir.buffer = noise; whir.loop = true;
+            wbp.type = 'bandpass'; wbp.Q.value = 2; wbp.frequency.value = 1800;
+            wg.gain.setValueAtTime(0.0001, at(P.X));
+            const dur = (P.STICK - P.X) / 1000;
+            for (let k = 0, n = 26; k < n; k++) {                  // лопасти: всё реже к удару
+                const tt = at(P.X) + dur * Math.pow(k / n, 0.8);
+                wg.gain.setValueAtTime(0.35 * (0.4 + 0.6 * k / n), tt);
+                wg.gain.setValueAtTime(0.02, tt + 0.012);
+            }
+            whir.connect(wbp).connect(wg).connect(master);
+            whir.start(at(P.X)); whir.stop(at(P.STICK));
+            clank(at(P.STICK), false);
+            const tw = ctx.createOscillator(), vib = ctx.createOscillator(), vg = ctx.createGain(), tg = ctx.createGain();
+            tw.type = 'triangle'; tw.frequency.value = 190;
+            vib.frequency.value = 24; vg.gain.value = 14;
+            vib.connect(vg).connect(tw.frequency);
+            env(tg.gain, at(P.STICK), 0.35, 0.005, 0.55);
+            tw.connect(tg).connect(master); tg.connect(echo);
+            tw.start(at(P.STICK)); vib.start(at(P.STICK)); tw.stop(at(P.STICK + 700)); vib.stop(at(P.STICK + 700));
+            whoosh(at(P.EXIT - 200), 0.26);
+            return;
+        }
+        if (rare === 'assemble') {
+            P.LOCK.forEach((lock, i) => {
+                // «тррррр»: щелчки всё чаще и громче к моменту, когда буква сложилась
+                for (let ms = lock - P.ASM + 120, k = 0; ms < lock - 30; k++) {
+                    const q = (ms - (lock - P.ASM)) / P.ASM;
+                    tick(at(ms), 0.08 + 0.22 * q, 2200 + Math.random() * 2600);
+                    ms += 26 - 17 * q + Math.random() * 4;
+                }
+                clank(at(lock), i === 2);
+            });
+            [0, P.X_GAP].forEach(d => slash(at(P.X + d), P.X_DRAW / 1000));
+            P.TICKS.forEach(tk => { tick(at(tk.t), 0.5, 1700); tick(at(tk.t + 6), 0.25, 3400); });
+            clank(at(P.LOCKED), true);
+            whoosh(at(P.EXIT - 200), 0.26);
+            return;
+        }
         P.LOCK.forEach((lock, i) => {
             whoosh(at(lock - P.FLY[i]), P.FLY[i] / 1000, rare && i === 2);
             clank(at(lock), i === 2);
@@ -336,8 +434,9 @@
         const t = document.documentElement.getAttribute('data-theme');
         return t ? t !== 'dark' : GM_getValue('siteTheme', 'dark') === 'light';
     }
-    function playIntro(mode, rare) {
+    function playIntro(mode, variant) {
         const root = document.documentElement;
+        const rare = variant === true, asm = variant === 'assemble', twist = variant === 'twist';
         const light = introIsLight();
         const css = document.createElement('style');
         css.textContent = `
@@ -365,6 +464,8 @@
             /* редкая: шлейф буквы — её «призраки», и неоновая волна от X */
             .vpi-ghost { position: absolute; }
             .vpi-xpulse { opacity: 0; }
+            /* «сборка»: осколки букв рисуются на холсте поверх половин */
+            .vpi-shards { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
         `;
         const el = (cls, parent, text) => {
             const e = document.createElement('div');
@@ -398,7 +499,8 @@
         root.style.overflow = 'hidden';
 
         const { SETTLE, FROM, SPLIT } = INTRO;
-        const { LOCK, FLY, X, X_DRAW, X_GAP, EXIT } = introPlan(rare);
+        const PLAN = introPlan(variant);
+        const { LOCK, FLY, X, X_DRAW, X_GAP, EXIT } = PLAN;
         const SHAKE = rare ? [5, 7, 16] : INTRO.SHAKE;          // редкая: «Д» после замедления бьёт сильнее
         // свечение букв при ударе: на тёмном — белое, на светлом — фиолетовое
         const GLOW = light ? '124,77,255' : '255,255,255';
@@ -434,7 +536,18 @@
 
         const letters = words.map(w => [...'ИТД'].map(ch => el('vpi-letter', w, ch)));
         const wr = worlds[0].getBoundingClientRect();
-        letters[0].forEach((box, i) => {
+        if (asm) letters[0].forEach((box, i) => {
+            const lock = LOCK[i], lr = box.getBoundingClientRect();
+            playBoth([letters[0][i], letters[1][i]], [
+                { opacity: 0, transform: 'none', filter: `drop-shadow(0 0 0 rgba(${GLOW},0))` },
+                { opacity: 1, transform: 'scale(1.07, .93)', filter: `drop-shadow(0 0 30px rgba(${GLOW},.9))`, offset: .25 },
+                { opacity: 1, transform: 'none', filter: `drop-shadow(0 0 10px rgba(${GLOW},.3))` }
+            ], { delay: lock - 25, duration: SETTLE + 120, easing: 'cubic-bezier(.2,.9,.3,1)' });
+            shake(lock, SHAKE[i]);
+            burst(lock, lr.left - wr.left + lr.width / 2, lr.top - wr.top + lr.height / 2, lr.height * (i === 2 ? 1.8 : 1.3), i === 2);
+        });
+        if (!asm) letters[0].forEach((box, i) => {
+            if (twist && i === 2) return;                     // Д у «Обманки» — своя, ниже
             const lock = LOCK[i], f = FROM[i], fly = FLY[i];
             const lr = box.getBoundingClientRect();
             const cx = lr.left - wr.left + lr.width / 2, cy = lr.top - wr.top + lr.height / 2;
@@ -473,16 +586,67 @@
             burst(lock, cx, cy, lr.height * (i === 2 ? 2.2 : 1.5), i === 2);
         });
 
+        if (twist) {
+            const all = i => letters.map(l => l[i]);
+            const hop = (i, at, h, dur) => playBoth(all(i), [
+                { transform: 'translateY(0)' },
+                { transform: `translateY(${-h}px) scale(.96, 1.05)`, offset: .45, easing: 'cubic-bezier(.3,0,.7,1)' },
+                { transform: 'translateY(0) scale(1.05, .95)', offset: .85 },
+                { transform: 'translateY(0)' }
+            ], { delay: at, duration: dur, easing: 'cubic-bezier(.2,.7,.3,1)', composite: 'add', fill: 'none' });
+            // Т: после удара отскакивает с наклоном и приземляется второй раз
+            const tb = letters[0][1].getBoundingClientRect();
+            playBoth(all(1), [
+                { transform: 'translateY(0) rotate(0deg)' },
+                { transform: `translateY(${-tb.height * .42}px) rotate(-9deg)`, offset: .5, easing: 'cubic-bezier(.3,0,.7,1)' },
+                { transform: 'translateY(0) rotate(0deg) scale(1.06, .92)', offset: .9 },
+                { transform: 'translateY(0) rotate(0deg)' }
+            ], { delay: LOCK[1] + 30, duration: PLAN.BOUNCE - LOCK[1] + 30, easing: 'cubic-bezier(.2,.7,.3,1)', composite: 'add', fill: 'none' });
+            shake(PLAN.BOUNCE, 3);
+            // Д: в свой (классический) срок — ничего; потом падает сверху наковальней
+            const db = letters[0][2].getBoundingClientRect();
+            playBoth(all(2), [
+                // до падения — целиком за верхним краем и невидима: сюрприз не должен выглядывать
+                { transform: `translateY(${-(db.bottom + db.height * 1.5)}px) scale(.94, 1.25)`, opacity: 0, filter: `blur(7px) drop-shadow(0 0 0 rgba(${GLOW},0))`, easing: 'cubic-bezier(.55,0,1,.45)' },
+                { opacity: 1, offset: .04 },
+                { transform: 'translateY(0) scale(1.18, .78)', opacity: 1, filter: `blur(0px) drop-shadow(0 0 40px rgba(${GLOW},1))`, offset: .55, easing: 'cubic-bezier(.2,.9,.3,1)' },
+                { transform: 'translateY(-6px) scale(.97, 1.04)', opacity: 1, offset: .78 },
+                { transform: 'none', opacity: 1, filter: `blur(0px) drop-shadow(0 0 10px rgba(${GLOW},.3))` }
+            ], { delay: LOCK[2] - FLY[2], duration: FLY[2] / .55 });
+            shake(LOCK[2], 20);
+            burst(LOCK[2], db.left - wr.left + db.width / 2, db.bottom - wr.top - db.height * .15, db.height * 2.2, true);
+            play(flash, [{ opacity: 0 }, { opacity: .2, offset: .1 }, { opacity: 0 }], { delay: LOCK[2], duration: 380, fill: 'none' });
+            [0, 1].forEach(i => hop(i, LOCK[2] + 20, 30, 300));               // ударная волна подбрасывает И и Т
+            [0, 1, 2].forEach(i => hop(i, PLAN.WAVE + i * 80, 22, 280));      // волна
+            // X: сюрикен — влетает справа, вращаясь, втыкается и дрожит
+            const T = PLAN.STICK - PLAN.X;
+            playBoth(xMarks, [
+                { transform: `translate(calc(-50% + ${innerWidth * .75}px), -50%) rotate(1440deg) scale(.5)`, opacity: 0 },
+                { opacity: 1, offset: .12 },
+                { transform: 'translate(-50%, -50%) rotate(0deg) scale(1)', opacity: 1 }
+            ], { delay: PLAN.X, duration: T, easing: 'cubic-bezier(.15,.6,.35,1)' });
+            playBoth(xMarks, [
+                { transform: 'rotate(0deg)' }, { transform: 'rotate(8deg)' }, { transform: 'rotate(-6deg)' },
+                { transform: 'rotate(4deg)' }, { transform: 'rotate(-2deg)' }, { transform: 'rotate(1deg)' }, { transform: 'rotate(0deg)' }
+            ], { delay: PLAN.STICK, duration: 460, easing: 'ease-out', composite: 'add', fill: 'none' });
+            shake(PLAN.STICK, 7);
+            play(flash, [{ opacity: 0 }, { opacity: .06, offset: .3 }, { opacity: 0 }], { delay: PLAN.STICK, duration: 200, fill: 'none' });
+            playBoth(xMarks, [
+                { filter: 'drop-shadow(0 0 6px rgba(124,77,255,.5))' },
+                { filter: 'drop-shadow(0 0 28px rgba(124,77,255,1))', offset: .3 },
+                { filter: 'drop-shadow(0 0 12px rgba(124,77,255,.55))' }
+            ], { delay: PLAN.STICK, duration: 520 });
+        }
         // X: два росчерка крест-накрест за буквами, потом вспышка свечения
-        ['.vpi-x1', '.vpi-x2'].forEach((sel, i) => {
+        if (!twist) ['.vpi-x1', '.vpi-x2'].forEach((sel, i) => {
             xMarks.forEach(xm => xm.querySelectorAll(sel).forEach(path => play(path, [
                 { strokeDasharray: '1 1', strokeDashoffset: 1 },
                 { strokeDasharray: '1 1', strokeDashoffset: 0 }
             ], { delay: X + i * X_GAP, duration: X_DRAW, easing: 'cubic-bezier(.7,0,.3,1)' })));
             play(flash, [{ opacity: 0 }, { opacity: .05, offset: .5 }, { opacity: 0 }], { delay: X + i * X_GAP + X_DRAW * .6, duration: 160, fill: 'none' });
         });
-        shake(X + X_GAP + X_DRAW * .8, rare ? 10 : 3);
-        playBoth(xMarks, [
+        if (!twist) shake(X + X_GAP + X_DRAW * .8, rare ? 10 : 3);
+        if (!twist) playBoth(xMarks, [
             { filter: 'drop-shadow(0 0 0 rgba(124,77,255,0))' },
             { filter: 'drop-shadow(0 0 26px rgba(124,77,255,.95))', offset: .35 },
             { filter: 'drop-shadow(0 0 12px rgba(124,77,255,.55))' }
@@ -516,6 +680,95 @@
             ], { delay: X + X_GAP + X_DRAW, duration: 720, easing: 'cubic-bezier(.1,.7,.3,1)', fill: 'forwards' });   // до своего момента не видна
         }
 
+        if (asm) {
+            // Осколки: пиксели букв (тот же шрифт, те же места) — тысячи квадратиков; каждый прилетает
+            // со своей стороны и ложится на место к моменту, когда буква «защёлкивается»
+            const cv = document.createElement('canvas');
+            cv.className = 'vpi-shards';
+            ov.insertBefore(cv, flash);
+            const dpr = Math.min(2, devicePixelRatio || 1), W = innerWidth, H = innerHeight;
+            cv.width = W * dpr; cv.height = H * dpr;
+            const g = cv.getContext('2d');
+            g.scale(dpr, dpr);
+            const cs = getComputedStyle(letters[0][0]);
+            const ink = cs.color, fontPx = parseFloat(cs.fontSize);
+            const step = Math.max(3, Math.round(fontPx / 52));
+            const off = document.createElement('canvas');
+            off.width = W; off.height = H;
+            const o = off.getContext('2d', { willReadFrequently: true });
+            o.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+            o.textAlign = 'center';
+            o.textBaseline = 'alphabetic';
+            o.fillStyle = '#fff';
+            const pieces = [];
+            letters[0].forEach((box, li) => {
+                const r = box.getBoundingClientRect(), m = o.measureText(box.textContent);
+                const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+                o.clearRect(0, 0, W, H);
+                o.fillText(box.textContent, cx, cy + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2);
+                const x0 = Math.max(0, Math.floor(r.left - step)), y0 = Math.max(0, Math.floor(r.top - step));
+                const w = Math.min(W - x0, Math.ceil(r.width + step * 2)), h = Math.min(H - y0, Math.ceil(r.height + step * 2));
+                const px = o.getImageData(x0, y0, w, h).data;
+                const lock = LOCK[li];
+                for (let y = 0; y < h; y += step) for (let x = 0; x < w; x += step) {
+                    if (px[(y * w + x) * 4 + 3] < 128) continue;
+                    const ang = rnd(0, Math.PI * 2), dist = vmax * rnd(.3, .8);
+                    const t0 = lock - PLAN.ASM + rnd(0, PLAN.ASM * .62);
+                    pieces.push({
+                        tx: x0 + x, ty: y0 + y, li, t0, d: Math.min(rnd(230, 430), lock - 20 - t0),
+                        sx: cx + Math.cos(ang) * dist, sy: cy + Math.sin(ang) * dist * .8, spin: rnd(-3, 3)
+                    });
+                }
+            });
+            const draw = t => {
+                g.clearRect(0, 0, W, H);
+                g.fillStyle = ink;
+                for (const p of pieces) {
+                    if (t < p.t0 || t >= LOCK[p.li] + 20) continue;       // буква защёлкнулась — дальше её держит текст
+                    const k = Math.min(1, (t - p.t0) / p.d), e = 1 - Math.pow(1 - k, 3);
+                    const x = p.sx + (p.tx - p.sx) * e, y = p.sy + (p.ty - p.sy) * e, sz = step * (.95 + (1 - e) * 1.4);
+                    g.globalAlpha = Math.min(1, k * 3);
+                    if (e < .98) {
+                        g.save(); g.translate(x, y); g.rotate(p.spin * (1 - e)); g.fillRect(-sz / 2, -sz / 2, sz, sz); g.restore();
+                    } else g.fillRect(x - sz / 2, y - sz / 2, sz, sz);
+                }
+                g.globalAlpha = 1;
+            };
+            // холст рисует по часам анимаций (своя «пустая» анимация): так он в такт и на паузе, и при перемотке
+            const clock = play(cv, [{ opacity: 1 }, { opacity: 1 }], { duration: LOCK[2] + 80, fill: 'none' });
+            const frame = () => {
+                if (!cv.isConnected) return;
+                const t = clock.currentTime;
+                if (t === null || t > LOCK[2] + 60) { cv.remove(); return; }
+                draw(t);
+                requestAnimationFrame(frame);
+            };
+            requestAnimationFrame(frame);
+
+            // вентиль: X щёлкает по 30° (рывок за 40 мс, пауза), в конце клац — толчок, тряска, вспышка
+            const T0 = PLAN.TICKS[0].t - 60, D = PLAN.LOCKED + 260 - T0;
+            const rot = (a, sc = 1) => `translate(-50%, -50%) rotate(${a}deg) scale(${sc})`;
+            const frames = [{ offset: 0, transform: rot(0) }];
+            let prev = 0, prevT = T0;
+            PLAN.TICKS.forEach(tk => {
+                const move = Math.min(40, (tk.t - prevT) * .6);      // рывок короче промежутка между щелчками
+                frames.push({ offset: (tk.t - move - T0) / D, transform: rot(prev) });
+                frames.push({ offset: (tk.t - T0) / D, transform: rot(tk.a) });
+                prev = tk.a; prevT = tk.t;
+            });
+            frames.push({ offset: (PLAN.LOCKED - T0) / D, transform: rot(prev) });
+            frames.push({ offset: (PLAN.LOCKED + 60 - T0) / D, transform: rot(prev + 4, 1.1) });
+            frames.push({ offset: 1, transform: rot(prev) });
+            playBoth(xMarks, frames, { delay: T0, duration: D, easing: 'linear' });
+            shake(PLAN.LOCKED, 9);
+            play(flash, [{ opacity: 0 }, { opacity: .12, offset: .15 }, { opacity: 0 }], { delay: PLAN.LOCKED, duration: 300, fill: 'none' });
+            playBoth(xMarks, [
+                { filter: 'drop-shadow(0 0 12px rgba(124,77,255,.55))' },
+                { filter: 'drop-shadow(0 0 30px rgba(124,77,255,1))', offset: .3 },
+                { filter: 'drop-shadow(0 0 12px rgba(124,77,255,.55))' }
+            ], { delay: PLAN.LOCKED, duration: 520, fill: 'forwards' });
+        }
+
         // Уход: по центру вспыхивает щель, экран делится ровно пополам — левая половина
         // уезжает влево, правая вправо, под ними уже сайт.
         play(seam, [
@@ -539,7 +792,7 @@
                 ctx = new (window.AudioContext || window.webkitAudioContext)();
                 const go = () => {
                     const base = ctx.currentTime - (performance.now() - t0) / 1000;
-                    introSound(ctx, ms => Math.max(ctx.currentTime, base + ms / 1000), rare);
+                    introSound(ctx, ms => Math.max(ctx.currentTime, base + ms / 1000), variant);
                 };
                 if (ctx.state === 'running') go();
                 else ctx.resume().then(() => { if (performance.now() - t0 < 150) go(); else ctx.close(); }, () => {});
@@ -598,7 +851,7 @@
                         if (ts && ts.performanceTime > 0) return ts.contextTime + (perf - ts.performanceTime) / 1000;
                         return ctx.currentTime + (perf - performance.now()) / 1000 - (ctx.outputLatency || 0);
                     };
-                    introSound(ctx, ms => Math.max(ctx.currentTime + 0.01, toCtx(start + ms)), rare);
+                    introSound(ctx, ms => Math.max(ctx.currentTime + 0.01, toCtx(start + ms)), variant);
                 }, () => {});
             } catch (e) { ctx = null; }
             // звук так и не завёлся — картинка уже идёт, просто без него
@@ -657,7 +910,11 @@
         : GM_getValue('introEnabled', true) ? 'desk' : 'off';
     if (window.top === window.self && introMode() !== 'off'
         && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        try { playIntro(introMode(), Math.random() < INTRO.RARE); } catch (e) { console.warn('[ITD VP] заставка', e); }
+        // introPreview ('rare' | 'assemble') — показать вариант вместо обычной (тесты, просмотр из админки)
+        const preview = GM_getValue('introPreview', '');
+        // какая выпала: одно случайное число на все редкие, иначе — классика
+        const pickIntro = () => { let r = Math.random(); for (const [v, p] of INTRO.RARE) { if (r < p) return v; r -= p; } return false; };
+        try { playIntro(introMode(), preview ? (preview === 'rare' || preview) : pickIntro()); } catch (e) { console.warn('[ITD VP] заставка', e); }
     }
 
     // Остальное — когда страница разобрана (раньше весь скрипт и запускался на document-idle);
@@ -2878,6 +3135,8 @@
                 <button type="button" data-act="report">${svgIcon('<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h4"/>', 18)}<span>Скопировать отчёт</span></button>
                 <button type="button" data-act="diag">${svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4M8.5 11l1.8 1.8 3.4-3.6"/>', 18)}<span>Диагностика</span></button>
                 <button type="button" data-act="rare">${svgIcon('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.3 6L12 16.4 6.6 19.4l1.3-6L3.4 9.3l6-.7z"/>', 18)}<span>Редкая заставка</span></button>
+                <button type="button" data-act="assemble">${svgIcon('<path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z"/>', 18)}<span>Заставка «сборка»</span></button>
+                <button type="button" data-act="twist">${svgIcon('<path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/>', 18)}<span>Заставка «обманка»</span></button>
                 <button type="button" data-act="fps">${svgIcon('<path d="M3 17l5-6 4 3 5-7 4 4"/>', 18)}<span>Счётчик FPS</span></button>
                 <button type="button" data-act="face">${svgIcon('<rect x="4" y="4" width="16" height="16" rx="8"/><path d="M8 15l2.5-3 2 2 1.5-2 2 3"/>', 18)}<span>Своя картинка кнопки</span></button>
                 <button type="button" data-act="off">${svgIcon('<path d="M12 3v8"/><path d="M6.3 7a8 8 0 1 0 11.4 0"/>', 18)}<span>Мод выкл (до закрытия вкладки)</span></button></div>`;
@@ -2935,6 +3194,8 @@
         act('diag', adminDiag);
         act('fps', toggleFps);
         act('rare', () => playIntro(IS_PHONE ? 'silent' : 'desk', true));
+        act('assemble', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'assemble'));
+        act('twist', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'twist'));
         // своя картинка кнопки — хранится только у тебя (в настройках скрипта), 96 px; пустой выбор — вернуть «A»
         act('face', () => {
             if (GM_getValue('fabFace', '') && confirm('Вернуть обычную «A»? (Отмена — выбрать другую картинку)')) {
@@ -3281,7 +3542,10 @@
     // Плашка версии мода (под логотипом) открывает журнал обновлений — как «Что нового» у сайта.
     // Пока новую версию не открывали, на плашке точка (changelogSeen — последняя просмотренная).
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
+    // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.2.8', '29 сентября 2026', [
+            'Кнопка «Обновить» больше не сдвигает плашку версии']],
         ['3.2.5 – 3.2.7', '27–28 сентября 2026', [
             'Заставка в светлой теме — светлый фон и тёмные буквы',
             'Плашка версии открывает «Что нового» — это окно',
@@ -5977,6 +6241,9 @@
         .vp-logo-top { display: flex; align-items: flex-start; gap: 10px; }
         .vp-logo-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
         .vp-logo-col > a { height: 36px; }
+        /* «Обновить» — справа от плашки, не участвует в центровке: плашка остаётся ровно под иконкой */
+        .vp-logo-col .vp-version-row { position: relative; }
+        .vp-logo-col .itd-update-sidebar-btn { position: absolute; left: calc(100% + 6px); top: 50%; translate: 0 -50%; }
         .vp-logo-top > :not(.vp-logo-col) { height: 36px; display: inline-flex; align-items: center; }
 
         /* «Что нового в ИТД X» — как окно «Что нового» сайта */
