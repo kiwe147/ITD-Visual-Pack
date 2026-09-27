@@ -3773,7 +3773,9 @@
     const CHANGELOG = [
         ['3.2.22', '28 сентября 2026', [
             'Галерея: кнопки на картинках сами подстраиваются — на светлом месте тёмные, на тёмном светлые (под каждой кнопкой своё место)',
-            'Галерея: кнопки крупнее, отзываются на нажатие, сердце «подпрыгивает» при лайке']],
+            'Галерея: кнопки крупнее, отзываются на нажатие, сердце «подпрыгивает» при лайке',
+            'Магазин → «Сообщения»: окно открывается поверх магазина (раньше не было видно)',
+            'Свой и живой фон видны в магазине и в «Сообщениях»']],
         ['3.2.21', '28 сентября 2026', [
             'Галерея: пост с несколькими картинками — одна плитка, картинки листаются внутри (телефон — свайп, компьютер — стрелки), лайк и репост — один на пост',
             '«Что нового»: страница за окном размыта сразу, а не после нажатия']],
@@ -5793,7 +5795,8 @@
         const style = document.createElement('style');
         style.textContent = `
         .vp-msgs { position: fixed; z-index: 5; display: none; flex-direction: column; box-sizing: border-box; overflow: hidden;
-            background: var(--bg-primary, #000); color: var(--text-primary, #fff); font-family: inherit; }
+            background: var(--block-bg, rgba(20, 20, 20, .72)); color: var(--text-primary, #fff); font-family: inherit;
+            backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none); }
         .vp-msgs.vp-open { display: flex; animation: vpMsgsIn .22s cubic-bezier(.2, .8, .2, 1); }
         html.vp-msgs-open .vp-msgs-navwrap { z-index: 10 !important; }
         html.vp-msgs-open .itd-scroll-top-btn { opacity: 0 !important; visibility: hidden !important; }
@@ -5806,8 +5809,8 @@
         html.vp-msgs-open .vp-nav-link[href="#"] { color: var(--vp-on-c) !important; opacity: var(--vp-on-o) !important; background-color: var(--vp-on-b) !important; }
         /* компьютер: окно — карточка, как блоки сайта, а не кусок страницы того же цвета */
         .vp-msgs.vp-card { border-radius: 36px; border: 1px solid var(--border-color, rgba(255, 255, 255, .15));
-            background: #141414; box-shadow: 0 16px 48px rgba(0, 0, 0, .45); }
-        html.vp-light .vp-msgs.vp-card { background: #fff; box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
+            box-shadow: 0 16px 48px rgba(0, 0, 0, .45); }
+        html.vp-light .vp-msgs.vp-card { box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
         /* под карточкой — вся колонка цветом страницы: в отступах сверху и снизу не видно ленты */
         .vp-msgs-under { position: fixed; top: 0; bottom: 0; z-index: 4; display: none; background: var(--bg-primary, #000); pointer-events: none; }
         html.vp-msgs-open .vp-msgs-under.vp-on { display: block; }
@@ -5819,7 +5822,7 @@
             cursor: pointer; background: var(--block-bg, #1c1c1c); color: var(--text-primary, #fff); flex-shrink: 0; }
         .vp-msgs-ib:active { transform: scale(.94); }
         .vp-msgs-search { margin: 0 16px 10px; display: flex; align-items: center; gap: 8px; padding: 0 14px; height: 42px; border-radius: 999px;
-            background: var(--block-bg, #1c1c1c); color: var(--text-secondary, #8a8a8a); }
+            background: var(--block-bg, rgba(28, 28, 28, .72)); color: var(--text-secondary, #8a8a8a); }
         .vp-msgs-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
         .vp-msgs-sub { padding: 2px 20px 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary, #8a8a8a); }
         .vp-msgs-ava img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
@@ -5845,7 +5848,7 @@
         .vp-msgs-row { -webkit-touch-callout: none; user-select: none; transition: transform .15s; }
         .vp-msgs-row.vp-held { transform: scale(.97); }
         .vp-msgs-ctx { position: absolute; z-index: 3; display: none; padding: 5px; border-radius: 16px; min-width: 170px;
-            background: var(--block-bg, #1c1c1c); border: 1px solid var(--border-color, rgba(255, 255, 255, .1)); box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
+            background: var(--block-bg, rgba(28, 28, 28, .72)); border: 1px solid var(--border-color, rgba(255, 255, 255, .1)); box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
         .vp-msgs-ctx.vp-open { display: block; animation: vpMsgsCtx .14s ease-out; }
         @keyframes vpMsgsCtx { from { opacity: 0; transform: scale(.94); } }
         .vp-msgs-ctx button { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; color: var(--text-primary, #fff);
@@ -5860,7 +5863,7 @@
         .vp-msgs-who small { font-size: 12px; color: var(--text-secondary, #8a8a8a); }
         .vp-msgs-feed { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; overscroll-behavior: contain; }
         .vp-msgs-note { align-self: center; margin: 2px 0 8px; padding: 6px 12px; border-radius: 999px; font-size: 12px;
-            background: var(--block-bg, #1c1c1c); color: var(--text-secondary, #8a8a8a); text-align: center; }
+            background: var(--block-bg, rgba(28, 28, 28, .72)); color: var(--text-secondary, #8a8a8a); text-align: center; }
         .vp-msgs-b { max-width: 78%; padding: 9px 13px 7px; border-radius: 20px; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere;
             animation: vpMsgsPop .2s ease-out; }
         .vp-msgs-b.vp-in { align-self: flex-start; background: var(--block-bg, #1c1c1c); border-bottom-left-radius: 6px; }
@@ -5872,7 +5875,7 @@
         .vp-msgs-typing span:nth-child(2) { animation-delay: .15s; } .vp-msgs-typing span:nth-child(3) { animation-delay: .3s; }
         .vp-msgs-bar { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px 12px; }
         .vp-msgs-field { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 14px; min-height: 44px; border-radius: 22px;
-            background: var(--block-bg, #1c1c1c); }
+            background: var(--block-bg, rgba(28, 28, 28, .72)); }
         .vp-msgs-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
         .vp-msgs-ghost { width: 36px; height: 36px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
             background: transparent; color: var(--text-secondary, #8a8a8a); cursor: pointer; flex-shrink: 0; }
@@ -6094,12 +6097,18 @@
                 const bottom = innerHeight - nav.getBoundingClientRect().top + BUMP_H + 8;
                 Object.assign(root.style, { left: '0px', right: '0px', top: '0px', bottom: '0px', width: '', borderRadius: '', paddingBottom: bottom + 'px' });
             } else {
-                const cb = contentBox() || lastCb;
+                let cb = contentBox() || lastCb;
+                // магазин и прочие страницы-рамки: колонки нет (ширина 0) — окно по центру, как лента, не заходя на меню
+                if (!cb || cb.right - cb.left < 300) {
+                    const side = document.querySelector('.' + SELECTORS.sidebar), sr = side && side.getBoundingClientRect();
+                    const w = Math.min(650, innerWidth - 32), l = Math.max(sr ? sr.right + 24 : 16, Math.round(innerWidth / 2 - w / 2));
+                    cb = { left: l, right: Math.min(innerWidth - 16, l + w) };
+                }
                 const left = cb ? cb.left : Math.max(0, innerWidth / 2 - 300), width = cb ? cb.right - cb.left : Math.min(600, innerWidth);
                 Object.assign(root.style, { left: left + 'px', width: width + 'px', right: '', top: '12px', bottom: '12px', borderRadius: '', paddingBottom: '0px' });
             }
             root.classList.toggle('vp-card', !row);
-            under.classList.toggle('vp-on', !row);
+            under.classList.remove('vp-on');                  // вместо подложки — лента под окном спрятана (свой фон виден)
             if (!row) Object.assign(under.style, { left: root.style.left, width: root.style.width });
         }
         let openPath = '';
@@ -6113,6 +6122,7 @@
             document.removeEventListener('keydown', onKey, true);
             removeEventListener('resize', place);
             msgsOpen = false;
+            if (!galOpen) galHideFeed(false);
             markActiveNav(); moveNavBlob();
             if (!fromHistory && overlayAt('vpMsgs')) history.back();
         }
@@ -6147,6 +6157,7 @@
             document.addEventListener('keydown', onKey, true);
             addEventListener('resize', place);
             if (fromHistory !== true) overlayEnter('vpMsgs');
+            galHideFeed(true);
             markActiveNav(); moveNavBlob();
         };
         root.close = close;
@@ -7820,7 +7831,7 @@
            карточка с картинками (скругление 36, стекло, как у постов); телефон — таблетка в полосе высотой 63 */
         .vp-gal { position: fixed; z-index: 30; display: flex; flex-direction: column; box-sizing: border-box; color: var(--text-primary, #fff); }
         .vp-gal-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; margin-top: 16px;
-            border-radius: 36px; background: var(--block-bg, #1c1c1c);
+            border-radius: 36px; background: var(--block-bg, rgba(28, 28, 28, .72));
             backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none); }
         .vp-gal.vp-card .vp-gal-card { border: 1px solid var(--border-color, rgba(255, 255, 255, .15)); }
         html.vp-light .vp-gal.vp-card .vp-gal-card { box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
@@ -7831,7 +7842,10 @@
         .vp-gal:not(.vp-card) .vp-gal-top { margin: 9px 12px 0 6px; }
         .vp-gal:not(.vp-card) .vp-gal-card { margin-top: 9px; border-radius: 36px 36px 0 0; }
         /* пока открыта галерея — лента под ней спрятана (иначе просвечивала сквозь стекло и в скруглённых углах) */
-        html.vp-gal-open .vp-gal-hidden { visibility: hidden !important; }
+        html.vp-gal-open .vp-gal-hidden, html.vp-msgs-open .vp-gal-hidden { visibility: hidden !important; }
+        /* страница-рамка (магазин): прозрачная — сквозь неё фон мода; под окнами мода — спрятана */
+        iframe.vp-page-frame { background: transparent !important; color-scheme: normal; }
+        html.vp-gal-open iframe.vp-page-frame, html.vp-msgs-open iframe.vp-page-frame { visibility: hidden !important; }
         .vp-gal-body { padding: 12px 12px var(--vp-gal-pb, 24px) !important; }
         html.vp-gal-open .vp-gal-navwrap { z-index: 40 !important; }
         html.vp-gal-open .vp-nav-link.vp-site-cur { color: var(--vp-off-c) !important; opacity: var(--vp-off-o) !important; background-color: var(--vp-off-b) !important; }
@@ -8215,7 +8229,7 @@
     function galHideFeed(on) {
         document.querySelectorAll('.vp-gal-hidden').forEach(e => { if (!on) e.classList.remove('vp-gal-hidden'); });
         if (!on) return;
-        const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail, nav, .vp-gal';
+        const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail, nav, .vp-gal, .vp-msgs';
         const up = el => {
             let top = el;
             for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
@@ -8225,9 +8239,9 @@
             return top;
         };
         document.querySelectorAll('.' + [SELECTORS.tabs, SELECTORS.feedBar, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .'))
-            .forEach(e => { const t = up(e); if (!t.closest('.vp-gal, nav')) t.classList.add('vp-gal-hidden'); });
+            .forEach(e => { const t = up(e); if (!t.closest('.vp-gal, .vp-msgs, nav')) t.classList.add('vp-gal-hidden'); });
     }
-    onDom(function galFeedHidden() { if (gal.el) galHideFeed(true); });
+    onDom(function galFeedHidden() { if (gal.el || msgsOpen) galHideFeed(true); });
     // Открыть: окно, закрытое раньше, возвращается как было (картинки, вкладка, место прокрутки) — без
     // новой загрузки; обновить — повторное нажатие на «Галерею», как у ленты (galRefresh)
     function openGallery(fromHistory) {
@@ -8346,6 +8360,31 @@
         a.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); gal.el ? galRefresh() : openGallery(); }, true);
         search.after(a);
     });
+
+    // Магазин у сайта — отдельная страница в рамке (iframe) во весь экран, с чёрным фоном: закрывала фон мода
+    // (свой и живой). Рамку и её страницу делаем прозрачными: сквозь них виден фон, как на остальных страницах
+    function framePages() {
+        document.querySelectorAll('iframe').forEach(f => {
+            const r = f.getBoundingClientRect();
+            const big = r.width >= innerWidth * 0.6 && r.height >= innerHeight * 0.6;
+            f.classList.toggle('vp-page-frame', big);
+            if (!big || f._vpClear) return;
+            const clear = () => {
+                try {
+                    const d = f.contentDocument;
+                    if (!d || !d.head || d.getElementById('vp-frame-clear')) return;
+                    const st = d.createElement('style');
+                    st.id = 'vp-frame-clear';
+                    st.textContent = 'html, body { background: transparent !important; }';
+                    d.head.appendChild(st);
+                    f._vpClear = true;
+                } catch (e) { /* чужой адрес — не трогаем */ }
+            };
+            if (!f._vpHooked) { f._vpHooked = true; f.addEventListener('load', () => { f._vpClear = false; clear(); }); }
+            clear();
+        });
+    }
+    onDom(framePages);
 
     // --- Обновить пост: на своих постах слева от «…» — один запрос счётчиков (как у сайта, POST /api/posts/stats),
     // лайки, комменты, репосты и просмотры меняются на месте, без перезагрузки; изменившиеся — вспыхивают
