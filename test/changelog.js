@@ -21,10 +21,11 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     if (u === URL0) return r.fulfill({ contentType: 'text/html', body: snap });
     if (['image', 'stylesheet', 'font'].includes(t)) return r.continue();
     return r.fulfill({ status: 404, body: '' }); });
-  await p.addInitScript(m => { const s = { introEnabled: false, introMobile: 'off', backgroundEnabled: false };
+  await p.addInitScript(([m, upd]) => { const s = { introEnabled: false, introMobile: 'off', backgroundEnabled: false };
     window.GM_getValue = (k, d) => k in s ? s[k] : d; window.GM_setValue = (k, v) => { s[k] = v; };
-    window.GM_xmlhttpRequest = o => setTimeout(() => o.onerror && o.onerror('x'), 0);
-    window.GM_info = { script: { version: '3.2.6' }, scriptMetaStr: m }; window.unsafeWindow = window; }, src.slice(0, src.indexOf('==/UserScript==')));
+    // UPDATE=1 — на GitHub версия новее: появляется «Обновить»
+    window.GM_xmlhttpRequest = o => setTimeout(() => upd ? o.onload({ status: 200, responseText: '// @version      9.9.9' }) : o.onerror && o.onerror('x'), 0);
+    window.GM_info = { script: { version: '3.2.6' }, scriptMetaStr: m }; window.unsafeWindow = window; }, [src.slice(0, src.indexOf('==/UserScript==')), !!process.env.UPDATE]);
   await p.goto(URL0);
   // в снимке логотип уже перестроен модом — возвращаем вид сайта: значок + кнопка версии сайта
   await p.evaluate(() => {
@@ -42,6 +43,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   await p.waitForTimeout(1800);
   // живая страница всё время меняется — шевельнём и эту, чтобы прошёл обычный проход мода
   await p.evaluate(() => document.body.appendChild(document.createElement('i'))); await p.waitForTimeout(400);
+  if (process.env.UPDATE) await p.waitForTimeout(1500);                     // «Обновить» ставится через секунду
   const chip = await p.$('.vp-version-chip');
   check(!!chip, 'плашка версии есть');
   if (!chip) { await b.close(); process.exit(1); }
