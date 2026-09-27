@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.5
+// @version      3.2.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3286,6 +3286,80 @@
         onDom(function bannerButtons() { createAllButtons(); });
     }
 
+    // ================= Что нового =================
+    // Плашка версии мода (под логотипом) открывает журнал обновлений — как «Что нового» у сайта.
+    // Пока новую версию не открывали, на плашке точка (changelogSeen — последняя просмотренная).
+    const CHANGELOG = [
+        ['3.2.6', '28 сентября 2026', ['Плашка версии открывает «Что нового» — вот это окно', 'На компьютере плашка версии стоит ровно по центру под иконкой']],
+        ['3.2.5', '27 сентября 2026', ['Заставка в светлой теме — светлый фон и тёмные буквы',
+            'Редкая заставка: выпадает с шансом 1% — золото, лучи, кольца ударов и свой звук',
+            'Пост с картинкой только в репосте больше не прозрачный']],
+        ['3.2.4', '27 сентября 2026', ['Светлая тема: размытый фон постов светлый, а не серый',
+            '«Сообщения» на компьютере — отдельная карточка, не сливается со страницей',
+            'Прокрутка в «Сообщениях» не двигает страницу за окном',
+            'Меню не тускнеет, пока открыты «Сообщения»']],
+        ['3.2.3', '27 сентября 2026', ['Стикеры отправляются без перезагрузки страницы — как обычная картинка через скрепку',
+            'Стикеры, загруженные с другого аккаунта, снова отправляются']],
+        ['3.2.1', '27 сентября 2026', ['Уведомления на телефоне снова видны при уменьшенных анимациях']],
+        ['3.2.0', '26 сентября 2026', ['Стикеры: обрезку можно двигать пальцем, снятый крестиком стикер больше не уходит с комментарием',
+            '«Клуб ИТД X» не ломается от испорченных данных',
+            'Большая уборка кода: всё работает как раньше, только надёжнее']],
+        ['3.1.26', '26 сентября 2026', ['Кнопка «наверх» и раскладка телефона переписаны без дёрганий',
+            'Подмена текста ошибок срабатывает и на повторной ошибке']],
+        ['3.1.25', '26 сентября 2026', ['Баннер: картинку можно двигать пальцем',
+            'Размытый фон постов больше не копит нагрузку на длинной ленте']],
+        ['3.1.24', '26 сентября 2026', ['«Анти цензура» выключается сразу, без перезагрузки']],
+        ['3.1.20', '25 сентября 2026', ['Планшет боком — версия для компьютера (настройка «Версия для ПК на планшете»)']],
+        ['3.1.14', '25 сентября 2026', ['Админ-островок: снимок страницы, отчёт, диагностика, счётчик FPS']],
+        ['3.1.4', '25 сентября 2026', ['Заставка на телефоне ждёт касания и играет со звуком']],
+        ['3.0.24', '25 сентября 2026', ['«Сообщения» — первая версия лички']],
+        ['3.0.23', '25 сентября 2026', ['«Создать пост» — бугорок по центру нижней панели']]
+    ];
+    function markChangelogChips() {
+        const unseen = GM_getValue('changelogSeen', '') !== CHANGELOG[0][0];
+        document.querySelectorAll('.vp-version-chip').forEach(c => {
+            c.classList.toggle('vp-news', unseen);
+            if (!c.hasAttribute('role')) { c.setAttribute('role', 'button'); c.tabIndex = 0; c.title = 'Что нового в ИТД X'; }
+        });
+    }
+    function openChangelog() {
+        if (document.querySelector('.vp-news-back')) return;
+        const back = document.createElement('div');
+        back.className = 'vp-news-back';
+        back.innerHTML = `<div class="vp-news-box" role="dialog" aria-label="Что нового в ИТД X"><div class="vp-news-head"><b>Что нового в ИТД X</b>
+            <button type="button" class="vp-news-x" aria-label="Закрыть">${svgIcon('<path d="M18 6 6 18M6 6l12 12"/>', 18)}</button></div><div class="vp-news-list"></div></div>`;
+        const list = back.querySelector('.vp-news-list');
+        for (const [v, date, items] of CHANGELOG) {
+            const sec = document.createElement('section');
+            sec.className = 'vp-news-ver';
+            sec.innerHTML = '<div class="vp-news-tag"><span></span><em></em></div><ul></ul>';
+            sec.querySelector('span').textContent = 'v' + v;
+            sec.querySelector('em').textContent = date;
+            sec.querySelector('em').style.fontStyle = 'normal';
+            for (const t of items) { const li = document.createElement('li'); li.textContent = t; sec.lastChild.appendChild(li); }
+            list.appendChild(sec);
+        }
+        const close = () => { back.remove(); removeEventListener('keydown', onKey, true); };
+        const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+        back.addEventListener('click', e => { if (e.target === back) close(); });
+        back.querySelector('.vp-news-x').onclick = close;
+        addEventListener('keydown', onKey, true);
+        document.body.appendChild(back);
+        GM_setValue('changelogSeen', CHANGELOG[0][0]);
+        markChangelogChips();
+    }
+    document.addEventListener('click', e => {
+        const chip = e.target.closest && e.target.closest('.vp-version-chip');
+        if (!chip) return;
+        e.preventDefault();
+        e.stopPropagation();
+        openChangelog();
+    }, true);
+    document.addEventListener('keydown', e => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('vp-version-chip')) { e.preventDefault(); openChangelog(); }
+    });
+    onDom(function changelogChips() { if (document.querySelector('.vp-version-chip:not([role])')) markChangelogChips(); });
+
     // ================= API сайта =================
     // Токен доступа живёт недолго: держим его 4 минуты, одновременные запросы ждут одно обновление
     // (раньше автолайк обновлял токен на каждого пользователя разом), на 401 — берём свежий.
@@ -3596,7 +3670,7 @@
             });
 
             function replaceIcon() {
-                const container = document.querySelector('.' + SELECTORS.logoContainer);
+                let container = document.querySelector('.' + SELECTORS.logoContainer);
                 if (!container) return;
                 const customLink = container.querySelector('a[href="https://t.me/NeuroSFW"]');
                 if (customLink) return;
@@ -3615,25 +3689,25 @@
                 let bottomBlock = container.querySelector('.vp-version-row');
                 container.innerHTML = '';
                 container.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; gap: 4px;';
+                // слева колонка: иконка и под ней, по её центру, плашка версии мода; справа — версия сайта
+                // на уровне иконки (раньше плашка стояла от левого края и уезжала вправо от центра иконки)
                 const topRow = document.createElement('div');
-                topRow.style.cssText = 'display: flex; flex-direction: row; align-items: center; gap: 10px;';
-                topRow.appendChild(link);
-                if (versionBtn) {
-                    versionBtn.style.margin = '0';
-                    versionBtn.style.padding = '0';
-                    topRow.appendChild(versionBtn);
-                } else {
-                    const fallbackBtn = document.createElement('button');
-                    fallbackBtn.className = SELECTORS.versionBtn;
-                    fallbackBtn.textContent = 'v1.1.1';
-                    fallbackBtn.style.margin = '0';
-                    fallbackBtn.style.padding = '0';
-                    topRow.appendChild(fallbackBtn);
-                }
+                topRow.className = 'vp-logo-top';
+                const iconCol = document.createElement('div');
+                iconCol.className = 'vp-logo-col';
+                iconCol.appendChild(link);
+                topRow.appendChild(iconCol);
+                const siteVer = versionBtn || document.createElement('button');
+                if (!versionBtn) { siteVer.className = SELECTORS.versionBtn; siteVer.textContent = 'v1.1.1'; }
+                siteVer.style.margin = '0';
+                siteVer.style.padding = '0';
+                topRow.appendChild(siteVer);
                 container.appendChild(topRow);
+                const container0 = container;
+                container = iconCol;                      // плашку версии ниже кладём в колонку иконки
                 if (bottomBlock) {
                     bottomBlock.style.margin = '0';
-                    bottomBlock.style.justifyContent = 'flex-start';
+                    bottomBlock.style.justifyContent = 'center';
                     container.appendChild(bottomBlock);
                 } else {
                     const newBottom = document.createElement('div');
@@ -3644,8 +3718,9 @@
                     versionSpan.textContent = 'v' + GM_info.script.version;
                     newBottom.appendChild(versionSpan);
                     container.appendChild(newBottom);
-                    container._bottomBlock = newBottom;
+                    container0._bottomBlock = newBottom;
                 }
+                markChangelogChips();
             }
 
             replaceIcon();
@@ -3768,6 +3843,7 @@
 
                 wrapper.appendChild(bottomRow);
                 block.appendChild(wrapper);
+                markChangelogChips();
 
                 nav.prepend(block);
                 fixNavLayout();
@@ -5901,7 +5977,41 @@
             font: 600 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
             color: var(--text-secondary, #8a8a8a); letter-spacing: 0.02em;
             padding: 3px 6px; border-radius: 6px; background: var(--bg-hover, rgba(255, 255, 255, 0.08));
+            cursor: pointer; position: relative; transition: color .15s ease, background-color .15s ease;
         }
+        .vp-version-chip:hover { color: var(--text-primary, #fff); background: var(--block-bg-secondary, rgba(255, 255, 255, 0.14)); }
+        /* новая версия, «Что нового» ещё не открывали — точка на плашке */
+        .vp-version-chip.vp-news::after { content: ""; position: absolute; top: -3px; right: -3px; width: 7px; height: 7px;
+            border-radius: 50%; background: #2a8cff; box-shadow: 0 0 0 2px var(--bg-primary, #000); }
+        .vp-logo-top { display: flex; align-items: flex-start; gap: 10px; }
+        .vp-logo-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .vp-logo-col > a { height: 36px; }
+        .vp-logo-top > :not(.vp-logo-col) { height: 36px; display: inline-flex; align-items: center; }
+
+        /* «Что нового в ИТД X» — как окно «Что нового» сайта */
+        .vp-news-back { position: fixed; inset: 0; z-index: 10050; background: rgba(0, 0, 0, .5); display: flex;
+            align-items: center; justify-content: center; padding: 16px; animation: vpNewsFade .18s ease; }
+        .vp-news-box { width: min(780px, 100%); max-height: min(82vh, 900px); display: flex; flex-direction: column; overflow: hidden;
+            background: var(--modal-bg, var(--block-bg, #1c1c1c)); color: var(--text-primary, #fff); border-radius: 28px;
+            border: 1px solid var(--border-color, rgba(255, 255, 255, .12)); box-shadow: 0 24px 64px rgba(0, 0, 0, .45);
+            backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none);
+            animation: vpNewsIn .22s cubic-bezier(.2, .8, .2, 1); }
+        .vp-news-head { display: flex; align-items: center; justify-content: space-between; padding: 20px 20px 16px 24px;
+            border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, .1)); }
+        .vp-news-head b { font-size: 20px; font-weight: 700; }
+        .vp-news-x { width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer; display: flex; align-items: center;
+            justify-content: center; background: var(--block-bg-secondary, rgba(255, 255, 255, .1)); color: var(--text-primary, #fff); }
+        .vp-news-list { overflow-y: auto; padding: 8px 28px 20px; overscroll-behavior: contain; }
+        .vp-news-ver { padding: 18px 0; border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, .1)); }
+        .vp-news-ver:last-child { border-bottom: 0; }
+        .vp-news-tag { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; color: var(--text-secondary, #8a8a8a); font-size: 15px; }
+        .vp-news-tag span { padding: 5px 12px; border-radius: 8px; font-weight: 600; color: #2a8cff; background: rgba(42, 140, 255, .14); }
+        .vp-news-ver ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+        .vp-news-ver li { position: relative; padding-left: 24px; font-size: 16px; line-height: 1.45; }
+        .vp-news-ver li::before { content: ""; position: absolute; left: 2px; top: .6em; width: 6px; height: 6px; border-radius: 50%; background: #2a8cff; }
+        @keyframes vpNewsFade { from { opacity: 0; } }
+        @keyframes vpNewsIn { from { opacity: 0; transform: translateY(12px) scale(.98); } }
+        @media (prefers-reduced-motion: reduce) { .vp-news-back, .vp-news-box { animation: none; } }
         .itd-update-sidebar-btn {
             display: inline-flex; align-items: center; gap: 4px; border: 0; cursor: pointer;
             font-family: inherit; font-size: 10px; font-weight: 700; line-height: 1; color: #fff; white-space: nowrap;
