@@ -61,6 +61,21 @@ let postsBody = postsFile && postsFile !== 'auto' ? fs.readFileSync(postsFile, '
   console.log(`кнопок: ${found.count}, все на своих постах: ${found.own}`);
   let ok = found.count > 0 && found.own;
   if (found.count) {
+    // карточка меняется после появления кнопки (сайт дописал «(ред.)», выросла шапка) — кнопка едет за «…»
+    const align = () => p.$eval('.vp-post-refresh', b => {
+      const m = b._vpMenu.getBoundingClientRect(), r = b.getBoundingClientRect();
+      return { dy: Math.round((r.top + r.height / 2) - (m.top + m.height / 2)), gap: Math.round(m.left - r.right) };
+    });
+    const a0 = await align();
+    await p.$eval('.vp-post-refresh', b => {
+      const card = b.parentElement, h = card.querySelector('header');
+      b._vpMenu.style.transform = 'translateY(23px)'; b._vpMenu.style.marginRight = '17px';
+      document.body.appendChild(document.createElement('i'));
+    });
+    await p.waitForTimeout(600);
+    const a1 = await align();
+    console.log(`кнопка у «…»: до ${JSON.stringify(a0)}, после сдвига шапки ${JSON.stringify(a1)}`);
+    ok = ok && Math.abs(a0.dy) <= 1 && Math.abs(a1.dy) <= 1 && a1.gap >= 0 && a1.gap <= 4;
     const btn = await p.$('.vp-post-refresh');
     await btn.scrollIntoViewIfNeeded();
     await btn.click();

@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.15
+// @version      3.2.16
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2076,9 +2076,9 @@
            на компьютере выезжает при наведении на баннер, на телефоне видна всегда */
         .vp-banner-buttons { inset: 0 auto auto 50% !important; width: auto !important; height: auto !important;
             transform: translateX(-50%); display: flex !important; gap: 2px !important; padding: 4px 12px 7px !important;
-            border-radius: 0 0 22px 22px; background: rgba(12, 12, 16, .82); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            border-radius: 0 0 22px 22px; background: rgba(12, 12, 16, .6); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
             z-index: 3; transition: transform .25s cubic-bezier(.2,.8,.2,1), opacity .2s; }
-        html.vp-light .vp-banner-buttons { background: rgba(255, 255, 255, .85); }
+        html.vp-light .vp-banner-buttons { background: rgba(255, 255, 255, .65); }
         .vp-banner-buttons > button { background: transparent !important; box-shadow: none !important; }
         .vp-banner-buttons > button:hover { background: rgba(128, 128, 128, .22) !important; }
         @media (hover: hover) and (pointer: fine) {
@@ -3745,14 +3745,20 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.2.16', '28 сентября 2026', [
+            'Лайки за всё время — в своём профиле рядом с постами; в «Статистике» — сколько прибавилось за день и за месяц',
+            'Галерея открывается как страница сайта: меню слева (на телефоне — снизу) остаётся, ширина — под экран; иконка в стиле сайта',
+            'Паки стикеров сохраняются на сервере — одинаковые на всех устройствах',
+            'Кнопка «обновить пост» больше не съезжает, если пост поменялся',
+            'Подложка кнопок баннера прозрачнее',
+            'Автолайки не теряют человека, если он сменил ник']],
         ['3.2.15', '27 сентября 2026', [
             'Галерея — картинки и видео из ленты сеткой, как в Пинтересте: кнопка рядом с поиском (на ПК — в меню слева)',
             'Свой фон — картинка или видео: «ИТД X» → «Фон» → «Своя картинка»',
             'Паки стикеров из архива: папка в .zip = пак, картинки встают как есть (правила — у кнопки в панели стикеров)',
             'Паки стикеров одинаковые на всех устройствах одного аккаунта',
             'Галочка ИТД X держится за аккаунт, а не за ник — смена ника её не снимает',
-            'Фон рисуется на частоте экрана (90, 120, 144 Гц) и сам возвращается к ней после подтормаживаний',
-            'Автолайки не теряют человека, если он сменил ник']],
+            'Фон рисуется на частоте экрана — любой, хоть 240 Гц — и сам возвращается к ней после подтормаживаний']],
         ['3.2.14', '27 сентября 2026', [
             'На своих постах — кнопка «обновить» слева от «…»: лайки, комменты и просмотры обновляются без перезагрузки страницы',
             'Меньше запросов к сайту: «Клуб ИТД X» и автолайки не спрашивают профиль каждого участника, мод не повторяет запросы сайта при загрузке']],
@@ -6948,11 +6954,12 @@
 
     // Активный пункт меню — по адресу страницы (у сайта это хеш-класс, он меняется)
     let msgsOpen = false;                               // открыта «страница» лички — активный пункт «Личка»
+    let galOpen = false;                                // открыта галерея — активный пункт «Галерея»
     function markActiveNav() {
         const path = location.pathname;
         document.querySelectorAll('.' + SELECTORS.navLink).forEach(a => {
             const href = a.getAttribute('href') || '';
-            const active = msgsOpen ? href === '#'
+            const active = msgsOpen ? href === '#' : galOpen ? href === '#gallery'
                 : href.startsWith('/') && (href === path || (href !== '/' && path.startsWith(href + '/')));
             a.classList.toggle('vp-active', active);
         });
@@ -6962,10 +6969,10 @@
     // (цвет, прозрачность, фон — считываем до своих правил и кладём в переменные у меню)
     function msgsNavLook() {
         const links = [...document.querySelectorAll('.' + SELECTORS.navLink)];
-        if (!msgsOpen) { links.forEach(a => a.classList.remove('vp-site-cur')); return; }
+        if (!msgsOpen && !galOpen) { links.forEach(a => a.classList.remove('vp-site-cur')); return; }
         const path = location.pathname;
         const cur = links.find(a => { const h = a.getAttribute('href') || ''; return h.startsWith('/') && (h === path || (h !== '/' && path.startsWith(h + '/'))); });
-        const other = links.find(a => a !== cur && a.getAttribute('href') !== '#' && a.getAttribute('href') !== path);
+        const other = links.find(a => a !== cur && !/^#/.test(a.getAttribute('href') || '') && a.getAttribute('href') !== path);
         const nav = (cur || other) && (cur || other).closest('nav');
         if (!nav || !other || (cur && cur.classList.contains('vp-site-cur'))) return;
         const look = (a, k) => { const g = getComputedStyle(a); nav.style.setProperty(`--vp-${k}-c`, g.color); nav.style.setProperty(`--vp-${k}-o`, g.opacity); nav.style.setProperty(`--vp-${k}-b`, g.backgroundColor); };
@@ -7748,12 +7755,25 @@
     // в полосе ленты, тем же видом, что у сайта. Лента — тем же запросом, что у сайта (/api/posts?tab=…&cursor=…),
     // страницами по 20; каждая картинка ложится в самую короткую колонку (сетка не перетасовывается при
     // подгрузке). Видео — без звука и играют, только пока их видно. Нажатие — открыть пост; «назад» закрывает.
+    // иконка — залитая, как у пунктов меню сайта (контурная выбивалась)
+    const galIcon = size => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="10" rx="2.5"/><rect x="13" y="3" width="8" height="6" rx="2.5"/><rect x="3" y="15" width="8" height="6" rx="2.5"/><rect x="13" y="11" width="8" height="10" rx="2.5"/></svg>`;
     const GAL_TABS = [['popular', 'Популярное'], ['following', 'Подписки'], ['clan', 'Кланы']];
     const gal = { el: null, tab: 'popular', cursor: null, loading: false, done: false, cols: [], heights: [], seen: new Set(), hist: false };
     const galStyle = document.createElement('style');
     galStyle.textContent = `
-        .vp-gal { position: fixed; inset: 0; z-index: 10010; display: flex; flex-direction: column; background: var(--bg-color, #000); color: var(--text-primary, #fff); }
+        .vp-gal { position: fixed; z-index: 30; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden;
+            background: var(--bg-primary, #000); color: var(--text-primary, #fff); }
+        .vp-gal.vp-card { border-radius: 36px; border: 1px solid var(--border-color, rgba(255, 255, 255, .15)); background: #141414; }
         html.vp-light .vp-gal { background: #f4f4f5; }
+        html.vp-light .vp-gal.vp-card { background: #fff; box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
+        .vp-gal-head { padding: 16px 20px 8px !important; }
+        .vp-gal-head > b { font-size: 22px !important; font-weight: 700; }
+        .vp-gal-tabs { padding: 0 20px 12px !important; }
+        .vp-gal-body { padding: 0 12px 24px !important; }
+        html.vp-gal-open .vp-rail { visibility: hidden; }
+        html.vp-gal-open .vp-gal-navwrap { z-index: 40 !important; }
+        html.vp-gal-open .vp-nav-link.vp-site-cur { color: var(--vp-off-c) !important; opacity: var(--vp-off-o) !important; background-color: var(--vp-off-b) !important; }
+        html.vp-gal-open .vp-gal-nav { color: var(--vp-on-c) !important; opacity: var(--vp-on-o) !important; background-color: var(--vp-on-b) !important; }
         .vp-gal-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; flex: 0 0 auto; }
         .vp-gal-head > b { font-size: 18px; margin-right: auto; }
         .vp-gal-x { width: 38px; height: 38px; border: 0; border-radius: 50%; background: rgba(128,128,128,.18); color: inherit; cursor: pointer;
@@ -7879,8 +7899,29 @@
         gal.el.querySelector('.vp-gal-body').scrollTop = 0;
         galLoad();
     }
+    // место окна, как у «Сообщений»: телефон (меню — панель внизу) — от верха до панели;
+    // компьютер — карточка от левого меню до правого края экрана (ширина — под экран)
+    function galPosition() {
+        if (!gal.el) return;
+        const nav = document.querySelector('.' + SELECTORS.nav);
+        const nr = nav && nav.getBoundingClientRect();
+        const row = nav && navIsRow(nav) && nr.top > innerHeight / 2;
+        // телефон: окно до низа экрана, нижняя панель — поверх (иначе между ними просвечивала лента)
+        document.querySelectorAll('.vp-gal-navwrap').forEach(w => w.classList.remove('vp-gal-navwrap'));
+        if (row) {
+            if (nav.parentElement) nav.parentElement.classList.add('vp-gal-navwrap');
+            Object.assign(gal.el.style, { left: '0px', right: '0px', top: '0px', bottom: '0px', width: '', paddingBottom: Math.max(0, innerHeight - nr.top + BUMP_H + 8) + 'px' });
+        } else {
+            const side = nav && nav.closest('aside') || nav;
+            const left = side ? Math.round(side.getBoundingClientRect().right + 20) : 20;
+            Object.assign(gal.el.style, { left: left + 'px', right: '20px', top: '12px', bottom: '12px', width: '', paddingBottom: '0px' });
+        }
+        gal.el.classList.toggle('vp-card', !row);
+    }
     function openGallery() {
         if (gal.el) return;
+        const msgs = document.querySelector('.vp-msgs.vp-open');
+        if (msgs && msgs.close) msgs.close();
         const el = document.createElement('div');
         el.className = 'vp-gal';
         el.innerHTML = `<div class="vp-gal-head"><b>Галерея</b><button type="button" class="vp-gal-x" title="Закрыть">${svgIcon('<path d="M18 6 6 18M6 6l12 12"/>', 18)}</button></div>
@@ -7888,12 +7929,17 @@
             <div class="vp-gal-body"><div class="vp-gal-grid"></div><div class="vp-gal-more"></div></div>`;
         document.body.appendChild(el);
         gal.el = el;
+        gal.path = location.pathname;
+        galPosition();
+        addEventListener('resize', galPosition);
+        document.documentElement.classList.add('vp-gal-open');
+        galOpen = true;
+        markActiveNav(); moveNavBlob();
         el.querySelector('.vp-gal-x').onclick = () => closeGallery();
         el.querySelectorAll('.vp-gal-tab').forEach(b => b.onclick = () => { if (b.dataset.tab !== gal.tab || !gal.seen.size) galSwitch(b.dataset.tab); });
         const body = el.querySelector('.vp-gal-body');
         body.addEventListener('scroll', () => { if (body.scrollTop + body.clientHeight > body.scrollHeight - 1200) galLoad(); }, { passive: true });
         for (const t of ['wheel', 'touchmove']) el.addEventListener(t, e => e.stopPropagation(), { passive: true });
-        document.documentElement.style.overflow = 'hidden';
         if (!gal.hist) { history.pushState(Object.assign({}, history.state, { vpGal: true }), '', location.href); gal.hist = true; }
         galSwitch(gal.tab);
     }
@@ -7902,10 +7948,20 @@
         gal.el.querySelectorAll('video').forEach(v => { galVideoIO.unobserve(v); v.pause(); v.removeAttribute('src'); v.load(); });
         gal.el.remove();
         gal.el = null; gal.cols = [];
-        document.documentElement.style.overflow = '';
+        removeEventListener('resize', galPosition);
+        document.documentElement.classList.remove('vp-gal-open');
+        galOpen = false;
+        document.querySelectorAll('.vp-gal-navwrap').forEach(w => w.classList.remove('vp-gal-navwrap'));
+        markActiveNav(); moveNavBlob();
         if (gal.hist) { gal.hist = false; if (!fromBack && history.state && history.state.vpGal) history.back(); }
     }
     addEventListener('popstate', () => { if (gal.el) { gal.hist = false; closeGallery(true); } });
+    onDom(function galLeft() { if (gal.el && location.pathname !== gal.path) { closeGallery(true); } });
+    document.addEventListener('click', e => {
+        if (!gal.el) return;
+        const a = e.target.closest && e.target.closest('a.' + SELECTORS.navLink);
+        if (a && !a.classList.contains('vp-gal-nav')) closeGallery();
+    }, true);
     addEventListener('keydown', e => { if (e.key === 'Escape' && gal.el) closeGallery(); });
     let galCols = galColsCount();
     addEventListener('resize', () => { if (gal.el && galColsCount() !== galCols) { galCols = galColsCount(); galLayout(); } });
@@ -7921,7 +7977,7 @@
         b.className = (search.className || '') + ' vp-gal-btn';
         b.title = 'Галерея';
         b.setAttribute('aria-label', 'Галерея');
-        b.innerHTML = svgIcon('<rect x="3.5" y="3.5" width="7" height="9" rx="2"/><rect x="13.5" y="3.5" width="7" height="5.5" rx="2"/><rect x="3.5" y="15.5" width="7" height="5" rx="2"/><rect x="13.5" y="12" width="7" height="8.5" rx="2"/>', 22);
+        b.innerHTML = galIcon(22);
         b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openGallery(); });
         search.before(b);
     });
@@ -7934,7 +7990,7 @@
         a.classList.add('vp-gal-nav');
         a.classList.remove('vp-active');
         const icon = a.querySelector('svg'), label = [...a.querySelectorAll('span')].find(sp => !sp.children.length && sp.textContent.trim());
-        if (icon) icon.outerHTML = svgIcon('<rect x="3.5" y="3.5" width="7" height="9" rx="2"/><rect x="13.5" y="3.5" width="7" height="5.5" rx="2"/><rect x="3.5" y="15.5" width="7" height="5" rx="2"/><rect x="13.5" y="12" width="7" height="8.5" rx="2"/>', 24);
+        if (icon) icon.outerHTML = galIcon(24);
         if (label) label.textContent = 'Галерея';
         a.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openGallery(); }, true);
         search.after(a);
@@ -8002,8 +8058,28 @@
         @keyframes vp-bump { 30% { transform: scale(1.35); color: var(--accent-primary, #3b9eff); } }
     `;
     document.head.appendChild(styleRefresh);
+    // «…» у сайта на ПК стоит поверх в углу карточки, на телефоне — в строке; кнопку ставим в карточку
+    // по месту самого «…»: вплотную слева, по его центру (отступ — от правого края карточки). Место
+    // пересчитываем на каждом проходе и при смене размера: карточка меняется (пометка «(ред.)», картинки,
+    // шрифт) — раньше кнопка оставалась там, где встала сначала, и съезжала до перезагрузки
+    function placeRefresh(b) {
+        const card = b.parentElement, menu = b._vpMenu;
+        if (!card || !menu || !menu.isConnected) return;
+        const cr = card.getBoundingClientRect(), mr = menu.getBoundingClientRect();
+        if (!mr.width) return;
+        const top = Math.round(mr.top - cr.top + (mr.height - 32) / 2) + 'px', right = Math.round(cr.right - mr.left + 2) + 'px';
+        if (b.style.top !== top || b.style.right !== right) Object.assign(b.style, { position: 'absolute', zIndex: '2', top, right });
+    }
+    addEventListener('resize', () => document.querySelectorAll('.vp-post-refresh').forEach(placeRefresh));
     onDom(function postRefreshButtons() {
         if (!myUsername) return;
+        document.querySelectorAll('.vp-post-refresh').forEach(b => {
+            if (b._vpMenu && !b._vpMenu.isConnected) {                  // сайт перерисовал шапку — найти «…» заново
+                const row = b.parentElement && b.parentElement.querySelector('header > :first-child');
+                b._vpMenu = row && [...row.children].reverse().find(c => c.querySelector('svg') && !c.matches('.' + SELECTORS.nickRow + ', a, .vp-post-refresh'));
+            }
+            placeRefresh(b);
+        });
         const me = myUsername.toLowerCase();
         document.querySelectorAll('header').forEach(h => {
             const row = h.firstElementChild;
@@ -8020,13 +8096,10 @@
             b.title = 'Обновить лайки и комменты';
             b.innerHTML = svgIcon('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>', 18);
             b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); refreshPost(card, b); });
-            // «…» у сайта на ПК стоит поверх в углу карточки, на телефоне — в строке; кнопку ставим в карточку
-            // по месту самого «…» на экране: вплотную слева, по его центру (отступ — от правого края карточки)
             if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
+            b._vpMenu = menu;
             card.appendChild(b);
-            const cr = card.getBoundingClientRect(), mr = menu.getBoundingClientRect();
-            Object.assign(b.style, { position: 'absolute', zIndex: '2',
-                top: Math.round(mr.top - cr.top + (mr.height - 32) / 2) + 'px', right: Math.round(cr.right - mr.left + 2) + 'px' });
+            placeRefresh(b);
         });
     });
 
@@ -8182,13 +8255,28 @@
             n.textContent = total;
             label.textContent = plural(total, 'пост', 'поста', 'постов');
             row.appendChild(mine);
-            if (!calm && !postsCounted.has(login)) {            // накрутка, как у соседних счётчиков, — раз на профиль
-                postsCounted.add(login);
+            const countUpOnce = (n, total) => {
+                if (calm) return;
                 n.style.setProperty('--vp-to', String(total));
                 n.style.setProperty('--vp-count-color', getComputedStyle(n).color);
                 n.classList.add('vp-count');
                 setTimeout(() => n.classList.remove('vp-count'), 1400);
-            }
+            };
+            if (!postsCounted.has(login)) countUpOnce(n, total);   // накрутка, как у соседних счётчиков, — раз на профиль
+            // свой профиль: справа от постов — лайки за всё время (сумма по всем своим постам)
+            if (myUsername && login.toLowerCase() === myUsername.toLowerCase()) myLikesTotal().then(likes => {
+                if (typeof likes !== 'number' || !row.isConnected || row.querySelector('.vp-likes-stat') || loginOf(location.pathname) !== login) return;
+                const lk = mine.cloneNode(true);
+                lk.classList.remove('vp-posts-stat');
+                lk.classList.add('vp-likes-stat');
+                const [ln, llabel] = lk.querySelectorAll('span');
+                ln.classList.remove('vp-count');
+                ln.textContent = likes;
+                llabel.textContent = plural(likes, 'лайк', 'лайка', 'лайков');
+                mine.after(lk);
+                if (!postsCounted.has(login + '|likes')) { postsCounted.add(login + '|likes'); countUpOnce(ln, likes); }
+            });
+            postsCounted.add(login);
         });
     }
     onDom(profilePostsRow);
@@ -8425,6 +8513,30 @@
     let statsPeriod = GM_getValue('vp_stats_tab', 'day'), statsNow = null;
     const DAY_MS = 864e5;
     function statsHistory() { try { return JSON.parse(GM_getValue('vp_stats_hist', '[]')); } catch (e) { return []; } }
+    // Лайки за всё время — сумма лайков всех своих постов: стена листается страницами по 50 (как у сайта,
+    // курсором), ~12 запросов на 500 постов. Поэтому не чаще раза в 3 часа (GM vp_likes_total), в промежутке — число из памяти
+    let likesPending = null;
+    function myLikesTotal() {
+        const c = GM_getValue('vp_likes_total', null);
+        if (c && c.user === myUsername && Date.now() - c.at < 3 * 3600e3) return Promise.resolve(c.total);
+        if (likesPending) return likesPending;
+        likesPending = (async () => {
+            let total = 0, cursor = null, pages = 0;
+            do {
+                const res = await api(`/api/posts/user/${encodeURIComponent(myUsername)}?limit=50&sort=new` + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
+                if (!res.ok) throw new Error('посты: ' + res.status);
+                const j = await res.json(), d = j.data || j;
+                keepSitePosts(j);
+                (d.posts || []).forEach(p => { total += +p.likesCount || 0; });
+                cursor = (d.pagination && d.pagination.nextCursor) || d.nextCursor || d.cursor || null;
+                if (!(d.posts || []).length) break;
+            } while (cursor && ++pages < 60);
+            GM_setValue('vp_likes_total', { user: myUsername, at: Date.now(), total });
+            return total;
+        })().catch(e => { logErr('лайки всего', e); const c2 = GM_getValue('vp_likes_total', null); return c2 && c2.user === myUsername ? c2.total : null; })
+            .finally(() => { likesPending = null; });
+        return likesPending;
+    }
     async function loadStats() {
         if (!myUsername) return setTimeout(loadStats, 1500);
         // счётчики — из /users/me, если он их отдаёт; иначе ответ сайта про мой профиль / свой запрос
@@ -8434,6 +8546,8 @@
             following: pick(d && d.followingCount, d && d.following_count, d && d.stats && d.stats.following, d && typeof d.following === 'number' ? d.following : undefined)
         };
         if (d && typeof d.postsCount === 'number') now.posts = d.postsCount;
+        const likes = await myLikesTotal();
+        if (typeof likes === 'number') now.likes = likes;
         const hist = statsHistory().filter(h => Date.now() - h.at < 40 * DAY_MS);
         if (!hist.length || Date.now() - hist[hist.length - 1].at > 6 * 3600e3) hist.push({ at: Date.now(), ...now });
         GM_setValue('vp_stats_hist', JSON.stringify(hist));
@@ -8451,7 +8565,7 @@
         const short = Date.now() - base.at < span * 0.9;
         railSince.textContent = short && base.at ? 'с ' + new Date(base.at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
             + ', ' + new Date(base.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
-        const rows = [['followers', 'подписчиков'], ['following', 'подписок'], ['posts', 'постов']].filter(([k]) => typeof statsNow[k] === 'number');
+        const rows = [['followers', 'подписчиков'], ['following', 'подписок'], ['posts', 'постов'], ['likes', 'лайков']].filter(([k]) => typeof statsNow[k] === 'number');
         if (!rows.length) { railStats.innerHTML = '<div class="vp-menu-note">Сайт не отдал числа</div>'; return; }
         railStats.innerHTML = '';
         rows.forEach(([k, label]) => {
