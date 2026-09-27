@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.13
+// @version      3.2.14
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -91,6 +91,29 @@
     // Ответы сайта про профили (/api/users/<ник>) подсматриваем и запоминаем: число постов,
     // подписчиков и прочее берём из них, а не шлём свой такой же запрос второй раз.
     const siteUsers = new Map(), siteUsersWait = new Map();
+    // Сайт сам берёт токен (auth/refresh) и спрашивает «кто я» (users/me) при каждой загрузке — мод
+    // раньше повторял оба запроса. Теперь подхватывает ответы сайта и свой делает, только если их не было.
+    const siteAuth = { token: null, at: 0, me: null, meWait: [] };
+    // Номера постов: в карточке ленты ссылки на пост нет — берём из ответов сайта (лента, профиль, пост)
+    // и узнаём карточку по картинке вложения или по автору и тексту
+    const postIndex = { byMedia: new Map(), byUser: new Map() };
+    const normText = t => String(t || '').replace(/\s+/g, ' ').trim();
+    const POSTS_URL = /\/api\/posts(?:\/user\/[^/?#]+(?:\/liked)?|\/[0-9a-f-]{36})?\/?(?:[?#]|$)/;
+    function keepSitePosts(body) {
+        try {
+            const j = typeof body === 'string' ? JSON.parse(body) : body;
+            const list = (j && j.data && (j.data.posts || (j.data.id ? [j.data] : null))) || (j && j.posts) || [];
+            for (const p of list) {
+                if (!p || !p.id || !p.author) continue;
+                (p.attachments || []).forEach(a => a && a.url && postIndex.byMedia.set(a.url, p.id));
+                const user = String(p.author.username || '').toLowerCase(), text = normText(p.content);
+                if (!user || !text) continue;
+                const mine = postIndex.byUser.get(user) || new Map();
+                mine.set(p.id, text);
+                postIndex.byUser.set(user, mine);
+            }
+        } catch (e) { /* не JSON — не наш ответ */ }
+    }
     const USER_URL = /\/api\/users\/([\w.]+)\/?(?:[?#]|$)/;
     function keepSiteUser(url, body) {
         const m = String(url).match(USER_URL);
@@ -128,6 +151,18 @@
                     const method = (init && init.method) || (input && input.method) || 'GET';
                     if (url && /^get$/i.test(method) && USER_URL.test(url)) {
                         res.then(r => r.ok && r.clone().text().then(t => keepSiteUser(url, t))).catch(() => { });
+                    }
+                    if (url && /^get$/i.test(method) && POSTS_URL.test(url)) {
+                        res.then(r => r.ok && r.clone().text().then(keepSitePosts)).catch(() => { });
+                    }
+                    if (url && /\/auth\/refresh(?:[?#]|$)/.test(url)) {
+                        res.then(r => r.ok && r.clone().json().then(d => { if (d && d.accessToken) { siteAuth.token = d.accessToken; siteAuth.at = Date.now(); } })).catch(() => { });
+                    }
+                    if (url && /^get$/i.test(method) && /\/api\/users\/me\/?(?:[?#]|$)/.test(url)) {
+                        res.then(r => r.ok && r.clone().json().then(d => {
+                            const me = d && (d.data || d.user || d);
+                            if (me && me.username) { siteAuth.me = me; siteAuth.meWait.splice(0).forEach(done => done(me)); }
+                        })).catch(() => { });
                     }
                 } catch (e) { /* подсмотр не должен ломать запрос сайта */ }
                 return res;
@@ -1605,6 +1640,8 @@
 
         const usersData = {};
         await Promise.all(usernames.map(async username => {
+            const v = verifiedInfo(username);
+            if (v && (v.displayName || v.avatar)) { usersData[username] = { username, displayName: v.displayName, avatar: v.avatar }; return; }
             try {
                 const res = await api(`/api/users/${username}`);
                 if (res.ok) usersData[username] = await res.json();
@@ -3578,6 +3615,9 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.2.14', '27 сентября 2026', [
+            'На своих постах — кнопка «обновить» слева от «…»: лайки, комменты и просмотры обновляются без перезагрузки страницы',
+            'Меньше запросов к сайту: «Клуб ИТД X» и автолайки не спрашивают профиль каждого участника, мод не повторяет запросы сайта при загрузке']],
         ['3.2.13', '27 сентября 2026', ['Форма «Ответить» в комментариях больше не тёмный прямоугольник']],
         ['3.2.12', '27 сентября 2026', [
             'Ссылки в постах и комментариях (t.me/…, https://…) подсвечиваются и открываются по нажатию',
@@ -3667,6 +3707,7 @@
     // (раньше автолайк обновлял токен на каждого пользователя разом), на 401 — берём свежий.
     let token = null, tokenTime = 0, tokenPending = null;
     function getAccessToken(force) {
+        if (!force && siteAuth.token && siteAuth.at > tokenTime && Date.now() - siteAuth.at < 4 * 60 * 1000) { token = siteAuth.token; tokenTime = siteAuth.at; }
         if (!force && token && Date.now() - tokenTime < 4 * 60 * 1000) return Promise.resolve(token);
         if (!tokenPending) {
             tokenPending = fetch('/api/v1/auth/refresh', { method: 'POST', credentials: 'include' })
@@ -3709,23 +3750,38 @@
         try { return Object.keys(JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}') || {}); } catch (e) { return []; }
     }
 
-    async function loadVerificationComments() {
-        const res = await api(`/api/posts/${VERIFICATION_POST_ID}/comments?limit=100`);
-        if (!res.ok) throw new Error('комментарии: ' + res.status);
-        const data = await res.json();
-        return data.data?.comments || data.comments || [];
+    // Служебный пост читают проверка всех и проверка себя подряд — это один и тот же ответ:
+    // держим его 20 с (fresh — после своего нового кода, нужен свежий)
+    let verifyLoad = null, verifyLoadAt = 0;
+    function loadVerificationComments(fresh) {
+        if (!fresh && verifyLoad && Date.now() - verifyLoadAt < 20000) return verifyLoad;
+        verifyLoadAt = Date.now();
+        verifyLoad = api(`/api/posts/${VERIFICATION_POST_ID}/comments?limit=100`).then(async res => {
+            if (!res.ok) throw new Error('комментарии: ' + res.status);
+            const data = await res.json();
+            return data.data?.comments || data.comments || [];
+        });
+        verifyLoad.catch(() => { verifyLoad = null; });
+        return verifyLoad;
+    }
+    // Ник и аватар участника — из его же комментария-кода: у комментария есть автор. Клубу и автолайкам
+    // так не нужен отдельный запрос профиля на каждого (при сотне участников это сотня запросов на вкладку)
+    function verifiedInfo(name) {
+        try { return (JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}') || {})[name] || null; } catch (e) { return null; }
     }
 
-    async function checkAllComments() {
+    async function checkAllComments(fresh) {
         if (isVerifying) return null;
         isVerifying = true;
         try {
             const verifiedUsers = {};
-            for (const c of await loadVerificationComments()) {
+            for (const c of await loadVerificationComments(fresh)) {
                 const name = c.author?.username;
                 const parsed = parseCode(c.content);
                 if (!name || verifiedUsers[name] || !isModCode(name, parsed)) continue;
-                verifiedUsers[name] = { code: parsed.code, commentId: c.id, hasMod: true, flags: parsed.flags };
+                const a = c.author, ava = a.avatar && (a.avatar.url || a.avatar) || a.avatarUrl || a.emoji;
+                verifiedUsers[name] = { code: parsed.code, commentId: c.id, hasMod: true, flags: parsed.flags,
+                    displayName: a.displayName || a.display_name || undefined, avatar: typeof ava === 'string' ? ava : undefined };
             }
             if (JSON.stringify(verifiedUsers) !== localStorage.getItem(VERIFICATION_STORAGE_KEY)) {
                 localStorage.setItem(VERIFICATION_STORAGE_KEY, JSON.stringify(verifiedUsers));
@@ -3754,7 +3810,7 @@
                 body: JSON.stringify({ content: generateCode(myUsername) + '1' })
             });
             if (!res.ok) return false;
-            await checkAllComments();
+            await checkAllComments(true);
             return true;
         } catch (e) {
             console.warn('[ITD VP] верификация себя:', e);
@@ -3845,7 +3901,8 @@
 
     async function initVisuals() {
         try {
-            const me = await (await api('/api/users/me')).json();
+            const me = siteAuth.me || await new Promise(done => { siteAuth.meWait.push(done); setTimeout(() => done(null), 1500); })
+                || await (await api('/api/users/me')).json();
             if (!me || !me.username) return;              // не вошли или API не ответил — свои ники искать не по чему
             meData = me;
             myUsername = me.username;
@@ -7226,6 +7283,96 @@
     document.addEventListener('click', e => { if (e.target.closest && e.target.closest(PROFILE_LINK)) { clearTimeout(hcTimer); hcClose(); } }, true);
     onDom(function hcLinkGone() { if (hc && !(hcLink && hcLink.isConnected)) hcClose(); });
 
+    // --- Обновить пост: на своих постах слева от «…» — один запрос счётчиков (как у сайта, POST /api/posts/stats),
+    // лайки, комменты, репосты и просмотры меняются на месте, без перезагрузки; изменившиеся — вспыхивают
+    function postIdOf(card) {
+        if (!card.matches('article')) { const m = location.pathname.match(/\/post\/([0-9a-f-]{36})/); if (m) return m[1]; }
+        for (const img of card.querySelectorAll('img')) { const id = postIndex.byMedia.get(img.currentSrc || img.src); if (id) return id; }
+        const bg = card.dataset.blurBg && postIndex.byMedia.get(card.dataset.blurBg);
+        if (bg) return bg;
+        const link = card.querySelector('header ' + PROFILE_LINK) || card.querySelector(PROFILE_LINK);
+        const user = link && loginOf(link.getAttribute('href'));
+        const posts = user && postIndex.byUser.get(user.toLowerCase());
+        if (!posts) return null;
+        const text = normText([...card.querySelectorAll('.' + SELECTORS.postText)].filter(t => !t.closest('.' + SELECTORS.repost)).map(t => t.textContent).join(' '));
+        if (!text) return null;
+        for (const [id, t] of posts) if (t === text || text.startsWith(t) || t.startsWith(text)) return id;
+        return null;
+    }
+    // числа в подвале карточки: лайки, комменты, репосты, просмотры — элементы с числом
+    function postCounters(card) {
+        const foot = card.querySelector('footer');
+        if (!foot) return null;
+        const num = el => el && [...el.querySelectorAll('span')].reverse().find(sp => !sp.children.length && /^\d[\d\s.,KkКк]*$/.test(sp.textContent.trim()));
+        const btn = label => num(foot.querySelector(`button[aria-label="${label}"]`));
+        const views = [...foot.querySelectorAll('span')].filter(sp => !sp.closest('button') && sp.querySelector('svg')).map(num).filter(Boolean).pop();
+        return { likesCount: btn('Нравится'), commentsCount: btn('Комментировать'), repostsCount: btn('Репост'), viewsCount: views };
+    }
+    async function refreshPost(card, btn) {
+        const id = postIdOf(card);
+        if (!id || btn.classList.contains('vp-spin')) return;
+        btn.classList.add('vp-spin');
+        try {
+            const res = await api('/api/posts/stats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [id] }) });
+            const j = res.ok ? await res.json() : null;
+            const st = j && ((j.posts || (j.data && j.data.posts) || [])[0]);
+            if (!st) throw new Error('счётчики: ' + res.status);
+            const els = postCounters(card) || {};
+            let changed = 0;
+            for (const k of ['likesCount', 'commentsCount', 'repostsCount', 'viewsCount']) {
+                const el = els[k];
+                if (!el || typeof st[k] !== 'number' || el.textContent.trim() === String(st[k])) continue;
+                el.textContent = String(st[k]);
+                el.classList.remove('vp-bump'); void el.offsetWidth; el.classList.add('vp-bump');
+                changed++;
+            }
+            btn.title = changed ? 'Обновлено' : 'Ничего нового';
+        } catch (e) {
+            logErr('обновить пост', e);
+            btn.title = 'Не вышло обновить';
+        } finally {
+            setTimeout(() => btn.classList.remove('vp-spin'), 400);
+        }
+    }
+    const styleRefresh = document.createElement('style');
+    styleRefresh.textContent = `
+        .vp-post-refresh { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; margin-right: 2px;
+            border: 0; border-radius: 50%; background: none; color: var(--text-secondary, #8a8a8a); cursor: pointer; flex: 0 0 auto; }
+        .vp-post-refresh:hover { background: var(--block-hover-bg, rgba(128,128,128,.15)); color: var(--text-primary, #fff); }
+        .vp-post-refresh.vp-spin svg { animation: vp-refresh-spin .6s linear infinite; }
+        @keyframes vp-refresh-spin { to { transform: rotate(360deg); } }
+        .vp-bump { animation: vp-bump .7s ease-out; display: inline-block; }
+        @keyframes vp-bump { 30% { transform: scale(1.35); color: var(--accent-primary, #3b9eff); } }
+    `;
+    document.head.appendChild(styleRefresh);
+    onDom(function postRefreshButtons() {
+        if (!myUsername) return;
+        const me = myUsername.toLowerCase();
+        document.querySelectorAll('header').forEach(h => {
+            const row = h.firstElementChild;
+            if (!row) return;
+            const card = h.closest('article') || h.closest('div:has(> footer)') || (h.parentElement && h.parentElement.closest('div:has(footer)'));
+            if (!card || card.querySelector(':scope > .vp-post-refresh') || !card.querySelector('footer') || card.closest('.vp-msgs')) return;
+            const link = h.querySelector(PROFILE_LINK) || card.querySelector(PROFILE_LINK);
+            if (!link || (loginOf(link.getAttribute('href')) || '').toLowerCase() !== me) return;
+            const menu = [...row.children].reverse().find(c => c.querySelector('svg') && !c.matches('.' + SELECTORS.nickRow + ', a'));
+            if (!menu || !postIdOf(card)) return;
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'vp-post-refresh';
+            b.title = 'Обновить лайки и комменты';
+            b.innerHTML = svgIcon('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>', 18);
+            b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); refreshPost(card, b); });
+            // «…» у сайта на ПК стоит поверх в углу карточки, на телефоне — в строке; кнопку ставим в карточку
+            // по месту самого «…» на экране: вплотную слева, по его центру (отступ — от правого края карточки)
+            if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
+            card.appendChild(b);
+            const cr = card.getBoundingClientRect(), mr = menu.getBoundingClientRect();
+            Object.assign(b.style, { position: 'absolute', zIndex: '2',
+                top: Math.round(mr.top - cr.top + (mr.height - 32) / 2) + 'px', right: Math.round(cr.right - mr.left + 2) + 'px' });
+        });
+    });
+
     // --- Ссылки в тексте: сайт показывает t.me/…, https://… простым текстом. Текст сайта не трогаем
     // (вставить свой <a> в текст React — он потом падает на обновлении поста): места ссылок держим
     // диапазонами, подсвечиваем их CSS-подсветкой (::highlight), нажатие ловим по точке под пальцем.
@@ -7689,7 +7836,10 @@
         clubShown = key;
         rail.querySelector('.vp-club-count').textContent = names.length || '';
         if (!names.length) { railClub.innerHTML = '<div class="vp-menu-note">Пока никого</div>'; return; }
-        const people = await Promise.all(names.map(async n => ({ n, d: await hcData(n) })));
+        const people = await Promise.all(names.map(async n => {
+            const v = verifiedInfo(n);
+            return { n, d: v && (v.displayName || v.avatar) ? v : n === myUsername && meData ? meData : await hcData(n) };
+        }));
         railClub.innerHTML = '';
         people.sort((a, b) => (a.n === myUsername ? -1 : b.n === myUsername ? 1 : a.n.localeCompare(b.n))).forEach(({ n, d }) => {
             const row = document.createElement('div');
