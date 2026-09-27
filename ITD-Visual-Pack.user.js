@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.11.1
+// @version      3.2.12
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1886,6 +1886,8 @@
         .nick-style-option:not(:last-child) {
             margin-bottom: 2px !important;
         }
+        .settings-dropdown.vp-logo-menu { min-width: 170px !important; padding: 6px !important; }
+        .settings-dropdown.vp-logo-menu .vp-opt-icon { display: inline-flex; width: 20px; justify-content: center; }
         .settings-dropdown {
             background: var(--block-bg, #1e1e2e) !important;
             border-radius: 24px !important;
@@ -2724,6 +2726,27 @@
         return option;
     }
 
+    // --- Иконка ИТД X в углу: не сразу в ТГ, а мини-меню «ТГК» / «Донат». Ссылка у иконки остаётся
+    // (по ней скрипт узнаёт свой логотип), нажатие перехватываем
+    const LOGO_LINKS = [
+        ['ТГК', 'https://t.me/NeuroSFW', '<path d="M21 4 3 11l6 2m12-9-3 16-9-7m12-9L9 13m0 0v6l3-4"/>'],
+        ['Донат', 'https://donatex.gg/donate/kiwe147', '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>']
+    ];
+    document.addEventListener('click', e => {
+        const a = e.target.closest && e.target.closest('a[href="https://t.me/NeuroSFW"]');
+        if (!a || !a.querySelector('img, svg')) return;
+        e.preventDefault(); e.stopPropagation();
+        const menu = document.createElement('div');
+        menu.className = 'settings-dropdown vp-logo-menu';
+        for (const [label, url, icon] of LOGO_LINKS) {
+            const ic = document.createElement('span');
+            ic.className = 'vp-opt-icon';
+            ic.innerHTML = svgIcon(icon, 18);
+            menu.appendChild(menuOption(ic, label, () => window.open(url, '_blank', 'noopener')));
+        }
+        openPopup(a, menu);
+    }, true);
+
     // --- стиль ника
     function getColorDot(styleKey) {
         const style = nickStyles[styleKey];
@@ -3555,6 +3578,14 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.2.12', '27 сентября 2026', [
+            'Ссылки в постах и комментариях (t.me/…, https://…) подсвечиваются и открываются по нажатию',
+            'Иконка ИТД X в углу открывает меню: ТГК и донат',
+            'Всплывающее поверх страницы (уведомления сайта, выпадающие окна) больше не просвечивает насквозь',
+            'Уведомления, пришедшие пока открыт список, тоже окрашиваются',
+            'Карточка профиля при наведении не остаётся висеть после перехода в профиль',
+            'Баннер больше не бледнеет, если зайти в профиль из прокрученной ленты',
+            'Свечение за видео меняет цвет плавно, без скачков']],
         ['3.2.11', '27 сентября 2026', ['Кнопки баннера — аккуратная «шторка» сверху по центру; на компьютере появляются при наведении']],
         ['3.2.10', '29 сентября 2026', ['Стикеры: при перетаскивании стикер больше не отстаёт от пальца']],
         ['3.2.9', '29 сентября 2026', [
@@ -6235,7 +6266,10 @@
             const emoji = avatar ? avatar.textContent.trim() : '';
             const withBlur = postBlurEnabled && !!post.querySelector('.' + SELECTORS.postMedia);
             const key = emoji ? emoji + (withBlur ? '|blur' : '') : '';
-            if ((post.getAttribute('data-post-colored') || '') === key) return;
+            // сайт сам переставляет className карточки (прочитано, обновилось) и стирает наш класс, а метка
+            // остаётся — поэтому «уже покрашено» = метка совпала И класс на месте
+            const tinted = !key || withBlur || post.classList.contains('vp-emoji-tint');
+            if ((post.getAttribute('data-post-colored') || '') === key && tinted) return;
             untintCard(post);
             if (!key) { post.removeAttribute('data-post-colored'); return; }
             post.setAttribute('data-post-colored', key);
@@ -6278,7 +6312,8 @@
             const emoji = emojiAvatarOf(el) || '';
             // сайт переиспользует пункты списка — перекрашиваем, если эмодзи сменилась (или пропала:
             // тогда снимаем старый цвет, а не оставляем чужой)
-            if ((el.getAttribute('data-colored') || '') === emoji) return;
+            // …и если сайт переставил className (новое уведомление пришло, пока открыт список) — класс пропал
+            if ((el.getAttribute('data-colored') || '') === emoji && (!emoji || el.classList.contains('vp-emoji-tint'))) return;
             untintCard(el);
             if (emoji) el.setAttribute('data-colored', emoji); else el.removeAttribute('data-colored');
             if (emoji) tintCard(el, emoji);
@@ -6442,11 +6477,11 @@
         html.vp-glass.vp-glass-lite[data-theme="dark"] { --block-bg: rgba(28, 28, 28, .82); --block-bg-secondary: rgba(42, 42, 44, .85); }
         html.vp-glass.vp-glass-lite.vp-light { --block-bg: rgba(255, 255, 255, .85); }
         /* шторка комментариев на телефоне: стекло плотнее — сквозь неё просвечивала лента и мешала читать */
-        html.vp-glass[data-theme="dark"] .vp-comments-sheet {
+        html.vp-glass[data-theme="dark"] :is(.vp-comments-sheet, .vp-float) {
             --block-bg: rgba(24, 24, 24, .9); --block-bg-secondary: rgba(38, 38, 40, .9); --block-hover-bg: rgba(44, 44, 47, .92);
             --modal-bg: rgba(17, 17, 17, .94); --glass-bg: rgba(30, 30, 30, .9);
         }
-        html.vp-glass.vp-light .vp-comments-sheet {
+        html.vp-glass.vp-light :is(.vp-comments-sheet, .vp-float) {
             --block-bg: rgba(255, 255, 255, .92); --block-bg-secondary: rgba(240, 240, 240, .92); --block-hover-bg: rgba(245, 245, 245, .94);
             --modal-bg: rgba(255, 255, 255, .95); --glass-bg: rgba(255, 255, 255, .9);
         }
@@ -6581,7 +6616,7 @@
     // Классы сайта — хеши, а так их знать не нужно. Новые таблицы (подгрузка) — дописываем.
     const glassCss = document.createElement('style');
     document.head.appendChild(glassCss);
-    let glassSheets = -1;
+    let glassSheets = -1, glassSel = '';
     function collectGlass() {
         if (document.styleSheets.length === glassSheets) return;
         glassSheets = document.styleSheets.length;
@@ -6597,6 +6632,7 @@
             if (sh.ownerNode === glassCss || sh.ownerNode === fx) continue;
             try { walk(sh.cssRules); } catch (e) { /* чужой домен — пропускаем */ }
         }
+        glassSel = [...sels].join(', ');
         glassCss.textContent = [...sels].map(sel => `html.vp-glass :is(${sel}) { backdrop-filter: var(--vp-glass-filter); -webkit-backdrop-filter: var(--vp-glass-filter); }`).join('\n');
     }
     function applyGlass() {
@@ -6605,6 +6641,26 @@
     }
     applyGlass();
     onDom(function glassSheetsCheck() { if (glassEnabled) collectGlass(); });
+    // Всплывающее поверх страницы (уведомления-тосты, выпадашки, окно эмодзи) со стеклом становилось
+    // кашей: сквозь полупрозрачный фон читался текст под ним. Такие слои — плотнее (класс vp-float,
+    // те же переменные, что у шторки комментариев). Всплывающее = блок или его предок до 5 уровней
+    // стоит fixed или absolute поверх (z-index ≥ 5): просто absolute — это посты в ленте, сайт так
+    // раскладывает длинный список. Навигация и сами посты — не всплывающее. Каждый элемент — один раз.
+    const floatSeen = new WeakSet();
+    let floatAt = 0;
+    onDom(function glassFloating() {
+        if (!glassEnabled || !glassSel || performance.now() - floatAt < 250) return;
+        floatAt = performance.now();
+        document.querySelectorAll(`:is(${glassSel}), [style*="--block-bg"], [style*="--modal-bg"], [style*="--glass-bg"]`).forEach(el => {
+            if (floatSeen.has(el)) return;
+            floatSeen.add(el);
+            if (el.matches('article, .' + SELECTORS.post + ', .' + SELECTORS.avatar) || el.closest('nav, aside, .vp-rail, .vp-msgs, .vp-comments-sheet')) return;
+            for (let n = el, i = 0; n && n !== document.body && i < 6; n = n.parentElement, i++) {
+                const cs = getComputedStyle(n);
+                if (cs.position === 'fixed' || (cs.position === 'absolute' && +cs.zIndex >= 5)) { el.classList.add('vp-float'); return; }
+            }
+        });
+    });
     // Шторка комментариев (телефон): самый внешний закреплённый на экране блок вокруг поля комментария
     onDom(function commentsSheet() {
         for (const input of commentInputs()) {
@@ -7022,6 +7078,9 @@
         const vr = v.getBoundingClientRect(), hr = a.host.getBoundingClientRect(), pad = 26;
         Object.assign(a.cv.style, { left: (vr.left - hr.left - pad) + 'px', top: (vr.top - hr.top - pad) + 'px',
             width: (vr.width + pad * 2) + 'px', height: (vr.height + pad * 2) + 'px' });
+        // новый кадр ложится поверх прошлого полупрозрачно: свечение перетекает за ~секунду,
+        // а не скачет на каждой смене сцены (первый кадр — целиком)
+        a.g.globalAlpha = a.cv.classList.contains('vp-on') ? .2 : 1;
         try { a.g.drawImage(v, 0, 0, 48, 27); a.cv.classList.add('vp-on'); } catch (e) { /* кадр ещё не готов */ }
     }
     setInterval(() => {
@@ -7155,24 +7214,99 @@
         if (a && !a.contains(e.relatedTarget)) { clearTimeout(hcTimer); hcScheduleHide(); }
     }, true);
     addEventListener('scroll', () => { clearTimeout(hcTimer); hcClose(); }, { capture: true, passive: true });
+    // нажали ник — сайт уводит в профиль и убирает ссылку, pointerout не приходит: карточка оставалась
+    // висеть уже в профиле. Закрываем по нажатию и когда ссылка, к которой она привязана, пропала
+    document.addEventListener('click', e => { if (e.target.closest && e.target.closest(PROFILE_LINK)) { clearTimeout(hcTimer); hcClose(); } }, true);
+    onDom(function hcLinkGone() { if (hc && !(hcLink && hcLink.isConnected)) hcClose(); });
+
+    // --- Ссылки в тексте: сайт показывает t.me/…, https://… простым текстом. Текст сайта не трогаем
+    // (вставить свой <a> в текст React — он потом падает на обновлении поста): места ссылок держим
+    // диапазонами, подсвечиваем их CSS-подсветкой (::highlight), нажатие ловим по точке под пальцем.
+    const LINK_RE = /(?:https?:\/\/|www\.)[^\s<>"'«»]+|(?<![\w@.\/-])(?:[a-z0-9-]+\.)+(?:com|ru|me|org|net|io|gg|tv|app|dev|xyz|su|ly|co|be|link|site|store|online|info|pro|рф)(?:\/[^\s<>"'«»]*)?(?![\w-])|(?<![\w@.\/-])[а-яё0-9-]+\.(?:com|рф|ru)(?![\w-])/giu;
+    const linkNodes = new Map();                        // текстовый узел → { text, links: [{ start, end, url }] }
+    const linkHl = window.Highlight && CSS.highlights ? new Highlight() : null;
+    if (linkHl) CSS.highlights.set('vp-link', linkHl);
+    const styleLinks = document.createElement('style');
+    styleLinks.textContent = `::highlight(vp-link) { color: var(--accent-primary, #3b9eff); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }`;
+    document.head.appendChild(styleLinks);
+    let linksAt = 0;
+    function scanLinks() {
+        const root = document.getElementById('root');
+        if (!root) return;
+        for (const node of linkNodes.keys()) if (!node.isConnected) linkNodes.delete(node);
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const text = node.nodeValue;
+            if (text.length < 5 || !text.includes('.')) { linkNodes.delete(node); continue; }
+            const known = linkNodes.get(node);
+            if (known && known.text === text) continue;
+            const host = node.parentElement;
+            if (!host || host.closest('a, button, input, textarea, [contenteditable], script, style, .vp-settings-tabs')) continue;
+            const links = [];
+            for (const m of text.matchAll(LINK_RE)) {
+                const raw = m[0].replace(/[.,!?:;)\]]+$/, '');
+                if (raw.length < 4) continue;
+                links.push({ start: m.index, end: m.index + raw.length, url: /^https?:\/\//i.test(raw) ? raw : 'https://' + raw });
+            }
+            if (links.length) linkNodes.set(node, { text, links }); else linkNodes.delete(node);
+        }
+        if (!linkHl) return;
+        linkHl.clear();
+        for (const [node, { links }] of linkNodes) for (const l of links) {
+            const r = new Range();
+            r.setStart(node, l.start); r.setEnd(node, l.end);
+            linkHl.add(r);
+        }
+    }
+    onDom(function linksScan() {
+        if (performance.now() - linksAt < 500) return;
+        linksAt = performance.now();
+        scanLinks();
+    });
+    // ссылка под точкой экрана (мышь или палец)
+    function linkAt(x, y) {
+        const pos = document.caretPositionFromPoint ? document.caretPositionFromPoint(x, y) : document.caretRangeFromPoint && document.caretRangeFromPoint(x, y);
+        if (!pos) return null;
+        const node = pos.offsetNode || pos.startContainer, off = pos.offset ?? pos.startOffset;
+        const info = node && linkNodes.get(node);
+        if (!info || info.text !== node.nodeValue) return null;
+        const l = info.links.find(l => off >= l.start && off <= l.end);
+        if (!l) return null;
+        // точка правее конца строки тоже даёт «последний символ» — проверяем, что палец на самих буквах
+        const r = new Range(); r.setStart(node, l.start); r.setEnd(node, l.end);
+        return [...r.getClientRects()].some(b => x >= b.left - 2 && x <= b.right + 2 && y >= b.top - 2 && y <= b.bottom + 2) ? l : null;
+    }
+    document.addEventListener('click', e => {
+        if (e.button || !linkNodes.size || e.target.closest('a, button, input, textarea')) return;
+        const l = linkAt(e.clientX, e.clientY);
+        if (!l) return;
+        e.preventDefault(); e.stopPropagation();
+        window.open(l.url, '_blank', 'noopener');
+    }, true);
+    let linkHover = null;
+    document.addEventListener('mousemove', e => {
+        if (!linkNodes.size) return;
+        const el = linkAt(e.clientX, e.clientY) ? e.target : null;
+        if (el === linkHover) return;
+        if (linkHover) linkHover.style.cursor = '';
+        linkHover = el;
+        if (el) el.style.cursor = 'pointer';
+    }, { passive: true });
 
     // --- 13. Баннер с глубиной
-    let bannerTop0 = null, bannerQueued = false, bannerSc = null, bannerH = 0;
+    // Сдвиг считаем по месту самого баннера на экране (один замер на кадр), а не по прокрутке блока,
+    // запомненного раньше: после перехода с прокрученной ленты тот хранил старую прокрутку —
+    // баннер в профиле оставался бледным и сдвинутым
+    let bannerQueued = false;
     function bannerDepth() {
         bannerQueued = false;
         const banner = document.querySelector('.' + SELECTORS.banner);
         const img = banner && banner.querySelector(':scope > img[alt="Banner"]');
-        if (!img || bannerEdit.img) { bannerTop0 = null; return; }       // пока баннер двигают в редакторе — не мешаем
+        if (!img || bannerEdit.img) return;                                // пока баннер двигают в редакторе — не мешаем
         banner.classList.add('vp-depth');
-        // замер раскладки — только раз; дальше — по прокрутке (сайт крутит #root, а не окно), без замеров
-        if (bannerTop0 === null || !bannerSc || !bannerSc.isConnected) {
-            bannerSc = [document.getElementById('root'), document.scrollingElement].find(e => e && e.scrollHeight > e.clientHeight + 1) || document.scrollingElement;
-            const r0 = banner.getBoundingClientRect(); bannerTop0 = r0.top + bannerSc.scrollTop; bannerH = r0.height;
-        }
-        const sc = bannerSc;
-        const r = { height: bannerH };
-        const past = Math.max(0, sc.scrollTop);                       // на сколько баннер уехал вверх (он в самом верху страницы)
-        if (past > r.height + bannerTop0) return;                    // давно за экраном
+        const r = banner.getBoundingClientRect();
+        if (r.bottom < -40 || r.top > innerHeight) return;               // за экраном
+        const past = Math.max(0, -r.top);                                  // на сколько баннер ушёл за верх экрана
         // пишем стиль, только если сдвиг заметно изменился: на прокрутке это каждый кадр
         const y = Math.round(past * .35);
         if (img._vpY === y && !calm) return;
@@ -7182,7 +7316,6 @@
     }
     addEventListener('scroll', () => { if (!bannerQueued) { bannerQueued = true; requestAnimationFrame(bannerDepth); } }, { capture: true, passive: true });
     onDom(function bannerDepthDom() { bannerDepth(); });
-    addEventListener('popstate', () => { bannerTop0 = null; });
 
     // --- 14. Счётчики профиля «накручиваются» до своего числа (один раз на профиль)
     const COUNT_LABEL = /подпис|пост|лайк|друз/i;
