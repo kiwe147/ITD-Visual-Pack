@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.20
+// @version      3.2.21
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3771,6 +3771,7 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.2.21', '28 сентября 2026', ['«Что нового»: страница за окном размыта сразу, а не после нажатия']],
         ['3.2.20', '28 сентября 2026', [
             'Кнопка «назад» и переходы с открытой галереей и «Сообщениями» работают как на обычных страницах: переход по меню больше не возвращает обратно, «назад» из поста — снова в галерею, «вперёд» открывает окно снова',
             'Галерея и «Сообщения» сменяют друг друга без лишних нажатий «назад»']],
@@ -6946,7 +6947,9 @@
 
         /* «Что нового в ИТД X» — как окно «Что нового» сайта */
         .vp-news-back { position: fixed; inset: 0; z-index: 10050; background: rgba(0, 0, 0, .5); display: flex;
-            align-items: center; justify-content: center; padding: 16px; animation: vpNewsFade .18s ease; }
+            align-items: center; justify-content: center; padding: 16px; animation: vpNewsFade .18s ease;
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }             /* страница за окном — размыта сразу */
+        html.vp-light .vp-news-back { background: rgba(0, 0, 0, .25); }
         .vp-news-box { width: min(780px, 100%); max-height: min(82vh, 900px); display: flex; flex-direction: column; overflow: hidden;
             background: var(--modal-bg, var(--block-bg, #1c1c1c)); color: var(--text-primary, #fff); border-radius: 28px;
             border: 1px solid var(--border-color, rgba(255, 255, 255, .12)); box-shadow: 0 24px 64px rgba(0, 0, 0, .45);
@@ -6965,7 +6968,7 @@
         .vp-news-ver ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
         .vp-news-ver li { position: relative; padding-left: 24px; font-size: 16px; line-height: 1.45; }
         .vp-news-ver li::before { content: ""; position: absolute; left: 2px; top: .6em; width: 6px; height: 6px; border-radius: 50%; background: #2a8cff; }
-        @keyframes vpNewsFade { from { opacity: 0; } }
+        @keyframes vpNewsFade { from { opacity: 0; backdrop-filter: blur(0); -webkit-backdrop-filter: blur(0); } }
         @keyframes vpNewsIn { from { opacity: 0; transform: translateY(12px) scale(.98); } }
         @media (prefers-reduced-motion: reduce) { .vp-news-back, .vp-news-box { animation: none; } }
         .itd-update-sidebar-btn {
