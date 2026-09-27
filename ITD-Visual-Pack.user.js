@@ -3747,6 +3747,7 @@
     const CHANGELOG = [
         ['3.2.17', '28 сентября 2026', [
             'Галерея: на компьютере — по центру, от меню до правой панели; вкладки как у ленты; стеклянный фон, как у постов; лента под ней больше не просвечивает; без крестика — обычная вкладка',
+            'Лента → Галерея → «Лента» больше не обновляет ленту (и с «Сообщениями» так же)',
             'В профиле — «лайков» при любом числе']],
         ['3.2.16', '28 сентября 2026', [
             'Лайки за всё время — в своём профиле рядом с постами; в «Статистике» — сколько прибавилось за день и за месяц',
@@ -6080,7 +6081,8 @@
         document.addEventListener('click', e => {
             if (!root.classList.contains('vp-open')) return;
             const a = e.target.closest && e.target.closest('a.' + SELECTORS.navLink);
-            if (a && a.getAttribute('href') !== '#' && a.getAttribute('href') === location.pathname) close();
+            // тот же пункт — только закрыть личку: иначе сайт считает это повторным нажатием и обновляет страницу
+            if (a && a.getAttribute('href') !== '#' && a.getAttribute('href') === location.pathname) { e.preventDefault(); e.stopPropagation(); close(); }
         }, true);
         // перешли на другую страницу (пункт меню, ссылка) — «страница» лички закрывается
         onDom(function msgsLeft() { if (root.classList.contains('vp-open') && location.pathname !== openPath) close(true); });
@@ -7999,10 +8001,15 @@
     }
     addEventListener('popstate', () => { if (gal.el) { gal.hist = false; closeGallery(true); } });
     onDom(function galLeft() { if (gal.el && location.pathname !== gal.path) { closeGallery(true); } });
+    // пункт меню: другая страница — закрыть и перейти; пункт той же страницы (галерею открыли с ленты
+    // и жмут «Ленту») — только закрыть: адрес при галерее не менялся, и сайт считал это повторным
+    // нажатием на текущий пункт — прокручивал и обновлял ленту
     document.addEventListener('click', e => {
         if (!gal.el) return;
         const a = e.target.closest && e.target.closest('a.' + SELECTORS.navLink);
-        if (a && !a.classList.contains('vp-gal-nav')) closeGallery();
+        if (!a || a.classList.contains('vp-gal-nav')) return;
+        if (a.getAttribute('href') === gal.path) { e.preventDefault(); e.stopPropagation(); }
+        closeGallery();
     }, true);
     addEventListener('keydown', e => { if (e.key === 'Escape' && gal.el) closeGallery(); });
     let galCols = galColsCount();

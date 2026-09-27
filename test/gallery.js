@@ -88,6 +88,21 @@ const page = n => ({ data: { posts: Array.from({ length: 20 }, (_, i) => {
   await p.goBack();
   await p.waitForTimeout(500);
   check(!(await p.$('.vp-gal')) && (await p.evaluate(() => location.pathname)) === url0, '«назад» закрывает галерею и не уводит со страницы');
+  // Лента → Галерея → «Лента»: галерея закрылась, а сайт нажатия не получил (не обновлял ленту)
+  const navLink = mode === 'desktop' ? 'nav a[href="/"]' : 'nav a[href="/"]';
+  await p.evaluate(u => { history.pushState({}, '', u); dispatchEvent(new PopStateEvent('popstate')); }, url0);
+  await p.click(sel); await p.waitForTimeout(400);
+  const same = await p.evaluate(sel => {
+    const a = document.querySelector(sel);
+    if (!a) return 'нет пункта';
+    let siteGot = false;
+    const spy = () => { siteGot = true; };
+    document.addEventListener('click', spy);                    // обработчик «сайта» — на всплытии
+    a.click();
+    document.removeEventListener('click', spy);
+    return JSON.stringify({ closed: !document.querySelector('.vp-gal'), siteGot });
+  }, navLink);
+  check(same === '{"closed":true,"siteGot":false}', `«Лента» при галерее с ленты: закрыть, сайту нажатие не отдавать (${same})`);
   check(!errors.length, 'ошибок нет' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await b.close();
   console.log(fails.length ? `\nНе прошло: ${fails.length}` : '\nВсё прошло');
