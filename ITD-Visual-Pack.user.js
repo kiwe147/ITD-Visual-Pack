@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.14
+// @version      3.2.15
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1479,6 +1479,7 @@
         RECENT: svgIcon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/>', 18),
         // квадрат с плюсом — новый набор
         ADD_PACK: svgIcon('<rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M12 8.5v7M8.5 12h7"/>', 18),
+        ZIP_PACK: svgIcon('<path d="M4 8h16v11.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19.5z"/><path d="M3 4.5h18V8H3z"/><path d="M10 12h4"/>', 18),
         ADD: svgIcon('<path d="M12 5v14M5 12h14"/>', 24),
         EDIT: svgIcon('<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>', 14),
         DELETE: svgIcon('<path d="M18 6 6 18M6 6l12 12"/>', 12),
@@ -1555,6 +1556,9 @@
     const VERIFICATION_POST_ID = 'a0d6625a-b3ec-44c4-98da-48422af101d5';
     const SECRET_SALT = 'ITD_MOD_2026_SECRET_SALT_NEUROSFW';
     const VERIFICATION_STORAGE_KEY = 'itd_verified_users';
+    // Пост, под которым хранятся паки стикеров (синхронизация между устройствами одного аккаунта).
+    // Пусто — синхронизация выключена, паки живут только в этом браузере
+    const STICKER_POST_ID = '';
     let isVerifying = false;
 
     let globalHue = 0;
@@ -2137,9 +2141,83 @@
     const canvas = document.createElement('canvas');
     canvas.className = 'vp-bg-canvas';
     document.body.appendChild(canvas);
-    // выключатель «Фон»: холст прячем, кадры фона не рисуются (frame смотрит backgroundEnabled)
+    // Свой фон: картинка или видео пользователя. Файл большой — хранится в IndexedDB этого браузера
+    // (в настройки Tampermonkey не влезет). Видео — без звука, по кругу. Слой — там же, где холст,
+    // чуть притушен, чтобы текст читался (в светлой теме — светлее).
+    const bgMedia = document.createElement('div');
+    bgMedia.className = 'vp-bg-media vp-bg-off';
+    document.body.appendChild(bgMedia);
+    styleBgCanvas.textContent += `
+        .vp-bg-media { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+        .vp-bg-media.vp-bg-off { display: none; }
+        .vp-bg-media > img, .vp-bg-media > video { width: 100%; height: 100%; object-fit: cover; display: block; filter: brightness(.5) saturate(1.1); }
+        html.vp-light .vp-bg-media > img, html.vp-light .vp-bg-media > video { filter: none; opacity: .45; }
+    `;
+    const bgDb = () => new Promise((ok, no) => {
+        const r = indexedDB.open('itdx', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('files');
+        r.onsuccess = () => ok(r.result);
+        r.onerror = () => no(r.error);
+    });
+    async function bgFile(blob) {                       // без аргумента — прочитать, с ним — сохранить
+        const db = await bgDb();
+        return new Promise((ok, no) => {
+            const tx = db.transaction('files', blob ? 'readwrite' : 'readonly'), st = tx.objectStore('files');
+            const r = blob ? st.put(blob, 'background') : st.get('background');
+            r.onsuccess = () => ok(blob || r.result || null);
+            r.onerror = () => no(r.error);
+        });
+    }
+    let bgMediaUrl = '';
+    async function showBgMedia(blob) {
+        const fresh = !!blob;                            // только что выбран (а не прочитан из памяти)
+        if (!blob) blob = await bgFile().catch(() => null);
+        if (bgMediaUrl) URL.revokeObjectURL(bgMediaUrl);
+        bgMediaUrl = blob ? URL.createObjectURL(blob) : '';
+        bgMedia.replaceChildren();
+        if (!blob) return;
+        if (/^video\//.test(blob.type)) {
+            const v = document.createElement('video');
+            Object.assign(v, { src: bgMediaUrl, muted: true, loop: true, autoplay: true, playsInline: true });
+            v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+            // формат, который браузер не играет (старый mp4, HEVC…) — сказать, а не молча показать чёрное
+            v.addEventListener('error', () => { if (fresh) alert('Браузер не умеет показывать это видео. Сохрани его как mp4 (H.264) или webm и выбери снова'); }, { once: true });
+            bgMedia.appendChild(v);
+            v.play().catch(() => { });
+        } else {
+            const img = document.createElement('img');
+            img.src = bgMediaUrl;
+            img.alt = '';
+            bgMedia.appendChild(img);
+        }
+    }
+    // выбрать файл для своего фона: картинка или видео до 150 МБ
+    function pickBgFile(done) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*,video/*';
+        input.onchange = async () => {
+            const f = input.files[0];
+            if (!f) return;
+            if (f.size > 150 * 1024 * 1024) { alert('Файл больше 150 МБ — возьми поменьше'); return; }
+            try { await bgFile(f); } catch (e) { alert('Не вышло сохранить файл: ' + (e && e.message || e)); return; }
+            backgroundStyle = 'custom';
+            GM_setValue('backgroundStyle', 'custom');
+            await showBgMedia(f);
+            updateBackgroundVisibility();
+            if (done) done();
+        };
+        input.click();
+    }
+    // выключатель «Фон»: холст прячем, кадры фона не рисуются (frame смотрит backgroundEnabled);
+    // свой фон — вместо холста слой с картинкой/видео
     function updateBackgroundVisibility() {
-        canvas.classList.toggle('vp-bg-off', !backgroundEnabled);
+        const custom = backgroundStyle === 'custom';
+        canvas.classList.toggle('vp-bg-off', !backgroundEnabled || custom);
+        bgMedia.classList.toggle('vp-bg-off', !backgroundEnabled || !custom);
+        const v = bgMedia.querySelector('video');
+        if (v) { if (backgroundEnabled && custom) v.play().catch(() => { }); else v.pause(); }
+        if (backgroundEnabled && custom && !bgMedia.firstChild) showBgMedia();
     }
     updateBackgroundVisibility();
     const ctx = canvas.getContext('2d');
@@ -2535,6 +2613,7 @@
     };
 
     function drawBackground(dt = 1) {
+        if (backgroundStyle === 'custom') return;          // свой фон — картинка/видео, холст не рисуем
         const def = BACKGROUNDS[backgroundStyle] || BACKGROUNDS.matrix;
         if (bgName !== backgroundStyle) {
             bgName = backgroundStyle;
@@ -2806,7 +2885,8 @@
         aurora: { name: 'Сияние', icon: svgIcon('<path d="M3 14c3-5 6-7 9-7s6 2 9 7"/><path d="M6 17c2-3 4-4.5 6-4.5s4 1.5 6 4.5"/><path d="M3 21h18"/>') },
         bokeh: { name: 'Боке', icon: svgIcon('<circle cx="8" cy="9" r="4"/><circle cx="16.5" cy="15.5" r="4.5"/><circle cx="17" cy="6" r="1.5"/>') },
         grid: { name: 'Неон-сетка', icon: svgIcon('<path d="M8 8a4 4 0 0 1 8 0"/><path d="M2 12h20"/><path d="M12 12v9M12 12l-8 9M12 12l8 9M5 17h14"/>') },
-        snow: { name: 'Снегопад', icon: svgIcon('<path d="M12 2v20M3.3 7l17.4 10M3.3 17 20.7 7"/><path d="m9 4 3 2 3-2M9 20l3-2 3 2"/>') }
+        snow: { name: 'Снегопад', icon: svgIcon('<path d="M12 2v20M3.3 7l17.4 10M3.3 17 20.7 7"/><path d="m9 4 3 2 3-2M9 20l3-2 3 2"/>') },
+        custom: { name: 'Своя картинка', icon: svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>') }
     };
     // --- автолайки: список тех, кого лайкать
     function renderAutoLikeUsers(list, footer, usersData) {
@@ -2976,12 +3056,30 @@
                     icon.className = 'vp-menu-icon';
                     icon.innerHTML = bg.icon;
                     grid.appendChild(pickRow(icon, bg.name, key === backgroundStyle, () => {
+                        if (key === 'custom') {
+                            // свой фон: файла ещё нет — сразу выбрать; есть — просто включить
+                            bgFile().then(f => {
+                                if (!f) return pickBgFile(redraw);
+                                backgroundStyle = 'custom'; GM_setValue('backgroundStyle', 'custom');
+                                updateBackgroundVisibility(); redraw();
+                            }).catch(() => pickBgFile(redraw));
+                            return;
+                        }
                         backgroundStyle = key;
                         GM_setValue('backgroundStyle', key);
+                        updateBackgroundVisibility();
                     }, redraw));
                 });
                 grid.style.gridTemplateRows = `repeat(${Math.ceil(grid.children.length / 2)}, auto)`;
                 body.appendChild(grid);
+                if (backgroundStyle === 'custom') {
+                    const icon = document.createElement('div');
+                    icon.className = 'vp-menu-icon';
+                    icon.innerHTML = svgIcon('<path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/><path d="M12 4v11M7.5 8.5 12 4l4.5 4.5"/>');
+                    const row = menuOption(icon, 'Сменить картинку или видео', () => { });
+                    row.onclick = e => { e.stopPropagation(); pickBgFile(redraw); };
+                    body.appendChild(row);
+                }
             }
             if (id === 'likes') {
                 body.appendChild(secTitle('Кого лайкать'));
@@ -3615,6 +3713,13 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.2.15', '27 сентября 2026', [
+            'Галерея — картинки и видео из ленты сеткой, как в Пинтересте: кнопка рядом с поиском (на ПК — в меню слева)',
+            'Свой фон — картинка или видео: «ИТД X» → «Фон» → «Своя картинка»',
+            'Паки стикеров из архива: папка в .zip = пак, картинки встают как есть (правила — у кнопки в панели стикеров)',
+            'Паки стикеров одинаковые на всех устройствах одного аккаунта',
+            'Галочка ИТД X держится за аккаунт, а не за ник — смена ника её не снимает',
+            'Фон рисуется на частоте экрана (90, 120, 144 Гц) и сам возвращается к ней после подтормаживаний']],
         ['3.2.14', '27 сентября 2026', [
             'На своих постах — кнопка «обновить» слева от «…»: лайки, комменты и просмотры обновляются без перезагрузки страницы',
             'Меньше запросов к сайту: «Клуб ИТД X» и автолайки не спрашивают профиль каждого участника, мод не повторяет запросы сайта при загрузке']],
@@ -3743,6 +3848,10 @@
         return match ? { code: match[1], flags: match[2] } : null;
     }
     const isModCode = (username, parsed) => parsed && parsed.flags[0] === '1' && parsed.code === generateCode(username);
+    // Код по номеру аккаунта (author.id): ник можно сменить — галочка остаётся. Старые коды (по нику)
+    // тоже верные: у друзей может стоять прошлая версия, её код — по нику
+    const isAuthorCode = (author, parsed) => !!author && !!parsed && parsed.flags[0] === '1'
+        && ((author.id && parsed.code === generateCode(author.id)) || (author.username && parsed.code === generateCode(author.username)));
 
     // Ники пользователей мода — из последней проверки (localStorage). Битая запись — пустой список:
     // на нём держатся «Клуб ИТД X», собеседники в личке, кандидаты автолайков и вериф-бейджи.
@@ -3753,14 +3862,26 @@
     // Служебный пост читают проверка всех и проверка себя подряд — это один и тот же ответ:
     // держим его 20 с (fresh — после своего нового кода, нужен свежий)
     let verifyLoad = null, verifyLoadAt = 0;
+    // Все комментарии поста — страницами по 100 (limit + cursor, как у сайта). Больше 30 страниц не читаем
+    async function allComments(postId, maxPages = 30) {
+        const all = [];
+        let cursor = null;
+        for (let page = 0; page < maxPages; page++) {
+            const res = await api(`/api/posts/${postId}/comments?limit=100` + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
+            if (!res.ok) throw new Error('комментарии: ' + res.status);
+            const j = await res.json(), d = j.data || j;
+            const list = d.comments || [];
+            if (page && list.length && all.some(c => c.id === list[0].id)) break;      // сервер не понял курсор — не зацикливаемся
+            all.push(...list);
+            cursor = d.nextCursor || null;
+            if (!cursor || !d.hasMore && d.hasMore !== undefined || !list.length) break;
+        }
+        return all;
+    }
     function loadVerificationComments(fresh) {
         if (!fresh && verifyLoad && Date.now() - verifyLoadAt < 20000) return verifyLoad;
         verifyLoadAt = Date.now();
-        verifyLoad = api(`/api/posts/${VERIFICATION_POST_ID}/comments?limit=100`).then(async res => {
-            if (!res.ok) throw new Error('комментарии: ' + res.status);
-            const data = await res.json();
-            return data.data?.comments || data.comments || [];
-        });
+        verifyLoad = allComments(VERIFICATION_POST_ID);
         verifyLoad.catch(() => { verifyLoad = null; });
         return verifyLoad;
     }
@@ -3778,9 +3899,9 @@
             for (const c of await loadVerificationComments(fresh)) {
                 const name = c.author?.username;
                 const parsed = parseCode(c.content);
-                if (!name || verifiedUsers[name] || !isModCode(name, parsed)) continue;
+                if (!name || verifiedUsers[name] || !isAuthorCode(c.author, parsed)) continue;
                 const a = c.author, ava = a.avatar && (a.avatar.url || a.avatar) || a.avatarUrl || a.emoji;
-                verifiedUsers[name] = { code: parsed.code, commentId: c.id, hasMod: true, flags: parsed.flags,
+                verifiedUsers[name] = { code: parsed.code, commentId: c.id, hasMod: true, flags: parsed.flags, id: a.id || undefined,
                     displayName: a.displayName || a.display_name || undefined, avatar: typeof ava === 'string' ? ava : undefined };
             }
             if (JSON.stringify(verifiedUsers) !== localStorage.getItem(VERIFICATION_STORAGE_KEY)) {
@@ -3800,15 +3921,24 @@
     async function verifyMyself() {
         if (!myUsername) return false;
         try {
-            const mine = (await loadVerificationComments())
-                .filter(c => c.author?.username === myUsername && parseCode(c.content));
-            if (mine.some(c => isModCode(myUsername, parseCode(c.content)))) return true;
-            for (const c of mine) await api(`/api/comments/${c.id}`, { method: 'DELETE' }).catch(() => { });
-            const res = await api(`/api/posts/${VERIFICATION_POST_ID}/comments`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: generateCode(myUsername) + '1' })
-            });
+            const all = await loadVerificationComments();
+            const myId = (meData && meData.id) || (all.find(c => c.author?.username === myUsername) || {}).author?.id;
+            const mine = all.filter(c => (myId ? c.author?.id === myId : c.author?.username === myUsername) && parseCode(c.content));
+            const byId = c => myId && parseCode(c.content).code === generateCode(myId);
+            if (!myId && mine.some(c => isModCode(myUsername, parseCode(c.content)))) return true;
+            if (mine.some(byId)) return true;
+            // Под служебным постом — только новый комментарий или правка: новый шлёт автору поста уведомление,
+            // правка — нет. Есть свой устаревший код (сменил ник, испорчен) — правим его на код по номеру
+            // аккаунта; верный код по нику не трогаем (его видят друзья со старой версией) — рядом пишем новый
+            const code = generateCode(myId || myUsername) + '1';
+            const stale = mine.find(c => !isAuthorCode(c.author, parseCode(c.content)));
+            const res = stale
+                ? await api(`/api/comments/${stale.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: code }) })
+                : await api(`/api/posts/${VERIFICATION_POST_ID}/comments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: code })
+                });
             if (!res.ok) return false;
             await checkAllComments(true);
             return true;
@@ -4285,13 +4415,13 @@
 
     // Кадр через requestAnimationFrame: в свёрнутой вкладке он сам встаёт на паузу.
     // Статичный цвет рисуется один раз (paint), радуга — каждый кадр.
-    // Фон рисуется на частоте экрана (но не чаще ~60 раз в секунду). Если кадры начинают пропадать (слабый компьютер, тяжёлая
-    // страница), фон сам переходит на каждый второй кадр: картинка та же, только реже.
-    let lastFrame = 0, bestGap = 1000, slow = 0, halfRate = false, odd = false;
+    // Фон рисуется на частоте экрана — 60, 90, 120, 144 Гц, какой есть (скорость одна и та же: dt от времени).
+    // Если кадры начинают пропадать (слабое устройство, тяжёлая страница), фон переходит на каждый второй
+    // кадр: картинка та же, только реже. Через 15 с пробует снова полную частоту (не вышло — ждёт вдвое дольше).
+    let lastFrame = 0, bestGap = 1000, slow = 0, halfRate = false, odd = false, halfSince = 0, retryMs = 15000;
     function frame(t) {
         requestAnimationFrame(frame);
-        // экраны 120–144 Гц (многие телефоны): фон — не чаще ~60 кадров, вдвое меньше работы, скорость та же (dt)
-        if (lastFrame && t - lastFrame < 10) return;
+        if (halfRate && t - halfSince > retryMs) { halfRate = false; slow = 0; retryMs = Math.min(retryMs * 2, 240000); }
         if (halfRate && (odd = !odd)) return;
         const gap = lastFrame ? t - lastFrame : 16.7;
         lastFrame = t;
@@ -4299,7 +4429,10 @@
             const base = halfRate ? gap / 2 : gap;
             bestGap = Math.min(bestGap, base);          // родной интервал экрана
             slow = base > bestGap * 1.7 ? slow + 1 : Math.max(0, slow - 2);
-            if (!halfRate && slow > 45) { halfRate = true; document.documentElement.classList.add('vp-glass-lite'); }
+            if (!halfRate && slow > 45) {
+                halfRate = true; halfSince = t; slow = 0;
+                document.documentElement.classList.add('vp-glass-lite');
+            }
         }
         const dt = Math.min(3, gap / 50);                // доля от 50 мс: скорости не зависят от частоты кадров
         if (currentStyle === 'rainbow') { stepHue(dt); paint(); }
@@ -4330,13 +4463,290 @@
         const writeList = (key, v) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) { } };
         let userPacks = readList(STORAGE_KEY);
         let recentStickers = readList(RECENT_STORAGE_KEY);
-        const saveUserPacks = () => writeList(STORAGE_KEY, userPacks);
+        const saveUserPacks = () => { writeList(STORAGE_KEY, userPacks); packsChanged(); };
         const saveRecent = () => writeList(RECENT_STORAGE_KEY, recentStickers);
         // стикеры пака по ключу ('recent' — недавние); имя пака
         const packStickers = key => key === 'recent' ? recentStickers : (userPacks.find(p => p.id === key) || { stickers: [] }).stickers;
         const packName = key => key === 'recent' ? 'Недавние' : ((userPacks.find(p => p.id === key) || {}).name || DEFAULT_PACK_NAME);
         const allPackKeys = () => ['recent', ...userPacks.map(p => p.id)];
         function savePack(key) { if (key === 'recent') saveRecent(); else saveUserPacks(); }
+
+        // ---- Синхронизация паков между устройствами одного аккаунта
+        // Паки — свои комментарии «ITDXS 1/2 …» под служебным постом STICKER_POST_ID. Под служебными постами
+        // только новый комментарий или правка (без ответов и удалений): ответы и новые комментарии шлют
+        // уведомления, правка — нет. Куски создаются один раз, дальше правятся; лишние — правятся в пустые.
+        // Автора комментария ставит сервер — свои куски узнаём по номеру аккаунта (author.id), не по нику.
+        // Время правки паков дописано цифрами к своему коду галочки («код1» + секунды — старые версии мода
+        // такой код принимают): его и так читают раз в 10 минут, а служебный пост паков читаем, только
+        // если там новее, чем здесь. Паки упакованы в байты: у стикера номер файла и имя картинки — две
+        // UUID по 16 байт, в комментарий (2000 знаков) влезает ~40 стикеров; больше — несколько кусков.
+        const SYNC_TAG = 'ITDXS';
+        const PACKS_AT_KEY = 'user_sticker_packs_at';
+        const EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+        const CDN_IMG = /^https:\/\/cdn\.xn--d1ah4a\.com\/images\/([0-9a-f-]{36})\.(\w+)$/i;
+        let packsAt = +(localStorage.getItem(PACKS_AT_KEY) || 0), syncTimer = 0, syncing = false, applyingRemote = false;
+        const hexToBytes = h => Uint8Array.from(h.replace(/-/g, '').match(/../g), x => parseInt(x, 16));
+        const bytesToUuid = b => [...b].map(x => x.toString(16).padStart(2, '0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+        const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        function encodePacks(packs, at) {
+            const out = [1], put = (...b) => out.push(...b), str = t => { const u = new TextEncoder().encode(t).slice(0, 255); put(u.length, ...u); };
+            const sec = Math.floor(at / 1000);
+            put((sec >>> 24) & 255, (sec >>> 16) & 255, (sec >>> 8) & 255, sec & 255, packs.length);
+            for (const pk of packs) {
+                str(pk.id || ''); str(pk.name || '');
+                const list = pk.stickers.slice(0, 65535);
+                put(list.length >> 8, list.length & 255);
+                for (const st of list) {
+                    const m = String(st.url || '').match(CDN_IMG), ext = m ? EXT.indexOf(m[2].toLowerCase()) : -1;
+                    if (m && ext >= 0 && UUID.test(st.id || '')) { put(ext, ...hexToBytes(st.id), ...hexToBytes(m[1])); }
+                    else { put(255); str(st.id || ''); str(st.url || ''); }        // не с CDN сайта — как есть
+                }
+            }
+            let bin = '';
+            out.forEach(b => { bin += String.fromCharCode(b); });
+            return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+        function decodePacks(b64) {
+            const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
+            const b = Uint8Array.from(bin, c => c.charCodeAt(0));
+            let i = 0;
+            const byte = () => { if (i >= b.length) throw new Error('обрыв данных'); return b[i++]; };
+            const str = () => { const n = byte(), t = new TextDecoder().decode(b.slice(i, i + n)); i += n; return t; };
+            if (byte() !== 1) throw new Error('версия паков');
+            const at = ((byte() << 24) >>> 0) + (byte() << 16) + (byte() << 8) + byte();
+            const packs = [];
+            for (let n = byte(); n > 0; n--) {
+                const pk = { id: str(), name: str(), stickers: [] };
+                for (let k = (byte() << 8) + byte(); k > 0; k--) {
+                    const ext = byte();
+                    if (ext === 255) { const id = str(), url = str(); pk.stickers.push({ id, url }); continue; }
+                    const id = bytesToUuid(b.slice(i, i + 16)), img = bytesToUuid(b.slice(i + 16, i + 32));
+                    i += 32;
+                    pk.stickers.push({ id, url: `https://cdn.xn--d1ah4a.com/images/${img}.${EXT[ext] || 'png'}` });
+                }
+                packs.push(pk);
+            }
+            return { at: at * 1000, packs };
+        }
+        const myAccountId = () => (meData && meData.id) || (verifiedInfo(myUsername || '') || {}).id || null;
+        const partsKey = () => 'vp_sticker_parts_' + myAccountId();
+        // время паков в данных галочки (секунды после «1» в коде); 0 — паков там нет
+        const remotePacksAt = () => { const f = String((verifiedInfo(myUsername || '') || {}).flags || ''); return f.length > 1 ? +f.slice(1) * 1000 : 0; };
+        // свои куски под постом паков: запомненные номера или поиском (один раз на устройство)
+        async function packParts(scan) {
+            if (!scan) { const saved = GM_getValue(partsKey(), null); if (saved) return saved; }
+            const me = myAccountId();
+            const list = (await allComments(STICKER_POST_ID)).filter(c => c.author && c.author.id === me && /^ITDXS \d+\/\d+ /.test(c.content || ''))
+                .map(c => { const m = c.content.match(/^ITDXS (\d+)\/(\d+) (\S*)/); return { id: c.id, i: +m[1], n: +m[2], d: m[3] }; });
+            GM_setValue(partsKey(), list.map(({ id, i, n }) => ({ id, i, n })));
+            return list;
+        }
+        function applyRemotePacks(remote) {
+            applyingRemote = true;
+            userPacks = remote.packs;
+            writeList(STORAGE_KEY, userPacks);
+            packsAt = remote.at;
+            localStorage.setItem(PACKS_AT_KEY, String(packsAt));
+            applyingRemote = false;
+            if (scrollContainer) { updateTabButtons(); refreshAllPackGrids(); }
+        }
+        const patchComment = (id, content) => api(`/api/comments/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) });
+        // скачать: в галочке время новее нашего — читаем свои куски и берём паки оттуда
+        async function pullPacks() {
+            const at = remotePacksAt();
+            if (!at || at <= packsAt + 999) return;
+            const parts = (await packParts(true)).filter(p => p.n).sort((a, b) => a.i - b.i);
+            const n = parts.length && parts[0].n;
+            if (!n || parts.length < n || !parts.slice(0, n).every((p, k) => p.i === k + 1 && p.n === n)) return;
+            const remote = decodePacks(parts.slice(0, n).map(p => p.d).join(''));
+            if (remote.at <= packsAt + 999) return;
+            // паки из прошлых версий (без времени) здесь — не теряем: к скачанным добавляем свои, которых там нет
+            const legacy = !packsAt && userPacks.length ? userPacks.filter(pk => !remote.packs.some(r => r.id === pk.id)) : [];
+            applyRemotePacks({ at: remote.at, packs: [...remote.packs, ...legacy] });
+            if (legacy.length) { packsAt = Date.now(); localStorage.setItem(PACKS_AT_KEY, String(packsAt)); return 'push'; }
+        }
+        // выгрузить свои паки: куски правкой (новые — новым комментарием), потом время — в код галочки
+        async function pushPacks() {
+            const mine = verifiedInfo(myUsername || '');
+            if (!mine || !mine.commentId) return;                 // без своей галочки некуда записать время
+            let parts = await packParts(false);
+            if (!parts.length) parts = await packParts(true);
+            if (!packsAt) { packsAt = Date.now(); localStorage.setItem(PACKS_AT_KEY, String(packsAt)); }
+            const data = encodePacks(userPacks, packsAt), CH = 1900, chunks = [];
+            for (let k = 0; k < data.length || !chunks.length; k += CH) chunks.push(data.slice(k, k + CH));
+            const slots = parts.map(p => p.id), saved = [];
+            for (let k = 0; k < Math.max(chunks.length, slots.length); k++) {
+                const content = k < chunks.length ? `${SYNC_TAG} ${k + 1}/${chunks.length} ${chunks[k]}` : `${SYNC_TAG} 0/0 -`;   // лишний кусок — пустой
+                if (slots[k]) {
+                    const res = await patchComment(slots[k], content);
+                    if (!res.ok) throw new Error('паки: правка ' + res.status);
+                    saved.push({ id: slots[k], i: k < chunks.length ? k + 1 : 0, n: k < chunks.length ? chunks.length : 0 });
+                } else {
+                    const res = await api(`/api/posts/${STICKER_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) });
+                    if (!res.ok) throw new Error('паки: запись ' + res.status);
+                    const j = await res.json();
+                    saved.push({ id: (j.data || j).id, i: k + 1, n: chunks.length });
+                }
+            }
+            GM_setValue(partsKey(), saved);
+            // время паков — в свой код галочки (правкой)
+            const code = String(mine.code) + '1' + Math.floor(packsAt / 1000);
+            const res = await patchComment(mine.commentId, code);
+            if (res.ok) await checkAllComments(true);
+        }
+        async function syncPacks(up) {
+            if (!STICKER_POST_ID || syncing || !myUsername || !myAccountId()) return;
+            syncing = true;
+            try {
+                if (up) await pushPacks();
+                else {
+                    const merged = await pullPacks();
+                    // здесь паки новее, чем записано (правили без сети, паки прошлых версий без времени,
+                    // слили свои с скачанными) — выгрузить
+                    const at = remotePacksAt();
+                    if (merged === 'push' || (userPacks.length && (!packsAt || packsAt > at + 999))) await pushPacks();
+                }
+            } catch (e) {
+                logErr('паки: синхронизация', e);
+            } finally {
+                syncing = false;
+            }
+        }
+        // правка паков здесь — отметить время и через 4 с выгрузить (серия правок — одна выгрузка)
+        function packsChanged() {
+            if (applyingRemote) return;
+            packsAt = Date.now();
+            localStorage.setItem(PACKS_AT_KEY, String(packsAt));
+            clearTimeout(syncTimer);
+            syncTimer = setTimeout(() => syncPacks(true), 4000);
+        }
+        // при входе и раз в 10 минут (после проверки галочек — там время паков)
+        (function syncLoop() {
+            if (!STICKER_POST_ID) return;
+            const tick = () => myUsername && myAccountId() && verifiedInfo(myUsername) ? syncPacks(false) : setTimeout(tick, 3000);
+            setTimeout(tick, 6000);
+            setInterval(() => syncPacks(false), 10 * 60 * 1000);
+        })();
+
+        // ---- Паки из архива (.zip): папка = пак (имя папки — название), внутри — картинки, как есть (без обрезки).
+        // Картинки прямо в корне архива — пак с именем архива. Одна общая папка сверху («Мои стикеры/Коты/…»)
+        // пропускается. ZIP разбираем сами: оглавление в конце файла, сжатие — deflate (DecompressionStream).
+        // Имена: флаг UTF-8 — UTF-8; иначе UTF-8, если читается, иначе кодировка DOS (архивы Windows с кириллицей)
+        const ZIP_IMG = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+        const ZIP_LIMITS = { packs: 20, perPack: 120, total: 300, bytes: 5 * 1024 * 1024 };
+        async function readZip(file) {
+            const buf = new Uint8Array(await file.arrayBuffer()), dv = new DataView(buf.buffer);
+            let eocd = -1;
+            for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+            if (eocd < 0) throw new Error('это не zip-архив');
+            const count = dv.getUint16(eocd + 10, true);
+            let at = dv.getUint32(eocd + 16, true);
+            const utf8 = new TextDecoder('utf-8', { fatal: true }), dos = new TextDecoder('ibm866');
+            const entries = [];
+            for (let k = 0; k < count; k++) {
+                if (dv.getUint32(at, true) !== 0x02014b50) throw new Error('архив повреждён');
+                const flags = dv.getUint16(at + 8, true), method = dv.getUint16(at + 10, true);
+                const csize = dv.getUint32(at + 20, true), size = dv.getUint32(at + 24, true);
+                const nlen = dv.getUint16(at + 28, true), xlen = dv.getUint16(at + 30, true), clen = dv.getUint16(at + 32, true);
+                const local = dv.getUint32(at + 42, true), raw = buf.subarray(at + 46, at + 46 + nlen);
+                let name;
+                try { name = flags & 0x800 ? new TextDecoder().decode(raw) : utf8.decode(raw); } catch (e) { name = dos.decode(raw); }
+                entries.push({ name: name.replace(/\\/g, '/'), method, csize, size, local });
+                at += 46 + nlen + xlen + clen;
+            }
+            entries.data = async e => {
+                const start = e.local + 30 + dv.getUint16(e.local + 26, true) + dv.getUint16(e.local + 28, true);
+                const bytes = buf.slice(start, start + e.csize);
+                if (e.method === 0) return bytes;
+                if (e.method !== 8) throw new Error('неизвестное сжатие');
+                return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+            };
+            return entries;
+        }
+        // архив → [{ name, files: [entry] }] по правилам выше
+        function zipPacks(entries, zipName) {
+            const imgs = entries.filter(e => {
+                const parts = e.name.split('/');
+                return !e.name.endsWith('/') && !parts.some(p => p.startsWith('.') || p === '__MACOSX') && ZIP_IMG[(parts.pop().split('.').pop() || '').toLowerCase()];
+            });
+            let paths = imgs.map(e => e.name.split('/'));
+            // одна общая папка сверху, а в ней ещё папки — пропускаем её
+            while (paths.length && paths.every(p => p.length > 2 && p[0] === paths[0][0])) paths = paths.map(p => p.slice(1));
+            const groups = new Map();
+            imgs.forEach((e, i) => {
+                const p = paths[i], pack = p.length > 1 ? p[0] : zipName.replace(/\.zip$/i, '');
+                if (!groups.has(pack)) groups.set(pack, []);
+                groups.get(pack).push(e);
+            });
+            return [...groups].map(([name, files]) => ({ name: name.trim().slice(0, MAX_NAME_LENGTH) || DEFAULT_PACK_NAME, files: files.sort((a, b) => a.name.localeCompare(b.name, 'ru', { numeric: true })) }));
+        }
+        function openZipImport() {
+            if (!stickerPanel || stickerPanel.querySelector('.vp-sp-import')) return;
+            exitEditMode();
+            const card = el('div', 'vp-sp-import', `<b>Паки из архива</b>
+                <ul>
+                    <li>Архив <b style="font-size:inherit">.zip</b></li>
+                    <li>Папка в архиве = пак, имя папки = название пака</li>
+                    <li>В папке — картинки png, jpg, gif, webp (до 5 МБ); встают как есть, без обрезки</li>
+                    <li>Картинки прямо в архиве, без папки, — пак с именем архива</li>
+                </ul>
+                <pre>стикеры.zip
+├ Коты/
+│  ├ 1.png
+│  └ 2.gif
+└ Мемы/
+   └ шрек.jpg</pre>
+                <div class="vp-imp-status"></div>
+                <div class="vp-imp-btns"><button type="button" class="vp-imp-cancel">Отмена</button><button type="button" class="vp-imp-go">Выбрать архив</button></div>`);
+            stickerPanel.appendChild(card);
+            const status = card.querySelector('.vp-imp-status'), go = card.querySelector('.vp-imp-go'), cancel = card.querySelector('.vp-imp-cancel');
+            let busy = false, stop = false;
+            cancel.onclick = () => { if (busy) { stop = true; cancel.disabled = true; status.textContent = 'Останавливаю…'; } else card.remove(); };
+            go.onclick = () => {
+                const input = el('input');
+                input.type = 'file';
+                input.accept = '.zip,application/zip';
+                input.onchange = async () => {
+                    const file = input.files[0];
+                    if (!file) return;
+                    busy = true; go.disabled = true;
+                    try {
+                        status.textContent = 'Читаю архив…';
+                        const entries = await readZip(file);
+                        const packs = zipPacks(entries, file.name).slice(0, ZIP_LIMITS.packs);
+                        const total = Math.min(ZIP_LIMITS.total, packs.reduce((n, pk) => n + Math.min(pk.files.length, ZIP_LIMITS.perPack), 0));
+                        if (!total) throw new Error('в архиве нет картинок по правилам');
+                        let done = 0, skipped = 0;
+                        for (const pk of packs) {
+                            if (stop || done >= total) break;
+                            const pack = { id: 'user_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), name: pk.name, stickers: [] };
+                            for (const e of pk.files.slice(0, ZIP_LIMITS.perPack)) {
+                                if (stop || done >= total) break;
+                                status.textContent = `Загружаю «${pk.name}»: ${done + 1} из ${total}…`;
+                                try {
+                                    if (e.size > ZIP_LIMITS.bytes) throw new Error('больше 5 МБ');
+                                    const base = e.name.split('/').pop(), type = ZIP_IMG[base.split('.').pop().toLowerCase()];
+                                    const data = await uploadImageToServer(new File([await entries.data(e)], base, { type }));
+                                    pack.stickers.push(data);
+                                } catch (err) { skipped++; }
+                                done++;
+                            }
+                            if (pack.stickers.length) { userPacks.push(pack); saveUserPacks(); }
+                        }
+                        rebuildPanel();
+                        const left = stickerPanel.querySelector('.vp-sp-import');
+                        if (left) left.remove();
+                        showPanel();
+                        if (skipped) alert(`Готово. Не загрузились: ${skipped} (слишком большие или битые картинки)`);
+                    } catch (err) {
+                        status.textContent = 'Не вышло: ' + (err && err.message || err);
+                        logErr('паки из архива', err);
+                        busy = false; go.disabled = false;
+                    }
+                };
+                input.click();
+            };
+        }
 
         function addToRecent(sticker) {
             recentStickers = [sticker, ...recentStickers.filter(s => s.id !== sticker.id)].slice(0, 30);
@@ -4402,6 +4812,20 @@
                 border-radius: 20px; border: 1px solid var(--border-color,rgba(255,255,255,0.1)); z-index: 10000;
                 width: ${PANEL_WIDTH}px; height: 440px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); overflow: hidden; }
             .sticker-panel.vp-open { display: flex; }
+            .vp-sp-import { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; gap: 10px; padding: 16px;
+                background: var(--block-bg,#1e1e2e); border-radius: inherit; font-size: 13px; line-height: 1.4; color: var(--text-primary,#fff); overflow: auto; }
+            html.vp-glass .vp-sp-import { background: rgba(24,24,24,.96); }
+            html.vp-glass.vp-light .vp-sp-import { background: rgba(255,255,255,.97); }
+            .vp-sp-import b { font-size: 15px; }
+            .vp-sp-import ul { margin: 0; padding-left: 18px; list-style: disc; color: var(--text-secondary,rgba(255,255,255,.7)); }
+            .vp-sp-import li + li { margin-top: 4px; }
+            .vp-sp-import pre { margin: 0; padding: 8px 10px; border-radius: 10px; background: rgba(128,128,128,.14); font-size: 12px; line-height: 1.35; white-space: pre; }
+            .vp-sp-import .vp-imp-btns { display: flex; gap: 8px; margin-top: auto; }
+            .vp-sp-import button { flex: 1; height: 38px; border: 0; border-radius: 12px; cursor: pointer; font: inherit; font-weight: 600;
+                background: rgba(128,128,128,.18); color: inherit; }
+            .vp-sp-import button.vp-imp-go { background: var(--accent-primary,#0080FF); color: #fff; }
+            .vp-sp-import button:disabled { opacity: .5; cursor: default; }
+            .vp-sp-import .vp-imp-status { min-height: 18px; color: var(--text-secondary,rgba(255,255,255,.7)); }
             .vp-sp-head { display: flex; align-items: center; padding: 8px; border-bottom: 1px solid var(--border-color,rgba(255,255,255,0.1));
                 gap: 4px; flex-shrink: 0; }
             .vp-sp-tab { background: transparent; border: none; width: 32px; height: 32px; border-radius: 12px; cursor: pointer;
@@ -4507,7 +4931,7 @@
             const card = row && row.closest('article');
             const link = card && card.querySelector('a[href*="/post/"]');
             const lm = link && link.getAttribute('href').match(/\/post\/([^\/?#]+)/);
-            return lm ? lm[1] : null;
+            return lm ? lm[1] : card ? postIdOf(card) : null;
         }
 
         // Прикреплённый стикер. Сайт о нём не знает: его «Отправить» включается только от своего текста
@@ -4682,7 +5106,10 @@
                 enterEditMode(pack.id);
                 showPanel();
             };
-            header.append(recentBtn, tabsRow, addPackBtn);
+            const zipBtn = el('button', 'vp-sp-tab', ICONS.ZIP_PACK);
+            zipBtn.title = 'Паки из архива';
+            zipBtn.onclick = () => openZipImport();
+            header.append(recentBtn, tabsRow, addPackBtn, zipBtn);
 
             scrollContainer = el('div', 'vp-sp-body');
             scrollContainer.addEventListener('wheel', e => e.stopPropagation(), { passive: true });
@@ -5029,6 +5456,7 @@
             hideTimeout = setTimeout(() => {
                 if (!stickerPanel || !stickerPanel.classList.contains('vp-open')) return;
                 if (stickerPanel.classList.contains('vp-drag')) return hidePanel(delay);   // тащат стикер — не закрывать
+                if (stickerPanel.querySelector('.vp-sp-import')) return hidePanel(delay);   // импорт архива — тоже
                 stickerPanel.classList.remove('vp-open');
                 exitEditMode();
                 enablePageScroll();
@@ -7282,6 +7710,202 @@
     // висеть уже в профиле. Закрываем по нажатию и когда ссылка, к которой она привязана, пропала
     document.addEventListener('click', e => { if (e.target.closest && e.target.closest(PROFILE_LINK)) { clearTimeout(hcTimer); hcClose(); } }, true);
     onDom(function hcLinkGone() { if (hc && !(hcLink && hcLink.isConnected)) hcClose(); });
+
+    // --- Галерея (как Пинтерест): картинки и видео из ленты сеткой в 2–4 колонки. Кнопка — рядом с поиском
+    // в полосе ленты, тем же видом, что у сайта. Лента — тем же запросом, что у сайта (/api/posts?tab=…&cursor=…),
+    // страницами по 20; каждая картинка ложится в самую короткую колонку (сетка не перетасовывается при
+    // подгрузке). Видео — без звука и играют, только пока их видно. Нажатие — открыть пост; «назад» закрывает.
+    const GAL_TABS = [['popular', 'Популярное'], ['following', 'Подписки'], ['clan', 'Кланы']];
+    const gal = { el: null, tab: 'popular', cursor: null, loading: false, done: false, cols: [], heights: [], seen: new Set(), hist: false };
+    const galStyle = document.createElement('style');
+    galStyle.textContent = `
+        .vp-gal { position: fixed; inset: 0; z-index: 10010; display: flex; flex-direction: column; background: var(--bg-color, #000); color: var(--text-primary, #fff); }
+        html.vp-light .vp-gal { background: #f4f4f5; }
+        .vp-gal-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; flex: 0 0 auto; }
+        .vp-gal-head > b { font-size: 18px; margin-right: auto; }
+        .vp-gal-x { width: 38px; height: 38px; border: 0; border-radius: 50%; background: rgba(128,128,128,.18); color: inherit; cursor: pointer;
+            display: inline-flex; align-items: center; justify-content: center; }
+        .vp-gal-tabs { display: flex; gap: 6px; padding: 0 12px 10px; flex: 0 0 auto; overflow-x: auto; scrollbar-width: none; }
+        .vp-gal-tab { border: 0; border-radius: 99px; padding: 7px 14px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+            background: rgba(128,128,128,.16); color: inherit; white-space: nowrap; }
+        .vp-gal-tab.vp-on { background: var(--accent-primary, #0080FF); color: #fff; }
+        .vp-gal-body { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 24px; }
+        .vp-gal-grid { display: flex; gap: 8px; align-items: flex-start; max-width: 1400px; margin: 0 auto; }
+        .vp-gal-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+        .vp-gal-tile { position: relative; border-radius: 16px; overflow: hidden; background: rgba(128,128,128,.15); cursor: pointer; }
+        .vp-gal-tile > img, .vp-gal-tile > video { display: block; width: 100%; height: 100%; object-fit: cover; }
+        .vp-gal-badge { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
+            background: rgba(0,0,0,.55); color: #fff; pointer-events: none; }
+        .vp-gal-more { text-align: center; padding: 18px; color: var(--text-secondary, #8a8a8a); font-size: 14px; }
+        .vp-gal-btn svg { pointer-events: none; }
+        /* ПК: поиск — в боковом меню, в полосе ленты его нет — там и «Галерея»; телефон — кнопка в полосе ленты */
+        @media (min-width: 1173px) { .vp-gal-btn { display: none !important; } }
+        @media (max-width: 1172px) { .vp-gal-nav { display: none !important; } }
+    `;
+    document.head.appendChild(galStyle);
+    const galColsCount = () => innerWidth >= 1100 ? 4 : innerWidth >= 700 ? 3 : 2;
+    const galVideoIO = new IntersectionObserver(es => es.forEach(e => {
+        const v = e.target;
+        if (e.isIntersecting && e.intersectionRatio > .5) v.play().catch(() => { }); else v.pause();
+    }), { threshold: [0, .5, 1] });
+    function galLayout() {
+        const grid = gal.el.querySelector('.vp-gal-grid');
+        const tiles = gal.cols.flatMap(c => [...c.children]).sort((a, b) => a._vpN - b._vpN);
+        grid.replaceChildren();
+        gal.cols = Array.from({ length: galColsCount() }, () => { const c = document.createElement('div'); c.className = 'vp-gal-col'; grid.appendChild(c); return c; });
+        gal.heights = gal.cols.map(() => 0);
+        tiles.forEach(galPlace);
+    }
+    function galPlace(tile) {
+        let k = 0;
+        gal.heights.forEach((h, i) => { if (h < gal.heights[k]) k = i; });
+        gal.cols[k].appendChild(tile);
+        gal.heights[k] += tile._vpRatio + .05;
+    }
+    let galN = 0;
+    function galTile(post, att) {
+        const tile = document.createElement('div');
+        tile.className = 'vp-gal-tile';
+        const w = +att.width || 1, h = +att.height || 1;
+        tile._vpRatio = Math.min(2.2, Math.max(.45, h / w));        // очень длинные/широкие — в разумных пределах
+        tile._vpN = galN++;
+        tile.style.aspectRatio = `1 / ${tile._vpRatio}`;
+        if (att.type === 'video' || /\.(mp4|webm|mov)(\?|$)/i.test(att.url || '')) {
+            const v = document.createElement('video');
+            Object.assign(v, { src: att.url, muted: true, loop: true, playsInline: true, preload: 'metadata' });
+            v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+            const poster = pick(att.thumbnailUrl, att.thumbnail, att.previewUrl, att.preview);
+            if (poster) v.poster = poster.url || poster;
+            tile.appendChild(v);
+            galVideoIO.observe(v);
+            const badge = document.createElement('span');
+            badge.className = 'vp-gal-badge';
+            const sec = Math.round(+att.duration || 0);
+            badge.textContent = sec ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}` : '▶';
+            tile.appendChild(badge);
+        } else {
+            const img = document.createElement('img');
+            img.loading = 'lazy'; img.decoding = 'async'; img.alt = '';
+            img.src = att.url;
+            tile.appendChild(img);
+        }
+        const user = post.author && post.author.username;
+        tile.addEventListener('click', () => {
+            if (!user) return;
+            // запись галереи в истории заменяем постом: «назад» из поста — в ленту, а не в пустую галерею
+            const hadHist = gal.hist;
+            gal.hist = false;
+            closeGallery(true);
+            history[hadHist ? 'replaceState' : 'pushState']({}, '', `/@${user}/post/${post.id}`);
+            dispatchEvent(new PopStateEvent('popstate'));
+        });
+        return tile;
+    }
+    async function galLoad() {
+        if (!gal.el || gal.loading || gal.done) return;
+        gal.loading = true;
+        const more = gal.el.querySelector('.vp-gal-more');
+        more.textContent = 'Загрузка…';
+        const tab = gal.tab;
+        try {
+            const res = await api(`/api/posts?limit=20&tab=${tab}` + (gal.cursor ? '&cursor=' + encodeURIComponent(gal.cursor) : ''));
+            if (!res.ok) throw new Error('лента: ' + res.status);
+            const j = await res.json(), d = j.data || j;
+            if (!gal.el || tab !== gal.tab) return;                                    // пока грузили — переключили
+            const posts = d.posts || [];
+            keepSitePosts(j);
+            let added = 0;
+            for (const post of posts) {
+                if (gal.seen.has(post.id)) continue;
+                gal.seen.add(post.id);
+                for (const att of (post.attachments || []).slice(0, 4)) {
+                    if (!att || !att.url || (att.type && !/image|video/.test(att.type))) continue;
+                    galPlace(galTile(post, att));
+                    added++;
+                }
+            }
+            gal.cursor = (d.pagination && d.pagination.nextCursor) || d.nextCursor || d.cursor || null;
+            gal.done = !gal.cursor || !posts.length;
+            more.textContent = gal.done ? (gal.seen.size ? 'Это всё' : 'Пусто') : '';
+            gal.loading = false;
+            // страница без картинок (одни тексты) — сразу следующая
+            if (!gal.done && added < 4) galLoad();
+        } catch (e) {
+            logErr('галерея', e);
+            more.textContent = 'Не загрузилось — нажми, чтобы повторить';
+            more.onclick = () => { more.onclick = null; galLoad(); };
+            gal.loading = false;
+        }
+    }
+    function galSwitch(tab) {
+        gal.tab = tab; gal.cursor = null; gal.done = false; gal.seen.clear(); galN = 0;
+        gal.el.querySelectorAll('.vp-gal-tab').forEach(b => b.classList.toggle('vp-on', b.dataset.tab === tab));
+        gal.cols.forEach(c => c.querySelectorAll('video').forEach(v => galVideoIO.unobserve(v)));
+        gal.cols = [];
+        galLayout();
+        gal.el.querySelector('.vp-gal-body').scrollTop = 0;
+        galLoad();
+    }
+    function openGallery() {
+        if (gal.el) return;
+        const el = document.createElement('div');
+        el.className = 'vp-gal';
+        el.innerHTML = `<div class="vp-gal-head"><b>Галерея</b><button type="button" class="vp-gal-x" title="Закрыть">${svgIcon('<path d="M18 6 6 18M6 6l12 12"/>', 18)}</button></div>
+            <div class="vp-gal-tabs">${GAL_TABS.map(([id, name]) => `<button type="button" class="vp-gal-tab" data-tab="${id}">${name}</button>`).join('')}</div>
+            <div class="vp-gal-body"><div class="vp-gal-grid"></div><div class="vp-gal-more"></div></div>`;
+        document.body.appendChild(el);
+        gal.el = el;
+        el.querySelector('.vp-gal-x').onclick = () => closeGallery();
+        el.querySelectorAll('.vp-gal-tab').forEach(b => b.onclick = () => { if (b.dataset.tab !== gal.tab || !gal.seen.size) galSwitch(b.dataset.tab); });
+        const body = el.querySelector('.vp-gal-body');
+        body.addEventListener('scroll', () => { if (body.scrollTop + body.clientHeight > body.scrollHeight - 1200) galLoad(); }, { passive: true });
+        for (const t of ['wheel', 'touchmove']) el.addEventListener(t, e => e.stopPropagation(), { passive: true });
+        document.documentElement.style.overflow = 'hidden';
+        if (!gal.hist) { history.pushState(Object.assign({}, history.state, { vpGal: true }), '', location.href); gal.hist = true; }
+        galSwitch(gal.tab);
+    }
+    function closeGallery(fromBack) {
+        if (!gal.el) return;
+        gal.el.querySelectorAll('video').forEach(v => { galVideoIO.unobserve(v); v.pause(); v.removeAttribute('src'); v.load(); });
+        gal.el.remove();
+        gal.el = null; gal.cols = [];
+        document.documentElement.style.overflow = '';
+        if (gal.hist) { gal.hist = false; if (!fromBack && history.state && history.state.vpGal) history.back(); }
+    }
+    addEventListener('popstate', () => { if (gal.el) { gal.hist = false; closeGallery(true); } });
+    addEventListener('keydown', e => { if (e.key === 'Escape' && gal.el) closeGallery(); });
+    let galCols = galColsCount();
+    addEventListener('resize', () => { if (gal.el && galColsCount() !== galCols) { galCols = galColsCount(); galLayout(); } });
+    // кнопка — в полосе ленты, перед поиском (круглая кнопка с иконкой у сайта), с её же классами
+    onDom(function galleryButton() {
+        const bar = document.querySelector('.' + SELECTORS.feedBar);
+        if (!bar || bar.querySelector('.vp-gal-btn')) return;
+        const tabs = bar.querySelector('.' + SELECTORS.tabs);
+        const search = [...bar.querySelectorAll('button, a')].reverse().find(b => b.querySelector('svg') && !b.textContent.trim() && !(tabs && tabs.contains(b)) && !b.closest('.my-nav-block'));
+        if (!search) return;
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = (search.className || '') + ' vp-gal-btn';
+        b.title = 'Галерея';
+        b.setAttribute('aria-label', 'Галерея');
+        b.innerHTML = svgIcon('<rect x="3.5" y="3.5" width="7" height="9" rx="2"/><rect x="13.5" y="3.5" width="7" height="5.5" rx="2"/><rect x="3.5" y="15.5" width="7" height="5" rx="2"/><rect x="13.5" y="12" width="7" height="8.5" rx="2"/>', 22);
+        b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openGallery(); });
+        search.before(b);
+    });
+    // ПК: пункт «Галерея» в боковом меню, после «Поиска» — копия его разметки со своей иконкой и подписью
+    onDom(function galleryNav() {
+        const search = document.querySelector('nav a[href="/search"]');
+        if (!search || search.parentElement.querySelector('.vp-gal-nav')) return;
+        const a = search.cloneNode(true);
+        a.setAttribute('href', '#gallery');
+        a.classList.add('vp-gal-nav');
+        a.classList.remove('vp-active');
+        const icon = a.querySelector('svg'), label = [...a.querySelectorAll('span')].find(sp => !sp.children.length && sp.textContent.trim());
+        if (icon) icon.outerHTML = svgIcon('<rect x="3.5" y="3.5" width="7" height="9" rx="2"/><rect x="13.5" y="3.5" width="7" height="5.5" rx="2"/><rect x="3.5" y="15.5" width="7" height="5" rx="2"/><rect x="13.5" y="12" width="7" height="8.5" rx="2"/>', 24);
+        if (label) label.textContent = 'Галерея';
+        a.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openGallery(); }, true);
+        search.after(a);
+    });
 
     // --- Обновить пост: на своих постах слева от «…» — один запрос счётчиков (как у сайта, POST /api/posts/stats),
     // лайки, комменты, репосты и просмотры меняются на месте, без перезагрузки; изменившиеся — вспыхивают
