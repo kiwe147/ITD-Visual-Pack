@@ -3714,6 +3714,7 @@
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
         ['3.2.15', '27 сентября 2026', [
+            'Галерея — картинки и видео из ленты сеткой, как в Пинтересте: кнопка рядом с поиском (на ПК — в меню слева)',
             'Свой фон — картинка или видео: «ИТД X» → «Фон» → «Своя картинка»',
             'Паки стикеров из архива: папка в .zip = пак, картинки встают как есть (правила — у кнопки в панели стикеров)',
             'Паки стикеров одинаковые на всех устройствах одного аккаунта',
@@ -7709,6 +7710,202 @@
     // висеть уже в профиле. Закрываем по нажатию и когда ссылка, к которой она привязана, пропала
     document.addEventListener('click', e => { if (e.target.closest && e.target.closest(PROFILE_LINK)) { clearTimeout(hcTimer); hcClose(); } }, true);
     onDom(function hcLinkGone() { if (hc && !(hcLink && hcLink.isConnected)) hcClose(); });
+
+    // --- Галерея (как Пинтерест): картинки и видео из ленты сеткой в 2–4 колонки. Кнопка — рядом с поиском
+    // в полосе ленты, тем же видом, что у сайта. Лента — тем же запросом, что у сайта (/api/posts?tab=…&cursor=…),
+    // страницами по 20; каждая картинка ложится в самую короткую колонку (сетка не перетасовывается при
+    // подгрузке). Видео — без звука и играют, только пока их видно. Нажатие — открыть пост; «назад» закрывает.
+    const GAL_TABS = [['popular', 'Популярное'], ['following', 'Подписки'], ['clan', 'Кланы']];
+    const gal = { el: null, tab: 'popular', cursor: null, loading: false, done: false, cols: [], heights: [], seen: new Set(), hist: false };
+    const galStyle = document.createElement('style');
+    galStyle.textContent = `
+        .vp-gal { position: fixed; inset: 0; z-index: 10010; display: flex; flex-direction: column; background: var(--bg-color, #000); color: var(--text-primary, #fff); }
+        html.vp-light .vp-gal { background: #f4f4f5; }
+        .vp-gal-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; flex: 0 0 auto; }
+        .vp-gal-head > b { font-size: 18px; margin-right: auto; }
+        .vp-gal-x { width: 38px; height: 38px; border: 0; border-radius: 50%; background: rgba(128,128,128,.18); color: inherit; cursor: pointer;
+            display: inline-flex; align-items: center; justify-content: center; }
+        .vp-gal-tabs { display: flex; gap: 6px; padding: 0 12px 10px; flex: 0 0 auto; overflow-x: auto; scrollbar-width: none; }
+        .vp-gal-tab { border: 0; border-radius: 99px; padding: 7px 14px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+            background: rgba(128,128,128,.16); color: inherit; white-space: nowrap; }
+        .vp-gal-tab.vp-on { background: var(--accent-primary, #0080FF); color: #fff; }
+        .vp-gal-body { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 24px; }
+        .vp-gal-grid { display: flex; gap: 8px; align-items: flex-start; max-width: 1400px; margin: 0 auto; }
+        .vp-gal-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+        .vp-gal-tile { position: relative; border-radius: 16px; overflow: hidden; background: rgba(128,128,128,.15); cursor: pointer; }
+        .vp-gal-tile > img, .vp-gal-tile > video { display: block; width: 100%; height: 100%; object-fit: cover; }
+        .vp-gal-badge { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
+            background: rgba(0,0,0,.55); color: #fff; pointer-events: none; }
+        .vp-gal-more { text-align: center; padding: 18px; color: var(--text-secondary, #8a8a8a); font-size: 14px; }
+        .vp-gal-btn svg { pointer-events: none; }
+        /* ПК: поиск — в боковом меню, в полосе ленты его нет — там и «Галерея»; телефон — кнопка в полосе ленты */
+        @media (min-width: 1173px) { .vp-gal-btn { display: none !important; } }
+        @media (max-width: 1172px) { .vp-gal-nav { display: none !important; } }
+    `;
+    document.head.appendChild(galStyle);
+    const galColsCount = () => innerWidth >= 1100 ? 4 : innerWidth >= 700 ? 3 : 2;
+    const galVideoIO = new IntersectionObserver(es => es.forEach(e => {
+        const v = e.target;
+        if (e.isIntersecting && e.intersectionRatio > .5) v.play().catch(() => { }); else v.pause();
+    }), { threshold: [0, .5, 1] });
+    function galLayout() {
+        const grid = gal.el.querySelector('.vp-gal-grid');
+        const tiles = gal.cols.flatMap(c => [...c.children]).sort((a, b) => a._vpN - b._vpN);
+        grid.replaceChildren();
+        gal.cols = Array.from({ length: galColsCount() }, () => { const c = document.createElement('div'); c.className = 'vp-gal-col'; grid.appendChild(c); return c; });
+        gal.heights = gal.cols.map(() => 0);
+        tiles.forEach(galPlace);
+    }
+    function galPlace(tile) {
+        let k = 0;
+        gal.heights.forEach((h, i) => { if (h < gal.heights[k]) k = i; });
+        gal.cols[k].appendChild(tile);
+        gal.heights[k] += tile._vpRatio + .05;
+    }
+    let galN = 0;
+    function galTile(post, att) {
+        const tile = document.createElement('div');
+        tile.className = 'vp-gal-tile';
+        const w = +att.width || 1, h = +att.height || 1;
+        tile._vpRatio = Math.min(2.2, Math.max(.45, h / w));        // очень длинные/широкие — в разумных пределах
+        tile._vpN = galN++;
+        tile.style.aspectRatio = `1 / ${tile._vpRatio}`;
+        if (att.type === 'video' || /\.(mp4|webm|mov)(\?|$)/i.test(att.url || '')) {
+            const v = document.createElement('video');
+            Object.assign(v, { src: att.url, muted: true, loop: true, playsInline: true, preload: 'metadata' });
+            v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+            const poster = pick(att.thumbnailUrl, att.thumbnail, att.previewUrl, att.preview);
+            if (poster) v.poster = poster.url || poster;
+            tile.appendChild(v);
+            galVideoIO.observe(v);
+            const badge = document.createElement('span');
+            badge.className = 'vp-gal-badge';
+            const sec = Math.round(+att.duration || 0);
+            badge.textContent = sec ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}` : '▶';
+            tile.appendChild(badge);
+        } else {
+            const img = document.createElement('img');
+            img.loading = 'lazy'; img.decoding = 'async'; img.alt = '';
+            img.src = att.url;
+            tile.appendChild(img);
+        }
+        const user = post.author && post.author.username;
+        tile.addEventListener('click', () => {
+            if (!user) return;
+            // запись галереи в истории заменяем постом: «назад» из поста — в ленту, а не в пустую галерею
+            const hadHist = gal.hist;
+            gal.hist = false;
+            closeGallery(true);
+            history[hadHist ? 'replaceState' : 'pushState']({}, '', `/@${user}/post/${post.id}`);
+            dispatchEvent(new PopStateEvent('popstate'));
+        });
+        return tile;
+    }
+    async function galLoad() {
+        if (!gal.el || gal.loading || gal.done) return;
+        gal.loading = true;
+        const more = gal.el.querySelector('.vp-gal-more');
+        more.textContent = 'Загрузка…';
+        const tab = gal.tab;
+        try {
+            const res = await api(`/api/posts?limit=20&tab=${tab}` + (gal.cursor ? '&cursor=' + encodeURIComponent(gal.cursor) : ''));
+            if (!res.ok) throw new Error('лента: ' + res.status);
+            const j = await res.json(), d = j.data || j;
+            if (!gal.el || tab !== gal.tab) return;                                    // пока грузили — переключили
+            const posts = d.posts || [];
+            keepSitePosts(j);
+            let added = 0;
+            for (const post of posts) {
+                if (gal.seen.has(post.id)) continue;
+                gal.seen.add(post.id);
+                for (const att of (post.attachments || []).slice(0, 4)) {
+                    if (!att || !att.url || (att.type && !/image|video/.test(att.type))) continue;
+                    galPlace(galTile(post, att));
+                    added++;
+                }
+            }
+            gal.cursor = (d.pagination && d.pagination.nextCursor) || d.nextCursor || d.cursor || null;
+            gal.done = !gal.cursor || !posts.length;
+            more.textContent = gal.done ? (gal.seen.size ? 'Это всё' : 'Пусто') : '';
+            gal.loading = false;
+            // страница без картинок (одни тексты) — сразу следующая
+            if (!gal.done && added < 4) galLoad();
+        } catch (e) {
+            logErr('галерея', e);
+            more.textContent = 'Не загрузилось — нажми, чтобы повторить';
+            more.onclick = () => { more.onclick = null; galLoad(); };
+            gal.loading = false;
+        }
+    }
+    function galSwitch(tab) {
+        gal.tab = tab; gal.cursor = null; gal.done = false; gal.seen.clear(); galN = 0;
+        gal.el.querySelectorAll('.vp-gal-tab').forEach(b => b.classList.toggle('vp-on', b.dataset.tab === tab));
+        gal.cols.forEach(c => c.querySelectorAll('video').forEach(v => galVideoIO.unobserve(v)));
+        gal.cols = [];
+        galLayout();
+        gal.el.querySelector('.vp-gal-body').scrollTop = 0;
+        galLoad();
+    }
+    function openGallery() {
+        if (gal.el) return;
+        const el = document.createElement('div');
+        el.className = 'vp-gal';
+        el.innerHTML = `<div class="vp-gal-head"><b>Галерея</b><button type="button" class="vp-gal-x" title="Закрыть">${svgIcon('<path d="M18 6 6 18M6 6l12 12"/>', 18)}</button></div>
+            <div class="vp-gal-tabs">${GAL_TABS.map(([id, name]) => `<button type="button" class="vp-gal-tab" data-tab="${id}">${name}</button>`).join('')}</div>
+            <div class="vp-gal-body"><div class="vp-gal-grid"></div><div class="vp-gal-more"></div></div>`;
+        document.body.appendChild(el);
+        gal.el = el;
+        el.querySelector('.vp-gal-x').onclick = () => closeGallery();
+        el.querySelectorAll('.vp-gal-tab').forEach(b => b.onclick = () => { if (b.dataset.tab !== gal.tab || !gal.seen.size) galSwitch(b.dataset.tab); });
+        const body = el.querySelector('.vp-gal-body');
+        body.addEventListener('scroll', () => { if (body.scrollTop + body.clientHeight > body.scrollHeight - 1200) galLoad(); }, { passive: true });
+        for (const t of ['wheel', 'touchmove']) el.addEventListener(t, e => e.stopPropagation(), { passive: true });
+        document.documentElement.style.overflow = 'hidden';
+        if (!gal.hist) { history.pushState(Object.assign({}, history.state, { vpGal: true }), '', location.href); gal.hist = true; }
+        galSwitch(gal.tab);
+    }
+    function closeGallery(fromBack) {
+        if (!gal.el) return;
+        gal.el.querySelectorAll('video').forEach(v => { galVideoIO.unobserve(v); v.pause(); v.removeAttribute('src'); v.load(); });
+        gal.el.remove();
+        gal.el = null; gal.cols = [];
+        document.documentElement.style.overflow = '';
+        if (gal.hist) { gal.hist = false; if (!fromBack && history.state && history.state.vpGal) history.back(); }
+    }
+    addEventListener('popstate', () => { if (gal.el) { gal.hist = false; closeGallery(true); } });
+    addEventListener('keydown', e => { if (e.key === 'Escape' && gal.el) closeGallery(); });
+    let galCols = galColsCount();
+    addEventListener('resize', () => { if (gal.el && galColsCount() !== galCols) { galCols = galColsCount(); galLayout(); } });
+    // кнопка — в полосе ленты, перед поиском (круглая кнопка с иконкой у сайта), с её же классами
+    onDom(function galleryButton() {
+        const bar = document.querySelector('.' + SELECTORS.feedBar);
+        if (!bar || bar.querySelector('.vp-gal-btn')) return;
+        const tabs = bar.querySelector('.' + SELECTORS.tabs);
+        const search = [...bar.querySelectorAll('button, a')].reverse().find(b => b.querySelector('svg') && !b.textContent.trim() && !(tabs && tabs.contains(b)) && !b.closest('.my-nav-block'));
+        if (!search) return;
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = (search.className || '') + ' vp-gal-btn';
+        b.title = 'Галерея';
+        b.setAttribute('aria-label', 'Галерея');
+        b.innerHTML = svgIcon('<rect x="3.5" y="3.5" width="7" height="9" rx="2"/><rect x="13.5" y="3.5" width="7" height="5.5" rx="2"/><rect x="3.5" y="15.5" width="7" height="5" rx="2"/><rect x="13.5" y="12" width="7" height="8.5" rx="2"/>', 22);
+        b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openGallery(); });
+        search.before(b);
+    });
+    // ПК: пункт «Галерея» в боковом меню, после «Поиска» — копия его разметки со своей иконкой и подписью
+    onDom(function galleryNav() {
+        const search = document.querySelector('nav a[href="/search"]');
+        if (!search || search.parentElement.querySelector('.vp-gal-nav')) return;
+        const a = search.cloneNode(true);
+        a.setAttribute('href', '#gallery');
+        a.classList.add('vp-gal-nav');
+        a.classList.remove('vp-active');
+        const icon = a.querySelector('svg'), label = [...a.querySelectorAll('span')].find(sp => !sp.children.length && sp.textContent.trim());
+        if (icon) icon.outerHTML = svgIcon('<rect x="3.5" y="3.5" width="7" height="9" rx="2"/><rect x="13.5" y="3.5" width="7" height="5.5" rx="2"/><rect x="3.5" y="15.5" width="7" height="5" rx="2"/><rect x="13.5" y="12" width="7" height="8.5" rx="2"/>', 24);
+        if (label) label.textContent = 'Галерея';
+        a.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openGallery(); }, true);
+        search.after(a);
+    });
 
     // --- Обновить пост: на своих постах слева от «…» — один запрос счётчиков (как у сайта, POST /api/posts/stats),
     // лайки, комменты, репосты и просмотры меняются на месте, без перезагрузки; изменившиеся — вспыхивают
