@@ -94,6 +94,26 @@
     // Сайт сам берёт токен (auth/refresh) и спрашивает «кто я» (users/me) при каждой загрузке — мод
     // раньше повторял оба запроса. Теперь подхватывает ответы сайта и свой делает, только если их не было.
     const siteAuth = { token: null, at: 0, me: null, meWait: [] };
+    // Номера постов: в карточке ленты ссылки на пост нет — берём из ответов сайта (лента, профиль, пост)
+    // и узнаём карточку по картинке вложения или по автору и тексту
+    const postIndex = { byMedia: new Map(), byUser: new Map() };
+    const normText = t => String(t || '').replace(/\s+/g, ' ').trim();
+    const POSTS_URL = /\/api\/posts(?:\/user\/[^/?#]+(?:\/liked)?|\/[0-9a-f-]{36})?\/?(?:[?#]|$)/;
+    function keepSitePosts(body) {
+        try {
+            const j = typeof body === 'string' ? JSON.parse(body) : body;
+            const list = (j && j.data && (j.data.posts || (j.data.id ? [j.data] : null))) || (j && j.posts) || [];
+            for (const p of list) {
+                if (!p || !p.id || !p.author) continue;
+                (p.attachments || []).forEach(a => a && a.url && postIndex.byMedia.set(a.url, p.id));
+                const user = String(p.author.username || '').toLowerCase(), text = normText(p.content);
+                if (!user || !text) continue;
+                const mine = postIndex.byUser.get(user) || new Map();
+                mine.set(p.id, text);
+                postIndex.byUser.set(user, mine);
+            }
+        } catch (e) { /* не JSON — не наш ответ */ }
+    }
     const USER_URL = /\/api\/users\/([\w.]+)\/?(?:[?#]|$)/;
     function keepSiteUser(url, body) {
         const m = String(url).match(USER_URL);
@@ -131,6 +151,9 @@
                     const method = (init && init.method) || (input && input.method) || 'GET';
                     if (url && /^get$/i.test(method) && USER_URL.test(url)) {
                         res.then(r => r.ok && r.clone().text().then(t => keepSiteUser(url, t))).catch(() => { });
+                    }
+                    if (url && /^get$/i.test(method) && POSTS_URL.test(url)) {
+                        res.then(r => r.ok && r.clone().text().then(keepSitePosts)).catch(() => { });
                     }
                     if (url && /\/auth\/refresh(?:[?#]|$)/.test(url)) {
                         res.then(r => r.ok && r.clone().json().then(d => { if (d && d.accessToken) { siteAuth.token = d.accessToken; siteAuth.at = Date.now(); } })).catch(() => { });
@@ -3594,7 +3617,8 @@
     const CHANGELOG = [
         ['3.2.13', '27 сентября 2026', [
             'Форма «Ответить» в комментариях больше не тёмный прямоугольник',
-            'Меньше запросов к сайту: «Клуб ИТД X» и автолайки не спрашивают профиль каждого участника, мод не повторяет запросы сайта при загрузке']],
+            'Меньше запросов к сайту: «Клуб ИТД X» и автолайки не спрашивают профиль каждого участника, мод не повторяет запросы сайта при загрузке',
+            'На своих постах — кнопка «обновить» слева от «…»: лайки, комменты и просмотры обновляются без перезагрузки страницы']],
         ['3.2.12', '27 сентября 2026', [
             'Ссылки в постах и комментариях (t.me/…, https://…) подсвечиваются и открываются по нажатию',
             'Иконка ИТД X в углу открывает меню: ТГК и донат',
@@ -3877,7 +3901,7 @@
 
     async function initVisuals() {
         try {
-            const me = siteAuth.me || await new Promise(done => { siteAuth.meWait.push(done); setTimeout(() => done(null), 3000); })
+            const me = siteAuth.me || await new Promise(done => { siteAuth.meWait.push(done); setTimeout(() => done(null), 1500); })
                 || await (await api('/api/users/me')).json();
             if (!me || !me.username) return;              // не вошли или API не ответил — свои ники искать не по чему
             meData = me;
@@ -7258,6 +7282,96 @@
     // висеть уже в профиле. Закрываем по нажатию и когда ссылка, к которой она привязана, пропала
     document.addEventListener('click', e => { if (e.target.closest && e.target.closest(PROFILE_LINK)) { clearTimeout(hcTimer); hcClose(); } }, true);
     onDom(function hcLinkGone() { if (hc && !(hcLink && hcLink.isConnected)) hcClose(); });
+
+    // --- Обновить пост: на своих постах слева от «…» — один запрос счётчиков (как у сайта, POST /api/posts/stats),
+    // лайки, комменты, репосты и просмотры меняются на месте, без перезагрузки; изменившиеся — вспыхивают
+    function postIdOf(card) {
+        if (!card.matches('article')) { const m = location.pathname.match(/\/post\/([0-9a-f-]{36})/); if (m) return m[1]; }
+        for (const img of card.querySelectorAll('img')) { const id = postIndex.byMedia.get(img.currentSrc || img.src); if (id) return id; }
+        const bg = card.dataset.blurBg && postIndex.byMedia.get(card.dataset.blurBg);
+        if (bg) return bg;
+        const link = card.querySelector('header ' + PROFILE_LINK) || card.querySelector(PROFILE_LINK);
+        const user = link && loginOf(link.getAttribute('href'));
+        const posts = user && postIndex.byUser.get(user.toLowerCase());
+        if (!posts) return null;
+        const text = normText([...card.querySelectorAll('.' + SELECTORS.postText)].filter(t => !t.closest('.' + SELECTORS.repost)).map(t => t.textContent).join(' '));
+        if (!text) return null;
+        for (const [id, t] of posts) if (t === text || text.startsWith(t) || t.startsWith(text)) return id;
+        return null;
+    }
+    // числа в подвале карточки: лайки, комменты, репосты, просмотры — элементы с числом
+    function postCounters(card) {
+        const foot = card.querySelector('footer');
+        if (!foot) return null;
+        const num = el => el && [...el.querySelectorAll('span')].reverse().find(sp => !sp.children.length && /^\d[\d\s.,KkКк]*$/.test(sp.textContent.trim()));
+        const btn = label => num(foot.querySelector(`button[aria-label="${label}"]`));
+        const views = [...foot.querySelectorAll('span')].filter(sp => !sp.closest('button') && sp.querySelector('svg')).map(num).filter(Boolean).pop();
+        return { likesCount: btn('Нравится'), commentsCount: btn('Комментировать'), repostsCount: btn('Репост'), viewsCount: views };
+    }
+    async function refreshPost(card, btn) {
+        const id = postIdOf(card);
+        if (!id || btn.classList.contains('vp-spin')) return;
+        btn.classList.add('vp-spin');
+        try {
+            const res = await api('/api/posts/stats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [id] }) });
+            const j = res.ok ? await res.json() : null;
+            const st = j && ((j.posts || (j.data && j.data.posts) || [])[0]);
+            if (!st) throw new Error('счётчики: ' + res.status);
+            const els = postCounters(card) || {};
+            let changed = 0;
+            for (const k of ['likesCount', 'commentsCount', 'repostsCount', 'viewsCount']) {
+                const el = els[k];
+                if (!el || typeof st[k] !== 'number' || el.textContent.trim() === String(st[k])) continue;
+                el.textContent = String(st[k]);
+                el.classList.remove('vp-bump'); void el.offsetWidth; el.classList.add('vp-bump');
+                changed++;
+            }
+            btn.title = changed ? 'Обновлено' : 'Ничего нового';
+        } catch (e) {
+            logErr('обновить пост', e);
+            btn.title = 'Не вышло обновить';
+        } finally {
+            setTimeout(() => btn.classList.remove('vp-spin'), 400);
+        }
+    }
+    const styleRefresh = document.createElement('style');
+    styleRefresh.textContent = `
+        .vp-post-refresh { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; margin-right: 2px;
+            border: 0; border-radius: 50%; background: none; color: var(--text-secondary, #8a8a8a); cursor: pointer; flex: 0 0 auto; }
+        .vp-post-refresh:hover { background: var(--block-hover-bg, rgba(128,128,128,.15)); color: var(--text-primary, #fff); }
+        .vp-post-refresh.vp-spin svg { animation: vp-refresh-spin .6s linear infinite; }
+        @keyframes vp-refresh-spin { to { transform: rotate(360deg); } }
+        .vp-bump { animation: vp-bump .7s ease-out; display: inline-block; }
+        @keyframes vp-bump { 30% { transform: scale(1.35); color: var(--accent-primary, #3b9eff); } }
+    `;
+    document.head.appendChild(styleRefresh);
+    onDom(function postRefreshButtons() {
+        if (!myUsername) return;
+        const me = myUsername.toLowerCase();
+        document.querySelectorAll('header').forEach(h => {
+            const row = h.firstElementChild;
+            if (!row) return;
+            const card = h.closest('article') || h.closest('div:has(> footer)') || (h.parentElement && h.parentElement.closest('div:has(footer)'));
+            if (!card || card.querySelector(':scope > .vp-post-refresh') || !card.querySelector('footer') || card.closest('.vp-msgs')) return;
+            const link = h.querySelector(PROFILE_LINK) || card.querySelector(PROFILE_LINK);
+            if (!link || (loginOf(link.getAttribute('href')) || '').toLowerCase() !== me) return;
+            const menu = [...row.children].reverse().find(c => c.querySelector('svg') && !c.matches('.' + SELECTORS.nickRow + ', a'));
+            if (!menu || !postIdOf(card)) return;
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'vp-post-refresh';
+            b.title = 'Обновить лайки и комменты';
+            b.innerHTML = svgIcon('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>', 18);
+            b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); refreshPost(card, b); });
+            // «…» у сайта на ПК стоит поверх в углу карточки, на телефоне — в строке; кнопку ставим в карточку
+            // по месту самого «…» на экране: вплотную слева, по его центру (отступ — от правого края карточки)
+            if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
+            card.appendChild(b);
+            const cr = card.getBoundingClientRect(), mr = menu.getBoundingClientRect();
+            Object.assign(b.style, { position: 'absolute', zIndex: '2',
+                top: Math.round(mr.top - cr.top + (mr.height - 32) / 2) + 'px', right: Math.round(cr.right - mr.left + 2) + 'px' });
+        });
+    });
 
     // --- Ссылки в тексте: сайт показывает t.me/…, https://… простым текстом. Текст сайта не трогаем
     // (вставить свой <a> в текст React — он потом падает на обновлении поста): места ссылок держим
