@@ -2141,9 +2141,83 @@
     const canvas = document.createElement('canvas');
     canvas.className = 'vp-bg-canvas';
     document.body.appendChild(canvas);
-    // выключатель «Фон»: холст прячем, кадры фона не рисуются (frame смотрит backgroundEnabled)
+    // Свой фон: картинка или видео пользователя. Файл большой — хранится в IndexedDB этого браузера
+    // (в настройки Tampermonkey не влезет). Видео — без звука, по кругу. Слой — там же, где холст,
+    // чуть притушен, чтобы текст читался (в светлой теме — светлее).
+    const bgMedia = document.createElement('div');
+    bgMedia.className = 'vp-bg-media vp-bg-off';
+    document.body.appendChild(bgMedia);
+    styleBgCanvas.textContent += `
+        .vp-bg-media { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+        .vp-bg-media.vp-bg-off { display: none; }
+        .vp-bg-media > img, .vp-bg-media > video { width: 100%; height: 100%; object-fit: cover; display: block; filter: brightness(.5) saturate(1.1); }
+        html.vp-light .vp-bg-media > img, html.vp-light .vp-bg-media > video { filter: none; opacity: .45; }
+    `;
+    const bgDb = () => new Promise((ok, no) => {
+        const r = indexedDB.open('itdx', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('files');
+        r.onsuccess = () => ok(r.result);
+        r.onerror = () => no(r.error);
+    });
+    async function bgFile(blob) {                       // без аргумента — прочитать, с ним — сохранить
+        const db = await bgDb();
+        return new Promise((ok, no) => {
+            const tx = db.transaction('files', blob ? 'readwrite' : 'readonly'), st = tx.objectStore('files');
+            const r = blob ? st.put(blob, 'background') : st.get('background');
+            r.onsuccess = () => ok(blob || r.result || null);
+            r.onerror = () => no(r.error);
+        });
+    }
+    let bgMediaUrl = '';
+    async function showBgMedia(blob) {
+        const fresh = !!blob;                            // только что выбран (а не прочитан из памяти)
+        if (!blob) blob = await bgFile().catch(() => null);
+        if (bgMediaUrl) URL.revokeObjectURL(bgMediaUrl);
+        bgMediaUrl = blob ? URL.createObjectURL(blob) : '';
+        bgMedia.replaceChildren();
+        if (!blob) return;
+        if (/^video\//.test(blob.type)) {
+            const v = document.createElement('video');
+            Object.assign(v, { src: bgMediaUrl, muted: true, loop: true, autoplay: true, playsInline: true });
+            v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+            // формат, который браузер не играет (старый mp4, HEVC…) — сказать, а не молча показать чёрное
+            v.addEventListener('error', () => { if (fresh) alert('Браузер не умеет показывать это видео. Сохрани его как mp4 (H.264) или webm и выбери снова'); }, { once: true });
+            bgMedia.appendChild(v);
+            v.play().catch(() => { });
+        } else {
+            const img = document.createElement('img');
+            img.src = bgMediaUrl;
+            img.alt = '';
+            bgMedia.appendChild(img);
+        }
+    }
+    // выбрать файл для своего фона: картинка или видео до 150 МБ
+    function pickBgFile(done) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*,video/*';
+        input.onchange = async () => {
+            const f = input.files[0];
+            if (!f) return;
+            if (f.size > 150 * 1024 * 1024) { alert('Файл больше 150 МБ — возьми поменьше'); return; }
+            try { await bgFile(f); } catch (e) { alert('Не вышло сохранить файл: ' + (e && e.message || e)); return; }
+            backgroundStyle = 'custom';
+            GM_setValue('backgroundStyle', 'custom');
+            await showBgMedia(f);
+            updateBackgroundVisibility();
+            if (done) done();
+        };
+        input.click();
+    }
+    // выключатель «Фон»: холст прячем, кадры фона не рисуются (frame смотрит backgroundEnabled);
+    // свой фон — вместо холста слой с картинкой/видео
     function updateBackgroundVisibility() {
-        canvas.classList.toggle('vp-bg-off', !backgroundEnabled);
+        const custom = backgroundStyle === 'custom';
+        canvas.classList.toggle('vp-bg-off', !backgroundEnabled || custom);
+        bgMedia.classList.toggle('vp-bg-off', !backgroundEnabled || !custom);
+        const v = bgMedia.querySelector('video');
+        if (v) { if (backgroundEnabled && custom) v.play().catch(() => { }); else v.pause(); }
+        if (backgroundEnabled && custom && !bgMedia.firstChild) showBgMedia();
     }
     updateBackgroundVisibility();
     const ctx = canvas.getContext('2d');
@@ -2539,6 +2613,7 @@
     };
 
     function drawBackground(dt = 1) {
+        if (backgroundStyle === 'custom') return;          // свой фон — картинка/видео, холст не рисуем
         const def = BACKGROUNDS[backgroundStyle] || BACKGROUNDS.matrix;
         if (bgName !== backgroundStyle) {
             bgName = backgroundStyle;
@@ -2810,7 +2885,8 @@
         aurora: { name: 'Сияние', icon: svgIcon('<path d="M3 14c3-5 6-7 9-7s6 2 9 7"/><path d="M6 17c2-3 4-4.5 6-4.5s4 1.5 6 4.5"/><path d="M3 21h18"/>') },
         bokeh: { name: 'Боке', icon: svgIcon('<circle cx="8" cy="9" r="4"/><circle cx="16.5" cy="15.5" r="4.5"/><circle cx="17" cy="6" r="1.5"/>') },
         grid: { name: 'Неон-сетка', icon: svgIcon('<path d="M8 8a4 4 0 0 1 8 0"/><path d="M2 12h20"/><path d="M12 12v9M12 12l-8 9M12 12l8 9M5 17h14"/>') },
-        snow: { name: 'Снегопад', icon: svgIcon('<path d="M12 2v20M3.3 7l17.4 10M3.3 17 20.7 7"/><path d="m9 4 3 2 3-2M9 20l3-2 3 2"/>') }
+        snow: { name: 'Снегопад', icon: svgIcon('<path d="M12 2v20M3.3 7l17.4 10M3.3 17 20.7 7"/><path d="m9 4 3 2 3-2M9 20l3-2 3 2"/>') },
+        custom: { name: 'Своя картинка', icon: svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>') }
     };
     // --- автолайки: список тех, кого лайкать
     function renderAutoLikeUsers(list, footer, usersData) {
@@ -2980,12 +3056,30 @@
                     icon.className = 'vp-menu-icon';
                     icon.innerHTML = bg.icon;
                     grid.appendChild(pickRow(icon, bg.name, key === backgroundStyle, () => {
+                        if (key === 'custom') {
+                            // свой фон: файла ещё нет — сразу выбрать; есть — просто включить
+                            bgFile().then(f => {
+                                if (!f) return pickBgFile(redraw);
+                                backgroundStyle = 'custom'; GM_setValue('backgroundStyle', 'custom');
+                                updateBackgroundVisibility(); redraw();
+                            }).catch(() => pickBgFile(redraw));
+                            return;
+                        }
                         backgroundStyle = key;
                         GM_setValue('backgroundStyle', key);
+                        updateBackgroundVisibility();
                     }, redraw));
                 });
                 grid.style.gridTemplateRows = `repeat(${Math.ceil(grid.children.length / 2)}, auto)`;
                 body.appendChild(grid);
+                if (backgroundStyle === 'custom') {
+                    const icon = document.createElement('div');
+                    icon.className = 'vp-menu-icon';
+                    icon.innerHTML = svgIcon('<path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/><path d="M12 4v11M7.5 8.5 12 4l4.5 4.5"/>');
+                    const row = menuOption(icon, 'Сменить картинку или видео', () => { });
+                    row.onclick = e => { e.stopPropagation(); pickBgFile(redraw); };
+                    body.appendChild(row);
+                }
             }
             if (id === 'likes') {
                 body.appendChild(secTitle('Кого лайкать'));
@@ -3620,6 +3714,7 @@
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
         ['3.2.15', '27 сентября 2026', [
+            'Свой фон — картинка или видео: «ИТД X» → «Фон» → «Своя картинка»',
             'Паки стикеров из архива: папка в .zip = пак, картинки встают как есть (правила — у кнопки в панели стикеров)',
             'Паки стикеров одинаковые на всех устройствах одного аккаунта',
             'Галочка ИТД X держится за аккаунт, а не за ник — смена ника её не снимает',
