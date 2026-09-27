@@ -1555,6 +1555,9 @@
     const VERIFICATION_POST_ID = 'a0d6625a-b3ec-44c4-98da-48422af101d5';
     const SECRET_SALT = 'ITD_MOD_2026_SECRET_SALT_NEUROSFW';
     const VERIFICATION_STORAGE_KEY = 'itd_verified_users';
+    // Пост, под которым хранятся паки стикеров (синхронизация между устройствами одного аккаунта).
+    // Пусто — синхронизация выключена, паки живут только в этом браузере
+    const STICKER_POST_ID = '';
     let isVerifying = false;
 
     let globalHue = 0;
@@ -3743,6 +3746,10 @@
         return match ? { code: match[1], flags: match[2] } : null;
     }
     const isModCode = (username, parsed) => parsed && parsed.flags[0] === '1' && parsed.code === generateCode(username);
+    // Код по номеру аккаунта (author.id): ник можно сменить — галочка остаётся. Старые коды (по нику)
+    // тоже верные: у друзей может стоять прошлая версия, её код — по нику
+    const isAuthorCode = (author, parsed) => !!author && !!parsed && parsed.flags[0] === '1'
+        && ((author.id && parsed.code === generateCode(author.id)) || (author.username && parsed.code === generateCode(author.username)));
 
     // Ники пользователей мода — из последней проверки (localStorage). Битая запись — пустой список:
     // на нём держатся «Клуб ИТД X», собеседники в личке, кандидаты автолайков и вериф-бейджи.
@@ -3753,14 +3760,26 @@
     // Служебный пост читают проверка всех и проверка себя подряд — это один и тот же ответ:
     // держим его 20 с (fresh — после своего нового кода, нужен свежий)
     let verifyLoad = null, verifyLoadAt = 0;
+    // Все комментарии поста — страницами по 100 (limit + cursor, как у сайта). Больше 30 страниц не читаем
+    async function allComments(postId, maxPages = 30) {
+        const all = [];
+        let cursor = null;
+        for (let page = 0; page < maxPages; page++) {
+            const res = await api(`/api/posts/${postId}/comments?limit=100` + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
+            if (!res.ok) throw new Error('комментарии: ' + res.status);
+            const j = await res.json(), d = j.data || j;
+            const list = d.comments || [];
+            if (page && list.length && all.some(c => c.id === list[0].id)) break;      // сервер не понял курсор — не зацикливаемся
+            all.push(...list);
+            cursor = d.nextCursor || null;
+            if (!cursor || !d.hasMore && d.hasMore !== undefined || !list.length) break;
+        }
+        return all;
+    }
     function loadVerificationComments(fresh) {
         if (!fresh && verifyLoad && Date.now() - verifyLoadAt < 20000) return verifyLoad;
         verifyLoadAt = Date.now();
-        verifyLoad = api(`/api/posts/${VERIFICATION_POST_ID}/comments?limit=100`).then(async res => {
-            if (!res.ok) throw new Error('комментарии: ' + res.status);
-            const data = await res.json();
-            return data.data?.comments || data.comments || [];
-        });
+        verifyLoad = allComments(VERIFICATION_POST_ID);
         verifyLoad.catch(() => { verifyLoad = null; });
         return verifyLoad;
     }
@@ -3778,9 +3797,9 @@
             for (const c of await loadVerificationComments(fresh)) {
                 const name = c.author?.username;
                 const parsed = parseCode(c.content);
-                if (!name || verifiedUsers[name] || !isModCode(name, parsed)) continue;
+                if (!name || verifiedUsers[name] || !isAuthorCode(c.author, parsed)) continue;
                 const a = c.author, ava = a.avatar && (a.avatar.url || a.avatar) || a.avatarUrl || a.emoji;
-                verifiedUsers[name] = { code: parsed.code, commentId: c.id, hasMod: true, flags: parsed.flags,
+                verifiedUsers[name] = { code: parsed.code, commentId: c.id, hasMod: true, flags: parsed.flags, id: a.id || undefined,
                     displayName: a.displayName || a.display_name || undefined, avatar: typeof ava === 'string' ? ava : undefined };
             }
             if (JSON.stringify(verifiedUsers) !== localStorage.getItem(VERIFICATION_STORAGE_KEY)) {
@@ -3800,15 +3819,24 @@
     async function verifyMyself() {
         if (!myUsername) return false;
         try {
-            const mine = (await loadVerificationComments())
-                .filter(c => c.author?.username === myUsername && parseCode(c.content));
-            if (mine.some(c => isModCode(myUsername, parseCode(c.content)))) return true;
-            for (const c of mine) await api(`/api/comments/${c.id}`, { method: 'DELETE' }).catch(() => { });
-            const res = await api(`/api/posts/${VERIFICATION_POST_ID}/comments`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: generateCode(myUsername) + '1' })
-            });
+            const all = await loadVerificationComments();
+            const myId = (meData && meData.id) || (all.find(c => c.author?.username === myUsername) || {}).author?.id;
+            const mine = all.filter(c => (myId ? c.author?.id === myId : c.author?.username === myUsername) && parseCode(c.content));
+            const byId = c => myId && parseCode(c.content).code === generateCode(myId);
+            if (!myId && mine.some(c => isModCode(myUsername, parseCode(c.content)))) return true;
+            if (mine.some(byId)) return true;
+            // Под служебным постом — только новый комментарий или правка: новый шлёт автору поста уведомление,
+            // правка — нет. Есть свой устаревший код (сменил ник, испорчен) — правим его на код по номеру
+            // аккаунта; верный код по нику не трогаем (его видят друзья со старой версией) — рядом пишем новый
+            const code = generateCode(myId || myUsername) + '1';
+            const stale = mine.find(c => !isAuthorCode(c.author, parseCode(c.content)));
+            const res = stale
+                ? await api(`/api/comments/${stale.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: code }) })
+                : await api(`/api/posts/${VERIFICATION_POST_ID}/comments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: code })
+                });
             if (!res.ok) return false;
             await checkAllComments(true);
             return true;
@@ -4285,13 +4313,13 @@
 
     // Кадр через requestAnimationFrame: в свёрнутой вкладке он сам встаёт на паузу.
     // Статичный цвет рисуется один раз (paint), радуга — каждый кадр.
-    // Фон рисуется на частоте экрана (но не чаще ~60 раз в секунду). Если кадры начинают пропадать (слабый компьютер, тяжёлая
-    // страница), фон сам переходит на каждый второй кадр: картинка та же, только реже.
-    let lastFrame = 0, bestGap = 1000, slow = 0, halfRate = false, odd = false;
+    // Фон рисуется на частоте экрана — 60, 90, 120, 144 Гц, какой есть (скорость одна и та же: dt от времени).
+    // Если кадры начинают пропадать (слабое устройство, тяжёлая страница), фон переходит на каждый второй
+    // кадр: картинка та же, только реже. Через 15 с пробует снова полную частоту (не вышло — ждёт вдвое дольше).
+    let lastFrame = 0, bestGap = 1000, slow = 0, halfRate = false, odd = false, halfSince = 0, retryMs = 15000;
     function frame(t) {
         requestAnimationFrame(frame);
-        // экраны 120–144 Гц (многие телефоны): фон — не чаще ~60 кадров, вдвое меньше работы, скорость та же (dt)
-        if (lastFrame && t - lastFrame < 10) return;
+        if (halfRate && t - halfSince > retryMs) { halfRate = false; slow = 0; retryMs = Math.min(retryMs * 2, 240000); }
         if (halfRate && (odd = !odd)) return;
         const gap = lastFrame ? t - lastFrame : 16.7;
         lastFrame = t;
@@ -4299,7 +4327,10 @@
             const base = halfRate ? gap / 2 : gap;
             bestGap = Math.min(bestGap, base);          // родной интервал экрана
             slow = base > bestGap * 1.7 ? slow + 1 : Math.max(0, slow - 2);
-            if (!halfRate && slow > 45) { halfRate = true; document.documentElement.classList.add('vp-glass-lite'); }
+            if (!halfRate && slow > 45) {
+                halfRate = true; halfSince = t; slow = 0;
+                document.documentElement.classList.add('vp-glass-lite');
+            }
         }
         const dt = Math.min(3, gap / 50);                // доля от 50 мс: скорости не зависят от частоты кадров
         if (currentStyle === 'rainbow') { stepHue(dt); paint(); }
@@ -4330,13 +4361,170 @@
         const writeList = (key, v) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) { } };
         let userPacks = readList(STORAGE_KEY);
         let recentStickers = readList(RECENT_STORAGE_KEY);
-        const saveUserPacks = () => writeList(STORAGE_KEY, userPacks);
+        const saveUserPacks = () => { writeList(STORAGE_KEY, userPacks); packsChanged(); };
         const saveRecent = () => writeList(RECENT_STORAGE_KEY, recentStickers);
         // стикеры пака по ключу ('recent' — недавние); имя пака
         const packStickers = key => key === 'recent' ? recentStickers : (userPacks.find(p => p.id === key) || { stickers: [] }).stickers;
         const packName = key => key === 'recent' ? 'Недавние' : ((userPacks.find(p => p.id === key) || {}).name || DEFAULT_PACK_NAME);
         const allPackKeys = () => ['recent', ...userPacks.map(p => p.id)];
         function savePack(key) { if (key === 'recent') saveRecent(); else saveUserPacks(); }
+
+        // ---- Синхронизация паков между устройствами одного аккаунта
+        // Паки — свои комментарии «ITDXS 1/2 …» под служебным постом STICKER_POST_ID. Под служебными постами
+        // только новый комментарий или правка (без ответов и удалений): ответы и новые комментарии шлют
+        // уведомления, правка — нет. Куски создаются один раз, дальше правятся; лишние — правятся в пустые.
+        // Автора комментария ставит сервер — свои куски узнаём по номеру аккаунта (author.id), не по нику.
+        // Время правки паков дописано цифрами к своему коду галочки («код1» + секунды — старые версии мода
+        // такой код принимают): его и так читают раз в 10 минут, а служебный пост паков читаем, только
+        // если там новее, чем здесь. Паки упакованы в байты: у стикера номер файла и имя картинки — две
+        // UUID по 16 байт, в комментарий (2000 знаков) влезает ~40 стикеров; больше — несколько кусков.
+        const SYNC_TAG = 'ITDXS';
+        const PACKS_AT_KEY = 'user_sticker_packs_at';
+        const EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+        const CDN_IMG = /^https:\/\/cdn\.xn--d1ah4a\.com\/images\/([0-9a-f-]{36})\.(\w+)$/i;
+        let packsAt = +(localStorage.getItem(PACKS_AT_KEY) || 0), syncTimer = 0, syncing = false, applyingRemote = false;
+        const hexToBytes = h => Uint8Array.from(h.replace(/-/g, '').match(/../g), x => parseInt(x, 16));
+        const bytesToUuid = b => [...b].map(x => x.toString(16).padStart(2, '0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+        const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        function encodePacks(packs, at) {
+            const out = [1], put = (...b) => out.push(...b), str = t => { const u = new TextEncoder().encode(t).slice(0, 255); put(u.length, ...u); };
+            const sec = Math.floor(at / 1000);
+            put((sec >>> 24) & 255, (sec >>> 16) & 255, (sec >>> 8) & 255, sec & 255, packs.length);
+            for (const pk of packs) {
+                str(pk.id || ''); str(pk.name || '');
+                const list = pk.stickers.slice(0, 65535);
+                put(list.length >> 8, list.length & 255);
+                for (const st of list) {
+                    const m = String(st.url || '').match(CDN_IMG), ext = m ? EXT.indexOf(m[2].toLowerCase()) : -1;
+                    if (m && ext >= 0 && UUID.test(st.id || '')) { put(ext, ...hexToBytes(st.id), ...hexToBytes(m[1])); }
+                    else { put(255); str(st.id || ''); str(st.url || ''); }        // не с CDN сайта — как есть
+                }
+            }
+            let bin = '';
+            out.forEach(b => { bin += String.fromCharCode(b); });
+            return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+        function decodePacks(b64) {
+            const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
+            const b = Uint8Array.from(bin, c => c.charCodeAt(0));
+            let i = 0;
+            const byte = () => { if (i >= b.length) throw new Error('обрыв данных'); return b[i++]; };
+            const str = () => { const n = byte(), t = new TextDecoder().decode(b.slice(i, i + n)); i += n; return t; };
+            if (byte() !== 1) throw new Error('версия паков');
+            const at = ((byte() << 24) >>> 0) + (byte() << 16) + (byte() << 8) + byte();
+            const packs = [];
+            for (let n = byte(); n > 0; n--) {
+                const pk = { id: str(), name: str(), stickers: [] };
+                for (let k = (byte() << 8) + byte(); k > 0; k--) {
+                    const ext = byte();
+                    if (ext === 255) { const id = str(), url = str(); pk.stickers.push({ id, url }); continue; }
+                    const id = bytesToUuid(b.slice(i, i + 16)), img = bytesToUuid(b.slice(i + 16, i + 32));
+                    i += 32;
+                    pk.stickers.push({ id, url: `https://cdn.xn--d1ah4a.com/images/${img}.${EXT[ext] || 'png'}` });
+                }
+                packs.push(pk);
+            }
+            return { at: at * 1000, packs };
+        }
+        const myAccountId = () => (meData && meData.id) || (verifiedInfo(myUsername || '') || {}).id || null;
+        const partsKey = () => 'vp_sticker_parts_' + myAccountId();
+        // время паков в данных галочки (секунды после «1» в коде); 0 — паков там нет
+        const remotePacksAt = () => { const f = String((verifiedInfo(myUsername || '') || {}).flags || ''); return f.length > 1 ? +f.slice(1) * 1000 : 0; };
+        // свои куски под постом паков: запомненные номера или поиском (один раз на устройство)
+        async function packParts(scan) {
+            if (!scan) { const saved = GM_getValue(partsKey(), null); if (saved) return saved; }
+            const me = myAccountId();
+            const list = (await allComments(STICKER_POST_ID)).filter(c => c.author && c.author.id === me && /^ITDXS \d+\/\d+ /.test(c.content || ''))
+                .map(c => { const m = c.content.match(/^ITDXS (\d+)\/(\d+) (\S*)/); return { id: c.id, i: +m[1], n: +m[2], d: m[3] }; });
+            GM_setValue(partsKey(), list.map(({ id, i, n }) => ({ id, i, n })));
+            return list;
+        }
+        function applyRemotePacks(remote) {
+            applyingRemote = true;
+            userPacks = remote.packs;
+            writeList(STORAGE_KEY, userPacks);
+            packsAt = remote.at;
+            localStorage.setItem(PACKS_AT_KEY, String(packsAt));
+            applyingRemote = false;
+            if (scrollContainer) { updateTabButtons(); refreshAllPackGrids(); }
+        }
+        const patchComment = (id, content) => api(`/api/comments/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) });
+        // скачать: в галочке время новее нашего — читаем свои куски и берём паки оттуда
+        async function pullPacks() {
+            const at = remotePacksAt();
+            if (!at || at <= packsAt + 999) return;
+            const parts = (await packParts(true)).filter(p => p.n).sort((a, b) => a.i - b.i);
+            const n = parts.length && parts[0].n;
+            if (!n || parts.length < n || !parts.slice(0, n).every((p, k) => p.i === k + 1 && p.n === n)) return;
+            const remote = decodePacks(parts.slice(0, n).map(p => p.d).join(''));
+            if (remote.at <= packsAt + 999) return;
+            // паки из прошлых версий (без времени) здесь — не теряем: к скачанным добавляем свои, которых там нет
+            const legacy = !packsAt && userPacks.length ? userPacks.filter(pk => !remote.packs.some(r => r.id === pk.id)) : [];
+            applyRemotePacks({ at: remote.at, packs: [...remote.packs, ...legacy] });
+            if (legacy.length) { packsAt = Date.now(); localStorage.setItem(PACKS_AT_KEY, String(packsAt)); return 'push'; }
+        }
+        // выгрузить свои паки: куски правкой (новые — новым комментарием), потом время — в код галочки
+        async function pushPacks() {
+            const mine = verifiedInfo(myUsername || '');
+            if (!mine || !mine.commentId) return;                 // без своей галочки некуда записать время
+            let parts = await packParts(false);
+            if (!parts.length) parts = await packParts(true);
+            if (!packsAt) { packsAt = Date.now(); localStorage.setItem(PACKS_AT_KEY, String(packsAt)); }
+            const data = encodePacks(userPacks, packsAt), CH = 1900, chunks = [];
+            for (let k = 0; k < data.length || !chunks.length; k += CH) chunks.push(data.slice(k, k + CH));
+            const slots = parts.map(p => p.id), saved = [];
+            for (let k = 0; k < Math.max(chunks.length, slots.length); k++) {
+                const content = k < chunks.length ? `${SYNC_TAG} ${k + 1}/${chunks.length} ${chunks[k]}` : `${SYNC_TAG} 0/0 -`;   // лишний кусок — пустой
+                if (slots[k]) {
+                    const res = await patchComment(slots[k], content);
+                    if (!res.ok) throw new Error('паки: правка ' + res.status);
+                    saved.push({ id: slots[k], i: k < chunks.length ? k + 1 : 0, n: k < chunks.length ? chunks.length : 0 });
+                } else {
+                    const res = await api(`/api/posts/${STICKER_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) });
+                    if (!res.ok) throw new Error('паки: запись ' + res.status);
+                    const j = await res.json();
+                    saved.push({ id: (j.data || j).id, i: k + 1, n: chunks.length });
+                }
+            }
+            GM_setValue(partsKey(), saved);
+            // время паков — в свой код галочки (правкой)
+            const code = String(mine.code) + '1' + Math.floor(packsAt / 1000);
+            const res = await patchComment(mine.commentId, code);
+            if (res.ok) await checkAllComments(true);
+        }
+        async function syncPacks(up) {
+            if (!STICKER_POST_ID || syncing || !myUsername || !myAccountId()) return;
+            syncing = true;
+            try {
+                if (up) await pushPacks();
+                else {
+                    const merged = await pullPacks();
+                    // здесь паки новее, чем записано (правили без сети, паки прошлых версий без времени,
+                    // слили свои с скачанными) — выгрузить
+                    const at = remotePacksAt();
+                    if (merged === 'push' || (userPacks.length && (!packsAt || packsAt > at + 999))) await pushPacks();
+                }
+            } catch (e) {
+                logErr('паки: синхронизация', e);
+            } finally {
+                syncing = false;
+            }
+        }
+        // правка паков здесь — отметить время и через 4 с выгрузить (серия правок — одна выгрузка)
+        function packsChanged() {
+            if (applyingRemote) return;
+            packsAt = Date.now();
+            localStorage.setItem(PACKS_AT_KEY, String(packsAt));
+            clearTimeout(syncTimer);
+            syncTimer = setTimeout(() => syncPacks(true), 4000);
+        }
+        // при входе и раз в 10 минут (после проверки галочек — там время паков)
+        (function syncLoop() {
+            if (!STICKER_POST_ID) return;
+            const tick = () => myUsername && myAccountId() && verifiedInfo(myUsername) ? syncPacks(false) : setTimeout(tick, 3000);
+            setTimeout(tick, 6000);
+            setInterval(() => syncPacks(false), 10 * 60 * 1000);
+        })();
 
         function addToRecent(sticker) {
             recentStickers = [sticker, ...recentStickers.filter(s => s.id !== sticker.id)].slice(0, 30);
@@ -4507,7 +4695,7 @@
             const card = row && row.closest('article');
             const link = card && card.querySelector('a[href*="/post/"]');
             const lm = link && link.getAttribute('href').match(/\/post\/([^\/?#]+)/);
-            return lm ? lm[1] : null;
+            return lm ? lm[1] : card ? postIdOf(card) : null;
         }
 
         // Прикреплённый стикер. Сайт о нём не знает: его «Отправить» включается только от своего текста
