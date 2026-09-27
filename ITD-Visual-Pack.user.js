@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.21
+// @version      3.2.22
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -495,6 +495,9 @@
         const t = document.documentElement.getAttribute('data-theme');
         return t ? t !== 'dark' : GM_getValue('siteTheme', 'dark') === 'light';
     }
+    // Пока идёт заставка — фон мода не рисуется и свой фон (картинка/видео) не грузится: иначе браузер
+    // тормозил анимацию, а звук шёл по своим часам — картинка и звук расходились (особенно с видео на фоне)
+    let introOn = false;
     function playIntro(mode, variant) {
         const root = document.documentElement;
         const rare = variant === true, asm = variant === 'assemble', twist = variant === 'twist';
@@ -536,6 +539,7 @@
             return e;
         };
         const ov = el('vpi-overlay' + (light ? ' vpi-light' : ''), root);
+        introOn = true;
         const halves = [0, 1].map(i => el('vpi-half vpi-half-' + i, ov));
         const worlds = halves.map(h => el('vpi-world', h));
         // X — за словом: неоновый контур (цветная линия, внутри чёрная), как на иконке
@@ -866,6 +870,8 @@
             done = true;
             ov.remove();
             css.remove();
+            introOn = false;
+            document.dispatchEvent(new CustomEvent('vp-intro-done'));
             root.style.overflow = prevOverflow;
             if (ctx) setTimeout(() => ctx.close().catch(() => {}), 3500);   // дать дотаять хвосту последнего удара
         };
@@ -2271,6 +2277,15 @@
     // свой фон — вместо холста слой с картинкой/видео
     function updateBackgroundVisibility() {
         const custom = backgroundStyle === 'custom';
+        // идёт заставка — свой фон включим после неё (загрузка и видео отнимали у неё кадры)
+        if (custom && backgroundEnabled && introOn) {
+            if (!updateBackgroundVisibility._wait) {
+                updateBackgroundVisibility._wait = true;
+                document.addEventListener('vp-intro-done', () => { updateBackgroundVisibility._wait = false; updateBackgroundVisibility(); }, { once: true });
+            }
+            canvas.classList.add('vp-bg-off');
+            return;
+        }
         canvas.classList.toggle('vp-bg-off', !backgroundEnabled || custom);
         bgMedia.classList.toggle('vp-bg-off', !backgroundEnabled || !custom);
         const v = bgMedia.querySelector('video');
@@ -3771,6 +3786,12 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.2.22', '28 сентября 2026', [
+            'Галерея: кнопки на картинках сами подстраиваются — на светлом месте тёмные, на тёмном светлые (под каждой кнопкой своё место)',
+            'Галерея: кнопки крупнее, отзываются на нажатие, сердце «подпрыгивает» при лайке',
+            'Магазин → «Сообщения»: окно открывается поверх магазина (раньше не было видно)',
+            'Свой и живой фон видны в магазине и в «Сообщениях»',
+            'Заставка больше не расходится со звуком, если на фоне своё видео: фон включается сразу после заставки']],
         ['3.2.21', '28 сентября 2026', [
             'Галерея: пост с несколькими картинками — одна плитка, картинки листаются внутри (телефон — свайп, компьютер — стрелки), лайк и репост — один на пост',
             '«Что нового»: страница за окном размыта сразу, а не после нажатия']],
@@ -4518,7 +4539,7 @@
         }
         const dt = Math.min(3, gap / 50);                // доля от 50 мс: скорости не зависят от частоты кадров
         if (currentStyle === 'rainbow') { stepHue(dt); paint(); }
-        if (backgroundEnabled) drawBackground(dt);
+        if (backgroundEnabled && !introOn) drawBackground(dt);
     }
     paint();
     requestAnimationFrame(frame);
@@ -5790,7 +5811,8 @@
         const style = document.createElement('style');
         style.textContent = `
         .vp-msgs { position: fixed; z-index: 5; display: none; flex-direction: column; box-sizing: border-box; overflow: hidden;
-            background: var(--bg-primary, #000); color: var(--text-primary, #fff); font-family: inherit; }
+            background: var(--block-bg, rgba(20, 20, 20, .72)); color: var(--text-primary, #fff); font-family: inherit;
+            backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none); }
         .vp-msgs.vp-open { display: flex; animation: vpMsgsIn .22s cubic-bezier(.2, .8, .2, 1); }
         html.vp-msgs-open .vp-msgs-navwrap { z-index: 10 !important; }
         html.vp-msgs-open .itd-scroll-top-btn { opacity: 0 !important; visibility: hidden !important; }
@@ -5803,8 +5825,8 @@
         html.vp-msgs-open .vp-nav-link[href="#"] { color: var(--vp-on-c) !important; opacity: var(--vp-on-o) !important; background-color: var(--vp-on-b) !important; }
         /* компьютер: окно — карточка, как блоки сайта, а не кусок страницы того же цвета */
         .vp-msgs.vp-card { border-radius: 36px; border: 1px solid var(--border-color, rgba(255, 255, 255, .15));
-            background: #141414; box-shadow: 0 16px 48px rgba(0, 0, 0, .45); }
-        html.vp-light .vp-msgs.vp-card { background: #fff; box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
+            box-shadow: 0 16px 48px rgba(0, 0, 0, .45); }
+        html.vp-light .vp-msgs.vp-card { box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
         /* под карточкой — вся колонка цветом страницы: в отступах сверху и снизу не видно ленты */
         .vp-msgs-under { position: fixed; top: 0; bottom: 0; z-index: 4; display: none; background: var(--bg-primary, #000); pointer-events: none; }
         html.vp-msgs-open .vp-msgs-under.vp-on { display: block; }
@@ -5816,7 +5838,7 @@
             cursor: pointer; background: var(--block-bg, #1c1c1c); color: var(--text-primary, #fff); flex-shrink: 0; }
         .vp-msgs-ib:active { transform: scale(.94); }
         .vp-msgs-search { margin: 0 16px 10px; display: flex; align-items: center; gap: 8px; padding: 0 14px; height: 42px; border-radius: 999px;
-            background: var(--block-bg, #1c1c1c); color: var(--text-secondary, #8a8a8a); }
+            background: var(--block-bg, rgba(28, 28, 28, .72)); color: var(--text-secondary, #8a8a8a); }
         .vp-msgs-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
         .vp-msgs-sub { padding: 2px 20px 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary, #8a8a8a); }
         .vp-msgs-ava img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
@@ -5842,7 +5864,7 @@
         .vp-msgs-row { -webkit-touch-callout: none; user-select: none; transition: transform .15s; }
         .vp-msgs-row.vp-held { transform: scale(.97); }
         .vp-msgs-ctx { position: absolute; z-index: 3; display: none; padding: 5px; border-radius: 16px; min-width: 170px;
-            background: var(--block-bg, #1c1c1c); border: 1px solid var(--border-color, rgba(255, 255, 255, .1)); box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
+            background: var(--block-bg, rgba(28, 28, 28, .72)); border: 1px solid var(--border-color, rgba(255, 255, 255, .1)); box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
         .vp-msgs-ctx.vp-open { display: block; animation: vpMsgsCtx .14s ease-out; }
         @keyframes vpMsgsCtx { from { opacity: 0; transform: scale(.94); } }
         .vp-msgs-ctx button { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; color: var(--text-primary, #fff);
@@ -5857,7 +5879,7 @@
         .vp-msgs-who small { font-size: 12px; color: var(--text-secondary, #8a8a8a); }
         .vp-msgs-feed { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; overscroll-behavior: contain; }
         .vp-msgs-note { align-self: center; margin: 2px 0 8px; padding: 6px 12px; border-radius: 999px; font-size: 12px;
-            background: var(--block-bg, #1c1c1c); color: var(--text-secondary, #8a8a8a); text-align: center; }
+            background: var(--block-bg, rgba(28, 28, 28, .72)); color: var(--text-secondary, #8a8a8a); text-align: center; }
         .vp-msgs-b { max-width: 78%; padding: 9px 13px 7px; border-radius: 20px; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere;
             animation: vpMsgsPop .2s ease-out; }
         .vp-msgs-b.vp-in { align-self: flex-start; background: var(--block-bg, #1c1c1c); border-bottom-left-radius: 6px; }
@@ -5869,7 +5891,7 @@
         .vp-msgs-typing span:nth-child(2) { animation-delay: .15s; } .vp-msgs-typing span:nth-child(3) { animation-delay: .3s; }
         .vp-msgs-bar { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px 12px; }
         .vp-msgs-field { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 14px; min-height: 44px; border-radius: 22px;
-            background: var(--block-bg, #1c1c1c); }
+            background: var(--block-bg, rgba(28, 28, 28, .72)); }
         .vp-msgs-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
         .vp-msgs-ghost { width: 36px; height: 36px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
             background: transparent; color: var(--text-secondary, #8a8a8a); cursor: pointer; flex-shrink: 0; }
@@ -6091,12 +6113,18 @@
                 const bottom = innerHeight - nav.getBoundingClientRect().top + BUMP_H + 8;
                 Object.assign(root.style, { left: '0px', right: '0px', top: '0px', bottom: '0px', width: '', borderRadius: '', paddingBottom: bottom + 'px' });
             } else {
-                const cb = contentBox() || lastCb;
+                let cb = contentBox() || lastCb;
+                // магазин и прочие страницы-рамки: колонки нет (ширина 0) — окно по центру, как лента, не заходя на меню
+                if (!cb || cb.right - cb.left < 300) {
+                    const side = document.querySelector('.' + SELECTORS.sidebar), sr = side && side.getBoundingClientRect();
+                    const w = Math.min(650, innerWidth - 32), l = Math.max(sr ? sr.right + 24 : 16, Math.round(innerWidth / 2 - w / 2));
+                    cb = { left: l, right: Math.min(innerWidth - 16, l + w) };
+                }
                 const left = cb ? cb.left : Math.max(0, innerWidth / 2 - 300), width = cb ? cb.right - cb.left : Math.min(600, innerWidth);
                 Object.assign(root.style, { left: left + 'px', width: width + 'px', right: '', top: '12px', bottom: '12px', borderRadius: '', paddingBottom: '0px' });
             }
             root.classList.toggle('vp-card', !row);
-            under.classList.toggle('vp-on', !row);
+            under.classList.remove('vp-on');                  // вместо подложки — лента под окном спрятана (свой фон виден)
             if (!row) Object.assign(under.style, { left: root.style.left, width: root.style.width });
         }
         let openPath = '';
@@ -6110,6 +6138,7 @@
             document.removeEventListener('keydown', onKey, true);
             removeEventListener('resize', place);
             msgsOpen = false;
+            if (!galOpen) galHideFeed(false);
             markActiveNav(); moveNavBlob();
             if (!fromHistory && overlayAt('vpMsgs')) history.back();
         }
@@ -6144,6 +6173,7 @@
             document.addEventListener('keydown', onKey, true);
             addEventListener('resize', place);
             if (fromHistory !== true) overlayEnter('vpMsgs');
+            galHideFeed(true);
             markActiveNav(); moveNavBlob();
         };
         root.close = close;
@@ -7810,14 +7840,14 @@
     // иконка — залитая, как у пунктов меню сайта (контурная выбивалась)
     const galIcon = size => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="10" rx="2.5"/><rect x="13" y="3" width="8" height="6" rx="2.5"/><rect x="3" y="15" width="8" height="6" rx="2.5"/><rect x="13" y="11" width="8" height="10" rx="2.5"/></svg>`;
     const GAL_TABS = [['popular', 'Популярное'], ['clan', 'Кланы'], ['following', 'Подписки']];   // порядок — как у ленты
-    const gal = { acts: new Map(), el: null, tab: 'popular', cursor: null, loading: false, done: false, cols: [], heights: [], seen: new Set(), hist: false };
+    const gal = { urls: [], acts: new Map(), el: null, tab: 'popular', cursor: null, loading: false, done: false, cols: [], heights: [], seen: new Set(), hist: false };
     const galStyle = document.createElement('style');
     galStyle.textContent = `
         /* как лента: таблетка вкладок отдельно сверху (ПК — 36 от верха, высота 45), под ней через 16 —
            карточка с картинками (скругление 36, стекло, как у постов); телефон — таблетка в полосе высотой 63 */
         .vp-gal { position: fixed; z-index: 30; display: flex; flex-direction: column; box-sizing: border-box; color: var(--text-primary, #fff); }
         .vp-gal-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; margin-top: 16px;
-            border-radius: 36px; background: var(--block-bg, #1c1c1c);
+            border-radius: 36px; background: var(--block-bg, rgba(28, 28, 28, .72));
             backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none); }
         .vp-gal.vp-card .vp-gal-card { border: 1px solid var(--border-color, rgba(255, 255, 255, .15)); }
         html.vp-light .vp-gal.vp-card .vp-gal-card { box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
@@ -7828,7 +7858,10 @@
         .vp-gal:not(.vp-card) .vp-gal-top { margin: 9px 12px 0 6px; }
         .vp-gal:not(.vp-card) .vp-gal-card { margin-top: 9px; border-radius: 36px 36px 0 0; }
         /* пока открыта галерея — лента под ней спрятана (иначе просвечивала сквозь стекло и в скруглённых углах) */
-        html.vp-gal-open .vp-gal-hidden { visibility: hidden !important; }
+        html.vp-gal-open .vp-gal-hidden, html.vp-msgs-open .vp-gal-hidden { visibility: hidden !important; }
+        /* страница-рамка (магазин): прозрачная — сквозь неё фон мода; под окнами мода — спрятана */
+        iframe.vp-page-frame { background: transparent !important; color-scheme: normal; }
+        html.vp-gal-open iframe.vp-page-frame, html.vp-msgs-open iframe.vp-page-frame { visibility: hidden !important; }
         .vp-gal-body { padding: 12px 12px var(--vp-gal-pb, 24px) !important; }
         html.vp-gal-open .vp-gal-navwrap { z-index: 40 !important; }
         html.vp-gal-open .vp-nav-link.vp-site-cur { color: var(--vp-off-c) !important; opacity: var(--vp-off-o) !important; background-color: var(--vp-off-b) !important; }
@@ -7858,14 +7891,19 @@
         .vp-gal-slide { flex: 0 0 100%; height: 100%; scroll-snap-align: start; }
         .vp-gal-slide > img, .vp-gal-slide > video { display: block; width: 100%; height: 100%; object-fit: cover; }
         .vp-gal-count { position: absolute; right: 8px; top: 8px; padding: 3px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
-            background: rgba(0,0,0,.55); color: #fff; pointer-events: none; }
+            background: rgba(0,0,0,.55); color: #fff; pointer-events: none; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: background .2s, color .2s; }
+        .vp-gal-count.vp-ink, .vp-gal-badge.vp-ink { background: rgba(255,255,255,.72); color: #111; }
         .vp-gal-dots { position: absolute; left: 0; right: 0; top: 16px; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
         .vp-gal-dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.5); box-shadow: 0 0 3px rgba(0,0,0,.5); }
         .vp-gal-dots i.vp-on { background: #fff; }
+        .vp-gal-dots.vp-ink i { background: rgba(0,0,0,.35); box-shadow: 0 0 3px rgba(255,255,255,.6); }
+        .vp-gal-dots.vp-ink i.vp-on { background: #111; }
         .vp-gal-arrow { position: absolute; top: 50%; width: 32px; height: 32px; margin-top: -16px; border: 0; border-radius: 50%; padding: 0;
             display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
             background: rgba(0,0,0,.45); color: #fff; opacity: 0; transition: opacity .15s; }
         .vp-gal-arrow.vp-prev { left: 8px; } .vp-gal-arrow.vp-next { right: 8px; }
+        .vp-gal-arrow.vp-ink { background: rgba(255,255,255,.75); color: #111; }
+        .vp-gal-arrow:active { transform: scale(.9); }
         .vp-gal-arrow:disabled { visibility: hidden; }
         @media (hover: hover) and (pointer: fine) { .vp-gal-tile:hover .vp-gal-arrow { opacity: 1; } }
         @media not ((hover: hover) and (pointer: fine)) { .vp-gal-arrow { display: none; } }
@@ -7875,8 +7913,16 @@
         .vp-gal-tile.vp-ctx .vp-gal-slide > img { pointer-events: auto; }
         /* кнопки поверх, как на постах: лайк, коммент, репост — контуры без фона; ПК — при наведении, телефон — всегда */
         .vp-gal-acts { position: absolute; left: 6px; bottom: 6px; display: flex; gap: 2px; transition: opacity .15s; }
-        .vp-gal-act { width: 36px; height: 36px; padding: 0; border: 0; background: none; color: #fff; cursor: pointer;
-            display: inline-flex; align-items: center; justify-content: center; filter: drop-shadow(0 1px 2px rgba(0,0,0,.7)) drop-shadow(0 0 6px rgba(0,0,0,.35)); }
+        .vp-gal-act { width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: none; color: #fff; cursor: pointer;
+            display: inline-flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent;
+            filter: drop-shadow(0 0 1px rgba(0,0,0,.9)) drop-shadow(0 1px 3px rgba(0,0,0,.55));
+            transition: transform .12s ease, color .2s, filter .2s; }
+        .vp-gal-act.vp-ink { color: #111; filter: drop-shadow(0 0 1px rgba(255,255,255,.95)) drop-shadow(0 1px 3px rgba(255,255,255,.5)); }
+        .vp-gal-act:active { transform: scale(.86); }
+        @media (hover: hover) and (pointer: fine) { .vp-gal-act:hover { transform: scale(1.12); } }
+        .vp-gal-act:focus-visible { outline: 2px solid var(--vp-accent, #fff); outline-offset: -4px; }
+        .vp-gal-act.vp-on[data-act="like"] svg { animation: vpGalPop .35s cubic-bezier(.3, 1.6, .5, 1); }
+        @keyframes vpGalPop { 40% { transform: scale(1.35); } }
         .vp-gal-act svg { width: 24px; height: 24px; }
         .vp-gal-act.vp-on { color: var(--accent-liked, #f91880); }
         .vp-gal-act.vp-on[data-act="like"] path { fill: currentColor; }
@@ -7986,9 +8032,75 @@
             return v;
         }
         const img = document.createElement('img');
-        img.loading = 'lazy'; img.decoding = 'async'; img.alt = '';
-        img.src = att.url;
+        img.decoding = 'async'; img.alt = '';
+        img.dataset.src = att.url;
+        galImgIO.observe(img);
         return img;
+    }
+    // Кнопки поверх картинки — светлые на тёмном месте, тёмные на светлом, и под КАЖДОЙ кнопкой своё место
+    // (слева тёмное пятно, справа светлый фон — сердце светлое, репост тёмный). Пиксели картинки с сервера
+    // сайта читать нельзя (нет разрешения CORS), поэтому картинку загружает Tampermonkey (тот же канал, что у
+    // стикеров): один раз, её же и показываем, а уменьшенную копию (64 точки по ширине) держим для замеров.
+    // Не вышло — обычная загрузка, кнопки светлые с обводкой (читаются на любом фоне).
+    const galImgIO = new IntersectionObserver(es => es.forEach(e => {
+        if (!e.isIntersecting) return;
+        galImgIO.unobserve(e.target);
+        galLoadImg(e.target);
+    }), { rootMargin: '900px 0px' });
+    function galLoadImg(img) {
+        const url = img.dataset.src;
+        const plain = () => { if (!img.src) img.src = url; };
+        if (typeof GM_xmlhttpRequest !== 'function') return plain();
+        GM_xmlhttpRequest({
+            method: 'GET', url, responseType: 'blob', timeout: 30000,
+            onload: async r => {
+                const blob = r.status === 200 && r.response;
+                if (!blob || !blob.size) return plain();
+                const obj = URL.createObjectURL(blob);
+                gal.urls.push(obj);
+                img.src = obj;
+                try {
+                    const bmp = await createImageBitmap(blob);
+                    const w = 64, h = Math.max(1, Math.round(64 * bmp.height / bmp.width));
+                    const c = document.createElement('canvas');
+                    c.width = w; c.height = h;
+                    const g = c.getContext('2d', { willReadFrequently: true });
+                    g.drawImage(bmp, 0, 0, w, h);
+                    bmp.close && bmp.close();
+                    img._vpLum = { w, h, d: g.getImageData(0, 0, w, h).data };
+                    galTone(img.closest('.vp-gal-tile'));
+                } catch (e) { /* не картинка для холста — остаёмся со светлыми кнопками */ }
+            },
+            onerror: plain, ontimeout: plain
+        });
+    }
+    // яркость (0–1) картинки под прямоугольником r (в координатах экрана); картинка — object-fit: cover
+    function galLumAt(img, r) {
+        const L = img._vpLum, box = img.getBoundingClientRect();
+        if (!L || !box.width) return null;
+        const scale = Math.max(box.width / L.w, box.height / L.h);          // cover: картинка шире/выше рамки
+        const ox = (L.w * scale - box.width) / 2, oy = (L.h * scale - box.height) / 2;
+        const x0 = Math.max(0, Math.floor((r.left - box.left + ox) / scale)), x1 = Math.min(L.w - 1, Math.ceil((r.right - box.left + ox) / scale));
+        const y0 = Math.max(0, Math.floor((r.top - box.top + oy) / scale)), y1 = Math.min(L.h - 1, Math.ceil((r.bottom - box.top + oy) / scale));
+        let sum = 0, n = 0;
+        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+            const i = (y * L.w + x) * 4;
+            sum += (0.2126 * L.d[i] + 0.7152 * L.d[i + 1] + 0.0722 * L.d[i + 2]) / 255;
+            n++;
+        }
+        return n ? sum / n : null;
+    }
+    // тон каждого элемента поверх плитки — по месту под ним на текущей картинке
+    function galTone(tile) {
+        if (!tile || !tile.isConnected) return;
+        const strip = tile.querySelector('.vp-gal-strip');
+        const i = strip ? Math.round(strip.scrollLeft / Math.max(1, strip.clientWidth)) : 0;
+        const slide = strip && strip.children[i];
+        const img = slide && slide.querySelector('img');
+        tile.querySelectorAll('.vp-gal-act, .vp-gal-count, .vp-gal-dots, .vp-gal-arrow, .vp-gal-badge').forEach(el => {
+            const lum = img && galLumAt(img, el.getBoundingClientRect());
+            el.classList.toggle('vp-ink', lum !== null && lum !== undefined && lum > .62);   // светло под элементом — тёмный
+        });
     }
     function galTile(post, media) {
         const tile = document.createElement('div');
@@ -8030,6 +8142,7 @@
                 [...dots.children].forEach((d, k) => d.classList.toggle('vp-on', k === i));
                 prev.disabled = i === 0; next.disabled = i === media.length - 1;
                 strip.querySelectorAll('video').forEach((v, k) => { if (v.closest('.vp-gal-slide') !== strip.children[i]) v.pause(); });
+                galTone(tile);
             };
             strip.addEventListener('scroll', () => requestAnimationFrame(show), { passive: true });
             const go = d => e => { e.stopPropagation(); strip.scrollTo({ left: (at() + d) * strip.clientWidth, behavior: 'smooth' }); };
@@ -8042,6 +8155,7 @@
         tile.addEventListener('contextmenu', () => setTimeout(() => tile.classList.remove('vp-ctx'), 300));
         tile.addEventListener('mouseleave', () => tile.classList.remove('vp-ctx'));
         tile.appendChild(galActions(post));
+        tile.addEventListener('mouseenter', () => galTone(tile));
         tile.addEventListener('click', () => galOpenPost(post));
         return tile;
     }
@@ -8091,6 +8205,8 @@
         gal.el.querySelectorAll('.vp-gal-tab').forEach(b => b.classList.toggle('vp-on', b.dataset.tab === tab));
         galInd();
         gal.cols.forEach(c => c.querySelectorAll('video').forEach(v => galVideoIO.unobserve(v)));
+        gal.cols.forEach(c => c.querySelectorAll('img[data-src]').forEach(i => galImgIO.unobserve(i)));
+        gal.urls.splice(0).forEach(u => URL.revokeObjectURL(u));
         gal.cols = [];
         galLayout();
         gal.el.querySelector('.vp-gal-body').scrollTop = 0;
@@ -8129,7 +8245,7 @@
     function galHideFeed(on) {
         document.querySelectorAll('.vp-gal-hidden').forEach(e => { if (!on) e.classList.remove('vp-gal-hidden'); });
         if (!on) return;
-        const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail, nav, .vp-gal';
+        const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail, nav, .vp-gal, .vp-msgs';
         const up = el => {
             let top = el;
             for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
@@ -8139,9 +8255,9 @@
             return top;
         };
         document.querySelectorAll('.' + [SELECTORS.tabs, SELECTORS.feedBar, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .'))
-            .forEach(e => { const t = up(e); if (!t.closest('.vp-gal, nav')) t.classList.add('vp-gal-hidden'); });
+            .forEach(e => { const t = up(e); if (!t.closest('.vp-gal, .vp-msgs, nav')) t.classList.add('vp-gal-hidden'); });
     }
-    onDom(function galFeedHidden() { if (gal.el) galHideFeed(true); });
+    onDom(function galFeedHidden() { if (gal.el || msgsOpen) galHideFeed(true); });
     // Открыть: окно, закрытое раньше, возвращается как было (картинки, вкладка, место прокрутки) — без
     // новой загрузки; обновить — повторное нажатие на «Галерею», как у ленты (galRefresh)
     function openGallery(fromHistory) {
@@ -8260,6 +8376,31 @@
         a.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); gal.el ? galRefresh() : openGallery(); }, true);
         search.after(a);
     });
+
+    // Магазин у сайта — отдельная страница в рамке (iframe) во весь экран, с чёрным фоном: закрывала фон мода
+    // (свой и живой). Рамку и её страницу делаем прозрачными: сквозь них виден фон, как на остальных страницах
+    function framePages() {
+        document.querySelectorAll('iframe').forEach(f => {
+            const r = f.getBoundingClientRect();
+            const big = r.width >= innerWidth * 0.6 && r.height >= innerHeight * 0.6;
+            f.classList.toggle('vp-page-frame', big);
+            if (!big || f._vpClear) return;
+            const clear = () => {
+                try {
+                    const d = f.contentDocument;
+                    if (!d || !d.head || d.getElementById('vp-frame-clear')) return;
+                    const st = d.createElement('style');
+                    st.id = 'vp-frame-clear';
+                    st.textContent = 'html, body { background: transparent !important; }';
+                    d.head.appendChild(st);
+                    f._vpClear = true;
+                } catch (e) { /* чужой адрес — не трогаем */ }
+            };
+            if (!f._vpHooked) { f._vpHooked = true; f.addEventListener('load', () => { f._vpClear = false; clear(); }); }
+            clear();
+        });
+    }
+    onDom(framePages);
 
     // --- Обновить пост: на своих постах слева от «…» — один запрос счётчиков (как у сайта, POST /api/posts/stats),
     // лайки, комменты, репосты и просмотры меняются на месте, без перезагрузки; изменившиеся — вспыхивают
