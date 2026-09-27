@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.12
+// @version      3.2.13
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3578,6 +3578,7 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.2.13', '27 сентября 2026', ['Форма «Ответить» в комментариях больше не тёмный прямоугольник']],
         ['3.2.12', '27 сентября 2026', [
             'Ссылки в постах и комментариях (t.me/…, https://…) подсвечиваются и открываются по нажатию',
             'Иконка ИТД X в углу открывает меню: ТГК и донат',
@@ -6485,6 +6486,7 @@
             --block-bg: rgba(255, 255, 255, .92); --block-bg-secondary: rgba(240, 240, 240, .92); --block-hover-bg: rgba(245, 245, 245, .94);
             --modal-bg: rgba(255, 255, 255, .95); --glass-bg: rgba(255, 255, 255, .9);
         }
+        html.vp-glass .vp-nested { background-color: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-radius: 18px; }
         html.vp-glass .settings-dropdown {
             backdrop-filter: var(--vp-glass-filter) !important; -webkit-backdrop-filter: var(--vp-glass-filter) !important;
         }
@@ -6659,6 +6661,11 @@
                 const cs = getComputedStyle(n);
                 if (cs.position === 'fixed' || (cs.position === 'absolute' && +cs.zIndex >= 5)) { el.classList.add('vp-float'); return; }
             }
+            // Блок того же фона внутри такого же блока (форма ответа в карточке поста): без стекла цвет
+            // сплошной и сливается, а два полупрозрачных слоя дают тёмный прямоугольник — внутренний прозрачный
+            const outer = el.parentElement && el.parentElement.closest(`:is(${glassSel})`);
+            const bg = getComputedStyle(el).backgroundColor;
+            if (outer && !outer.classList.contains('vp-float') && getComputedStyle(outer).backgroundColor === bg && !/^rgba\(0, 0, 0, 0\)$/.test(bg)) el.classList.add('vp-nested');
         });
     });
     // Шторка комментариев (телефон): самый внешний закреплённый на экране блок вокруг поля комментария
