@@ -803,3 +803,12 @@ if (!lbIsMe(a) && !isApprovedAuthor(a)) continue;
 - Диапазон `3.3.5 – 3.3.6`, дата 28 сентября 2026.
 - Галочка выдаётся вручную (серая → радужная после подтверждения).
 - Личка и лидеры игр — только для подтверждённых.
+
+## 3.3.6.2 — владелец всегда approved
+
+### Что изменилось
+
+`checkAllComments`: `state` для владельца всегда `approved`, независимо от `ITDX-V`.
+
+```js
+state: a.id === OWNER_ID ? 'approved' : resolveVerifyState(a.id, lists, now)

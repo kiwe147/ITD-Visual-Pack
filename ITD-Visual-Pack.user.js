@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.6.1
+// @version      3.3.6.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3907,7 +3907,7 @@
                         id: a.id || undefined,
                         displayName: a.displayName || a.display_name || undefined,
                         avatar: typeof ava === 'string' ? ava : undefined,
-                        state: resolveVerifyState(a.id, lists, now)
+                        state: a.id === OWNER_ID ? 'approved' : resolveVerifyState(a.id, lists, now)
                     };
                 }
                 if (JSON.stringify(verifiedUsers) !== localStorage.getItem(VERIFICATION_STORAGE_KEY)) {
