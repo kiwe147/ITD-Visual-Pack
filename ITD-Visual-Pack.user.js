@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.3
+// @version      3.3.3.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3833,6 +3833,7 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.3.3.1', '28 сентября 2026', ['Игры: окно не меняет размер при смене вкладок']],
         ['3.3.3', '28 сентября 2026', [
             'Сообщения заработали: личка с теми, у кого ИТД X, — со сквозным шифрованием (прочитать можете только вы двое, даже зная код мода)',
             'Сообщения хранятся в зашифрованном виде; пароль сообщений открывает переписку на любом устройстве — придумай надёжный',
@@ -9996,7 +9997,7 @@
         .vp-games { position: fixed; inset: 0; z-index: 2147483050; display: flex; align-items: center; justify-content: center; padding: 12px;
             background: rgba(0, 0, 0, .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: vpGamesIn .18s ease-out; }
         @keyframes vpGamesIn { from { opacity: 0; } }
-        .vp-games-win { display: flex; flex-direction: column; gap: 12px; width: min(760px, 100%); max-height: 100%; padding: 16px; border-radius: 32px; box-sizing: border-box;
+        .vp-games-win { display: flex; flex-direction: column; gap: 12px; width: min(760px, 100%); height: min(900px, 100%); max-height: 100%; padding: 16px; border-radius: 32px; box-sizing: border-box;
             background: var(--block-bg, #1c1c1c); color: var(--text-primary, #fff); border: 1px solid var(--border-color, rgba(255, 255, 255, .12));
             box-shadow: 0 24px 64px rgba(0, 0, 0, .5); overflow: auto; }
         .vp-games-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -10009,7 +10010,7 @@
         .vp-games-score { margin-left: auto; font-size: 14px; font-weight: 600; color: var(--text-secondary, #8a8a8a); white-space: nowrap; }
         .vp-games-x { width: 36px; height: 36px; border: 0; border-radius: 50%; cursor: pointer; background: rgba(255, 255, 255, .08); color: inherit;
             display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
-        .vp-games-body { display: flex; justify-content: center; align-items: flex-start; gap: 16px; min-height: 0; }
+        .vp-games-body { display: flex; justify-content: center; align-items: flex-start; gap: 16px; min-height: 0; flex: 1 1 auto; overflow: auto; }
         .vp-games-hint { font-size: 12px; text-align: center; color: var(--text-secondary, #8a8a8a); }
         .vp-g-canvas { display: block; border-radius: 20px; background: var(--bg-primary, #000); touch-action: none; outline: none; cursor: pointer; }
         .vp-g-side { display: flex; flex-direction: column; gap: 10px; min-width: 110px; font-size: 14px; }
