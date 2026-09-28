@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.0
+// @version      3.3.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -117,6 +117,8 @@
     const postIndex = { byMedia: new Map(), byUser: new Map(), byRepost: new Map() };
     const normText = t => String(t || '').replace(/\s+/g, ' ').trim();
     const POSTS_URL = /\/api\/posts(?:\/user\/[^/?#]+(?:\/liked)?|\/[0-9a-f-]{36})?\/?(?:[?#]|$)/;
+    const POST_INDEX_MAX = 4000;
+    const trimMap = m => { if (m.size > POST_INDEX_MAX) { const it = m.keys(); for (let n = m.size - POST_INDEX_MAX * 0.75; n > 0; n--) m.delete(it.next().value); } };
     function keepSitePosts(body) {
         try {
             const j = typeof body === 'string' ? JSON.parse(body) : body;
@@ -135,7 +137,9 @@
                 const mine = postIndex.byUser.get(user) || new Map();
                 mine.set(p.id, text);
                 postIndex.byUser.set(user, mine);
+                trimMap(mine);
             }
+            trimMap(postIndex.byMedia); trimMap(postIndex.byRepost); trimMap(postIndex.byUser);
         } catch (e) { /* не JSON — не наш ответ */ }
     }
     const USER_URL = /\/api\/users\/([\w.]+)\/?(?:[?#]|$)/;
@@ -3804,6 +3808,9 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.3.1', '28 сентября 2026', [
+            'Долгая прокрутка ленты: память под служебные записи о постах больше не растёт всю сессию',
+            'Меньше лишней работы на каждом обновлении страницы']],
         ['3.3.0', '28 сентября 2026', [
             'У всех постов рядом с «…» — кнопки «Скопировать картинку» и «Скопировать ссылку», как в галерее; «Обновить» — по-прежнему только у своих постов, теперь и у репостов, и у закреплённого',
             'Галерея грузится бережно: по 50 постов за раз и не больше 4 страниц подряд, дальше — «Показать ещё» или прокрутка (раньше листала десятки страниц и сайт мог ограничить запросы)',
@@ -6319,10 +6326,11 @@
             + `C${n(cx + half * .42)} ${peak} ${n(cx + half * .45)} ${top} ${n(cx + half)} ${top}`
             + `H${w - r}A${r} ${r} 0 0 1 ${w - r} ${top + h}H${r}A${r} ${r} 0 0 1 ${r} ${top}Z`;
     }
+    let bumpPlus = null;
     onDom(function newPostBump() {
         const nav = document.querySelector('.' + SELECTORS.nav);
-        const plus = document.querySelector('button[aria-label="Создать пост"]');
-        const up = document.querySelector('.itd-scroll-top-btn');
+        if (!bumpPlus || !bumpPlus.isConnected) bumpPlus = document.querySelector('button[aria-label="Создать пост"]');
+        const plus = bumpPlus, up = scrollTopButton;
         if (plus && up) {
             const cls = siteClasses(plus);
             if (cls && !cls.split(' ').every(c => up.classList.contains(c))) cls.split(' ').forEach(c => up.classList.add(c));
