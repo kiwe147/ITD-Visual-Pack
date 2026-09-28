@@ -38,14 +38,18 @@ let postsBody = postsFile && postsFile !== 'auto' ? fs.readFileSync(postsFile, '
     window.GM_info = { script: { version: 't' }, scriptMetaStr: m }; window.unsafeWindow = window;
   }, src.slice(0, src.indexOf('==/UserScript==')));
   await p.goto(URL0);
-  await p.evaluate(() => document.querySelectorAll('.vp-rail, .vp-fab, .vp-itdx-btn, .vp-post-refresh').forEach(e => e.remove()));
+  await p.evaluate(() => document.querySelectorAll('.vp-rail, .vp-fab, .vp-itdx-btn, .vp-post-tools, .vp-post-refresh').forEach(e => e.remove()));
   // auto — ответ «сайта» собираем из самого снимка: свои карточки, их картинки и текст (как в настоящем ответе)
   if (postsFile === 'auto') postsBody = await p.evaluate(() => JSON.stringify({ data: { posts: [...document.querySelectorAll('article')].map((a, i) => {
     const link = a.querySelector('header a[href^="/@"]') || a.querySelector('a[href^="/@"]');
     const user = link && link.getAttribute('href').slice(2).split(/[/?#]/)[0];
-    const text = [...a.querySelectorAll('div')].filter(d => [...d.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()) && !d.closest('header, footer, a, button, time')).map(d => d.textContent).join(' ');
-    const imgs = [...a.querySelectorAll('img')].map(i => i.src).filter(s => /\/images\//.test(s));
-    return { id: '00000000-0000-4000-8000-' + String(i).padStart(12, '0'), content: text, author: { username: user }, attachments: imgs.map(url => ({ url })) };
+    // репост (карточка .vp-repost внутри) — как у сайта: свой текст отдельно, оригинал — в originalPost
+    const rp = a.querySelector('.vp-repost');
+    const txt = (root, skip) => [...root.querySelectorAll('div')].filter(d => [...d.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()) && !d.closest('header, footer, a, button, time') && !(skip && skip.contains(d))).map(d => d.textContent).join(' ');
+    const pics = (root, skip) => [...root.querySelectorAll('img')].filter(i => !(skip && skip.contains(i))).map(i => i.src).filter(s => /\/images\//.test(s));
+    const post = { id: '00000000-0000-4000-8000-' + String(i).padStart(12, '0'), content: txt(a, rp), author: { username: user }, attachments: pics(a, rp).map(url => ({ url })) };
+    if (rp) post.originalPost = { id: 'orig-' + i, content: txt(rp), attachments: pics(rp).map(url => ({ url })), author: { username: 'someone' } };
+    return post;
   }).filter(p => p.author.username) } }));
   await p.addScriptTag({ content: src });
   // «сайт» запрашивает список постов (адрес — как у профиля, ответ — подложенный)
@@ -55,19 +59,24 @@ let postsBody = postsFile && postsFile !== 'auto' ? fs.readFileSync(postsFile, '
   await p.waitForTimeout(800);
   const found = await p.evaluate(() => {
     const btns = [...document.querySelectorAll('.vp-post-refresh')];
-    const own = btns.every(b => /NeuroSFW/i.test((b.closest('header') || b.parentElement).innerHTML));
-    return { count: btns.length, own };
+    const own = btns.every(b => /NeuroSFW/i.test(b.closest('.vp-post-tools').parentElement.innerHTML));
+    const boxes = [...document.querySelectorAll('.vp-post-tools')];
+    const links = boxes.filter(x => x.querySelector('.vp-post-copy[data-act="link"]')).length;
+    const order = boxes.every(x => [...x.children].map(c => c.dataset.act || 'refresh').join(',').replace(/^refresh,?/, '').match(/^(copy,)?link$/));
+    return { count: btns.length, own, boxes: boxes.length, links, order };
   });
-  console.log(`кнопок: ${found.count}, все на своих постах: ${found.own}`);
-  let ok = found.count > 0 && found.own;
+  console.log(`кнопок «обновить»: ${found.count}, все на своих постах: ${found.own}; групп кнопок: ${found.boxes}, со ссылкой: ${found.links}, порядок верный: ${found.order}`);
+  const cards = await p.evaluate(() => document.querySelectorAll('article').length);
+  console.log(`карточек: ${cards}`);
+  let ok = found.count > 0 && found.own && found.boxes > 0 && found.links === found.boxes && found.order && (!process.env.ALL || found.boxes === cards);
   if (found.count) {
     // карточка меняется после появления кнопки (сайт дописал «(ред.)», выросла шапка) — кнопка едет за «…»
-    const align = () => p.$eval('.vp-post-refresh', b => {
+    const align = () => p.$eval('.vp-post-tools', b => {
       const m = b._vpMenu.getBoundingClientRect(), r = b.getBoundingClientRect();
       return { dy: Math.round((r.top + r.height / 2) - (m.top + m.height / 2)), gap: Math.round(m.left - r.right) };
     });
     const a0 = await align();
-    await p.$eval('.vp-post-refresh', b => {
+    await p.$eval('.vp-post-tools', b => {
       const card = b.parentElement, h = card.querySelector('header');
       b._vpMenu.style.transform = 'translateY(23px)'; b._vpMenu.style.marginRight = '17px';
       document.body.appendChild(document.createElement('i'));
