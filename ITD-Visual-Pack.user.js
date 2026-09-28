@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.4
+// @version      3.3.5
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1421,6 +1421,17 @@
         const OWNER_ID = '5e064703-104d-4794-bc28-9ed6f5847cca';
         const QUARANTINE_MS = 3 * 24 * 60 * 60 * 1000;
         const COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
+        let approvedIds = new Set();
+        function isApprovedId(id) {
+            if (!id) return false;
+            const key = String(id).toLowerCase();
+            if (key === OWNER_ID.toLowerCase()) return true;
+            return approvedIds.has(key);
+        }
+        function isApprovedAuthor(author) {
+            return !!(author && isApprovedId(author.id));
+        }
 
         let globalHue = 0;
         let colorDirection = 1;
@@ -4111,10 +4122,13 @@
                         verifiedPendingSet = new Set();
                         let parsed;
                         try { parsed = JSON.parse(raw) || {}; } catch (e) { parsed = {}; }
+                        approvedIds = new Set();
                         for (const [name, info] of Object.entries(parsed)) {
                             if (!info || !info.state) continue;
-                            if (info.state === 'approved') verifiedSet.add(name.toLowerCase());
-                            else if (info.state === 'quarantine') verifiedPendingSet.add(name.toLowerCase());
+                            if (info.state === 'approved') {
+                                verifiedSet.add(name.toLowerCase());
+                                if (info.id) approvedIds.add(String(info.id).toLowerCase());
+                            } else if (info.state === 'quarantine') verifiedPendingSet.add(name.toLowerCase());
                         }
                     }
                     const allNames = new Set([...verifiedSet, ...verifiedPendingSet]);
@@ -5593,6 +5607,7 @@
                 for (const c of await allComments(MSG_POST_ID, 30)) {
                     const a = c.author, t = String(c.content || '');
                     if (!a || !a.id) continue;
+                    if (!isApprovedAuthor(a)) continue;
                     let m;
                     if ((m = t.match(/^ITDXK1 ([\w-]+) ([\w-]+)$/))) {
                         if (!keys.has(a.id)) keys.set(a.id, { id: a.id, login: a.username || '', cid: c.id, pubText: m[1], pub: b64u.dec(m[1]), sealed: m[2] });
