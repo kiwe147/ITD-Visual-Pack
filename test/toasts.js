@@ -48,6 +48,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     check(s && s.shown === 1, `${mode}: видна одна всплывашка из двух`);
     check(s && Math.abs(s.cx - s.w / 2) <= 2 && s.top <= 60, `${mode}: сверху по центру (центр ${s && s.cx} из ${s && s.w}, сверху ${s && s.top})`);
     check(s && s.hideAll === 'none', `${mode}: «Скрыть все» спрятана`);
+    check(await p.evaluate(() => { const it = [...document.querySelectorAll('.vp-toasts > div > *')].find(e => getComputedStyle(e).display !== 'none'); return !!it && it.classList.contains('vp-emoji-tint') && getComputedStyle(it).borderTopLeftRadius === '24px'; }), `${mode}: оформлена как во вкладке уведомлений (оттенок по эмодзи, скругление)`);
     check(s && s.closed === 1, `${mode}: старая закрыта своим крестиком`);
     // пришла новая — прошлая закрывается сразу
     await p.evaluate(() => {
