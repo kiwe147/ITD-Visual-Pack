@@ -106,6 +106,7 @@ const comments = [
     console.log('Состояния:', JSON.stringify(state, null, 2));
     console.log('');
 
+    check(state.NeuroSFW === 'approved', 'владелец всегда approved            (получено: ' + state.NeuroSFW + ')');
     check(state.Alice === 'approved', 'Alice в ITDX-V → approved          (получено: ' + state.Alice + ')');
     check(state.Bob === 'none', 'Bob в SEEN, ts просрочен → none    (получено: ' + state.Bob + ')');
     check(state.Carl === 'quarantine', 'Carl в SEEN, ts свежий → quarantine(получено: ' + state.Carl + ')');
