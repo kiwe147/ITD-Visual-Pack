@@ -3838,7 +3838,10 @@
             'Сообщения хранятся в зашифрованном виде; пароль сообщений открывает переписку на любом устройстве — придумай надёжный',
             'Поддержка ИТД X — настоящая: вопрос уходит разработчику, ответ приходит в тот же чат',
             'Сообщения: видно, кто в сети, и когда человек был в сети последний раз',
-            'Сообщения: число непрочитанных на пункте меню (как у уведомлений) и всплывашка о новом сообщении — нажми, чтобы открыть чат']],
+            'Сообщения: число непрочитанных на пункте меню (как у уведомлений) и всплывашка о новом сообщении — нажми, чтобы открыть чат',
+            'Игры: лидеры — отдельная вкладка, у каждой игры свой список с прокруткой',
+            'Галерея грузится плавно: одно обновление — 100 постов, запросы идут потоком, а не пачкой',
+            'Меню: «Галерея» — сразу под «Лентой»; под галереей не просвечивают ссылки сайта справа']],
         ['3.3.1 – 3.3.2', '28 сентября 2026', [
             'Долгая прокрутка ленты: память под служебные записи о постах больше не растёт всю сессию',
             'Меньше лишней работы на каждом обновлении страницы',
@@ -8363,6 +8366,7 @@
         html.vp-light .vp-gal-tab { color: rgba(0, 0, 0, .5); }
         .vp-gal-tab.vp-on { color: var(--text-primary, #f5f5f5); }
         html.vp-gal-open .itd-scroll-top-btn, html.vp-msgs-open .itd-scroll-top-btn { display: none !important; }
+        html.vp-gal-open .vp-sidebar-right > :last-child { visibility: hidden !important; }   /* «Статус серверов», «© ООО ИТД» */
         .vp-gal-body { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 24px; }
         .vp-gal-grid { display: flex; gap: 8px; align-items: flex-start; max-width: 1400px; margin: 0 auto; }
         .vp-gal-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -8768,7 +8772,7 @@
     // галерея раньше листала десятки страниц подряд), дальше — по прокрутке или кнопкой «Показать ещё».
     // Ответ «слишком часто» (429) — пауза с растущим ожиданием, без повторов подряд.
     // Собранное держим 10 минут в sessionStorage: перезагрузка страницы и новое открытие — без запросов
-    const GAL_CHAIN = 4, GAL_CACHE_MS = 10 * 60 * 1000;
+    const GAL_CHAIN = 2, GAL_CACHE_MS = 10 * 60 * 1000, GAL_GAP = 700;
     const galCacheKey = tab => 'vpGalCache:' + tab;
     function galCacheRead(tab) {
         try {
@@ -8797,6 +8801,10 @@
     async function galLoad(auto) {
         if (!gal.el || gal.loading || gal.done || (gal.waitUntil || 0) > Date.now()) return;
         if (!auto) gal.chain = 0;                                                     // прокрутка или кнопка — новый счёт
+        // поток, а не рывок: между запросами не меньше GAL_GAP (прокрутка до низа не шлёт пачку подряд)
+        const gap = (gal.lastReq || 0) + GAL_GAP - Date.now();
+        if (gap > 0) { clearTimeout(gal.gapT); const g0 = gal.gen; gal.gapT = setTimeout(() => { if (g0 === gal.gen) galLoad(true); }, gap); return; }
+        gal.lastReq = Date.now();
         gal.loading = true;
         const gen = gal.gen, tab = gal.tab;
         const more = gal.el.querySelector('.vp-gal-more');
@@ -9066,7 +9074,7 @@
         b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); gal.el ? galRefresh() : openGallery(); });
         search.before(b);
     });
-    // ПК: пункт «Галерея» в боковом меню, после «Поиска» — копия его разметки со своей иконкой и подписью
+    // ПК: пункт «Галерея» в боковом меню, перед «Поиском» (рядом с «Лентой») — копия его разметки со своей иконкой и подписью
     onDom(function galleryNav() {
         const search = document.querySelector('nav a[href="/search"]');
         if (!search || search.parentElement.querySelector('.vp-gal-nav')) return;
@@ -9078,7 +9086,7 @@
         if (icon) icon.outerHTML = galIcon(24);
         if (label) label.textContent = 'Галерея';
         a.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); gal.el ? galRefresh() : openGallery(); }, true);
-        search.after(a);
+        search.before(a);
     });
 
     // Магазин у сайта — отдельная страница в рамке (iframe) во весь экран, с чёрным фоном: закрывала фон мода
@@ -10024,9 +10032,10 @@
         .vp-mines-bar button { border: 0; border-radius: 9999px; padding: 7px 14px; cursor: pointer; font: inherit; background: rgba(255, 255, 255, .1); color: inherit; }
         .vp-mines-bar button.vp-on { box-shadow: inset 0 0 0 1px var(--vp-accent, #fff); }
         .vp-mines-msg { text-align: center; margin-top: 10px; font-weight: 600; min-height: 20px; }
-        .vp-games-lead { border-top: 1px solid rgba(255, 255, 255, .08); padding-top: 10px; }
+        .vp-games-leads { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; width: 100%; }
+        .vp-games-leads section { padding: 12px; border-radius: 20px; background: rgba(255, 255, 255, .04); min-width: 0; }
         .vp-games-lead-t { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
-        .vp-games-lead-list { display: grid; gap: 2px; max-height: 190px; overflow-y: auto; }
+        .vp-games-lead-list { display: grid; gap: 2px; max-height: min(52vh, 420px); overflow-y: auto; scrollbar-width: thin; }
         .vp-games-lead-row { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; padding: 4px 10px; border-radius: 10px; font-size: 14px; }
         .vp-games-lead-row > span:first-child { color: var(--text-secondary, #8a8a8a); }
         .vp-games-lead-row > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -10401,19 +10410,23 @@
                 : await api(`/api/posts/${GAMES_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) });
             if (!res.ok) throw new Error('лидерборд: ' + res.status);
             lbLoad = null;
-            if (gw.el) lbRender(gw.id);
+            if (gw.el) lbRender();
         } catch (e) { logErr('лидерборд', e); } finally { lbBusy = false; }
     }
     // новый рекорд — отправить (с задержкой: несколько рекордов подряд — одним запросом)
     function gamesRecord() { clearTimeout(lbT); lbT = setTimeout(lbSubmit, 2000); }
-    async function lbRender(id) {
-        const box = gw.el && gw.el.querySelector('.vp-games-lead');
+    function lbRender() {
+        const view = gw.el && gw.el.querySelector('.vp-games-leads');
+        if (view) GAMES.forEach(g => lbRenderInto(view.querySelector(`[data-lead="${g.id}"]`), g.id));
+    }
+    async function lbRenderInto(box, id) {
         if (!box) return;
         const k = LB_KEYS[id];
-        box.innerHTML = '<div class="vp-games-lead-t">🏆 Лидеры</div><div class="vp-games-hint">Загрузка…</div>';
+        box.innerHTML = `<div class="vp-games-lead-t"></div><div class="vp-games-hint">Загрузка…</div>`;
+        box.firstChild.textContent = GAMES.find(g => g.id === id).name;
         let all;
         try { all = await lbComments(); } catch (e) { box.lastElementChild.textContent = 'Не загрузилось'; return; }
-        if (!gw.el || gw.id !== id) return;
+        if (!box.isConnected) return;
         const best = new Map();
         for (const c of all) {
             const o = parseLB(c.content), a = c.author;
@@ -10421,7 +10434,7 @@
             const key = a.id || a.username, cur = best.get(key);
             if (!cur || lbBetter(k, cur.v, o[k]) !== cur.v) best.set(key, { v: o[k], name: a.displayName || a.username || '?', me: lbIsMe(a) });
         }
-        const list = [...best.values()].sort((x, y) => k === 'm' ? x.v - y.v : y.v - x.v).slice(0, 10);
+        const list = [...best.values()].sort((x, y) => k === 'm' ? x.v - y.v : y.v - x.v);
         const fmt = v => k === 'm' ? `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}` : String(v);
         const body = box.lastElementChild;
         if (!list.length) { body.textContent = 'Пока пусто — стань первым'; return; }
@@ -10436,17 +10449,24 @@
         });
     }
 
-    const GAME_MAKERS = { snake: snakeGame, mines: minesGame, tetris: tetrisGame };
+    function leadersView() {
+        const el = document.createElement('div');
+        el.className = 'vp-games-leads';
+        el.innerHTML = GAMES.map(g => `<section data-lead="${g.id}"></section>`).join('');
+        return { el, key() { }, pause() { }, resize() { }, destroy() { } };
+    }
+    const GAME_MAKERS = { snake: snakeGame, mines: minesGame, tetris: tetrisGame, lead: leadersView };
     function showGame(id) {
         if (!gw.el) return;
         if (gw.cur) gw.cur.destroy();
         gw.id = id; GM_setValue('vp_game_last', id);
         gw.el.querySelectorAll('.vp-games-tab').forEach(t => t.classList.toggle('vp-on', t.dataset.g === id));
         const score = gw.el.querySelector('.vp-games-score'), body = gw.el.querySelector('.vp-games-body');
+        score.textContent = '';
         gw.cur = GAME_MAKERS[id](text => { score.textContent = text; });
         body.replaceChildren(gw.cur.el);
         gw.cur.resize();
-        lbRender(id);
+        if (id === 'lead') lbRender();
         const f = gw.cur.el.querySelector('[tabindex]');
         if (f) f.focus({ preventScroll: true });
     }
@@ -10454,8 +10474,8 @@
         if (gw.el) return showGame(id);
         const el = document.createElement('div');
         el.className = 'vp-games';
-        el.innerHTML = `<div class="vp-games-win" role="dialog" aria-label="Игры"><div class="vp-games-head"><div class="vp-games-tabs">${GAMES.map(g => `<button type="button" class="vp-games-tab" data-g="${g.id}">${g.name}</button>`).join('')}</div>
-            <span class="vp-games-score"></span><button type="button" class="vp-games-x" aria-label="Закрыть">${svgIcon('<path d="M6 6l12 12M18 6 6 18"/>', 18)}</button></div><div class="vp-games-body"></div><div class="vp-games-lead"></div></div>`;
+        el.innerHTML = `<div class="vp-games-win" role="dialog" aria-label="Игры"><div class="vp-games-head"><div class="vp-games-tabs">${GAMES.map(g => `<button type="button" class="vp-games-tab" data-g="${g.id}">${g.name}</button>`).join('')}<button type="button" class="vp-games-tab" data-g="lead">🏆 Лидеры</button></div>
+            <span class="vp-games-score"></span><button type="button" class="vp-games-x" aria-label="Закрыть">${svgIcon('<path d="M6 6l12 12M18 6 6 18"/>', 18)}</button></div><div class="vp-games-body"></div></div>`;
         el.addEventListener('click', e => { if (e.target === el) closeGames(); });
         el.querySelector('.vp-games-x').addEventListener('click', closeGames);
         el.querySelectorAll('.vp-games-tab').forEach(t => t.addEventListener('click', () => showGame(t.dataset.g)));
