@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.0
+// @version      3.3.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -117,6 +117,8 @@
     const postIndex = { byMedia: new Map(), byUser: new Map(), byRepost: new Map() };
     const normText = t => String(t || '').replace(/\s+/g, ' ').trim();
     const POSTS_URL = /\/api\/posts(?:\/user\/[^/?#]+(?:\/liked)?|\/[0-9a-f-]{36})?\/?(?:[?#]|$)/;
+    const POST_INDEX_MAX = 4000;
+    const trimMap = m => { if (m.size > POST_INDEX_MAX) { const it = m.keys(); for (let n = m.size - POST_INDEX_MAX * 0.75; n > 0; n--) m.delete(it.next().value); } };
     function keepSitePosts(body) {
         try {
             const j = typeof body === 'string' ? JSON.parse(body) : body;
@@ -135,7 +137,9 @@
                 const mine = postIndex.byUser.get(user) || new Map();
                 mine.set(p.id, text);
                 postIndex.byUser.set(user, mine);
+                trimMap(mine);
             }
+            trimMap(postIndex.byMedia); trimMap(postIndex.byRepost); trimMap(postIndex.byUser);
         } catch (e) { /* не JSON — не наш ответ */ }
     }
     const USER_URL = /\/api\/users\/([\w.]+)\/?(?:[?#]|$)/;
@@ -3804,6 +3808,10 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.3.1', '28 сентября 2026', [
+            'Долгая прокрутка ленты: память под служебные записи о постах больше не растёт всю сессию',
+            'Меньше лишней работы на каждом обновлении страницы',
+            'Игры: общий лидерборд — топ-10 по каждой игре внизу окна, твои рекорды попадают туда сами']],
         ['3.3.0', '28 сентября 2026', [
             'У всех постов рядом с «…» — кнопки «Скопировать картинку» и «Скопировать ссылку», как в галерее; «Обновить» — по-прежнему только у своих постов, теперь и у репостов, и у закреплённого',
             'Галерея грузится бережно: по 50 постов за раз и не больше 4 страниц подряд, дальше — «Показать ещё» или прокрутка (раньше листала десятки страниц и сайт мог ограничить запросы)',
@@ -6319,10 +6327,11 @@
             + `C${n(cx + half * .42)} ${peak} ${n(cx + half * .45)} ${top} ${n(cx + half)} ${top}`
             + `H${w - r}A${r} ${r} 0 0 1 ${w - r} ${top + h}H${r}A${r} ${r} 0 0 1 ${r} ${top}Z`;
     }
+    let bumpPlus = null;
     onDom(function newPostBump() {
         const nav = document.querySelector('.' + SELECTORS.nav);
-        const plus = document.querySelector('button[aria-label="Создать пост"]');
-        const up = document.querySelector('.itd-scroll-top-btn');
+        if (!bumpPlus || !bumpPlus.isConnected) bumpPlus = document.querySelector('button[aria-label="Создать пост"]');
+        const plus = bumpPlus, up = scrollTopButton;
         if (plus && up) {
             const cls = siteClasses(plus);
             if (cls && !cls.split(' ').every(c => up.classList.contains(c))) cls.split(' ').forEach(c => up.classList.add(c));
@@ -9587,6 +9596,13 @@
         .vp-mines-bar button { border: 0; border-radius: 9999px; padding: 7px 14px; cursor: pointer; font: inherit; background: rgba(255, 255, 255, .1); color: inherit; }
         .vp-mines-bar button.vp-on { box-shadow: inset 0 0 0 1px var(--vp-accent, #fff); }
         .vp-mines-msg { text-align: center; margin-top: 10px; font-weight: 600; min-height: 20px; }
+        .vp-games-lead { border-top: 1px solid rgba(255, 255, 255, .08); padding-top: 10px; }
+        .vp-games-lead-t { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+        .vp-games-lead-list { display: grid; gap: 2px; max-height: 190px; overflow-y: auto; }
+        .vp-games-lead-row { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; padding: 4px 10px; border-radius: 10px; font-size: 14px; }
+        .vp-games-lead-row > span:first-child { color: var(--text-secondary, #8a8a8a); }
+        .vp-games-lead-row > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-games-lead-row.vp-me { background: rgba(255, 255, 255, .08); box-shadow: inset 0 0 0 1px var(--vp-accent, #fff); }
         @media (prefers-reduced-motion: reduce) { .vp-games { animation: none; } }
     `;
     document.head.appendChild(gamesCss);
@@ -9657,7 +9673,7 @@
             const head = { x: (snake[0].x + dir.x + CELLS) % CELLS, y: (snake[0].y + dir.y + CELLS) % CELLS };
             if (snake.slice(0, -1).some(p => p.x === head.x && p.y === head.y)) {       // хвост в этот шаг уходит — в него можно
                 on = false;
-                if (score > best) { best = score; GM_setValue('vp_snake_best', best); renderGamesMenu(); }
+                if (score > best) { best = score; GM_setValue('vp_snake_best', best); renderGamesMenu(); gamesRecord(); }
                 msg = `Съел себя · ${score}\nнажми — ещё раз`;
                 show(); draw(); dead = true;
                 return;
@@ -9768,7 +9784,7 @@
             const s = secs();
             if (win) {
                 const b = GM_getValue('vp_mines_best', 0);
-                if (!b || s < b) { GM_setValue('vp_mines_best', s); renderGamesMenu(); }
+                if (!b || s < b) { GM_setValue('vp_mines_best', s); renderGamesMenu(); gamesRecord(); }
                 msgEl.textContent = `Разминировано за ${fmt(s)}!`;
             } else msgEl.textContent = 'Бум! Нажми «Новая игра»';
             show();
@@ -9850,7 +9866,7 @@
         function reset() { board = Array.from({ length: ROWS }, () => Array(COLS).fill(null)); score = 0; lines = 0; level = 1; over = false; next = null; spawn(); show(); }
         function gameOver() {
             on = false; over = true;
-            if (score > best) { best = score; GM_setValue('vp_tetris_best', best); renderGamesMenu(); }
+            if (score > best) { best = score; GM_setValue('vp_tetris_best', best); renderGamesMenu(); gamesRecord(); }
             msg = `Конец · ${score}\nнажми — ещё раз`; show(); draw();
         }
         function lock() {
@@ -9917,6 +9933,81 @@
         return { el, key, pause, resize, destroy() { on = false; cancelAnimationFrame(raf); } };
     }
 
+    // Лидерборд игр: у каждого игрока — один свой комментарий под служебным постом «Резе: Девушка из кафе»:
+    // «ITDXG s26 m42 t1200» (змейка; сапёр — секунды; тетрис). Пишем его один раз, дальше только правим
+    // (новый комментарий шлёт владельцу уведомление, правка — нет; ни ответов, ни удалений). Значение
+    // на сервере не понижаем. Проверить честность без своего сервера нельзя — это таблица друзей
+    const GAMES_POST_ID = 'd5f8b7c0-b97d-40cd-bdd4-3c07b3ea0611';
+    const LB_KEYS = { snake: 's', mines: 'm', tetris: 't' };
+    const parseLB = t => {
+        const m = String(t || '').trim().match(/^ITDXG((?:\s+[smt]\d+)*)$/);
+        if (!m) return null;
+        const o = {};
+        for (const [, k, v] of m[1].matchAll(/([smt])(\d+)/g)) o[k] = +v;
+        return o;
+    };
+    const lbText = o => 'ITDXG' + ['s', 'm', 't'].filter(k => o[k]).map(k => ` ${k}${o[k]}`).join('');
+    const lbBetter = (k, a, b) => !a ? b : !b ? a : k === 'm' ? Math.min(a, b) : Math.max(a, b);
+    const lbLocal = () => ({ s: +GM_getValue('vp_snake_best', 0) || 0, m: +GM_getValue('vp_mines_best', 0) || 0, t: +GM_getValue('vp_tetris_best', 0) || 0 });
+    const lbIsMe = a => !!a && ((meData && meData.id && a.id === meData.id) || (!!myUsername && a.username === myUsername));
+    let lbLoad = null, lbAt = 0, lbBusy = false, lbT = 0;
+    function lbComments(fresh) {
+        if (!fresh && lbLoad && Date.now() - lbAt < 60000) return lbLoad;
+        lbAt = Date.now();
+        lbLoad = allComments(GAMES_POST_ID, 5);
+        lbLoad.catch(() => { lbLoad = null; });
+        return lbLoad;
+    }
+    async function lbSubmit() {
+        if (!myUsername || lbBusy) return;
+        lbBusy = true;
+        try {
+            const all = await lbComments(true);
+            const mine = all.find(c => lbIsMe(c.author) && parseLB(c.content));
+            const was = mine ? parseLB(mine.content) : {}, loc = lbLocal(), now = {};
+            for (const k of ['s', 'm', 't']) now[k] = lbBetter(k, was[k], loc[k]);
+            const text = lbText(now);
+            if (text === 'ITDXG' || (mine && text === lbText(was))) return;
+            const res = mine
+                ? await api(`/api/comments/${mine.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) })
+                : await api(`/api/posts/${GAMES_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) });
+            if (!res.ok) throw new Error('лидерборд: ' + res.status);
+            lbLoad = null;
+            if (gw.el) lbRender(gw.id);
+        } catch (e) { logErr('лидерборд', e); } finally { lbBusy = false; }
+    }
+    // новый рекорд — отправить (с задержкой: несколько рекордов подряд — одним запросом)
+    function gamesRecord() { clearTimeout(lbT); lbT = setTimeout(lbSubmit, 2000); }
+    async function lbRender(id) {
+        const box = gw.el && gw.el.querySelector('.vp-games-lead');
+        if (!box) return;
+        const k = LB_KEYS[id];
+        box.innerHTML = '<div class="vp-games-lead-t">🏆 Лидеры</div><div class="vp-games-hint">Загрузка…</div>';
+        let all;
+        try { all = await lbComments(); } catch (e) { box.lastElementChild.textContent = 'Не загрузилось'; return; }
+        if (!gw.el || gw.id !== id) return;
+        const best = new Map();
+        for (const c of all) {
+            const o = parseLB(c.content), a = c.author;
+            if (!o || !o[k] || !a) continue;
+            const key = a.id || a.username, cur = best.get(key);
+            if (!cur || lbBetter(k, cur.v, o[k]) !== cur.v) best.set(key, { v: o[k], name: a.displayName || a.username || '?', me: lbIsMe(a) });
+        }
+        const list = [...best.values()].sort((x, y) => k === 'm' ? x.v - y.v : y.v - x.v).slice(0, 10);
+        const fmt = v => k === 'm' ? `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}` : String(v);
+        const body = box.lastElementChild;
+        if (!list.length) { body.textContent = 'Пока пусто — стань первым'; return; }
+        body.className = 'vp-games-lead-list';
+        body.textContent = '';
+        list.forEach((r, i) => {
+            const row = document.createElement('div');
+            row.className = 'vp-games-lead-row' + (r.me ? ' vp-me' : '');
+            row.innerHTML = '<span></span><span></span><b></b>';
+            row.children[0].textContent = i + 1; row.children[1].textContent = r.name; row.children[2].textContent = fmt(r.v);
+            body.appendChild(row);
+        });
+    }
+
     const GAME_MAKERS = { snake: snakeGame, mines: minesGame, tetris: tetrisGame };
     function showGame(id) {
         if (!gw.el) return;
@@ -9927,6 +10018,7 @@
         gw.cur = GAME_MAKERS[id](text => { score.textContent = text; });
         body.replaceChildren(gw.cur.el);
         gw.cur.resize();
+        lbRender(id);
         const f = gw.cur.el.querySelector('[tabindex]');
         if (f) f.focus({ preventScroll: true });
     }
@@ -9935,13 +10027,14 @@
         const el = document.createElement('div');
         el.className = 'vp-games';
         el.innerHTML = `<div class="vp-games-win" role="dialog" aria-label="Игры"><div class="vp-games-head"><div class="vp-games-tabs">${GAMES.map(g => `<button type="button" class="vp-games-tab" data-g="${g.id}">${g.name}</button>`).join('')}</div>
-            <span class="vp-games-score"></span><button type="button" class="vp-games-x" aria-label="Закрыть">${svgIcon('<path d="M6 6l12 12M18 6 6 18"/>', 18)}</button></div><div class="vp-games-body"></div></div>`;
+            <span class="vp-games-score"></span><button type="button" class="vp-games-x" aria-label="Закрыть">${svgIcon('<path d="M6 6l12 12M18 6 6 18"/>', 18)}</button></div><div class="vp-games-body"></div><div class="vp-games-lead"></div></div>`;
         el.addEventListener('click', e => { if (e.target === el) closeGames(); });
         el.querySelector('.vp-games-x').addEventListener('click', closeGames);
         el.querySelectorAll('.vp-games-tab').forEach(t => t.addEventListener('click', () => showGame(t.dataset.g)));
         document.body.appendChild(el);
         gw.el = el;
         showGame(id || gw.id);
+        if (!gw.synced) { gw.synced = true; gamesRecord(); }          // рекорды, поставленные до лидерборда, — в таблицу
     }
     function closeGames() {
         if (!gw.el) return;

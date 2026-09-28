@@ -22,7 +22,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     if (u === URL0) return r.fulfill({ contentType: 'text/html; charset=utf-8', body: snap });
     if (['image', 'stylesheet', 'font'].includes(t)) return r.continue();
     if (u.includes('/auth/refresh')) return r.fulfill({ contentType: 'application/json', body: '{"accessToken":"t"}' });
-    if (u.endsWith('/api/users/me')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ username: 'NeuroSFW', displayName: '#NeuroSFW | ЧБ', id: 'u1' }) });
+    if (u.endsWith('/api/users/me')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ username: 'NeuroSFW', displayName: ((snap.match(/vp-nick-large[\s\S]*?vp-nick-text[^>]*>([^<]+)</) || [])[1] || '#NeuroSFW | ИТД X').trim(), id: 'u1' }) });
     return r.fulfill({ status: 404, body: '' });
   });
   await p.addInitScript(m => {
