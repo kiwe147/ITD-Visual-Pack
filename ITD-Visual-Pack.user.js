@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.7
+// @version      3.3.7.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3613,9 +3613,10 @@
         }
 
         const CHANGELOG = [
-            ['3.3.7', '29 сентября 2026', [
+            ['3.3.7 – 3.3.7.1', '29 сентября 2026', [
                 'Телефон: рядом с «ИТД X» в профиле — кнопка «Меню»: статистика, клуб ИТД X и игры в полноэкранном окне (раньше на телефоне панели не было совсем)',
-                '«Назад» на телефоне и Esc закрывают меню; открытое окно помечается в истории — листается как галерея и личка']],
+                '«Назад» на телефоне и Esc закрывают меню; открытое окно помечается в истории — листается как галерея и личка',
+                'Рекорды игр подтягиваются с сервера: зашёл с другого устройства — старые рекорды на месте']],
             ['3.3.5 – 3.3.6', '28 сентября 2026', [
                 'Галочка «пользуется ИТД X» теперь выдаётся вручную: новая — серая и ждёт подтверждения, после подтверждения становится радужной',
                 'Личные сообщения и лидеры игр — только для подтверждённых: без галочки эти разделы пустые']],
@@ -4049,6 +4050,8 @@
 
                 checkAllComments().then(() => { markVerifiedUsers(); return verifyMyself(); });
                 setInterval(checkAllComments, 10 * 60 * 1000);
+
+                lbSyncFromServer();
 
                 function findAllMyAvatars() {
                     const primaryAvatar = myAvatarEl();
@@ -9841,6 +9844,26 @@
         };
         const lbBetter = (k, a, b) => !a ? b : !b ? a : k === 'm' ? Math.min(a, b) : Math.max(a, b);
         const lbLocal = () => ({ s: +GM_getValue('vp_snake_best', 0) || 0, m: +GM_getValue('vp_mines_best', 0) || 0, t: +GM_getValue('vp_tetris_best', 0) || 0 });
+        const LB_LOCAL_KEYS = { s: 'vp_snake_best', m: 'vp_mines_best', t: 'vp_tetris_best' };
+        function lbMergeIntoLocal(remote) {
+            if (!remote) return;
+            for (const k of ['s', 'm', 't']) {
+                const rv = +remote[k] || 0;
+                if (!rv) continue;
+                const lv = +GM_getValue(LB_LOCAL_KEYS[k], 0) || 0;
+                const best = lbBetter(k, rv, lv);
+                if (best && best !== lv) GM_setValue(LB_LOCAL_KEYS[k], best);
+            }
+        }
+        async function lbSyncFromServer() {
+            if (!myUsername) return;
+            try {
+                const all = await lbComments();
+                const mine = all.find(c => lbIsMe(c.author) && parseLB(c.content));
+                if (mine) lbMergeIntoLocal(parseLB(mine.content));
+                renderGamesMenu();
+            } catch (e) { }
+        }
         const lbIsMe = a => !!a && ((meData && meData.id && a.id === meData.id) || (!!myUsername && a.username === myUsername));
         let lbLoad = null, lbAt = 0, lbBusy = false, lbT = 0;
         function lbComments(fresh) {
@@ -9857,7 +9880,10 @@
                 const all = await lbComments(true);
                 const mine = all.find(c => lbIsMe(c.author) && parseLB(c.content));
                 const was = mine ? parseLB(mine.content) : {}, loc = lbLocal(), now = {};
-                for (const k of ['s', 'm', 't']) now[k] = lbBetter(k, was[k], loc[k]);
+                for (const k of ['s', 'm', 't']) {
+                    now[k] = lbBetter(k, was[k], loc[k]);
+                    if (now[k] && now[k] !== loc[k]) GM_setValue(LB_LOCAL_KEYS[k], now[k]);
+                }
                 const text = lbText(now);
                 if (!text || (mine && text === lbText(was))) return;
                 const res = mine
