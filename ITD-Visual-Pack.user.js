@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.6.2
+// @version      3.3.6.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -9725,14 +9725,44 @@
 
         const GAMES_POST_ID = 'd5f8b7c0-b97d-40cd-bdd4-3c07b3ea0611';
         const LB_KEYS = { snake: 's', mines: 'm', tetris: 't' };
+        const LB_KEY = 'ITDX-LB-KEY-2026-Kiwe-NSFW-Visual-Pack-games';
+        function lbEncode(text) {
+            const b = new TextEncoder().encode(text), k = new TextEncoder().encode(LB_KEY);
+            const o = new Uint8Array(b.length);
+            for (let i = 0; i < b.length; i++) o[i] = b[i] ^ k[i % k.length];
+            let s = '';
+            for (const byte of o) s += String.fromCharCode(byte);
+            return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+        function lbDecode(b64) {
+            try {
+                const s = atob(b64.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - b64.length % 4) % 4));
+                const b = Uint8Array.from(s, c => c.charCodeAt(0));
+                const k = new TextEncoder().encode(LB_KEY);
+                const o = new Uint8Array(b.length);
+                for (let i = 0; i < b.length; i++) o[i] = b[i] ^ k[i % k.length];
+                return new TextDecoder().decode(o);
+            } catch (e) { return null; }
+        }
         const parseLB = t => {
-            const m = String(t || '').trim().match(/^ITDXG((?:\s+[smt]\d+)*)$/);
+            const s = String(t || '').trim();
+            let body = s;
+            if (s.startsWith('ITDXG2 ')) {
+                const d = lbDecode(s.slice(7));
+                if (!d) return null;
+                body = d;
+            }
+            const m = body.match(/^ITDXG((?:\s+[smt]\d+)*)$/);
             if (!m) return null;
             const o = {};
             for (const [, k, v] of m[1].matchAll(/([smt])(\d+)/g)) o[k] = +v;
             return o;
         };
-        const lbText = o => 'ITDXG' + ['s', 'm', 't'].filter(k => o[k]).map(k => ` ${k}${o[k]}`).join('');
+        const lbText = o => {
+            const parts = ['s', 'm', 't'].filter(k => o[k]).map(k => ` ${k}${o[k]}`);
+            if (!parts.length) return null;
+            return 'ITDXG2 ' + lbEncode('ITDXG' + parts.join(''));
+        };
         const lbBetter = (k, a, b) => !a ? b : !b ? a : k === 'm' ? Math.min(a, b) : Math.max(a, b);
         const lbLocal = () => ({ s: +GM_getValue('vp_snake_best', 0) || 0, m: +GM_getValue('vp_mines_best', 0) || 0, t: +GM_getValue('vp_tetris_best', 0) || 0 });
         const lbIsMe = a => !!a && ((meData && meData.id && a.id === meData.id) || (!!myUsername && a.username === myUsername));
@@ -9753,7 +9783,7 @@
                 const was = mine ? parseLB(mine.content) : {}, loc = lbLocal(), now = {};
                 for (const k of ['s', 'm', 't']) now[k] = lbBetter(k, was[k], loc[k]);
                 const text = lbText(now);
-                if (text === 'ITDXG' || (mine && text === lbText(was))) return;
+                if (!text || (mine && text === lbText(was))) return;
                 const res = mine
                     ? await api(`/api/comments/${mine.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) })
                     : await api(`/api/posts/${GAMES_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) });
