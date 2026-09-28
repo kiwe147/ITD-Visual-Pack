@@ -23,11 +23,7 @@
 
 (function () {
     'use strict';
-    // Только в самой вкладке: магазин ИТД — страница в рамке (iframe) с того же адреса, и в ней вторая
-    // копия скрипта рисовала свою панель и фон поверх товаров. @noframes в шапке — то же для Tampermonkey.
     if (window.top !== window.self) return;
-    // Счётчик FPS: кадры в секунду и самый долгий кадр за секунду (рывок). Один на весь скрипт:
-    // и в админке, и в режиме «Мод выкл». Гаснет сам, когда элемент убрали со страницы.
     function fpsMeter(box, label = '') {
         let n = 0, t0 = performance.now(), last = t0, worst = 0;
         (function tick(t) {
@@ -44,8 +40,6 @@
         })(t0);
     }
 
-    // Админка → «Мод выкл»: до закрытия вкладки скрипт не запускается вовсе, сайт — как без мода.
-    // Вернуть — кнопка «Включить ИТД X» внизу страницы.
     try {
         if (sessionStorage.getItem('vp-off') === '1') {
             const back = () => {
@@ -54,7 +48,6 @@
                 b.style.cssText = 'position:fixed;left:50%;bottom:110px;transform:translateX(-50%);z-index:2147483000;padding:10px 18px;border-radius:999px;border:1px solid rgba(255,255,255,.2);background:rgba(20,20,24,.9);color:#fff;font:600 14px system-ui,sans-serif;cursor:pointer';
                 b.onclick = () => { sessionStorage.removeItem('vp-off'); location.reload(); };
                 document.body.appendChild(b);
-                // счётчик FPS — чтобы сравнить сайт без мода с модом (как в админке)
                 const f = document.createElement('div');
                 f.style.cssText = 'position:fixed;left:8px;top:8px;z-index:2147483000;padding:4px 8px;border-radius:8px;pointer-events:none;background:rgba(0,0,0,.75);color:#6f6;font:600 12px ui-monospace,monospace';
                 f.textContent = 'без мода';
@@ -65,10 +58,6 @@
             return;
         }
     } catch (e) { }
-    // Планшет в горизонтальном положении: сайт считает телефоном всё уже 1173 px и растягивает мобильную
-    // вёрстку на весь экран. Если экран от 1024 до 1172 px — говорим браузеру, что ширина 1180: сайт
-    // показывает компьютерную версию, браузер чуть уменьшает её под экран. Телефоны и вертикальный
-    // планшет — как было. Отключается в настройках («Вид» → «Версия для ПК на планшете»).
     function tabletViewport() {
         const meta = document.querySelector('meta[name="viewport"]');
         if (!meta) return;
@@ -84,19 +73,11 @@
     addEventListener('orientationchange', () => setTimeout(tabletViewport, 50));
     matchMedia('(orientation: landscape)').addEventListener('change', tabletViewport);
 
-    // Ошибки скрипта — в журнал для отчёта из админки (последние 30)
     const vpErrors = [];
     const logErr = (where, e) => { vpErrors.push(new Date().toTimeString().slice(0, 8) + ' ' + where + ': ' + (e && (e.message || e))); if (vpErrors.length > 30) vpErrors.shift(); };
 
-    // Ответы сайта про профили (/api/users/<ник>) подсматриваем и запоминаем: число постов,
-    // подписчиков и прочее берём из них, а не шлём свой такой же запрос второй раз.
     const siteUsers = new Map(), siteUsersWait = new Map();
-    // Сайт сам берёт токен (auth/refresh) и спрашивает «кто я» (users/me) при каждой загрузке — мод
-    // раньше повторял оба запроса. Теперь подхватывает ответы сайта и свой делает, только если их не было.
     const siteAuth = { token: null, at: 0, me: null, meWait: [] };
-    // Окна мода (галерея, личка) — запись в истории браузера: «назад» закрывает окно, «назад»/«вперёд» на
-    // такую запись — открывает. Второе окно не добавляет запись, а занимает запись первого (иначе «назад»
-    // пришлось бы жать дважды). Переход по меню историю не трогает — только сайт.
     const OVERLAY_KEYS = ['vpGal', 'vpMsgs'];
     function overlayEnter(key) {
         const st = Object.assign({}, history.state);
@@ -106,14 +87,11 @@
         history[had ? 'replaceState' : 'pushState'](st, '', location.href);
     }
     const overlayAt = key => !!(history.state && history.state[key]);
-    // после перезагрузки запись окна осталась, а окна нет — «назад» ничего бы не делал: чистим
     if (OVERLAY_KEYS.some(overlayAt)) {
         const st = Object.assign({}, history.state);
         OVERLAY_KEYS.forEach(k => delete st[k]);
         history.replaceState(st, '', location.href);
     }
-    // Номера постов: в карточке ленты ссылки на пост нет — берём из ответов сайта (лента, профиль, пост)
-    // и узнаём карточку по картинке вложения или по автору и тексту
     const postIndex = { byMedia: new Map(), byUser: new Map(), byRepost: new Map() };
     const normText = t => String(t || '').replace(/\s+/g, ' ').trim();
     const POSTS_URL = /\/api\/posts(?:\/user\/[^/?#]+(?:\/liked)?|\/[0-9a-f-]{36})?\/?(?:[?#]|$)/;
@@ -140,7 +118,7 @@
                 trimMap(mine);
             }
             trimMap(postIndex.byMedia); trimMap(postIndex.byRepost); trimMap(postIndex.byUser);
-        } catch (e) { /* не JSON — не наш ответ */ }
+        } catch (e) {   }
     }
     const USER_URL = /\/api\/users\/([\w.]+)\/?(?:[?#]|$)/;
     function keepSiteUser(url, body) {
@@ -154,9 +132,8 @@
             siteUsers.set(key, d);
             (siteUsersWait.get(key) || []).forEach(done => done(d));
             siteUsersWait.delete(key);
-        } catch (e) { /* не JSON — не наш ответ */ }
+        } catch (e) {   }
     }
-    // ждать ответ сайта про ник не дольше ms; не пришёл — null
     function siteUser(user, ms) {
         const key = user.toLowerCase();
         if (siteUsers.has(key)) return Promise.resolve(siteUsers.get(key));
@@ -168,10 +145,6 @@
             setTimeout(() => res(siteUsers.get(key) || null), ms);
         });
     }
-    // Служебные посты владельца (галочки, стикеры, личка, лидерборд игр): под ними комментарии пишет мод, и
-    // владельцу на каждый приходило уведомление — всплывашка и звук. Из живого потока уведомлений сайта
-    // (/api/notifications/stream, события SSE) такие события выкидываем: ни всплывашки, ни звука.
-    // Во вкладке «Уведомления» они остаются — её сайт грузит отдельным запросом (/notifications/)
     const SERVICE_POSTS = ['a0d6625a-b3ec-44c4-98da-48422af101d5', '92f2913c-18be-499a-bc03-97aed0947b34',
         'a53b53e0-9950-4f62-83f4-91e5985ef6c5', 'd5f8b7c0-b97d-40cd-bdd4-3c07b3ea0611'];
     const isServiceEvent = text => SERVICE_POSTS.some(id => text.includes(id));
@@ -183,7 +156,7 @@
             const body = r.body.pipeThrough(new TransformStream({
                 transform(chunk, out) {
                     buf += dec.decode(chunk, { stream: true });
-                    const events = buf.split('\n\n');                 // событие SSE кончается пустой строкой
+                    const events = buf.split('\n\n');                 
                     buf = events.pop();
                     for (const ev of events) if (!isServiceEvent(ev)) out.enqueue(enc.encode(ev + '\n\n'));
                 },
@@ -208,7 +181,6 @@
                     if (url && /^get$/i.test(method) && POSTS_URL.test(url)) {
                         res.then(r => r.ok && r.clone().text().then(keepSitePosts)).catch(() => { });
                     }
-                    // лайк/репост на сайте (в посте, в ленте) — сказать галерее: у неё своё состояние кнопок
                     const act = url && /^(post|delete)$/i.test(method) && String(url).match(/\/api\/posts\/([\w-]+)\/(like|repost)\/?(?:[?#]|$)/);
                     if (act) {
                         const on = /^post$/i.test(method);
@@ -223,7 +195,7 @@
                             if (me && me.username) { siteAuth.me = me; siteAuth.meWait.splice(0).forEach(done => done(me)); }
                         })).catch(() => { });
                     }
-                } catch (e) { /* подсмотр не должен ломать запрос сайта */ }
+                } catch (e) {   }
                 return res;
             };
             for (const m of ['pushState', 'replaceState']) {
@@ -247,45 +219,29 @@
         } catch (e) { console.warn('[ITD VP] не вышло подсмотреть запросы сайта', e); }
     })();
 
-    // ==== заставка:начало
-    // Заставка при входе: белые буквы ИТД прилетают целиком, как части костюма, и с ударом
-    // встают на место — лёгкая тряска, вспышка, искры, звук. Всё — анимации с задержками,
-    // поэтому любой кадр можно остановить и проверить (test/intro.py).
-    // общая громкость звуков мода (ползунок «Громкость» в настройках → «Ещё»), 0…1
     const soundVolume = () => Math.max(0, Math.min(100, +GM_getValue('soundVolume', 100))) / 100;
     const INTRO = {
-        LOCK: [620, 1020, 1420],             // когда буква встаёт на место, мс
-        FLY: 520,                            // полёт до касания
-        SETTLE: 170,                         // дожим после касания
-        SHAKE: [4, 6, 9],                    // сила тряски, px
-        VOLUME: 0.11,                        // общая громкость звука (0.55 → 0.28 → 0.22 → 0.11: владелец просил тише)
-        // откуда летит: угол (0 — справа, 90 — снизу), разворот, масштаб «из камеры»
+        LOCK: [620, 1020, 1420],             
+        FLY: 520,                            
+        SETTLE: 170,                         
+        SHAKE: [4, 6, 9],                    
+        VOLUME: 0.11,                        
         FROM: [{ ang: 200, rot: -110, sc: 1.8 }, { ang: 272, rot: 80, sc: 2.4 }, { ang: -12, rot: 130, sc: 1.6 }],
-        // X за словом (как на иконке «ИТД X»): два росчерка крест-накрест после последнего удара
-        X_DRAW: 170,                         // один росчерк, мс
-        X_GAP: 150,                          // между росчерками
-        SPLIT: 380,                          // уход: экран делится пополам и разъезжается
-        IDLE: 3000,                          // телефон: ждём касания (со звуком), потом играем сами без звука
-        // редкие заставки: кинематографичная (true), «сборка», «обманка» (introPlan) — общий шанс 1%,
-        // внутри — любая из трёх поровну (у каждой по трети процента)
+        X_DRAW: 170,                         
+        X_GAP: 150,                          
+        SPLIT: 380,                          
+        IDLE: 3000,                          
         RARE: [[true, 0.01 / 3], ['assemble', 0.01 / 3], ['twist', 0.01 / 3]],
-        RARE_HOLD: 550                       // редкая: пауза на готовом логотипе перед уходом, мс
+        RARE_HOLD: 550                       
     };
-    INTRO.X = INTRO.LOCK[2] + 220;           // первый росчерк
+    INTRO.X = INTRO.LOCK[2] + 220;           
     INTRO.EXIT = INTRO.X + INTRO.X_GAP + INTRO.X_DRAW + 380;
-    // План по времени. Редкая — та же классика, но поставлена круче: «Д» летит в замедлении
-    // (влетает, почти зависает, врезается), X влетает целиком и врезается, после — пауза на логотипе.
     function introPlan(rare) {
-        // «Обманка»: И — как в классике, Т — как будто тоже, но отскакивает; Д в свой срок не прилетает —
-        // пауза, потом падает сверху наковальней (И и Т подпрыгивают от удара); буквы подпрыгивают волной;
-        // X не рисуется, а влетает сбоку сюрикеном, втыкается за словом и дрожит, как нож
         if (rare === 'twist') {
             const LOCK = [620, 1020, 1760], FLY = [520, 520, 230];
             const BOUNCE = LOCK[1] + 250, WAVE = LOCK[2] + 330, X = WAVE + 420, STICK = X + 430;
             return { LOCK, FLY, BOUNCE, WAVE, X, STICK, X_DRAW: 0, X_GAP: 0, EXIT: STICK + 480 };
         }
-        // «Сборка»: буквы собираются из тысяч осколков (трещотка), X прочерчивается как обычно и крутится,
-        // как вентиль сейфа — щелчками по 30°: оборот вправо, пол-оборота назад, пол-оборота вправо; клац
         if (rare === 'assemble') {
             const LOCK = [1150, 1500, 1850], ASM = 950;
             const X = LOCK[2] + 280, X_DRAW = INTRO.X_DRAW, X_GAP = INTRO.X_GAP;
@@ -293,11 +249,11 @@
             let t = X + X_GAP + X_DRAW + 260, a = 0;
             [[12, 1], [6, -1], [6, 1]].forEach(([n, dir]) => {
                 for (let k = 0; k < n; k++) {
-                    t += 28 + 40 * Math.pow(k / (n - 1), 2);          // к концу поворота — медленнее
+                    t += 28 + 40 * Math.pow(k / (n - 1), 2);          
                     a += 30 * dir;
                     TICKS.push({ t: Math.round(t), a });
                 }
-                t += 150;                                          // смена направления
+                t += 150;                                          
             });
             const LOCKED = TICKS[TICKS.length - 1].t + 90;
             return { LOCK, ASM, FLY: LOCK.map(() => ASM), X, X_DRAW, X_GAP, TICKS, LOCKED, EXIT: LOCKED + 560 };
@@ -308,8 +264,6 @@
         return { LOCK, FLY, X, X_DRAW, X_GAP, EXIT: X + X_GAP + X_DRAW + 380 + INTRO.RARE_HOLD };
     }
 
-    // Звук синтезом, без файлов: свист полёта, металлический лязг стыковки, в конце — тяжёлый удар.
-    // at(мс от начала ролика) → время звуковой карты.
     function introSound(ctx, at, rare) {
         const out = ctx.createDynamicsCompressor();
         out.connect(ctx.destination);
@@ -340,9 +294,6 @@
             src.start(t);
             src.stop(t + dur + 0.1);
         }
-        // Последний удар гаснет плавно: быстро до половины, дальше ровно до нуля (TAIL секунд),
-        // плюс эхо. Экспонента до нуля глохла за полсекунды — на слух как обрыв.
-        // Хвост несут только низы (бум и гул); металл всегда короткий — долгий звенит колоколом.
         const TAIL = 1.6;
         const tailEnv = (param, t, peak, attack) => {
             param.setValueAtTime(0.0001, t);
@@ -350,7 +301,6 @@
             param.exponentialRampToValueAtTime(peak * 0.5, t + attack + 0.3);
             param.linearRampToValueAtTime(0, t + attack + 0.3 + TAIL);
         };
-        // эхо: свёртка с затухающим шумом — хвост тает сам
         const echo = ctx.createConvolver();
         const ir = ctx.createBuffer(2, ctx.sampleRate * 1.8, ctx.sampleRate);
         for (let c = 0; c < 2; c++) {
@@ -364,9 +314,8 @@
 
         function clank(t, heavy) {
             const end = t + (heavy ? 0.3 + TAIL + 0.1 : 1.2);
-            const thump = ctx.createOscillator();              // низкий удар
+            const thump = ctx.createOscillator();              
             thump.frequency.setValueAtTime(heavy ? 110 : 150, t);
-            // у тяжёлого не ниже 45 Гц: ниже колонки не играют, и хвост пропадал бы раньше времени
             thump.frequency.exponentialRampToValueAtTime(heavy ? 45 : 48, t + (heavy ? 0.9 : 0.25));
             const tg = ctx.createGain();
             if (heavy) tailEnv(tg.gain, t, 1, 0.004);
@@ -375,7 +324,7 @@
             if (heavy) tg.connect(echo);
             thump.start(t);
             thump.stop(end);
-            if (heavy) {                                       // глухой гул под хвостом
+            if (heavy) {                                       
                 const rumble = ctx.createBufferSource();
                 rumble.buffer = noise;
                 rumble.loop = true;
@@ -389,7 +338,7 @@
                 rumble.start(t);
                 rumble.stop(end);
             }
-            [1, 1.47, 2.09, 2.76, 3.9].forEach((k, i) => {      // металл: негармоничные призвуки
+            [1, 1.47, 2.09, 2.76, 3.9].forEach((k, i) => {      
                 const m = ctx.createOscillator();
                 m.type = 'triangle';
                 m.frequency.value = (heavy ? 420 : 560) * k;
@@ -399,7 +348,7 @@
                 m.start(t);
                 m.stop(t + 1);
             });
-            const click = ctx.createBufferSource();            // щелчок касания
+            const click = ctx.createBufferSource();            
             click.buffer = noise;
             const hp = ctx.createBiquadFilter();
             hp.type = 'highpass';
@@ -410,7 +359,6 @@
             click.start(t, Math.random() * 0.5);
             click.stop(t + 0.1);
         }
-        // росчерк X: короткий свист клинка — шум, фильтр взлетает вверх, и тонкий «дзынь» без хвоста
         function slash(t, dur) {
             const src = ctx.createBufferSource();
             src.buffer = noise;
@@ -437,7 +385,6 @@
             zing.start(t + dur * 0.5);
             zing.stop(t + dur + 0.3);
         }
-        // редкая: глубокий суббас под последним ударом и звенящий аккорд после X
         function subDrop(t) {
             const o = ctx.createOscillator();
             o.frequency.setValueAtTime(70, t);
@@ -449,7 +396,6 @@
             o.stop(t + 0.3 + TAIL + 0.2);
         }
         const P = introPlan(rare);
-        // мелкий металлический щелчок: осколок встал / зубец вентиля
         function tick(t, gain, freq) {
             const src = ctx.createBufferSource();
             src.buffer = noise;
@@ -466,8 +412,7 @@
         if (rare === 'twist') {
             whoosh(at(P.LOCK[0] - P.FLY[0]), P.FLY[0] / 1000); clank(at(P.LOCK[0]), false);
             whoosh(at(P.LOCK[1] - P.FLY[1]), P.FLY[1] / 1000); clank(at(P.LOCK[1]), false);
-            tick(at(P.BOUNCE), 0.5, 900); clank(at(P.BOUNCE + 10), false);        // Т приземлилась после отскока
-            // Д: свист падения сверху (тон вниз), наковальня
+            tick(at(P.BOUNCE), 0.5, 900); clank(at(P.BOUNCE + 10), false);        
             const fall = ctx.createOscillator(), fg = ctx.createGain();
             fall.type = 'sine';
             fall.frequency.setValueAtTime(1500, at(P.LOCK[2] - P.FLY[2]));
@@ -479,14 +424,13 @@
             fall.start(at(P.LOCK[2] - P.FLY[2])); fall.stop(at(P.LOCK[2] + 40));
             clank(at(P.LOCK[2]), true);
             subDrop(at(P.LOCK[2]));
-            [0, 80, 160].forEach(d => tick(at(P.WAVE + d + 60), 0.25, 1200));  // волна: мягкие стуки
-            // X: жужжание вращения (шум с «рубленой» громкостью), удар, звон дрожащего ножа
+            [0, 80, 160].forEach(d => tick(at(P.WAVE + d + 60), 0.25, 1200));  
             const whir = ctx.createBufferSource(), wbp = ctx.createBiquadFilter(), wg = ctx.createGain();
             whir.buffer = noise; whir.loop = true;
             wbp.type = 'bandpass'; wbp.Q.value = 2; wbp.frequency.value = 1800;
             wg.gain.setValueAtTime(0.0001, at(P.X));
             const dur = (P.STICK - P.X) / 1000;
-            for (let k = 0, n = 26; k < n; k++) {                  // лопасти: всё реже к удару
+            for (let k = 0, n = 26; k < n; k++) {                  
                 const tt = at(P.X) + dur * Math.pow(k / n, 0.8);
                 wg.gain.setValueAtTime(0.35 * (0.4 + 0.6 * k / n), tt);
                 wg.gain.setValueAtTime(0.02, tt + 0.012);
@@ -506,7 +450,6 @@
         }
         if (rare === 'assemble') {
             P.LOCK.forEach((lock, i) => {
-                // «тррррр»: щелчки всё чаще и громче к моменту, когда буква сложилась
                 for (let ms = lock - P.ASM + 120, k = 0; ms < lock - 30; k++) {
                     const q = (ms - (lock - P.ASM)) / P.ASM;
                     tick(at(ms), 0.08 + 0.22 * q, 2200 + Math.random() * 2600);
@@ -526,20 +469,16 @@
         });
         if (rare) {
             subDrop(at(P.LOCK[2]));
-            whoosh(at(P.X - 140), 0.3, true);                // X влетает целиком
+            whoosh(at(P.X - 140), 0.3, true);                
         }
         [0, P.X_GAP].forEach(d => slash(at(P.X + d), P.X_DRAW / 1000));
-        whoosh(at(P.EXIT - 200), 0.26);                     // створки разъезжаются
+        whoosh(at(P.EXIT - 200), 0.26);                     
     }
 
-    // Тема сайта для заставки: заставка стартует раньше, чем сайт ставит тему, поэтому мод запоминает
-    // последнюю (siteTheme, пишет applySiteTheme); если сайт уже успел — берём его.
     function introIsLight() {
         const t = document.documentElement.getAttribute('data-theme');
         return t ? t !== 'dark' : GM_getValue('siteTheme', 'dark') === 'light';
     }
-    // Пока идёт заставка — фон мода не рисуется и свой фон (картинка/видео) не грузится: иначе браузер
-    // тормозил анимацию, а звук шёл по своим часам — картинка и звук расходились (особенно с видео на фоне)
     let introOn = false;
     function playIntro(mode, variant) {
         const root = document.documentElement;
@@ -585,7 +524,6 @@
         introOn = true;
         const halves = [0, 1].map(i => el('vpi-half vpi-half-' + i, ov));
         const worlds = halves.map(h => el('vpi-world', h));
-        // X — за словом: неоновый контур (цветная линия, внутри чёрная), как на иконке
         const xMarks = worlds.map((w, n) => {
             w.insertAdjacentHTML('beforeend', `<svg class="vpi-x" viewBox="0 0 100 100">
                 <defs><linearGradient id="vpiX${n}" x1="0" y1="0" x2="1" y2="1">
@@ -609,14 +547,12 @@
         const { SETTLE, FROM, SPLIT } = INTRO;
         const PLAN = introPlan(variant);
         const { LOCK, FLY, X, X_DRAW, X_GAP, EXIT } = PLAN;
-        const SHAKE = rare ? [5, 7, 16] : INTRO.SHAKE;          // редкая: «Д» после замедления бьёт сильнее
-        // свечение букв при ударе: на тёмном — белое, на светлом — фиолетовое
+        const SHAKE = rare ? [5, 7, 16] : INTRO.SHAKE;          
         const GLOW = light ? '124,77,255' : '255,255,255';
         const vmax = Math.max(innerWidth, innerHeight);
         const rnd = (a, b) => a + Math.random() * (b - a);
         const anims = [];
         const play = (target, frames, opts) => { const a = target.animate(frames, { fill: 'both', ...opts }); anims.push(a); return a; };
-        // обе половины играют одно и то же (со своими случайностями они бы разошлись на стыке)
         const playBoth = (targets, frames, opts) => targets.map(t => play(t, frames, opts));
 
         function shake(at, amp) {
@@ -628,8 +564,7 @@
             playBoth(worlds, frames, { delay: at, duration: 340, fill: 'none', composite: 'add' });
         }
         function burst(at, x, y, size, strong) {
-            // искры — от края буквы наружу; до удара их нет
-            const big = rare && strong;                      // редкая: последний удар — больше искр и дальше
+            const big = rare && strong;                      
             for (let i = 0, n = strong ? (big ? 32 : 20) : 10; i < n; i++) {
                 const ang = rnd(0, Math.PI * 2), r0 = size * .22, dist = size * rnd(.3, strong ? .75 : .55) * (big ? 1.35 : 1);
                 const rot = ang * 180 / Math.PI + 90, c = Math.cos(ang), sn = Math.sin(ang);
@@ -655,7 +590,7 @@
             burst(lock, lr.left - wr.left + lr.width / 2, lr.top - wr.top + lr.height / 2, lr.height * (i === 2 ? 1.8 : 1.3), i === 2);
         });
         if (!asm) letters[0].forEach((box, i) => {
-            if (twist && i === 2) return;                     // Д у «Обманки» — своя, ниже
+            if (twist && i === 2) return;                     
             const lock = LOCK[i], f = FROM[i], fly = FLY[i];
             const lr = box.getBoundingClientRect();
             const cx = lr.left - wr.left + lr.width / 2, cy = lr.top - wr.top + lr.height / 2;
@@ -666,20 +601,16 @@
             const at = k => `translate(${dx * (1 - k)}px, ${dy * (1 - k)}px) rotate(${f.rot * (1 - k)}deg) scale(${1 + (f.sc - 1) * (1 - k)})`;
             const from = { transform: at(0), opacity: 0, filter: `blur(10px) drop-shadow(0 0 0 rgba(${GLOW},0))`, easing: flyEase };
             const touch = { transform: `translate(${-dx * .012}px, ${-dy * .012}px) scale(1.07, .93)`, opacity: 1, filter: `blur(0px) drop-shadow(0 0 30px rgba(${GLOW},.9))`, offset: hit, easing: 'cubic-bezier(.2,.9,.3,1)' };
-            // редкая, «Д» — замедление: быстро пролетает 80% пути, медленно дрейфует уже на виду у слова,
-            // потом резко врезается
             const flight = rare && i === 2 ? [
                 { ...from, easing: 'cubic-bezier(.15,.7,.35,1)' },
                 { transform: at(.8), opacity: 1, filter: `blur(2px) drop-shadow(0 0 12px rgba(${GLOW},.4))`, offset: hit * .3, easing: 'linear' },
                 { transform: at(.88), opacity: 1, filter: `blur(0px) drop-shadow(0 0 16px rgba(${GLOW},.5))`, offset: hit * .86, easing: 'cubic-bezier(.8,0,1,.5)' },
                 touch
             ] : [from, { opacity: 1, offset: hit * .25 }, touch];
-            // разгон до самого касания, затем проскок чуть дальше и сжатие от удара
             playBoth([letters[0][i], letters[1][i]], [
                 ...flight,
                 { transform: 'none', opacity: 1, filter: `blur(0px) drop-shadow(0 0 10px rgba(${GLOW},.3))` }
             ], { delay: lock - fly, duration: fly + SETTLE });
-            // редкая: шлейф — два «призрака» буквы тем же путём с запаздыванием, гаснут к удару
             if (rare) [1, 2].forEach(k => {
                 const ghosts = words.map(w => el('vpi-letter vpi-ghost', w, box.textContent));
                 ghosts.forEach(g => { g.style.left = box.offsetLeft + 'px'; g.style.top = box.offsetTop + 'px'; });
@@ -702,7 +633,6 @@
                 { transform: 'translateY(0) scale(1.05, .95)', offset: .85 },
                 { transform: 'translateY(0)' }
             ], { delay: at, duration: dur, easing: 'cubic-bezier(.2,.7,.3,1)', composite: 'add', fill: 'none' });
-            // Т: после удара отскакивает с наклоном и приземляется второй раз
             const tb = letters[0][1].getBoundingClientRect();
             playBoth(all(1), [
                 { transform: 'translateY(0) rotate(0deg)' },
@@ -711,10 +641,8 @@
                 { transform: 'translateY(0) rotate(0deg)' }
             ], { delay: LOCK[1] + 30, duration: PLAN.BOUNCE - LOCK[1] + 30, easing: 'cubic-bezier(.2,.7,.3,1)', composite: 'add', fill: 'none' });
             shake(PLAN.BOUNCE, 3);
-            // Д: в свой (классический) срок — ничего; потом падает сверху наковальней
             const db = letters[0][2].getBoundingClientRect();
             playBoth(all(2), [
-                // до падения — целиком за верхним краем и невидима: сюрприз не должен выглядывать
                 { transform: `translateY(${-(db.bottom + db.height * 1.5)}px) scale(.94, 1.25)`, opacity: 0, filter: `blur(7px) drop-shadow(0 0 0 rgba(${GLOW},0))`, easing: 'cubic-bezier(.55,0,1,.45)' },
                 { opacity: 1, offset: .04 },
                 { transform: 'translateY(0) scale(1.18, .78)', opacity: 1, filter: `blur(0px) drop-shadow(0 0 40px rgba(${GLOW},1))`, offset: .55, easing: 'cubic-bezier(.2,.9,.3,1)' },
@@ -724,9 +652,8 @@
             shake(LOCK[2], 20);
             burst(LOCK[2], db.left - wr.left + db.width / 2, db.bottom - wr.top - db.height * .15, db.height * 2.2, true);
             play(flash, [{ opacity: 0 }, { opacity: .2, offset: .1 }, { opacity: 0 }], { delay: LOCK[2], duration: 380, fill: 'none' });
-            [0, 1].forEach(i => hop(i, LOCK[2] + 20, 30, 300));               // ударная волна подбрасывает И и Т
-            [0, 1, 2].forEach(i => hop(i, PLAN.WAVE + i * 80, 22, 280));      // волна
-            // X: сюрикен — влетает справа, вращаясь, втыкается и дрожит
+            [0, 1].forEach(i => hop(i, LOCK[2] + 20, 30, 300));               
+            [0, 1, 2].forEach(i => hop(i, PLAN.WAVE + i * 80, 22, 280));      
             const T = PLAN.STICK - PLAN.X;
             playBoth(xMarks, [
                 { transform: `translate(calc(-50% + ${innerWidth * .75}px), -50%) rotate(1440deg) scale(.5)`, opacity: 0 },
@@ -745,7 +672,6 @@
                 { filter: 'drop-shadow(0 0 12px rgba(124,77,255,.55))' }
             ], { delay: PLAN.STICK, duration: 520 });
         }
-        // X: два росчерка крест-накрест за буквами, потом вспышка свечения
         if (!twist) ['.vpi-x1', '.vpi-x2'].forEach((sel, i) => {
             xMarks.forEach(xm => xm.querySelectorAll(sel).forEach(path => play(path, [
                 { strokeDasharray: '1 1', strokeDashoffset: 1 },
@@ -761,19 +687,16 @@
         ], { delay: X + X_GAP + X_DRAW, duration: 520 });
 
         if (rare) {
-            // камера: весь ролик медленно наезжает на слово, на ударе X — рывок вперёд и назад
             playBoth(worlds, [{ transform: 'scale(1)' }, { transform: 'scale(1.07)' }],
                 { delay: 0, duration: EXIT, easing: 'linear', composite: 'add', fill: 'forwards' });
             playBoth(worlds, [{ transform: 'scale(1)' }, { transform: 'scale(1.13)', offset: .14 }, { transform: 'scale(1)' }],
                 { delay: X + X_GAP + X_DRAW * .7, duration: 560, easing: 'cubic-bezier(.2,.8,.2,1)', composite: 'add', fill: 'none' });
-            // X влетает целиком: большой, повёрнутый — врезается на место, пока прочерчиваются росчерки
             playBoth(xMarks, [
                 { transform: 'translate(-50%, -50%) scale(2.6) rotate(-35deg)', opacity: 0 },
                 { opacity: 1, offset: .2 },
                 { transform: 'translate(-50%, -50%) scale(.94) rotate(3deg)', opacity: 1, offset: .8 },
                 { transform: 'translate(-50%, -50%) scale(1) rotate(0deg)', opacity: 1 }
             ], { delay: X - 90, duration: X_DRAW + X_GAP + 150, easing: 'cubic-bezier(.3,0,.2,1)' });
-            // неоновая волна: копия контура X расходится и тает
             const pulses = worlds.map((w, n) => {
                 const c = xMarks[n].cloneNode(true);
                 c.setAttribute('class', 'vpi-x vpi-xpulse');
@@ -785,12 +708,10 @@
             playBoth(pulses, [
                 { transform: 'translate(-50%, -50%) scale(1)', opacity: .85, filter: 'blur(0px)' },
                 { transform: 'translate(-50%, -50%) scale(1.75)', opacity: 0, filter: 'blur(7px)' }
-            ], { delay: X + X_GAP + X_DRAW, duration: 720, easing: 'cubic-bezier(.1,.7,.3,1)', fill: 'forwards' });   // до своего момента не видна
+            ], { delay: X + X_GAP + X_DRAW, duration: 720, easing: 'cubic-bezier(.1,.7,.3,1)', fill: 'forwards' });   
         }
 
         if (asm) {
-            // Осколки: пиксели букв (тот же шрифт, те же места) — тысячи квадратиков; каждый прилетает
-            // со своей стороны и ложится на место к моменту, когда буква «защёлкивается»
             const cv = document.createElement('canvas');
             cv.className = 'vpi-shards';
             ov.insertBefore(cv, flash);
@@ -832,7 +753,7 @@
                 g.clearRect(0, 0, W, H);
                 g.fillStyle = ink;
                 for (const p of pieces) {
-                    if (t < p.t0 || t >= LOCK[p.li] + 20) continue;       // буква защёлкнулась — дальше её держит текст
+                    if (t < p.t0 || t >= LOCK[p.li] + 20) continue;       
                     const k = Math.min(1, (t - p.t0) / p.d), e = 1 - Math.pow(1 - k, 3);
                     const x = p.sx + (p.tx - p.sx) * e, y = p.sy + (p.ty - p.sy) * e, sz = step * (.95 + (1 - e) * 1.4);
                     g.globalAlpha = Math.min(1, k * 3);
@@ -842,7 +763,6 @@
                 }
                 g.globalAlpha = 1;
             };
-            // холст рисует по часам анимаций (своя «пустая» анимация): так он в такт и на паузе, и при перемотке
             const clock = play(cv, [{ opacity: 1 }, { opacity: 1 }], { duration: LOCK[2] + 80, fill: 'none' });
             const frame = () => {
                 if (!cv.isConnected) return;
@@ -853,13 +773,12 @@
             };
             requestAnimationFrame(frame);
 
-            // вентиль: X щёлкает по 30° (рывок за 40 мс, пауза), в конце клац — толчок, тряска, вспышка
             const T0 = PLAN.TICKS[0].t - 60, D = PLAN.LOCKED + 260 - T0;
             const rot = (a, sc = 1) => `translate(-50%, -50%) rotate(${a}deg) scale(${sc})`;
             const frames = [{ offset: 0, transform: rot(0) }];
             let prev = 0, prevT = T0;
             PLAN.TICKS.forEach(tk => {
-                const move = Math.min(40, (tk.t - prevT) * .6);      // рывок короче промежутка между щелчками
+                const move = Math.min(40, (tk.t - prevT) * .6);      
                 frames.push({ offset: (tk.t - move - T0) / D, transform: rot(prev) });
                 frames.push({ offset: (tk.t - T0) / D, transform: rot(tk.a) });
                 prev = tk.a; prevT = tk.t;
@@ -877,8 +796,6 @@
             ], { delay: PLAN.LOCKED, duration: 520, fill: 'forwards' });
         }
 
-        // Уход: по центру вспыхивает щель, экран делится ровно пополам — левая половина
-        // уезжает влево, правая вправо, под ними уже сайт.
         play(seam, [
             { opacity: 0, transform: 'scaleY(0)' },
             { opacity: 1, transform: 'scaleY(1)', offset: .55 },
@@ -890,10 +807,6 @@
         ], { delay: EXIT, duration: SPLIT, easing: 'cubic-bezier(.7,0,.3,1)', fill: 'forwards' }));
         const out = doors[1];
 
-        // Звук: браузер пускает его только после касания страницы. На компьютере обычно пускает сразу,
-        // на телефоне — нет. Поэтому на телефоне заставка ждёт касания: тёмный экран, в центре «дышит»
-        // маленький логотип; коснулся — ролик идёт со звуком ровно в такт. Не коснулся за IDLE мс —
-        // идёт сам, без звука (как раньше): на входе никого не держим.
         let ctx = null;
         let done = false, started = false;
         const cleanup = () => {
@@ -904,10 +817,9 @@
             introOn = false;
             document.dispatchEvent(new CustomEvent('vp-intro-done'));
             root.style.overflow = prevOverflow;
-            if (ctx) setTimeout(() => ctx.close().catch(() => {}), 3500);   // дать дотаять хвосту последнего удара
+            if (ctx) setTimeout(() => ctx.close().catch(() => {}), 3500);   
         };
         out.finished.then(cleanup, cleanup);
-        // клик или клавиша — пропустить
         const skip = () => {
             if (done) return;
             removeEventListener('keydown', skip, true);
@@ -922,12 +834,6 @@
             afterStart();
             if (withSound) syncSound();
         }
-        // Звук подстраиваем под картинку, а не наоборот. Картинка стартует сразу, но первый кадр может
-        // запоздать на десятые доли секунды (сайт в этот момент грузится) — поэтому звук не считаем от
-        // нажатия «старт», а ждём, когда анимации реально пошли (ready → startTime), и каждый удар ставим
-        // на то время звуковой карты, которое прозвучит из динамика ровно в момент кадра. Сопоставление
-        // времён даёт сам браузер (getOutputTimestamp — с учётом задержки вывода, и Bluetooth тоже).
-        // Так и на компьютере, и на телефоне (там звук разрешён только по касанию — оно и запускает).
         function syncSound() {
             let queued = false;
             try {
@@ -935,7 +841,7 @@
                 Promise.all([ctx.resume(), anims[0].ready]).then(() => {
                     if (!ctx || done) return;
                     queued = true;
-                    const start = anims[0].startTime;            // мс, та же шкала, что performance.now()
+                    const start = anims[0].startTime;            
                     const toCtx = perf => {
                         const ts = ctx.getOutputTimestamp ? ctx.getOutputTimestamp() : null;
                         if (ts && ts.performanceTime > 0) return ts.contextTime + (perf - ts.performanceTime) / 1000;
@@ -944,19 +850,15 @@
                     introSound(ctx, ms => Math.max(ctx.currentTime + 0.01, toCtx(start + ms)), variant);
                 }, () => {});
             } catch (e) { ctx = null; }
-            // звук так и не завёлся за 0,6 с от старта картинки — она идёт без него (отсчёт от старта картинки:
-            // страница на входе может быть занята дольше, и звук иначе выключился бы, не успев начаться)
             anims[0].ready.then(() => setTimeout(() => { if (!queued && ctx) { ctx.close().catch(() => {}); ctx = null; } }, 600), () => {});
         }
         function afterStart() {
-            setTimeout(cleanup, EXIT + SPLIT + 2500);       // если анимации не доиграют (вкладка в фоне)
-            // пропуск — не тем же касанием, что запустило ролик
+            setTimeout(cleanup, EXIT + SPLIT + 2500);       
             setTimeout(() => { if (done) return; ov.addEventListener('click', skip); addEventListener('keydown', skip, true); }, 400);
         }
 
         if (mode !== 'tap') { begin(mode === 'desk'); return anims; }
 
-        // телефон: ждём касания
         for (const a of anims) a.pause();
         const idle = document.createElement('div');
         idle.className = 'vpi-idle';
@@ -986,52 +888,37 @@
                 .finished.then(() => idle.remove(), () => idle.remove());
             begin(withSound);
         }
-        // звук включается только в обработчике самого касания (pointerup/click — они дают разрешение)
         function tap(e) { e.stopPropagation(); go(true); }
         ov.addEventListener('pointerup', tap, true);
         ov.addEventListener('click', tap, true);
         return anims;
     }
-    // ==== заставка:конец
 
-    // Заставка: на компьютере — вкл/выкл (introEnabled). На телефоне — свой выбор (introMobile):
-    // 'tap' — ждёт касания и играет со звуком, 'silent' — сразу без звука, 'off' — выключена.
     const IS_PHONE = matchMedia('(pointer: coarse)').matches;
     const introMode = () => IS_PHONE ? GM_getValue('introMobile', GM_getValue('introEnabled', true) ? 'tap' : 'off')
         : GM_getValue('introEnabled', true) ? 'desk' : 'off';
     if (window.top === window.self && introMode() !== 'off'
         && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        // introPreview ('rare' | 'assemble') — показать вариант вместо обычной (тесты, просмотр из админки)
         const preview = GM_getValue('introPreview', '');
-        // какая выпала: одно случайное число на все редкие, иначе — классика
         const pickIntro = () => { let r = Math.random(); for (const [v, p] of INTRO.RARE) { if (r < p) return v; r -= p; } return false; };
         try { playIntro(introMode(), preview ? (preview === 'rare' || preview) : pickIntro()); } catch (e) { console.warn('[ITD VP] заставка', e); }
     }
 
-    // Остальное — когда страница разобрана (раньше весь скрипт и запускался на document-idle);
-    // заставке нужен document-start, чтобы закрыть страницу с первого кадра.
     const start = () => {
 
-    // ================= Поиск элементов сайта =================
-    // Классы ИТД (drJg, U91s, iciV…) — хеши сборки, они меняются при каждом обновлении сайта.
-    // Поэтому элементы ищем по тому, что не меняется: тегам (article, nav, aside, header, time),
-    // ссылкам /@ник, подписям кнопок (aria-label, title), alt и data-атрибутам.
-    // Найденному элементу вешаем СВОЙ класс vp-*, и весь остальной код и CSS работают только
-    // с ними. Если сайт поменяет разметку, сломается одна функция в FIND, а не весь скрипт;
-    // какая — видно в консоли: itdvp.diag().
     const SELECTORS = {
-        post: 'vp-post',                  // карточка поста (article)
-        repost: 'vp-repost',              // вложенная карточка репоста внутри поста
+        post: 'vp-post',                  
+        repost: 'vp-repost',              
         postText: 'vp-post-text',
         postMedia: 'vp-post-media',
-        postAction: 'vp-post-action',     // кнопки «Нравится», «Комментировать», «Репост»
-        avatarLink: 'vp-avatar-link',     // ссылка-аватар в посте
+        postAction: 'vp-post-action',     
+        avatarLink: 'vp-avatar-link',     
         avatar: 'vp-avatar',
-        nickContainer: 'vp-nick',         // имя + значки
-        nickText: 'vp-nick-text',         // само имя
+        nickContainer: 'vp-nick',         
+        nickText: 'vp-nick-text',         
         nickBadges: 'vp-nick-badges',
-        nickRow: 'vp-nick-row',           // строка, в которой стоит ник
-        nickLarge: 'vp-nick-large',       // крупный ник в шапке профиля
+        nickRow: 'vp-nick-row',           
+        nickLarge: 'vp-nick-large',       
         banner: 'vp-banner',
         bannerButtons: 'vp-banner-buttons',
         bannerDraw: 'vp-banner-draw',
@@ -1043,9 +930,9 @@
         navIcon: 'vp-nav-icon',
         logoContainer: 'vp-logo',
         versionBtn: 'vp-version',
-        tabs: 'vp-tabs',                  // «Для вас / Подписки», «Посты / Лайки»
-        feedBar: 'vp-feed-bar',           // верхняя полоса ленты: вкладки + поиск
-        commentBox: 'vp-comment-box',     // обёртка формы комментария
+        tabs: 'vp-tabs',                  
+        feedBar: 'vp-feed-bar',           
+        commentBox: 'vp-comment-box',     
         stickerContainer: 'vp-comment-row',
         stickerMicBtn: 'vp-comment-mic',
         stickerSendBtn: 'vp-comment-send',
@@ -1062,20 +949,14 @@
     const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
     const ownText = el => [...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim());
 
-    // Классы сайта у элемента, без наших vp-*: нужны, когда свой элемент должен выглядеть
-    // как родной (свои кнопки баннера, пункт меню «Сообщения»)
     function siteClasses(el) {
         return el ? [...el.classList].filter(c => !c.startsWith('vp-')).join(' ') : '';
     }
-    // Классы, общие для всех элементов: у пунктов меню это «обычный пункт» без «активного»
     function commonClasses(els) {
         if (!els.length) return '';
         return [...els[0].classList].filter(c => !c.startsWith('vp-') && els.every(e => e.classList.contains(c))).join(' ');
     }
 
-    // Выученные классы. Надёжный образец (ник и аватар в шапке поста) даёт класс компонента,
-    // по нему находим тот же компонент там, где надёжной приметы нет: шапка профиля, репост,
-    // поле нового поста. Учимся заново на каждой странице, запоминаем на случай страниц без постов.
     const learned = JSON.parse(GM_getValue('vp_learned', '{}'));
     function learn(role, el) {
         const cls = el && [...el.classList].find(c => !c.startsWith('vp-'));
@@ -1086,7 +967,6 @@
     }
     const byLearned = role => learned[role] ? [...document.getElementsByClassName(learned[role])].filter(inScope) : [];
 
-    // Самый глубокий span с текстом внутри ника (имя бывает вложено: span > span > span)
     function nickTextOf(container) {
         if (!container.children.length) return container;
         return $$('span', container).find(s => !s.children.length && s.textContent.trim()
@@ -1094,8 +974,6 @@
     }
 
     const FIND = {
-        // Пост: в ленте — article; открытый пост собран из div — узнаём его по подвалу с кнопкой
-        // «Нравится» и шапке над ним (ближайший предок, у которого шапка — прямой потомок)
         post: () => [...new Set([...$$('article'), ...$$('footer')
             .filter(f => !f.closest('article') && f.querySelector('button[aria-label="Нравится"]'))
             .map(f => { let el = f.parentElement; for (let i = 0; el && i < 4 && !el.querySelector(':scope > header'); i++) el = el.parentElement; return el; })
@@ -1106,7 +984,6 @@
         postMedia: () => [...$$('img[data-post-media-image]'), ...F('post').flatMap(p => $$('video', p))],
         postAction: () => F('post').flatMap(p => $$('button[aria-label]', p)).filter(b => b.querySelector('[data-icon]')),
         postText: () => F('post').flatMap(p => $$('div', p)).filter(d => ownText(d) && !d.closest('header, footer, a, button, time')),
-        // аватар-ссылка — ссылка на профиль, внутри которой блок (у ссылки с ником внутри span)
         avatarLink: () => F('post').flatMap(p => $$(PROFILE_LINK, p)).filter(a => a.firstElementChild && a.firstElementChild.tagName === 'DIV'),
         avatar: () => {
             const sample = F('avatarLink').map(a => a.firstElementChild);
@@ -1126,9 +1003,6 @@
         nickBadges: () => F('nickContainer').flatMap(c => [...c.children]
             .filter(s => s.querySelector('img, svg') && !s.matches('.' + SELECTORS.badgeVoronoi + ', .' + SELECTORS.badgeVerify))),
         nickRow: () => F('nickContainer').map(c => (c.closest(PROFILE_LINK) || c).parentElement).filter(Boolean),
-        // Крупный ник — в шапке профиля: не ссылка и не внутри поста, рядом строка «@ник»
-        // Крупный ник — в шапке профиля: не ссылка, не в посте, рядом «@ник» и баннер. Строки окон
-        // «Подписчики»/«Подписки» устроены так же, но баннера рядом нет — их отсекаем.
         nickLarge: () => F('nickContainer').filter(c => !c.closest('a, article, .' + SELECTORS.post) && atLoginOf(c) && isProfileHeader(c)),
         banner: () => $$('img[alt="Banner"]').map(i => i.parentElement).filter(Boolean),
         bannerButtons: () => F('banner').map(b => [...b.children].find(c => c.querySelector('button'))).filter(Boolean),
@@ -1141,7 +1015,6 @@
         navIcon: () => F('navLink').map(a => a.firstElementChild).filter(s => s && s.tagName === 'SPAN' && s.querySelector('svg')),
         sidebar: () => $$('aside').filter(a => a.querySelector('nav')),
         sidebarRight: () => $$('aside').filter(a => !a.querySelector('nav')),
-        // Логотип стоит прямо перед меню; после замены иконки внутри уже наша ссылка
         logoContainer: () => F('nav').map(n => n.previousElementSibling)
             .filter(d => d && (d.querySelector('svg, button') || d.querySelector('a[href="https://t.me/NeuroSFW"]'))),
         versionBtn: () => F('logoContainer').flatMap(c => $$('button', c))
@@ -1155,21 +1028,17 @@
         stickerSendBtn: () => F('stickerContainer').map(r => siteButtons(r).pop()).filter(Boolean),
         commentBox: () => commentInputs().map(i => i.closest('form') || (commentRow(i) || i).parentElement).filter(Boolean),
         modal: () => $$('[role="dialog"], [aria-modal="true"], dialog[open]'),
-        // Уведомления: пункт — строка-кнопка со ссылкой на профиль (дата там простой span, не time)
         notification: () => location.pathname.startsWith('/notifications')
             ? $$('[role="button"]').filter(b => b.querySelector(PROFILE_LINK) && !b.closest('article')
                 && !b.parentElement.closest('[role="button"]'))
             : [],
-        // Текст действия («оценил(а) ваш пост») — первый текст сразу после ссылки с ником
         notificationText: () => F('notification').map(n => {
-            // ссылка с ником идёт после ссылки-аватарки: берём последнюю ссылку с текстом
             const nickLink = $$(PROFILE_LINK, n).filter(a => a.textContent.trim() && !a.querySelector('.' + SELECTORS.avatar)).pop();
             const el = nickLink && nickLink.nextElementSibling;
             return el && ownText(el) ? el : null;
         }).filter(Boolean)
     };
 
-    // «@ник» в той же строке, что и имя (шапка профиля, строки окон подписок) — логин без ссылки
     function atLoginOf(c) {
         const row = c.parentElement;
         const at = row && [...row.children].find(s => /^@[\w.]+$/.test(s.textContent.trim()));
@@ -1179,8 +1048,7 @@
         for (let el = c, i = 0; el && i < 7; el = el.parentElement, i++) {
             if (el.querySelector('img[alt="Banner"]')) return true;
         }
-        if (document.querySelector('img[alt="Banner"]')) return false;      // баннер есть, но не рядом — это не шапка
-        // профиль без баннера: шапка — не строка списка, где у соседей тоже ники
+        if (document.querySelector('img[alt="Banner"]')) return false;      
         const item = c.parentElement && c.parentElement.parentElement;
         return !(item && item.parentElement && [...item.parentElement.children]
             .filter(x => x !== item && x.querySelector('.' + SELECTORS.nickContainer)).length);
@@ -1189,7 +1057,6 @@
     function commentInputs() {
         return $$('[contenteditable="true"][data-placeholder]').filter(i => /коммент/i.test(i.getAttribute('data-placeholder')));
     }
-    // Строка ввода комментария — ближайший предок поля, в котором есть кнопки
     function commentRow(input) {
         let el = input.parentElement;
         for (let i = 0; el && i < 6; i++, el = el.parentElement) {
@@ -1199,7 +1066,6 @@
     }
     const siteButtons = root => $$('button', root).filter(b => !b.classList.contains('sticker-btn') && !b.classList.contains('vp-sticker-sendbtn'));
 
-    // Порядок важен: ник и аватар учатся на постах, остальные роли пользуются результатом
     const ROLE_ORDER = ['post', 'repost', 'postMedia', 'postAction', 'postText', 'avatarLink', 'avatar',
         'nickContainer', 'nickText', 'nickBadges', 'nickRow', 'nickLarge',
         'banner', 'bannerButtons', 'bannerDelete', 'bannerDraw',
@@ -1207,15 +1073,10 @@
         'tabs', 'feedBar', 'commentBox', 'stickerContainer', 'stickerMicBtn', 'stickerSendBtn',
         'modal', 'notification', 'notificationText'];
     const roleCount = {};
-    // Внутри одного прохода результат роли считаем один раз: ник нужен пяти другим ролям
     let tickCache = null;
     const F = role => (tickCache && tickCache[role]) || FIND[role]();
 
-    // Разбирать заново всю ленту на каждое изменение страницы — дорого: чем дальше листаешь,
-    // тем больше постов. Поэтому внутренности постов разбираем только у новых постов и у тех,
-    // в которых что-то поменялось (dirtyPosts). Всё остальное (меню, вкладки, шапка профиля) —
-    // как раньше, целиком. Раз в 5 секунд и по itdvp.diag() — полный проход, на всякий случай.
-    let scope = null;                                   // null — все посты; иначе Set постов для разбора
+    let scope = null;                                   
     const dirtyPosts = new Set();
     let lastFullTag = 0;
     function inScope(el) {
@@ -1234,7 +1095,6 @@
             try { els = FIND[role](); } catch (e) { console.warn('[ITD VP] поиск сломался:', role, e); }
             const cls = SELECTORS[role];
             if (role === 'post' && !full) {
-                // новые посты (ещё без метки) и посты, где что-то поменялось
                 scope = new Set(els.filter(el => !el.classList.contains(cls) || dirtyPosts.has(el)));
             }
             tickCache[role] = role === 'post' && scope ? [...scope] : els;
@@ -1246,8 +1106,6 @@
         scope = null;
     }
 
-    // Один наблюдатель на всю страницу вместо десятка: сначала расставляем метки,
-    // потом вызываем всех подписчиков. Не чаще раза за кадр.
     const domHandlers = [];
     function onDom(fn) { domHandlers.push(fn); }
     let domQueued = false;
@@ -1257,7 +1115,7 @@
         domQueued = false;
         lastTick = performance.now();
         domRecords(domObserver.takeRecords());
-        domObserver.disconnect();                 // свои правки не должны будить наблюдателя
+        domObserver.disconnect();                 
         try {
             tagAll(false);
             for (const fn of domHandlers) { try { fn(); } catch (e) { console.warn('[ITD VP]', fn.name || 'обработчик', e); logErr(fn.name || 'обработчик', e); } }
@@ -1265,8 +1123,6 @@
             domObserver.observe(document.body, DOM_WATCH);
         }
     }
-    // Что поменялось: пост, внутри которого была правка, разберём заново. Смена класса важна,
-    // только если сайт перерисовал элемент и стёр наши метки vp-* (свои правки класса — не повод).
     const lostVp = m => {
         const old = m.oldValue || '';
         if (!old.includes('vp-')) return false;
@@ -1277,8 +1133,6 @@
         let any = false;
         for (const m of muts) {
             if (m.type === 'attributes' && !lostVp(m)) continue;
-            // сайт сменил текст на месте: важно, только если это эмодзи-аватарка (карточку отдали другому
-            // человеку — перекрасить); часы «5 мин.», счётчики и т.п. — не повод всё перебирать
             if (m.type === 'characterData' && !/\p{Extended_Pictographic}/u.test(m.target.nodeValue || '')) continue;
             any = true;
             const el = m.target.nodeType === 1 ? m.target : m.target.parentElement;
@@ -1290,8 +1144,6 @@
     const domObserver = new MutationObserver(muts => {
         if (domRecords(muts) && !domQueued) {
             domQueued = true;
-            // телефон: не чаще ~20 проходов в секунду — при прокрутке ленты сайт правит страницу почти
-            // каждый кадр, и полный проход на каждом отнимал кадры у самой прокрутки
             const wait = IS_PHONE ? Math.max(0, lastTick + 50 - performance.now()) : 0;
             if (wait) setTimeout(() => requestAnimationFrame(domTick), wait); else requestAnimationFrame(domTick);
         }
@@ -1299,7 +1151,6 @@
     tagAll();
     domObserver.observe(document.body, DOM_WATCH);
 
-    // Проверка: какие элементы не нашлись. В консоли страницы: itdvp.diag()
     const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
     pageWindow.itdvp = {
         diag() {
@@ -1309,31 +1160,20 @@
         },
         learned
     };
-    // Раз в заход — предупреждение, если не нашлось то, что есть на любой странице
     setTimeout(() => {
-        tagAll();                                 // полный проход: счёт по всей странице, а не по последним правкам
+        tagAll();                                 
         const must = ['nav', 'sidebar', 'logoContainer'];
         if (roleCount.post) must.push('avatar', 'nickContainer', 'nickText');
         const lost = must.filter(r => !roleCount[r]);
         if (lost.length) console.warn('[ITD VP] не нашёл на странице:', lost.join(', '), '— похоже, сайт поменял разметку. Подробно: itdvp.diag()');
     }, 4000);
 
-    // Иконки мода — один стиль: контур 1.8 px, скруглённые концы, сетка 24×24, цвет — currentColor.
-    // Каждая рисует свою функцию: по ней должно быть понятно, что делает кнопка.
-    // Логотип скрипта по умолчанию задаётся в ОДНОМ месте — строкой @icon в шапке. Tampermonkey показывает
-    // его в своём списке, а мы берём его оттуда же (GM_info). Остальные иконки — вкладка «Иконка» в настройках.
     function scriptIconSrc() {
         const meta = (GM_info.scriptMetaStr || '').match(/^\/\/ @icon\s+(.+?)\s*$/m);
         return (GM_info.script && GM_info.script.icon) || (meta && meta[1]) || null;
     }
 
-    // ================= Иконка скрипта (вкладка «Иконка» в настройках) =================
-    // Выбранная ставится на вкладку браузера, в логотип на сайте и на ярлык «На главный экран».
-    // Ярлыку телефон берёт PNG — рисуем её из выбранной картинки на холсте (192 px и 180 px для iOS).
-    // Уже созданный ярлык сам не поменяется: его надо добавить заново.
-    // Классика — строка @icon из шапки.
     const APP_ICONS = [
-        // по виду рядами по 4: фирменные неоновые · тёмные с цветом · яркие · светлые · остальное
         { id: "classic", name: "Классика", svg: null },
         { id: "itd", name: "ИТД", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><linearGradient id=\"n\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#00e5ff\"/><stop offset=\".5\" stop-color=\"#7c4dff\"/><stop offset=\"1\" stop-color=\"#ff3d9a\"/></linearGradient></defs><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"#0b0d13\"/><text x=\"32\" y=\"39.5\" text-anchor=\"middle\" font-family=\"Arial Black, Arial, sans-serif\" font-weight=\"900\" font-size=\"20\" fill=\"url(#n)\">ИТД</text><text x=\"32\" y=\"50\" text-anchor=\"middle\" font-family=\"Arial, sans-serif\" font-weight=\"700\" font-size=\"8\" fill=\"#fff\" opacity=\".7\" letter-spacing=\"1.5\">X</text></svg>" },
         { id: "neon", name: "Неон", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><linearGradient id=\"n\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#00e5ff\"/><stop offset=\".5\" stop-color=\"#7c4dff\"/><stop offset=\"1\" stop-color=\"#ff3d9a\"/></linearGradient><filter id=\"g\" x=\"-50%\" y=\"-50%\" width=\"200%\" height=\"200%\"><feGaussianBlur stdDeviation=\"3\"/></filter></defs><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"#0b0d13\"/><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"url(#n)\" stroke-width=\"10\" stroke-linecap=\"round\" fill=\"none\" filter=\"url(#g)\" opacity=\".9\"/><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"url(#n)\" stroke-width=\"8\" stroke-linecap=\"round\" fill=\"none\" /><path d=\"M21 21L43 43M43 21L21 43\" stroke=\"#fff\" stroke-width=\"3\" stroke-linecap=\"round\" fill=\"none\" opacity=\".55\"/></svg>" },
@@ -1352,8 +1192,6 @@
         { id: "uwu", name: "UwU", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><defs><linearGradient id=\"bg\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#f7dfb3\"/><stop offset=\".55\" stop-color=\"#f5bfb2\"/><stop offset=\"1\" stop-color=\"#ef93b3\"/></linearGradient><radialGradient id=\"glow\" cx=\".5\" cy=\".5\" r=\".5\"><stop offset=\"0\" stop-color=\"#fff2c7\"/><stop offset=\".4\" stop-color=\"#ffe1a0\" stop-opacity=\".75\"/><stop offset=\"1\" stop-color=\"#ffe1a0\" stop-opacity=\"0\"/></radialGradient><radialGradient id=\"vig\" cx=\".5\" cy=\".45\" r=\".75\"><stop offset=\".6\" stop-color=\"#8f4f72\" stop-opacity=\"0\"/><stop offset=\"1\" stop-color=\"#8f4f72\" stop-opacity=\".22\"/></radialGradient></defs><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"url(#bg)\"/><path d=\"M17 26v6a5 5 0 0 0 10 0v-6\" stroke=\"#1a1016\" stroke-width=\"3.4\" stroke-linecap=\"round\" fill=\"none\"/><path d=\"M37 26v6a5 5 0 0 0 10 0v-6\" stroke=\"#1a1016\" stroke-width=\"3.4\" stroke-linecap=\"round\" fill=\"none\"/><path d=\"M26 40q3 4 6 0 3 4 6 0\" stroke=\"#1a1016\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\" fill=\"none\"/></svg>" },
         { id: "xxx", name: "XXX", svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"#000\"/><path d=\"M8 24h4.8L15.0 30.1L17.2 24H22L18.0 32.5L22 41h-4.8L15.0 34.9L12.8 41H8L12.0 32.5Z\" fill=\"#fff\"/><rect x=\"25\" y=\"19\" width=\"32\" height=\"27\" rx=\"6\" fill=\"#ff9000\"/><path d=\"M28.5 24h4.1L34.5 30.1L36.4 24H40.5L37.0 32.5L40.5 41h-4.1L34.5 34.9L32.6 41H28.5L32.0 32.5Z\" fill=\"#000\"/><path d=\"M41.5 24h4.1L47.5 30.1L49.4 24H53.5L50.0 32.5L53.5 41h-4.1L47.5 34.9L45.6 41H41.5L45.0 32.5Z\" fill=\"#000\"/></svg>" },
     ];
-    // своя иконка: фон — любой из стилей ника (их цвета) или чёрный, сверху любой эмодзи.
-    // Список собирается при первом обращении: стили ника объявлены ниже по файлу.
     const ICON_BG_EXTRA = {
         shimmer: ['#7c3aed', '#a78bfa', '#f0abfc'],
         glitch: ['#00fff0', '#7c4dff', '#ff00c8'],
@@ -1368,7 +1206,6 @@
             return { id: k, name: st.name, c };
         });
         iconBgList.push({ id: 'black', name: 'Чёрный', c: ['#26262c', '#050507'] });
-        // по кругу цветов от красного до розового, потом многоцветные, потом белый → серый → чёрный
         const MULTI = ['glitch', 'rainbow'], NEUTRAL = ['white', 'gray', 'black'];
         const rank = b => {
             if (MULTI.includes(b.id)) return 1000 + MULTI.indexOf(b.id);
@@ -1380,7 +1217,6 @@
     }
     const svgUrl = svg => 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
     const xmlText = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    // первый символ так, как его видит человек: эмодзи с оттенком кожи или флаг — это несколько кодов
     function firstGrapheme(s) {
         s = (s || '').trim();
         if (!s) return '';
@@ -1413,9 +1249,6 @@
         img.style.cssText = `width:${size}px;height:${size}px;display:block;border-radius:${Math.round(size * 0.25)}px;`;
         return img;
     }
-    // PNG нужного размера из любой картинки (SVG или загруженной). SVG без width/height браузер
-    // растрирует в своём размере по умолчанию (300×150) и потом растягивает — ярлык выходил мыльным.
-    // Поэтому SVG перед отрисовкой получает ровно нужный размер и рисуется сразу в нём.
     function sizedSvg(src, size) {
         const m = src.match(/^data:image\/svg\+xml(;[^,]*)?,(.*)$/s);
         if (!m) return src;
@@ -1457,7 +1290,6 @@
         document.querySelectorAll('img.vp-app-logo').forEach(img => { if (img.src !== src) img.src = src; });
         if (pngFor === src) return;
         pngFor = src;
-        // ярлык: телефон берёт самую крупную — 512 px хватает и на 2K-экранах (иконка ~200 px)
         iconPng(src, 512).then(png => { if (png && pngFor === src) headLink('vp-icon-512', 'icon', { type: 'image/png', sizes: '512x512', href: png }); });
         iconPng(src, 192).then(png => { if (png && pngFor === src) headLink('vp-icon-192', 'icon', { type: 'image/png', sizes: '192x192', href: png }); });
         iconPng(src, 180).then(png => { if (png && pngFor === src) headLink('vp-touch-icon', 'apple-touch-icon', { sizes: '180x180', href: png }); });
@@ -1468,8 +1300,6 @@
         applyAppIcon();
     }
 
-    // Вкладка браузера: наша иконка и название «ИТД X». Сайт сам меняет
-    // заголовок и иконку при переходах — следим за <head> и возвращаем своё.
     const TAB_TITLE = 'ИТД X';
     function brandTab() {
         if (document.title !== TAB_TITLE) document.title = TAB_TITLE;
@@ -1478,62 +1308,38 @@
     }
     const svgIcon = (body, size = 20, stroke = 'currentColor') =>
         `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
-    // фон: рамка с искрой — «живой фон»
     const I_BG = '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M12 8.2l1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1z"/><path d="M17.5 6.8v1.6M16.7 7.6h1.6"/>';
 
     const ICONS = {
         settings: {
             'Фон': svgIcon(I_BG),
-            // буква с искрой — светящийся ник
             'Подсветка ника': svgIcon('<path d="M4 19 9 5h1l5 14M5.8 14.5h7.4"/><path d="M18.5 3.5v4M16.5 5.5h4"/><path d="M19 11.5v2M18 12.5h2"/>'),
-            // человек в пунктирном ореоле — светящаяся аватарка
             'Подсветка аватарок': svgIcon('<circle cx="12" cy="10" r="3"/><path d="M7 17.5a5.5 5.5 0 0 1 10 0"/><circle cx="12" cy="12" r="9.5" stroke-dasharray="2.2 2.6"/>'),
-            // карточка поста в пунктирной рамке — подсветка поста
             'Подсветка постов': svgIcon('<rect x="5" y="6" width="14" height="12" rx="2.5"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/><rect x="2" y="3" width="20" height="18" rx="4.5" stroke-dasharray="2.2 2.6"/>'),
-            // карточка с пятном в пунктирном ореоле — размытый фон поста
             'Размытый фон постов': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="12" r="5" stroke-dasharray="1.4 2"/>'),
-            // перечёркнутый щит — без цензуры
             'Анти цензура': svgIcon('<path d="M12 3 5 6v5.2c0 4.3 2.9 7.9 7 9.8 1.6-.7 3-1.7 4.1-3M19 13.5c.1-.8.2-1.5.2-2.3V6L12 3"/><path d="m3 3 18 18"/>'),
             'Стиль фона': svgIcon(I_BG),
-            // два стекла внахлёст с бликом — стеклянные блоки
             'Стекло': svgIcon('<rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/><path d="M11.5 15.5l3-3M11.5 18.5l6-6"/>'),
-            // динамик с волнами — звуки интерфейса
             'Звуки интерфейса': svgIcon('<path d="M4 9.5h3l4-3.5v12l-4-3.5H4z"/><path d="M15 9a4 4 0 0 1 0 6M17.5 6.5a7.5 7.5 0 0 1 0 11"/>'),
-            // колонка из трёх блоков справа — боковая панель
             'Боковая панель': svgIcon('<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M15 3v18"/><path d="M17.5 7.5h1M17.5 11h1M17.5 14.5h1"/>'),
-            // планшет боком с монитором — версия для ПК на планшете
             'Версия для ПК на планшете': svgIcon('<rect x="2.5" y="5" width="19" height="13" rx="2"/><path d="M9 21h6"/><path d="M6 9h6M6 12h4"/>'),
-            // карточки лесенкой, верхняя тает — сцена ленты
             'Сцена ленты': svgIcon('<rect x="5" y="3" width="14" height="5" rx="1.5" stroke-dasharray="2 2"/><rect x="4" y="10" width="16" height="5" rx="1.5"/><rect x="3" y="17" width="18" height="5" rx="1.5"/>'),
-            // экран с лучами вокруг — свечение видео
             'Свечение видео': svgIcon('<rect x="6" y="7" width="12" height="10" rx="2"/><path d="m11 10 3 2-3 2z"/><path d="M3 5.5 4.5 7M21 5.5 19.5 7M3 18.5 4.5 17M21 18.5 19.5 17M12 2.5v2M12 19.5v2"/>'),
-            // кадр с кнопкой воспроизведения — заставка при входе
             'Заставка при входе': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><path d="m10 9 5 3-5 3z"/>'),
-            // сердце со стрелкой повтора — лайки сами
             'Автолайки': svgIcon('<path transform="translate(.5 1) scale(.74)" stroke-width="2.43" d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/><path d="M21.3 17.2a3.3 3.3 0 1 1-1-2.4"/><path d="M21 12.9v2.3h-2.3"/>')
         },
 
-        // палитра — стиль ника
         PALETTE: svgIcon('<path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 0 0 5-5C21 6.4 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="14.5" cy="7" r="1"/><circle cx="17" cy="10.5" r="1"/>'),
-        // шестерёнка — настройки
         GEAR: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
         MESSAGES: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M5 3a3 3 0 00-3 3v10a3 3 0 003 3h1v2.47a.5.5 0 00.85.36L11.12 19H19a3 3 0 003-3V6a3 3 0 00-3-3H5zm2 5a1 1 0 000 2h10a1 1 0 100-2H7zm0 4a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>`,
-        // стрелка к черте — наверх ленты
-        // как «+» у ИТД (кнопка «Создать пост»): 24 px, линия 2
         SCROLL_TOP: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 4.5h14M12 20V9M7 13.5l5-5 5 5"/></svg>',
-        // картинка с плюсом — поставить свою картинку в баннер
         BANNER_IMAGE: svgIcon('<path d="M20 12.5V17a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17V7a2.5 2.5 0 0 1 2.5-2.5H12"/><circle cx="9" cy="9.5" r="1.5"/><path d="m20 15.5-3.5-3.5L8 19.5"/><path d="M18 2.5v6M15 5.5h6"/>'),
-        // картинка со стрелками по кругу — сменить картинку
         BANNER_CHANGE: svgIcon('<path d="M20 11.5V17a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17V7a2.5 2.5 0 0 1 2.5-2.5h5"/><circle cx="9" cy="9.5" r="1.5"/><path d="m20 15.5-3.5-3.5L8 19.5"/><path d="M15 6.5a3 3 0 0 1 5.2-1.8M21 3v2.4h-2.4"/>'),
         BANNER_CANCEL: svgIcon('<path d="M18 6 6 18M6 6l12 12"/>'),
         BANNER_APPLY: svgIcon('<path d="m5 12.5 4.5 4.5L19 7.5"/>'),
-        // наклейка с загнутым углом — стикеры
         STICKER_BUTTON: svgIcon('<path d="M15 21H8a5 5 0 0 1-5-5V8a5 5 0 0 1 5-5h8a5 5 0 0 1 5 5v7z"/><path d="M15 21v-2.5a3.5 3.5 0 0 1 3.5-3.5H21"/><path d="M8.5 13.5a4.5 4.5 0 0 0 6 .5"/><path d="M9 9h.01M15 9h.01" stroke-width="2.6"/>'),
-        // дуга, крутится — загрузка
         LOADING: svgIcon('<path d="M21 12a9 9 0 1 1-6.2-8.6"/>', 22).replace('<svg ', '<svg class="spin" '),
-        // часы — недавние стикеры
         RECENT: svgIcon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/>', 18),
-        // квадрат с плюсом — новый набор
         ADD_PACK: svgIcon('<rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M12 8.5v7M8.5 12h7"/>', 18),
         ZIP_PACK: svgIcon('<path d="M4 8h16v11.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19.5z"/><path d="M3 4.5h18V8H3z"/><path d="M10 12h4"/>', 18),
         ADD: svgIcon('<path d="M12 5v14M5 12h14"/>', 24),
@@ -1542,10 +1348,7 @@
         CHECK: svgIcon('<path d="m5 12.5 4.5 4.5L19 7.5"/>', 16, '#fff'),
         TRASH: svgIcon('<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/>', 16, '#fff'),
         EMPTY_PACK: svgIcon('<rect x="3.5" y="3.5" width="17" height="17" rx="4.5" stroke-dasharray="2.5 2.5" opacity=".5"/>', 18),
-        // стрелка в лоток — скачать обновление
         UPDATE: svgIcon('<path d="M12 4v10M7.5 9.5 12 14l4.5-4.5"/><path d="M4.5 15v2.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V15"/>', 14),
-        // Радужная заливка бейджа (размытые круги с анимацией) — одна на страницу в скрытом SVG,
-        // бейджи на неё ссылаются. Раньше у каждого бейджа была своя копия с 24 анимациями.
         badge: function (size) {
             if (!document.getElementById('vp-badge-defs')) {
                 const holder = document.createElement('div');
@@ -1612,15 +1415,13 @@
     const VERIFICATION_POST_ID = 'a0d6625a-b3ec-44c4-98da-48422af101d5';
     const SECRET_SALT = 'ITD_MOD_2026_SECRET_SALT_NEUROSFW';
     const VERIFICATION_STORAGE_KEY = 'itd_verified_users';
-    // Пост, под которым хранятся паки стикеров (синхронизация между устройствами одного аккаунта).
-    // Пусто — синхронизация выключена, паки живут только в этом браузере
-    const STICKER_POST_ID = '92f2913c-18be-499a-bc03-97aed0947b34';   // старый пост владельца «Гань Юй», 25.02.2026
+    const STICKER_POST_ID = '92f2913c-18be-499a-bc03-97aed0947b34';   
     let isVerifying = false;
 
     let globalHue = 0;
     let colorDirection = 1;
     let myUsername = null;
-    let meData = null;                                    // ответ /api/users/me (счётчики — для статистики)
+    let meData = null;                                    
     let myDisplayName = null;
     let postBorderEnabled = GM_getValue('postBorderEnabled', true);
     let postBlurEnabled = GM_getValue('postBlurEnabled', true);
@@ -1633,21 +1434,14 @@
     let autoLikeUsers = (() => { try { return JSON.parse(GM_getValue('itd_auto_like_users', '{}')) || {}; } catch (e) { return {}; } })();
     let autoLikeEnabled = GM_getValue('autoLikeEnabled', true);
 
-    // Мой аватар — в первой ссылке на мой профиль
     function myAvatarEl() {
         if (!myUsername) return null;
-        // первая ссылка на мой профиль — обычно пункт «Профиль» в меню: его иконка светится так же, как аватарка
         const link = document.querySelector(`a[href="/@${myUsername}" i]`);
         if (!link) return null;
         const container = link.querySelector(':scope > div');
         if (container && container.querySelector('span')) return container;
         return link.firstElementChild || link.querySelector('span');
     }
-    // ==== автолайки
-    // Кого отметили в «ИТД X» → «Лайки» (autoLikeUsers, { ник: true } в GM 'itd_auto_like_users'):
-    // раз в 2–5 минут лайкаем их посты за последние сутки, которые ещё не лайкнуты.
-    // Кандидаты в список — пользователи мода (из проверки значков) и NeuroSFW; их профили
-    // для списка держим в localStorage 10 минут, чтобы окно открывалось без запросов.
     const AUTO_LIKE_CACHE_KEY = 'itd_auto_like_full_cache';
     const AUTO_LIKE_CACHE_TTL = 10 * 60 * 1000;
     const LIKE_INTERVAL_MIN = 2 * 60 * 1000;
@@ -1658,9 +1452,6 @@
         GM_setValue('itd_auto_like_users', JSON.stringify(autoLikeUsers));
     }
 
-    // Список автолайков — по никам, а ник можно сменить: тогда старый ник даёт 404 (раньше — каждые
-    // 2–5 минут, бесконечно). Номер аккаунта каждого запоминаем (из данных галочек); ник пропал —
-    // ищем по номеру новый и переносим отметку; не нашли — до перезагрузки этот ник не трогаем.
     const autoLikeIds = JSON.parse(GM_getValue('itd_auto_like_ids', '{}') || '{}');
     const autoLikeGone = new Set();
     function rememberAutoLikeId(username) {
@@ -1682,7 +1473,6 @@
         GM_setValue('itd_auto_like_ids', JSON.stringify(autoLikeIds));
         return now;
     }
-    // лайкнуть посты пользователя за последние сутки, которые ещё не лайкнуты
     async function likePostsForUser(username) {
         if (autoLikeGone.has(username)) return;
         rememberAutoLikeId(username);
@@ -1704,12 +1494,11 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: '{}'
                 });
-                if (like.ok) await new Promise(r => setTimeout(r, 300));   // не частить: лайки одного — через паузу
+                if (like.ok) await new Promise(r => setTimeout(r, 300));   
             }
         } catch (e) { console.warn('[ITD VP] автолайк', e); logErr('автолайк', e); }
     }
 
-    // следующий проход — через случайные 2–5 минут после конца прошлого
     function scheduleAutoLike() {
         const delay = LIKE_INTERVAL_MIN + Math.floor(Math.random() * (LIKE_INTERVAL_MAX - LIKE_INTERVAL_MIN + 1));
         setTimeout(async () => {
@@ -1720,12 +1509,11 @@
         }, delay);
     }
 
-    // профили кандидатов для списка в окне: { ник: профиль }
     async function fetchAutoLikeUsers() {
         try {
             const c = JSON.parse(localStorage.getItem(AUTO_LIKE_CACHE_KEY) || 'null');
             if (c && Date.now() - c.timestamp <= AUTO_LIKE_CACHE_TTL) return c.usersData;
-        } catch (e) { /* битый кеш — просто спросим заново */ }
+        } catch (e) {   }
 
         const usernames = verifiedNames();
         if (!usernames.includes('NeuroSFW')) usernames.push('NeuroSFW');
@@ -1867,7 +1655,6 @@
             matrixSat: 0,
             avatarSat: 0
         },
-        // «Перелив» — по буквам пробегает блик; «Глитч» — цифровые помехи. Вид задаёт nickCss(dark).
         shimmer: {
             name: 'Перелив',
             color: '#b388ff',
@@ -1907,21 +1694,19 @@
         }
     };
 
-    // В меню — по кругу цветов, от красного: красные к красным, синие к синим; белый и радуга — в конце
     const hueOf = hex => {
         const h = hex.length === 4 ? hex.replace(/#(.)(.)(.)/, '#$1$1$2$2$3$3') : hex;
         const [r, g, b] = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
         const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
-        if (d < 0.15) return null;                                   // серые и белый — без оттенка
+        if (d < 0.15) return null;                                   
         const hue = max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
-        return (hue * 60 + 30) % 360;                                // сдвиг: розово-красные (330°+) идут первыми
+        return (hue * 60 + 30) % 360;                                
     };
     const styleKeys = Object.keys(nickStyles).sort((a, b) => {
         const rank = k => { const c = nickStyles[k].color; const h = c && c.startsWith('#') ? hueOf(c) : null;
             return h !== null ? h : c === 'rainbow' ? 1001 : 1000; };
         return rank(a) - rank(b);
     });
-    // вкладка браузера и иконка — здесь, после стилей ника: своя иконка берёт фон из них
     brandTab();
     new MutationObserver(brandTab).observe(document.head, { childList: true, subtree: true, characterData: true });
 
@@ -2219,11 +2004,6 @@
     `;
     document.head.appendChild(globalStyles);
 
-    // ================= Фоны (выбираются в таблетке у ника) =================
-    // Рисуются в цвете стиля ника (у радуги — бегущим оттенком) на полупрозрачном слое под сайтом.
-    // Кадр — в frame() (частота экрана, не чаще ~60 в секунду); скорости заданы на 50 мс (dt),
-    // от частоты кадров не зависят. Свечение — заранее нарисованные спрайты, а не shadowBlur:
-    // тот считался бы каждый кадр. Прозрачность слоя у каждого фона своя (opacity в BACKGROUNDS).
     const styleBgCanvas = document.createElement('style');
     styleBgCanvas.textContent = `
         .vp-bg-canvas {
@@ -2236,9 +2016,6 @@
     const canvas = document.createElement('canvas');
     canvas.className = 'vp-bg-canvas';
     document.body.appendChild(canvas);
-    // Свой фон: картинка или видео пользователя. Файл большой — хранится в IndexedDB этого браузера
-    // (в настройки Tampermonkey не влезет). Видео — без звука, по кругу. Слой — там же, где холст,
-    // чуть притушен, чтобы текст читался (в светлой теме — светлее).
     const bgMedia = document.createElement('div');
     bgMedia.className = 'vp-bg-media vp-bg-off';
     document.body.appendChild(bgMedia);
@@ -2254,7 +2031,7 @@
         r.onsuccess = () => ok(r.result);
         r.onerror = () => no(r.error);
     });
-    async function bgFile(blob) {                       // без аргумента — прочитать, с ним — сохранить
+    async function bgFile(blob) {                       
         const db = await bgDb();
         return new Promise((ok, no) => {
             const tx = db.transaction('files', blob ? 'readwrite' : 'readonly'), st = tx.objectStore('files');
@@ -2265,7 +2042,7 @@
     }
     let bgMediaUrl = '';
     async function showBgMedia(blob) {
-        const fresh = !!blob;                            // только что выбран (а не прочитан из памяти)
+        const fresh = !!blob;                            
         if (!blob) blob = await bgFile().catch(() => null);
         if (bgMediaUrl) URL.revokeObjectURL(bgMediaUrl);
         bgMediaUrl = blob ? URL.createObjectURL(blob) : '';
@@ -2275,7 +2052,6 @@
             const v = document.createElement('video');
             Object.assign(v, { src: bgMediaUrl, muted: true, loop: true, autoplay: true, playsInline: true });
             v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
-            // формат, который браузер не играет (старый mp4, HEVC…) — сказать, а не молча показать чёрное
             v.addEventListener('error', () => { if (fresh) alert('Браузер не умеет показывать это видео. Сохрани его как mp4 (H.264) или webm и выбери снова'); }, { once: true });
             bgMedia.appendChild(v);
             v.play().catch(() => { });
@@ -2286,7 +2062,6 @@
             bgMedia.appendChild(img);
         }
     }
-    // выбрать файл для своего фона: картинка или видео до 150 МБ
     function pickBgFile(done) {
         const input = document.createElement('input');
         input.type = 'file';
@@ -2304,11 +2079,8 @@
         };
         input.click();
     }
-    // выключатель «Фон»: холст прячем, кадры фона не рисуются (frame смотрит backgroundEnabled);
-    // свой фон — вместо холста слой с картинкой/видео
     function updateBackgroundVisibility() {
         const custom = backgroundStyle === 'custom';
-        // идёт заставка — свой фон включим после неё (загрузка и видео отнимали у неё кадры)
         if (custom && backgroundEnabled && introOn) {
             if (!updateBackgroundVisibility._wait) {
                 updateBackgroundVisibility._wait = true;
@@ -2326,9 +2098,8 @@
     updateBackgroundVisibility();
     const ctx = canvas.getContext('2d');
     let W = 0, H = 0;
-    let bg = null, bgName = '';                          // текущий фон и его состояние
+    let bg = null, bgName = '';                          
     const mouse = { x: -1e4, y: -1e4 };
-    // курсор — в координатах холста: холст может быть уже окна (полоса прокрутки)
     let canvasRect = { left: 0, top: 0, width: 1, height: 1 };
     addEventListener('pointermove', e => {
         mouse.x = (e.clientX - canvasRect.left) * W / canvasRect.width;
@@ -2336,8 +2107,6 @@
     }, { passive: true });
     document.addEventListener('pointerleave', () => { mouse.x = mouse.y = -1e4; });
 
-    // Картинка холста — ровно по его размеру на экране. Раньше бралась ширина окна вместе с
-    // полосой прокрутки: картинка чуть сжималась, и точка курсора у частиц уезжала влево.
     function resizeCanvas() {
         const r = canvas.getBoundingClientRect();
         const w = Math.round(r.width) || innerWidth, h = Math.round(r.height) || innerHeight;
@@ -2345,7 +2114,7 @@
         if (w === W && h === H) return;
         canvas.width = W = w;
         canvas.height = H = h;
-        bgName = '';                                     // пересобрать фон под новый размер
+        bgName = '';                                     
     }
     const rand = (a, b) => a + Math.random() * (b - a);
     const hsla = (h, s, l, a) => `hsla(${Math.round(h)}, ${Math.round(s)}%, ${Math.round(l)}%, ${a})`;
@@ -2355,7 +2124,6 @@
         return { h: st.matrixHue || 210, s: st.matrixSat ?? 100 };
     }
 
-    // Спрайты по цвету, с кешем: мягкое свечение, диск боке, занавес сияния
     const spriteCache = new Map();
     function sprite(kind, h, s, l) {
         const key = kind + Math.round(h) + ',' + Math.round(s) + ',' + Math.round(l);
@@ -2364,7 +2132,7 @@
         if (spriteCache.size > 400) spriteCache.clear();
         c = document.createElement('canvas');
         const g = c.getContext('2d');
-        if (kind === 'curtain') {                        // снизу яркий край, вверх тает
+        if (kind === 'curtain') {                        
             c.width = 1; c.height = 128;
             const grad = g.createLinearGradient(0, 0, 0, 128);
             grad.addColorStop(0, hsla(h, s, l, 0));
@@ -2377,8 +2145,8 @@
             c.width = c.height = 64;
             const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
             const stops = kind === 'disc'
-                ? [[0, 0.5], [0.72, 0.6], [0.86, 0.3], [1, 0]]          // диск с чуть ярким краем
-                : [[0, 1], [0.35, 0.4], [0.7, 0.08], [1, 0]];           // свечение
+                ? [[0, 0.5], [0.72, 0.6], [0.86, 0.3], [1, 0]]          
+                : [[0, 1], [0.35, 0.4], [0.7, 0.08], [1, 0]];           
             stops.forEach(([o, a]) => grad.addColorStop(o, hsla(h, s, l, a)));
             g.fillStyle = grad;
             g.fillRect(0, 0, 64, 64);
@@ -2391,7 +2159,6 @@
         ctx.drawImage(sprite(kind, h, s, l), x - r, y - r, r * 2, r * 2);
         ctx.globalAlpha = 1;
     }
-    // стереть часть прошлого кадра до прозрачности — хвосты тают, страница не темнеет
     function fadeOut(k, dt) {
         ctx.globalCompositeOperation = 'destination-out';
         ctx.fillStyle = `rgba(0, 0, 0, ${1 - Math.pow(1 - k, dt)})`;
@@ -2408,7 +2175,6 @@
     ];
 
     const BACKGROUNDS = {
-        // Колонки символов с разной скоростью, яркая «голова», хвост тает
         matrix: {
             opacity: 0.2,
             init() {
@@ -2425,7 +2191,7 @@
                     const next = Math.floor(c.y);
                     if (next !== cell) {
                         const x = i * s.size;
-                        if (c.prev) {                    // прошлая голова становится телом
+                        if (c.prev) {                    
                             ctx.clearRect(x, c.prev.y * s.size, s.size, s.size);
                             ctx.fillStyle = hsla(h + rand(-12, 12), sat, 45, 1);
                             ctx.fillText(c.prev.ch, x, c.prev.y * s.size);
@@ -2439,14 +2205,13 @@
                 });
             }
         },
-        // Три слоя глубины: мерцают, медленно плывут (ближние быстрее), иногда падающая звезда
         stars: {
             opacity: 0.4,
             init() {
                 const n = Math.min(600, Math.floor(W * H / 3500));
                 return {
                     stars: Array.from({ length: n }, () => {
-                        const d = Math.random() ** 2;    // ближних меньше
+                        const d = Math.random() ** 2;    
                         return { x: rand(0, W), y: rand(0, H), d, r: 0.5 + d * 1.8, ph: rand(0, 6.3), sp: rand(0.03, 0.1) };
                     }),
                     shoot: null, wait: rand(40, 120)
@@ -2455,7 +2220,6 @@
             draw(s, dt, { h, s: sat }) {
                 ctx.clearRect(0, 0, W, H);
                 const S = Math.min(100, sat * 1.2);
-                // точки собираем в 8 пачек по яркости: 8 заливок на кадр вместо сотен
                 const packs = Array.from({ length: 8 }, () => new Path2D());
                 for (const st of s.stars) {
                     st.ph += st.sp * dt;
@@ -2491,7 +2255,6 @@
                 }
             }
         },
-        // Сеть точек; курсор издалека притягивает, вблизи расталкивает, к нему тянутся линии
         particles: {
             opacity: 0.35,
             init() {
@@ -2515,7 +2278,6 @@
                     if (p.x < 0 || p.x > W) { p.vx *= -1; p.x = Math.max(0, Math.min(W, p.x)); }
                     if (p.y < 0 || p.y > H) { p.vy *= -1; p.y = Math.max(0, Math.min(H, p.y)); }
                 }
-                // линии — в 6 пачек по прозрачности: 6 обводок на кадр вместо сотен
                 const lines = Array.from({ length: 6 }, () => new Path2D());
                 const add = (a, x1, y1, x2, y2) => { const l = lines[Math.min(5, a * 6 | 0)]; l.moveTo(x1, y1); l.lineTo(x2, y2); };
                 for (let i = 0; i < ps.length; i++) {
@@ -2542,7 +2304,6 @@
                 ctx.fill(dots);
             }
         },
-        // Четыре волны; под каждой — полупрозрачная заливка, получаются слои
         waves: {
             opacity: 0.3,
             init() { return { time: rand(0, 50) }; },
@@ -2578,7 +2339,6 @@
                 });
             }
         },
-        // Северное сияние: три переливающихся занавеса из вертикальных лучей
         aurora: {
             opacity: 0.45,
             init() { return { t: rand(0, 100) }; },
@@ -2587,7 +2347,6 @@
                 s.t += 0.012 * dt;
                 const S = Math.min(100, sat * 1.15), step = 6;
                 ctx.globalCompositeOperation = 'lighter';
-                // base — нижний край занавеса (доля высоты): середина сияния — у центра экрана
                 [
                     { base: 0.64, amp: 0.08, len: 0.3, dh: 0, a: 0.45, f: 0.0021, sp: 1 },
                     { base: 0.72, amp: 0.06, len: 0.24, dh: 45, a: 0.3, f: 0.0016, sp: -0.7 },
@@ -2605,7 +2364,6 @@
                 ctx.globalCompositeOperation = 'source-over';
             }
         },
-        // Боке: мягкие диски всплывают на разной глубине — ближние крупнее, прозрачнее и быстрее
         bokeh: {
             opacity: 0.4,
             init() {
@@ -2630,7 +2388,6 @@
                 ctx.globalCompositeOperation = 'source-over';
             }
         },
-        // Синтвейв: солнце с прорезями над горизонтом и сетка, которая едет на тебя
         grid: {
             opacity: 0.4,
             init() { return { z: 0 }; },
@@ -2648,7 +2405,7 @@
                 ctx.globalCompositeOperation = 'destination-out';
                 for (let i = 0; i < 6; i++) ctx.fillRect(cx - R, cy + R * (0.02 + i * 0.105), 2 * R, 1.5 + i * 1.2);
                 ctx.globalCompositeOperation = 'source-over';
-                ctx.clearRect(0, hor, W, H - hor);               // ниже горизонта — земля
+                ctx.clearRect(0, hor, W, H - hor);               
                 const floor = ctx.createLinearGradient(0, hor, 0, H);
                 floor.addColorStop(0, hsla(h, S, 45, 0.22));
                 floor.addColorStop(1, hsla(h, S, 30, 0));
@@ -2657,11 +2414,11 @@
                 ctx.strokeStyle = hsla(h, S, 68, 1);
                 ctx.lineWidth = 1.2;
                 const n = 18;
-                for (let i = -n; i <= n; i++) {                   // лучи из точки схода
+                for (let i = -n; i <= n; i++) {                   
                     ctx.globalAlpha = 0.55;
                     ctx.beginPath(); ctx.moveTo(cx + i * 6, hor); ctx.lineTo(cx + i * (W / n) * 1.4, H); ctx.stroke();
                 }
-                for (let i = 0; i < 18; i++) {                    // поперечные линии уезжают к зрителю
+                for (let i = 0; i < 18; i++) {                    
                     const d = i + 1 - s.z, y = hor + (H - hor) * 0.9 / d;
                     if (y > H) continue;
                     ctx.globalAlpha = Math.min(0.8, 1.2 / d);
@@ -2671,7 +2428,6 @@
                 ctx.lineWidth = 2;
                 ctx.strokeStyle = hsla(h + 20, S, 75, 0.9);
                 ctx.beginPath(); ctx.moveTo(0, hor); ctx.lineTo(W, hor); ctx.stroke();
-                // дымка у горизонта прячет густую сетку вдали
                 const haze = ctx.createLinearGradient(0, hor, 0, hor + (H - hor) * 0.3);
                 haze.addColorStop(0, 'rgba(0, 0, 0, 1)');
                 haze.addColorStop(1, 'rgba(0, 0, 0, 0)');
@@ -2681,7 +2437,6 @@
                 ctx.globalCompositeOperation = 'source-over';
             }
         },
-        // Снегопад: хлопья на разной глубине, ветер меняется, ближние светятся
         snow: {
             opacity: 0.5,
             init() {
@@ -2697,7 +2452,7 @@
                 s.windT += 0.004 * dt;
                 const wind = Math.sin(s.windT) * 0.6 + Math.sin(s.windT * 2.7) * 0.3;
                 const S = sat * 0.4;
-                const packs = Array.from({ length: 4 }, () => new Path2D());   // 4 заливки по глубине
+                const packs = Array.from({ length: 4 }, () => new Path2D());   
                 s.f.forEach((p, i) => {
                     p.ph += 0.03 * dt;
                     p.y += (0.35 + p.d * 1.4) * dt;
@@ -2717,7 +2472,7 @@
     };
 
     function drawBackground(dt = 1) {
-        if (backgroundStyle === 'custom') return;          // свой фон — картинка/видео, холст не рисуем
+        if (backgroundStyle === 'custom') return;          
         const def = BACKGROUNDS[backgroundStyle] || BACKGROUNDS.matrix;
         if (bgName !== backgroundStyle) {
             bgName = backgroundStyle;
@@ -2728,10 +2483,6 @@
         def.draw(bg, dt, theme());
     }
 
-    // ================= Покраска: мой ник, его свечение, мои аватарки, рамка поста =================
-    // Мои ники, их блоки и аватарки помечены классами, а цвет живёт в четырёх CSS-правилах.
-    // Меняются только правила: новые элементы красятся сами, радуга трогает четыре правила,
-    // а не каждый ник на странице.
     const paintStyle = document.createElement('style');
     paintStyle.textContent = '.vp-my-nick {} .vp-my-nick-box {} .my-avatar-glow {} article.vp-post:hover {} '
         + '.vp-nav-link.vp-active .vp-nav-icon {} .vp-tabs > div:empty {} :root {} ::selection {}';
@@ -2743,8 +2494,6 @@
         const style = nickStyles[currentStyle];
         const rainbow = currentStyle === 'rainbow';
         const dark = isDarkTheme();
-        // Шаг оттенка — 1°: глазом не отличить от плавного, а правила стилей (и пересчёт страницы за ними)
-        // меняются ~16 раз в секунду, а не каждый кадр
         const h = Math.round(globalHue);
         const key = [currentStyle, rainbow ? h : '', dark, nickGlowEnabled, avatarGlowEnabled, postBorderEnabled].join();
         if (key === paintKey) return;
@@ -2756,12 +2505,10 @@
         } else if (style.nickCss) {
             nick.cssText = style.nickCss(dark);
         } else {
-            // светлая тема сайта: белый ник — графитовым, иначе его не видно
             const gradient = dark ? style.gradientDark || style.gradientLight
                 : currentStyle === 'white' ? 'linear-gradient(270deg, #1a1a1a, #4a4a4a, #262626)' : style.gradientLight;
             nick.cssText = `background: ${gradient} !important; -webkit-background-clip: text !important; background-clip: text !important; -webkit-text-fill-color: transparent !important;`;
         }
-        // на светлом фоне яркие цвета темнее, а свечение мягче — иначе ник расплывается пятном
         const glow = rainbow ? `drop-shadow(0 0 6px ${hsl}) drop-shadow(0 0 12px ${hsl})`
             : dark ? style.glow
             : currentStyle === 'white' ? 'drop-shadow(0 0 5px rgba(0, 0, 0, 0.25))'
@@ -2772,50 +2519,40 @@
         avatar.cssText = !avatarGlowEnabled ? '' : `filter: ${rainbow
             ? `drop-shadow(0 0 5px ${hsl}) drop-shadow(0 0 12px ${hsl})`
             : `drop-shadow(0 0 3px hsl(${ah}, ${as}%, 60%)) drop-shadow(0 0 6px hsl(${ah}, ${as}%, 60%))`} !important;`;
-        // подсветка поста при наведении — та же обводка ярче (в postDesignStyle), цвет стиля не нужен
         post.cssText = '';
         document.documentElement.classList.toggle('vp-post-hl', postBorderEnabled);
 
-        // цвет стиля — по интерфейсу: иконка активного пункта меню, бегунок вкладок
         const accent = rainbow ? `hsl(${h}, 100%, ${dark ? 62 : 45}%)`
             : dark ? accentOf(style)
             : currentStyle === 'white' ? '#1a1a1a' : `color-mix(in srgb, ${accentOf(style)} 78%, #000)`;
         navIcon.cssText = `color: ${accent} !important; filter: drop-shadow(0 0 6px ${accent}) !important;`;
         tab.cssText = `box-shadow: inset 0 0 0 1px ${accent}, 0 0 14px -4px ${accent} !important;`;
-        // прокрутка, выделение и фокус висят на корне — их меняем редко (у радуги шагом 30°),
-        // иначе каждый кадр пересчитывалась бы вся страница
         const rootKey = (rainbow ? 'r' + Math.round(h / 30) : accent) + dark;
         if (rootKey !== paintRootKey) {
             paintRootKey = rootKey;
             const slow = rainbow ? `hsl(${Math.round(h / 30) * 30}, 100%, ${dark ? 62 : 45}%)` : accent;
-            // надписи поверх акцента: на тёмной теме он светлый (у «Белого» — белый), на светлой — затемнён
             root.cssText = `--vp-accent: ${slow}; --vp-on-accent: ${dark ? '#0b0b0f' : '#fff'}; scrollbar-color: color-mix(in srgb, ${slow} 55%, transparent) transparent;`;
             selection.cssText = `background: color-mix(in srgb, ${slow} 45%, transparent) !important;`;
         }
     }
-    // сплошной цвет стиля; у белого — белый
     function accentOf(style) {
         if (style.color && style.color.startsWith('#')) return style.color;
         return `hsl(${style.avatarHue || 210}, ${style.avatarSat ?? 100}%, 62%)`;
     }
-    // Тема сайта: «Настройки → Оформление» ставит <html data-theme="dark">, у светлой атрибута
-    // «dark» нет. Меняют тему — перекрашиваемся сразу, без перезагрузки.
     function isDarkTheme() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
     function applySiteTheme() {
         document.documentElement.classList.toggle('vp-light', !isDarkTheme());
         rememberSiteTheme();
         paint();
     }
-    // заставка следующего входа возьмёт цвета темы отсюда (она стартует раньше, чем сайт ставит тему)
     function rememberSiteTheme() {
         const t = document.documentElement.getAttribute('data-theme');
         if (t && GM_getValue('siteTheme', '') !== (t === 'dark' ? 'dark' : 'light')) GM_setValue('siteTheme', t === 'dark' ? 'dark' : 'light');
     }
     rememberSiteTheme();
-    document.documentElement.classList.toggle('vp-light', !isDarkTheme());   // первая покраска — ниже, paint()
+    document.documentElement.classList.toggle('vp-light', !isDarkTheme());   
     new MutationObserver(applySiteTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
-    // радуга: оттенок ходит туда-обратно 0 → 360 → 0
     function stepHue(dt = 1) {
         globalHue += colorDirection * 0.8 * dt;
         if (globalHue >= 360) { globalHue = 360; colorDirection = -1; }
@@ -2831,11 +2568,6 @@
         if (box) box.classList.add('vp-my-nick-box');
         glowRoom(box || nickSpan);
     }
-    // Свечение ника (drop-shadow) обрезалось резким прямоугольником: блок вокруг ника (в комментариях —
-    // строка с многоточием для длинных имён) не показывает ничего за своими краями. Такому блоку
-    // оставляем обрезку (многоточие работает), но разрешаем рисовать на GLOW_ROOM px за краями
-    // (overflow-clip-margin): раскладка и нажатия не меняются. Где этого нет (старый Safari) —
-    // запас полями: поля внутрь и столько же отрицательного отступа наружу.
     const GLOW_ROOM = 60, CLIP_MARGIN = typeof CSS !== 'undefined' && CSS.supports('overflow-clip-margin', '1px');
     function glowRoom(el) {
         for (let p = el, i = 0; p && i < 4 && p !== document.body; p = p.parentElement, i++) {
@@ -2843,7 +2575,7 @@
             if (p._vpGlowRoom) continue;
             const cs = getComputedStyle(p);
             if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
-            if (cs.overflowX === 'auto' || cs.overflowX === 'scroll' || cs.overflowY === 'auto' || cs.overflowY === 'scroll') continue;   // прокрутку не трогаем
+            if (cs.overflowX === 'auto' || cs.overflowX === 'scroll' || cs.overflowY === 'auto' || cs.overflowY === 'scroll') continue;   
             p._vpGlowRoom = true;
             if (CLIP_MARGIN) {
                 p.style.setProperty('overflow', 'clip', 'important');
@@ -2856,14 +2588,8 @@
         }
     }
 
-    // ================= Таблетка у ника и её меню =================
-    // Одно меню за раз: открытие закрывает прежнее, повторный клик по кнопке — тоже закрывает.
-    // Меню держится у кнопки при прокрутке (ловим прокрутку любого блока: сайт крутит #root,
-    // а не окно) и закрывается кликом мимо или когда кнопка ушла с экрана.
-    let popup = null;                                   // { el, btn }
+    let popup = null;                                   
 
-    // Кнопка «назад» на телефоне закрывает открытое меню, а не уводит со страницы: при открытии
-    // кладём в историю запись с тем же адресом, «назад» снимает её. Закрыли меню сами — снимаем её тоже.
     let popupHist = false;
     function closePopup(keepHist) {
         if (!popup) return;
@@ -2890,13 +2616,10 @@
             return;
         }
         const w = popup.el.offsetWidth, h = popup.el.offsetHeight;
-        // окно настроек ИТД X — под кнопкой по центру; не влезает вниз — прижимаем к низу экрана
         if (popup.el.classList.contains('vp-settings-tabs')) {
-            const cx = innerWidth < 600 ? innerWidth / 2 : r.left + r.width / 2;          // на телефоне — по центру экрана
+            const cx = innerWidth < 600 ? innerWidth / 2 : r.left + r.width / 2;          
             popup.el.style.left = Math.max(8, Math.min(cx - w / 2, innerWidth - w - 8)) + 'px';
-            // видимая высота: на телефоне панель браузера перекрывает низ окна, innerHeight её не учитывает
             const vh = window.visualViewport ? Math.min(innerHeight, visualViewport.height) : innerHeight;
-            // высота окна одна на все вкладки — при переключении окно не прыгает; лишнее прокручивается внутри
             const fixedH = Math.min(vh - 16, 580);
             popup.el.style.height = popup.el.style.maxHeight = fixedH + 'px';
             popup.el.style.top = Math.max(8, Math.min(r.bottom + 8, vh - fixedH - 8)) + 'px';
@@ -2912,7 +2635,7 @@
     }
     function openPopup(btn, el) {
         const same = popup && popup.btn === btn;
-        closePopup(!same);                              // меню сменилось на другое — запись в истории та же
+        closePopup(!same);                              
         if (same) return false;
         popup = { el, btn };
         if (!popupHist) {
@@ -2928,7 +2651,6 @@
         return true;
     }
 
-    // active — выбранный сейчас пункт: подсветка и галочка справа
     function menuOption(icon, label, onPick, active) {
         const option = document.createElement('div');
         option.className = 'nick-style-option' + (active ? ' vp-active' : '');
@@ -2946,8 +2668,6 @@
         return option;
     }
 
-    // --- Иконка ИТД X в углу: не сразу в ТГ, а мини-меню «ТГК» / «Донат». Ссылка у иконки остаётся
-    // (по ней скрипт узнаёт свой логотип), нажатие перехватываем
     const LOGO_LINKS = [
         ['ТГК', 'https://t.me/NeuroSFW', '<path d="M21 4 3 11l6 2m12-9-3 16-9-7m12-9L9 13m0 0v6l3-4"/>'],
         ['Донат', 'https://donatex.gg/donate/kiwe147', '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>']
@@ -2967,7 +2687,6 @@
         openPopup(a, menu);
     }, true);
 
-    // --- стиль ника
     function getColorDot(styleKey) {
         const style = nickStyles[styleKey];
         const dot = document.createElement('div');
@@ -2980,7 +2699,6 @@
         }
         return dot;
     }
-    // --- стиль фона
     const BG_STYLES = {
         matrix: { name: 'Матрица', icon: svgIcon('<path d="M6 3v3M6 9.5v5M6 18v3M12 3v6M12 12.5v2M12 18v3M18 3v2M18 8.5v6M18 18v3"/>') },
         stars: { name: 'Звёзды', icon: svgIcon('<path d="M10 3.5l1.6 3.9 3.9 1.6-3.9 1.6L10 14.5l-1.6-3.9L4.5 9l3.9-1.6z"/><path d="M17.5 13.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/>') },
@@ -2992,7 +2710,6 @@
         snow: { name: 'Снегопад', icon: svgIcon('<path d="M12 2v20M3.3 7l17.4 10M3.3 17 20.7 7"/><path d="m9 4 3 2 3-2M9 20l3-2 3 2"/>') },
         custom: { name: 'Своя картинка', icon: svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>') }
     };
-    // --- автолайки: список тех, кого лайкать
     function renderAutoLikeUsers(list, footer, usersData) {
         const users = Object.keys(usersData).sort((a, b) => a === 'NeuroSFW' ? -1 : b === 'NeuroSFW' ? 1 : a.localeCompare(b));
         const count = () => { footer.textContent = `Активно: ${Object.keys(autoLikeUsers).length}`; };
@@ -3023,7 +2740,6 @@
             list.appendChild(row);
         }
     }
-    // --- настройки: список переключателей
     function applyPostBlurSetting() {
         document.querySelectorAll('.' + SELECTORS.post + '[data-post-colored]').forEach(post => {
             post.removeAttribute('data-post-colored');
@@ -3036,7 +2752,6 @@
         }
         colorizePosts();
     }
-    // label совпадает с ключом ICONS.settings — оттуда значок пункта
     const SETTINGS = [
         { label: 'Фон', get: () => backgroundEnabled, set: v => { backgroundEnabled = v; updateBackgroundVisibility(); }, key: 'backgroundEnabled' },
         { label: 'Подсветка ника', get: () => nickGlowEnabled, set: v => { nickGlowEnabled = v; paint(); }, key: 'nickGlowEnabled' },
@@ -3056,8 +2771,6 @@
         { label: 'Боковая панель', get: () => railEnabled, set: v => { railEnabled = v; placeRail(); }, key: 'railEnabled' },
         { label: 'Версия для ПК на планшете', get: () => GM_getValue('tabletDesktop', true), set: () => tabletViewport(), key: 'tabletDesktop' }
     ];
-    // Все настройки ИТД X — одно окно по вкладкам (кнопка «ИТД X» в шапке профиля).
-    // Последняя открытая вкладка запоминается.
     const SETTINGS_TABS = [
         { id: 'nick', name: 'Ник', items: ['Подсветка ника', 'Подсветка аватарок', 'Подсветка постов'] },
         { id: 'bg', name: 'Фон', items: ['Фон'] },
@@ -3083,8 +2796,6 @@
         };
         return row;
     }
-    // Заставка на телефоне — такой же переключатель, как остальные, но на три положения:
-    // Выкл → Вкл (без звука) → Вкл + звук. Тап по строке — следующее положение.
     function introModeRow() {
         const STEPS = [['off', 'Выкл'], ['silent', 'Вкл'], ['tap', 'Вкл + звук · коснись при входе']];
         const row = document.createElement('div');
@@ -3102,7 +2813,6 @@
         };
         return row;
     }
-    // Громкость всех звуков мода (заставка, звуки интерфейса): ползунок 0–100 %, отпустил — короткий звук-проба
     function volumeRow() {
         const row = document.createElement('div');
         row.className = 'settings-option vp-vol-row';
@@ -3123,7 +2833,6 @@
         t.textContent = text;
         return t;
     };
-    // пункт списка (стиль ника, фон): выбор не закрывает окно — вкладка перерисовывается с новой галочкой
     function pickRow(icon, label, active, onPick, redraw) {
         const o = menuOption(icon, label, onPick, active);
         o.onclick = (e) => { e.stopPropagation(); onPick(); redraw(); };
@@ -3143,14 +2852,13 @@
             current = id;
             GM_setValue('settingsTab', id);
             tabs.querySelectorAll('.vp-stab').forEach(t => t.classList.toggle('vp-active', t.dataset.tab === id));
-            const keep = body.dataset.tab === id ? body.scrollTop : 0;   // перерисовка той же вкладки — прокрутка на месте
+            const keep = body.dataset.tab === id ? body.scrollTop : 0;   
             body.dataset.tab = id;
             body.textContent = '';
             const redraw = () => show(id);
             const tab = SETTINGS_TABS.find(t => t.id === id);
             if (id === 'icon') body.appendChild(iconPicker());
             else for (const label of tab.items) {
-                // на телефоне у заставки три варианта вместо переключателя
                 if (label === 'Заставка при входе' && IS_PHONE) { body.appendChild(introModeRow()); continue; }
                 if (label === 'Громкость') { body.appendChild(volumeRow()); continue; }
                 body.appendChild(settingRow(SETTINGS.find(o => o.label === label), id === 'bg' ? redraw : null));
@@ -3177,7 +2885,6 @@
                     icon.innerHTML = bg.icon;
                     grid.appendChild(pickRow(icon, bg.name, key === backgroundStyle, () => {
                         if (key === 'custom') {
-                            // свой фон: файла ещё нет — сразу выбрать; есть — просто включить
                             bgFile().then(f => {
                                 if (!f) return pickBgFile(redraw);
                                 backgroundStyle = 'custom'; GM_setValue('backgroundStyle', 'custom');
@@ -3226,13 +2933,11 @@
             b.onclick = (e) => { e.stopPropagation(); if (current !== t.id) show(t.id); };
             tabs.appendChild(b);
         }
-        // палец внутри окна крутит окно: не отдаём касания сайту (он может гасить прокрутку)
         for (const t of ['touchstart', 'touchmove']) menu.addEventListener(t, e => e.stopPropagation(), { passive: true });
         show(current);
         openPopup(btn, menu);
     }
 
-    // Вкладка «Иконка»: готовые, своя (фон + эмодзи) и своя картинка
     function iconPicker() {
         const wrap = document.createElement('div');
         wrap.className = 'vp-icon-picker';
@@ -3266,7 +2971,6 @@
         if (GM_getValue('appIconImage', '')) addImageTile();
         wrap.appendChild(grid);
 
-        // своя: эмодзи + фон
         const own = document.createElement('div');
         own.className = 'vp-icon-own';
         own.innerHTML = '<div class="vp-icon-own-title">Своя иконка</div><div class="vp-icon-own-row"><input class="vp-icon-emoji" type="text" maxlength="16" placeholder="🦊" aria-label="Эмодзи"><div class="vp-icon-bgs"></div></div>';
@@ -3300,7 +3004,6 @@
         input.addEventListener('blur', () => { input.value = iconCustom().emoji; });
         wrap.appendChild(own);
 
-        // своя картинка: обрезаем по центру в квадрат 512 px и храним у себя (в настройках скрипта)
         const up = document.createElement('button');
         up.type = 'button';
         up.className = 'vp-icon-upload';
@@ -3318,7 +3021,7 @@
                 img.onload = () => {
                     const s = Math.min(img.naturalWidth, img.naturalHeight);
                     const c = document.createElement('canvas');
-                    const side = Math.min(512, s);                   // мелкую не раздуваем
+                    const side = Math.min(512, s);                   
                     c.width = c.height = side;
                     c.getContext('2d').drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, side, side);
                     URL.revokeObjectURL(url);
@@ -3362,7 +3065,6 @@
         tagAll();
         return ROLE_ORDER.map(r => [r, roleCount[r] || 0]);
     }
-    // Отчёт: версия, браузер, экран, страница, настройки мода, что нашлось на странице и ошибки
     function adminReport() {
         const found = diagRows(), missing = found.filter(([, n]) => !n).map(([r]) => r);
         const opts = SETTINGS.map(o => (o.get() ? '+' : '-') + o.label).join(', ');
@@ -3378,7 +3080,6 @@
             `Ошибки (${vpErrors.length}):` + (vpErrors.length ? '\n' + vpErrors.join('\n') : ' нет')
         ].join('\n');
     }
-    // Диагностика: какие части сайта скрипт узнал на этой странице, а какие — нет
     function adminDiag() {
         document.querySelectorAll('.vp-admin-panel').forEach(p => p.remove());
         const rows = diagRows();
@@ -3397,7 +3098,6 @@
         box.querySelector('button').onclick = () => box.remove();
         document.body.appendChild(box);
     }
-    // Счётчик FPS: кадры в секунду и самый долгий кадр за секунду (рывок)
     let fpsBox = null;
     function toggleFps() {
         if (fpsBox) { fpsBox.remove(); fpsBox = null; return; }
@@ -3412,9 +3112,6 @@
         return face ? `<img src="${face.replace(/"/g, '')}" alt="">` : '<span class="vp-fab-a">A</span>';
     }
 
-    // Админ-островок (только у админа, и на телефоне, и на компьютере): круглая кнопка поверх всего, её можно таскать —
-    // отпустил, она прилипает к ближайшему краю (как плавающая кнопка на Samsung). Тап — меню.
-    // Пока в меню одно — снимок страницы. Место запоминается.
     function adminFab() {
         if (document.querySelector('.vp-fab') || !myUsername || !ADMINS.includes(myUsername.toLowerCase())) return;
         const fab = document.createElement('div');
@@ -3467,7 +3164,6 @@
                 snap();
             } else {
                 fab.classList.toggle('vp-open');
-                // меню по центру кнопки, но не за краем экрана (кнопка у верха или низа)
                 const menu = fab.querySelector('.vp-fab-menu'), h = menu.offsetHeight, c = fab.offsetTop + SIZE / 2;
                 const shift = Math.max(8 - (c - h / 2), Math.min(0, innerHeight - 8 - (c + h / 2)));
                 menu.style.marginTop = shift + 'px';
@@ -3485,7 +3181,6 @@
         act('rare', () => playIntro(IS_PHONE ? 'silent' : 'desk', true));
         act('assemble', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'assemble'));
         act('twist', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'twist'));
-        // своя картинка кнопки — хранится только у тебя (в настройках скрипта), 96 px; пустой выбор — вернуть «A»
         act('face', () => {
             if (GM_getValue('fabFace', '') && confirm('Вернуть обычную «A»? (Отмена — выбрать другую картинку)')) {
                 GM_setValue('fabFace', ''); btn.innerHTML = fabFace(); return;
@@ -3509,13 +3204,10 @@
             f.click();
         });
         act('off', () => { if (!confirm('Выключить ИТД X до закрытия вкладки? Вернуть — кнопкой внизу страницы.')) return; try { sessionStorage.setItem('vp-off', '1'); } catch (e) { } location.reload(); });
-        // тап мимо — меню закрывается
         document.addEventListener('pointerdown', e => { if (!fab.contains(e.target)) fab.classList.remove('vp-open'); }, true);
     }
     onDom(adminFab);
 
-    // Снимок страницы: разметка как она есть сейчас (с метками vp-* и классами сайта) + все стили сайта
-    // и мода + размер экрана. Без скриптов. Сохраняется файлом — его и присылать.
     function pageSnapshot() {
         const css = [];
         for (const sh of document.styleSheets) {
@@ -3542,7 +3234,6 @@
         setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
     }
 
-    // --- запасная круглая кнопка настроек у крупного ника (когда на сайте нет «ИТД НУКСТА», см. ниже)
     function pillButton(cls, title, icon, open) {
         const b = document.createElement('span');
         b.className = 'vp-pill-btn ' + cls;
@@ -3555,9 +3246,6 @@
         });
         return b;
     }
-    // Кнопка «ИТД X» — на месте кнопки сайта «ИТД НУКСТА» в шапке своего профиля, тем же видом
-    // (берём её классы). Открывает все настройки мода. Кнопку сайта только прячем: её рисует сайт.
-    // Если такой кнопки нет (сайт поменялся) — у ника остаётся круглая кнопка настроек.
     function findNukstaButton(from) {
         for (let el = from, i = 0; el && i < 6; el = el.parentElement, i++) {
             const b = [...el.querySelectorAll('button')].find(x => !x.classList.contains('vp-itdx-btn') && /нукста/i.test(x.textContent));
@@ -3595,12 +3283,7 @@
         else ru5n.appendChild(panel);
     }
 
-    // ==== редактор баннера
-    // Своя картинка вместо баннера: кнопка «картинка» рядом с кнопками сайта → выбрать файл →
-    // картинка ложится на баннер во всю ширину, её двигают вверх-вниз (мышь, палец, колесо) →
-    // «Применить» вырезает видимую часть, грузит файл и ставит его баннером профиля.
-    // Режим правки — класс vp-banner-editing на баннере и на ряде кнопок, вид — в CSS.
-    const bannerEdit = { banner: null, img: null, url: null, top: 0, drag: null };   // drag: { y, top } при перетаскивании
+    const bannerEdit = { banner: null, img: null, url: null, top: 0, drag: null };   
     const bannerBtns = { row: null, draw: null, del: null, image: null, change: null, cancel: null, apply: null };
 
     const styleBanner = document.createElement('style');
@@ -3640,7 +3323,6 @@
         b.innerHTML = icon;
         return b;
     }
-    // Кнопки — в ряд кнопок баннера сайта; сайт перерисовывает ряд — ставим заново
     function createAllButtons() {
         const row = document.querySelector('.' + SELECTORS.bannerButtons);
         if (!row || row.querySelector('.custom-image-btn')) return;
@@ -3652,7 +3334,7 @@
         B.change = bannerButton('custom-change-btn', 'Сменить картинку', ICONS.BANNER_CHANGE);
         B.cancel = bannerButton('custom-cancel-btn', 'Отмена', ICONS.BANNER_CANCEL);
         B.apply = bannerButton('custom-apply-btn', 'Применить', ICONS.BANNER_APPLY);
-        row.insertBefore(B.image, B.del);                 // del нет — insertBefore(null) ставит в конец
+        row.insertBefore(B.image, B.del);                 
         row.append(B.change, B.cancel, B.apply);
         B.image.onclick = B.change.onclick = pickBannerFile;
         B.cancel.onclick = () => setBannerEditing(false);
@@ -3683,7 +3365,6 @@
         if (bannerBtns.apply && !on) { bannerBtns.apply.innerHTML = ICONS.BANNER_APPLY; bannerBtns.apply.disabled = false; }
     }
 
-    // картинка на баннер — сразу посередине по высоте
     function putBannerImage(url) {
         const banner = document.querySelector('.' + SELECTORS.banner);
         if (!banner) return;
@@ -3702,8 +3383,6 @@
         setBannerEditing(true);
     }
 
-    // сдвиг в пределах баннера: край картинки за край баннера не уходит;
-    // free — без ограничения (середина для картинки ниже баннера, как было)
     function moveBannerImage(top, free) {
         const E = bannerEdit;
         if (!E.img) return;
@@ -3712,9 +3391,6 @@
     }
     const bannerMovable = () => bannerEdit.img && bannerEdit.img.offsetHeight > bannerEdit.banner.clientHeight;
 
-    // Перетаскивание — pointer-события: одинаково для мыши и пальца (раньше палец не мог начать
-    // перетаскивание — не было обработчика касания). Колесо — шаг 30px.
-    // Слушатели одни на всё время работы: раньше каждое открытие картинки добавляло ещё один на колесо.
     document.addEventListener('pointerdown', e => {
         const E = bannerEdit;
         if (e.target !== E.img || !bannerMovable()) return;
@@ -3744,7 +3420,6 @@
         if (bannerMovable()) moveBannerImage(E.top + (e.deltaY > 0 ? -30 : 30));
     }, { passive: false });
 
-    // видимая в баннере часть картинки — в JPEG исходного разрешения
     function cropBannerImage() {
         return new Promise((resolve, reject) => {
             const img = bannerEdit.img;
@@ -3767,7 +3442,6 @@
         });
     }
 
-    // файл грузим через XHR, как раньше: на нём «Анти цензура» (gifOnSend)
     function uploadBannerFile(blob, token) {
         return new Promise((resolve, reject) => {
             const form = new FormData();
@@ -3827,11 +3501,6 @@
         onDom(function bannerButtons() { createAllButtons(); });
     }
 
-    // ================= Что нового =================
-    // Плашка версии мода (под логотипом) открывает журнал обновлений — как «Что нового» у сайта.
-    // Пока новую версию не открывали, на плашке точка (changelogSeen — последняя просмотренная).
-    // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
-    // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
         ['3.3.3.1 – 3.3.3.2', '28 сентября 2026', ['Игры: окно не меняет размер при смене вкладок; поле каждой игры целиком влезает в окно, без прокрутки; страница под окном не крутится']],
         ['3.3.3', '28 сентября 2026', [
@@ -3996,9 +3665,6 @@
     });
     onDom(function changelogChips() { if (document.querySelector('.vp-version-chip:not([role])')) markChangelogChips(); });
 
-    // ================= API сайта =================
-    // Токен доступа живёт недолго: держим его 4 минуты, одновременные запросы ждут одно обновление
-    // (раньше автолайк обновлял токен на каждого пользователя разом), на 401 — берём свежий.
     let token = null, tokenTime = 0, tokenPending = null;
     function getAccessToken(force) {
         if (!force && siteAuth.token && siteAuth.at > tokenTime && Date.now() - siteAuth.at < 4 * 60 * 1000) { token = siteAuth.token; tokenTime = siteAuth.at; }
@@ -4018,9 +3684,6 @@
         return res;
     }
 
-    // ================= Кто пользуется модом =================
-    // Каждый пользователь мода оставляет под служебным постом комментарий-код (хеш ника с солью + флаги).
-    // Кто оставил верный код — «свой», ему вешаем вериф-бейдж.
     function hashString(str) {
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
@@ -4037,21 +3700,14 @@
         return match ? { code: match[1], flags: match[2] } : null;
     }
     const isModCode = (username, parsed) => parsed && parsed.flags[0] === '1' && parsed.code === generateCode(username);
-    // Код по номеру аккаунта (author.id): ник можно сменить — галочка остаётся. Старые коды (по нику)
-    // тоже верные: у друзей может стоять прошлая версия, её код — по нику
     const isAuthorCode = (author, parsed) => !!author && !!parsed && parsed.flags[0] === '1'
         && ((author.id && parsed.code === generateCode(author.id)) || (author.username && parsed.code === generateCode(author.username)));
 
-    // Ники пользователей мода — из последней проверки (localStorage). Битая запись — пустой список:
-    // на нём держатся «Клуб ИТД X», собеседники в личке, кандидаты автолайков и вериф-бейджи.
     function verifiedNames() {
         try { return Object.keys(JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}') || {}); } catch (e) { return []; }
     }
 
-    // Служебный пост читают проверка всех и проверка себя подряд — это один и тот же ответ:
-    // держим его 20 с (fresh — после своего нового кода, нужен свежий)
     let verifyLoad = null, verifyLoadAt = 0;
-    // Все комментарии поста — страницами по 100 (limit + cursor, как у сайта). Больше 30 страниц не читаем
     async function allComments(postId, maxPages = 30) {
         const all = [];
         let cursor = null;
@@ -4060,7 +3716,7 @@
             if (!res.ok) throw new Error('комментарии: ' + res.status);
             const j = await res.json(), d = j.data || j;
             const list = d.comments || [];
-            if (page && list.length && all.some(c => c.id === list[0].id)) break;      // сервер не понял курсор — не зацикливаемся
+            if (page && list.length && all.some(c => c.id === list[0].id)) break;      
             all.push(...list);
             cursor = d.nextCursor || null;
             if (!cursor || !d.hasMore && d.hasMore !== undefined || !list.length) break;
@@ -4074,8 +3730,6 @@
         verifyLoad.catch(() => { verifyLoad = null; });
         return verifyLoad;
     }
-    // Ник и аватар участника — из его же комментария-кода: у комментария есть автор. Клубу и автолайкам
-    // так не нужен отдельный запрос профиля на каждого (при сотне участников это сотня запросов на вкладку)
     function verifiedInfo(name) {
         try { return (JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}') || {})[name] || null; } catch (e) { return null; }
     }
@@ -4106,7 +3760,6 @@
         }
     }
 
-    // свой код под служебным постом: есть верный — ничего не делаем, иначе старые удаляем и пишем новый
     async function verifyMyself() {
         if (!myUsername) return false;
         try {
@@ -4116,9 +3769,6 @@
             const byId = c => myId && parseCode(c.content).code === generateCode(myId);
             if (!myId && mine.some(c => isModCode(myUsername, parseCode(c.content)))) return true;
             if (mine.some(byId)) return true;
-            // Под служебным постом — только новый комментарий или правка: новый шлёт автору поста уведомление,
-            // правка — нет. Есть свой устаревший код (сменил ник, испорчен) — правим его на код по номеру
-            // аккаунта; верный код по нику не трогаем (его видят друзья со старой версией) — рядом пишем новый
             const code = generateCode(myId || myUsername) + '1';
             const stale = mine.find(c => !isAuthorCode(c.author, parseCode(c.content)));
             const res = stale
@@ -4138,11 +3788,6 @@
         }
     }
 
-    // ==== кнопка «наверх» и телефонная раскладка
-    // Кнопка появляется, когда прокрутили ниже 300px. Вид — в CSS (!important: кнопка берёт классы
-    // сайта у «Создать пост», см. newPostBump, и раньше их перебивал style.*).
-    // До ширины 1172px (телефон, планшет): кнопка выше нижней панели, у страницы нет полосы
-    // прокрутки и оттяжки; всё это — только после входа (html.vp-has-up), как было.
     const styleScrollTop = document.createElement('style');
     styleScrollTop.textContent = `
         .itd-scroll-top-btn {
@@ -4196,9 +3841,6 @@
         placeNickWrapper();
     }
 
-    // Крупный ник в шапке профиля на узком экране: его части — в обёртке .nick-wrapper (строка
-    // с переносом), сам блок — столбец по центру. На широком обёртку снимаем. Переключение —
-    // по смене ширины (matchMedia) и когда сайт перерисовал шапку (onDom).
     const narrowScreen = matchMedia('(max-width: 1172px)');
     function placeNickWrapper() {
         const nick = document.querySelector('.' + SELECTORS.nickLarge);
@@ -4222,16 +3864,15 @@
         try {
             const me = siteAuth.me || await new Promise(done => { siteAuth.meWait.push(done); setTimeout(() => done(null), 1500); })
                 || await (await api('/api/users/me')).json();
-            if (!me || !me.username) return;              // не вошли или API не ответил — свои ники искать не по чему
+            if (!me || !me.username) return;              
             meData = me;
             myUsername = me.username;
             myDisplayName = me.displayName || me.username;
             tagAll();
-            try { placeRail(); } catch (e) { /* панель ещё не собрана — встанет сама при первой перестройке */ }
+            try { placeRail(); } catch (e) {   }
 
             createScrollTopButton();
 
-            // список пользователей мода: сразу и раз в 10 минут; свой код — после первой проверки
             checkAllComments().then(() => { markVerifiedUsers(); return verifyMyself(); });
             setInterval(checkAllComments, 10 * 60 * 1000);
 
@@ -4243,11 +3884,8 @@
                 document.querySelectorAll('.' + SELECTORS.avatar).forEach(avatar => {
                     const link = avatar.closest(PROFILE_LINK);
                     if (link) { if (isMe(link.getAttribute('href'))) glowMyAvatar(avatar); return; }
-                    if (avatar.closest('.' + SELECTORS.post)) return;   // аватар в репосте — чужой
-                    // поле нового поста или шапка моего профиля
+                    if (avatar.closest('.' + SELECTORS.post)) return;   
                     const inComposer = avatar.parentElement && avatar.parentElement.querySelector('[contenteditable="true"]');
-                    // на своём профиле — только аватар шапки (он в паре уровней от крупного ника),
-                    // а не все аватары в окнах «Подписчики» и «Подписки»
                     if (inComposer || (isMe(location.pathname) && nearLargeNick(avatar))) glowMyAvatar(avatar);
                 });
             }
@@ -4285,7 +3923,6 @@
                         nickSpan.parentNode.insertBefore(badge, nickSpan.nextSibling);
                     }
 
-                    // Таблетка с кнопками — только у крупного ника в шапке профиля, не у ника на своих постах
                     if (isLarge) {
                         const ru5n = container.closest('.' + SELECTORS.nickRow) || container;
                         addToggleButtonToNick(ru5n);
@@ -4293,13 +3930,10 @@
                 });
             }
 
-            // Вериф-бейдж — у всех, кто пользуется модом (список — из комментариев под служебным
-            // постом), где бы ни стоял их ник: лента, комментарии, окна подписчиков и подписок, шапка профиля.
             const userOf = href => ((href || '').split('/@')[1] || '').split(/[/?#]/)[0].toLowerCase();
             function nickLeaf(root) {
                 const tagged = root.querySelector('.' + SELECTORS.nickText);
                 if (tagged) return tagged;
-                // имя — первый текстовый лист с буквами: не «@ник», не эмодзи-аватар, не наши значки
                 return [...root.querySelectorAll('span, p, div')].find(e => {
                     if (e.children.length) return false;
                     const t = e.textContent.trim();
@@ -4315,7 +3949,6 @@
                 badge.style.setProperty('--vp-badge', size + 'px');
                 nick.insertAdjacentElement('afterend', badge);
             }
-            // список разбираем заново, только когда он поменялся, а не на каждую правку страницы
             let verifiedRaw = null, verifiedSet = new Set();
             function markVerifiedUsers() {
                 const raw = localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}';
@@ -4324,12 +3957,11 @@
                     verifiedSet = new Set(verifiedNames().map(u => u.toLowerCase()));
                 }
                 const names = new Set(verifiedSet);
-                names.delete(myUsername.toLowerCase());          // у меня свой значок
+                names.delete(myUsername.toLowerCase());          
                 if (!names.size) return;
                 document.querySelectorAll(PROFILE_LINK).forEach(link => {
                     if (names.has(userOf(link.getAttribute('href')))) addVerifyBadge(nickLeaf(link), 16);
                 });
-                // имя без ссылки, но с «@ником» рядом: шапка профиля и строки окон подписок
                 document.querySelectorAll('.' + SELECTORS.nickContainer).forEach(c => {
                     if (c.closest(PROFILE_LINK)) return;
                     const login = atLoginOf(c);
@@ -4367,8 +3999,6 @@
                 let bottomBlock = container.querySelector('.vp-version-row');
                 container.innerHTML = '';
                 container.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; gap: 4px;';
-                // слева колонка: иконка и под ней, по её центру, плашка версии мода; справа — версия сайта
-                // на уровне иконки (раньше плашка стояла от левого края и уезжала вправо от центра иконки)
                 const topRow = document.createElement('div');
                 topRow.className = 'vp-logo-top';
                 const iconCol = document.createElement('div');
@@ -4382,7 +4012,7 @@
                 topRow.appendChild(siteVer);
                 container.appendChild(topRow);
                 const container0 = container;
-                container = iconCol;                      // плашку версии ниже кладём в колонку иконки
+                container = iconCol;                      
                 if (bottomBlock) {
                     bottomBlock.style.margin = '0';
                     bottomBlock.style.justifyContent = 'center';
@@ -4414,14 +4044,10 @@
                 }, 300);
             });
 
-            // Новая версия на GitHub: читаем только начало файла (там @version), не чаще раза в час,
-            // ответ помним между загрузками. Раньше весь файл качался при каждом заходе, а на телефоне — дважды.
             const updateUrl = 'https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js?t=' + Date.now();
             function latestVersion() {
                 let cached = null;
                 try { cached = JSON.parse(GM_getValue('vp_latest', 'null')); } catch (e) { }
-                // запомненный ответ — только свежий (10 мин) или если он уже новее установленной:
-                // иначе после заливки на GitHub кнопка ждала бы старый ответ целый час
                 if (cached && (Date.now() - cached.at < 10 * 60 * 1000 || versionCompare(cached.v, GM_info.script.version) > 0)) {
                     return Promise.resolve(cached.v);
                 }
@@ -4541,7 +4167,6 @@
                     block.style.flex = '0 0 auto';
                     nav.style.display = 'flex';
                     nav.style.width = '100%';
-                    // логотип с версией — ровно на высоту вкладок и по центру своего места
                     const logo = block.querySelector('img.vp-app-logo'), chip = block.querySelector('.vp-version-row');
                     const h = tabs.getBoundingClientRect().height;
                     if (logo && chip && h) {
@@ -4586,8 +4211,6 @@
 
             setTimeout(updateNavIcon, 500);
 
-            // «Лента кланов» → «Кланы»: короче, вкладки ленты помещаются в строку. Меняем сам текстовый
-            // узел (не пересоздаём) — сайт продолжит им управлять как своим.
             onDom(function clanTabName() {
                 document.querySelectorAll('.' + SELECTORS.feedBar + ' button').forEach(b => {
                     const walker = document.createTreeWalker(b, NodeFilter.SHOW_TEXT);
@@ -4602,11 +4225,6 @@
         } catch (e) { console.warn('[ITD VP] запуск мода', e); logErr('запуск мода', e); }
     }
 
-    // Кадр через requestAnimationFrame: в свёрнутой вкладке он сам встаёт на паузу.
-    // Статичный цвет рисуется один раз (paint), радуга — каждый кадр.
-    // Фон рисуется на частоте экрана — 60, 90, 120, 144 Гц, какой есть (скорость одна и та же: dt от времени).
-    // Если кадры начинают пропадать (слабое устройство, тяжёлая страница), фон переходит на каждый второй
-    // кадр: картинка та же, только реже. Через 15 с пробует снова полную частоту (не вышло — ждёт вдвое дольше).
     let lastFrame = 0, bestGap = 1000, slow = 0, halfRate = false, odd = false, halfSince = 0, retryMs = 15000;
     function frame(t) {
         requestAnimationFrame(frame);
@@ -4616,31 +4234,25 @@
         lastFrame = t;
         if (gap > 0 && gap < 100) {
             const base = halfRate ? gap / 2 : gap;
-            bestGap = Math.min(bestGap, base);          // родной интервал экрана
+            bestGap = Math.min(bestGap, base);          
             slow = base > bestGap * 1.7 ? slow + 1 : Math.max(0, slow - 2);
             if (!halfRate && slow > 45) {
                 halfRate = true; halfSince = t; slow = 0;
                 document.documentElement.classList.add('vp-glass-lite');
             }
         }
-        const dt = Math.min(3, gap / 50);                // доля от 50 мс: скорости не зависят от частоты кадров
+        const dt = Math.min(3, gap / 50);                
         if (currentStyle === 'rainbow') { stepHue(dt); paint(); }
         if (backgroundEnabled && !introOn) drawBackground(dt);
     }
     paint();
     requestAnimationFrame(frame);
 
-    new ResizeObserver(resizeCanvas).observe(canvas);   // и окно, и появление полосы прокрутки
+    new ResizeObserver(resizeCanvas).observe(canvas);   
     resizeCanvas();
     initVisuals();
     initBanner();
 
-    // ==== стикеры в комментариях
-    // Кнопка у поля комментария → панель паков (наведение открывает, уход мыши закрывает).
-    // Паки свои: хранятся в localStorage, картинки грузятся на сайт (/api/files/upload), стикер
-    // уходит в комментарий вложением. «Недавние» — последние отправленные.
-    // Режим правки пака: стикеры дрожат, их можно таскать, удалять, добавлять (с обрезкой).
-    // Вид — в CSS (классы ниже), режимы — классами; в style.* только то, что считается.
     (function () {
         const STORAGE_KEY = 'user_sticker_packs_v1';
         const RECENT_STORAGE_KEY = 'recent_stickers_v1';
@@ -4654,21 +4266,11 @@
         let recentStickers = readList(RECENT_STORAGE_KEY);
         const saveUserPacks = () => { writeList(STORAGE_KEY, userPacks); packsChanged(); };
         const saveRecent = () => writeList(RECENT_STORAGE_KEY, recentStickers);
-        // стикеры пака по ключу ('recent' — недавние); имя пака
         const packStickers = key => key === 'recent' ? recentStickers : (userPacks.find(p => p.id === key) || { stickers: [] }).stickers;
         const packName = key => key === 'recent' ? 'Недавние' : ((userPacks.find(p => p.id === key) || {}).name || DEFAULT_PACK_NAME);
         const allPackKeys = () => ['recent', ...userPacks.map(p => p.id)];
         function savePack(key) { if (key === 'recent') saveRecent(); else saveUserPacks(); }
 
-        // ---- Синхронизация паков между устройствами одного аккаунта
-        // Паки — свои комментарии «ITDXS 1/2 …» под служебным постом STICKER_POST_ID. Под служебными постами
-        // только новый комментарий или правка (без ответов и удалений): ответы и новые комментарии шлют
-        // уведомления, правка — нет. Куски создаются один раз, дальше правятся; лишние — правятся в пустые.
-        // Автора комментария ставит сервер — свои куски узнаём по номеру аккаунта (author.id), не по нику.
-        // Время правки паков дописано цифрами к своему коду галочки («код1» + секунды — старые версии мода
-        // такой код принимают): его и так читают раз в 10 минут, а служебный пост паков читаем, только
-        // если там новее, чем здесь. Паки упакованы в байты: у стикера номер файла и имя картинки — две
-        // UUID по 16 байт, в комментарий (2000 знаков) влезает ~40 стикеров; больше — несколько кусков.
         const SYNC_TAG = 'ITDXS';
         const PACKS_AT_KEY = 'user_sticker_packs_at';
         const EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
@@ -4688,7 +4290,7 @@
                 for (const st of list) {
                     const m = String(st.url || '').match(CDN_IMG), ext = m ? EXT.indexOf(m[2].toLowerCase()) : -1;
                     if (m && ext >= 0 && UUID.test(st.id || '')) { put(ext, ...hexToBytes(st.id), ...hexToBytes(m[1])); }
-                    else { put(255); str(st.id || ''); str(st.url || ''); }        // не с CDN сайта — как есть
+                    else { put(255); str(st.id || ''); str(st.url || ''); }        
                 }
             }
             let bin = '';
@@ -4719,9 +4321,7 @@
         }
         const myAccountId = () => (meData && meData.id) || (verifiedInfo(myUsername || '') || {}).id || null;
         const partsKey = () => 'vp_sticker_parts_' + myAccountId();
-        // время паков в данных галочки (секунды после «1» в коде); 0 — паков там нет
         const remotePacksAt = () => { const f = String((verifiedInfo(myUsername || '') || {}).flags || ''); return f.length > 1 ? +f.slice(1) * 1000 : 0; };
-        // свои куски под постом паков: запомненные номера или поиском (один раз на устройство)
         async function packParts(scan) {
             if (!scan) { const saved = GM_getValue(partsKey(), null); if (saved) return saved; }
             const me = myAccountId();
@@ -4740,7 +4340,6 @@
             if (scrollContainer) { updateTabButtons(); refreshAllPackGrids(); }
         }
         const patchComment = (id, content) => api(`/api/comments/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) });
-        // скачать: в галочке время новее нашего — читаем свои куски и берём паки оттуда
         async function pullPacks() {
             const at = remotePacksAt();
             if (!at || at <= packsAt + 999) return;
@@ -4749,15 +4348,13 @@
             if (!n || parts.length < n || !parts.slice(0, n).every((p, k) => p.i === k + 1 && p.n === n)) return;
             const remote = decodePacks(parts.slice(0, n).map(p => p.d).join(''));
             if (remote.at <= packsAt + 999) return;
-            // паки из прошлых версий (без времени) здесь — не теряем: к скачанным добавляем свои, которых там нет
             const legacy = !packsAt && userPacks.length ? userPacks.filter(pk => !remote.packs.some(r => r.id === pk.id)) : [];
             applyRemotePacks({ at: remote.at, packs: [...remote.packs, ...legacy] });
             if (legacy.length) { packsAt = Date.now(); localStorage.setItem(PACKS_AT_KEY, String(packsAt)); return 'push'; }
         }
-        // выгрузить свои паки: куски правкой (новые — новым комментарием), потом время — в код галочки
         async function pushPacks() {
             const mine = verifiedInfo(myUsername || '');
-            if (!mine || !mine.commentId) return;                 // без своей галочки некуда записать время
+            if (!mine || !mine.commentId) return;                 
             let parts = await packParts(false);
             if (!parts.length) parts = await packParts(true);
             if (!packsAt) { packsAt = Date.now(); localStorage.setItem(PACKS_AT_KEY, String(packsAt)); }
@@ -4765,7 +4362,7 @@
             for (let k = 0; k < data.length || !chunks.length; k += CH) chunks.push(data.slice(k, k + CH));
             const slots = parts.map(p => p.id), saved = [];
             for (let k = 0; k < Math.max(chunks.length, slots.length); k++) {
-                const content = k < chunks.length ? `${SYNC_TAG} ${k + 1}/${chunks.length} ${chunks[k]}` : `${SYNC_TAG} 0/0 -`;   // лишний кусок — пустой
+                const content = k < chunks.length ? `${SYNC_TAG} ${k + 1}/${chunks.length} ${chunks[k]}` : `${SYNC_TAG} 0/0 -`;   
                 if (slots[k]) {
                     const res = await patchComment(slots[k], content);
                     if (!res.ok) throw new Error('паки: правка ' + res.status);
@@ -4778,7 +4375,6 @@
                 }
             }
             GM_setValue(partsKey(), saved);
-            // время паков — в свой код галочки (правкой)
             const code = String(mine.code) + '1' + Math.floor(packsAt / 1000);
             const res = await patchComment(mine.commentId, code);
             if (res.ok) await checkAllComments(true);
@@ -4790,8 +4386,6 @@
                 if (up) await pushPacks();
                 else {
                     const merged = await pullPacks();
-                    // здесь паки новее, чем записано (правили без сети, паки прошлых версий без времени,
-                    // слили свои с скачанными) — выгрузить
                     const at = remotePacksAt();
                     if (merged === 'push' || (userPacks.length && (!packsAt || packsAt > at + 999))) await pushPacks();
                 }
@@ -4801,7 +4395,6 @@
                 syncing = false;
             }
         }
-        // правка паков здесь — отметить время и через 4 с выгрузить (серия правок — одна выгрузка)
         function packsChanged() {
             if (applyingRemote) return;
             packsAt = Date.now();
@@ -4809,7 +4402,6 @@
             clearTimeout(syncTimer);
             syncTimer = setTimeout(() => syncPacks(true), 4000);
         }
-        // при входе и раз в 10 минут (после проверки галочек — там время паков)
         (function syncLoop() {
             if (!STICKER_POST_ID) return;
             const tick = () => myUsername && myAccountId() && verifiedInfo(myUsername) ? syncPacks(false) : setTimeout(tick, 3000);
@@ -4817,10 +4409,6 @@
             setInterval(() => syncPacks(false), 10 * 60 * 1000);
         })();
 
-        // ---- Паки из архива (.zip): папка = пак (имя папки — название), внутри — картинки, как есть (без обрезки).
-        // Картинки прямо в корне архива — пак с именем архива. Одна общая папка сверху («Мои стикеры/Коты/…»)
-        // пропускается. ZIP разбираем сами: оглавление в конце файла, сжатие — deflate (DecompressionStream).
-        // Имена: флаг UTF-8 — UTF-8; иначе UTF-8, если читается, иначе кодировка DOS (архивы Windows с кириллицей)
         const ZIP_IMG = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
         const ZIP_LIMITS = { packs: 20, perPack: 120, total: 300, bytes: 5 * 1024 * 1024 };
         async function readZip(file) {
@@ -4852,14 +4440,12 @@
             };
             return entries;
         }
-        // архив → [{ name, files: [entry] }] по правилам выше
         function zipPacks(entries, zipName) {
             const imgs = entries.filter(e => {
                 const parts = e.name.split('/');
                 return !e.name.endsWith('/') && !parts.some(p => p.startsWith('.') || p === '__MACOSX') && ZIP_IMG[(parts.pop().split('.').pop() || '').toLowerCase()];
             });
             let paths = imgs.map(e => e.name.split('/'));
-            // одна общая папка сверху, а в ней ещё папки — пропускаем её
             while (paths.length && paths.every(p => p.length > 2 && p[0] === paths[0][0])) paths = paths.map(p => p.slice(1));
             const groups = new Map();
             imgs.forEach((e, i) => {
@@ -5095,7 +4681,6 @@
             return e;
         };
 
-        // ---- загрузка картинки и отправка
         async function uploadImageToServer(file) {
             const accessToken = await getAccessToken();
             const formData = new FormData();
@@ -5110,9 +4695,6 @@
             return await res.json();
         }
 
-        // Номер поста — со страницы (раньше его подсматривали в запросах сайта, но та обёртка
-        // fetch стояла в песочнице Tampermonkey и запросов сайта не видела): из адреса /post/…,
-        // а в ленте — из ссылки на пост в той же карточке, что и поле комментария
         function stickerPostId() {
             const m = location.pathname.match(/\/post\/([^\/?#]+)/);
             if (m) return m[1];
@@ -5123,13 +4705,7 @@
             return lm ? lm[1] : card ? postIdOf(card) : null;
         }
 
-        // Прикреплённый стикер. Сайт о нём не знает: его «Отправить» включается только от своего текста
-        // или своего вложения, по выключенной кнопке нажатие не проходит. Поэтому на это время кнопка
-        // сайта спрятана, на её месте — наша такая же: текст поля + стикер вложением нашим запросом,
-        // потом перезагрузка (так сайт покажет новый комментарий). Enter в поле — то же, что наша кнопка.
-        // Кнопки строки после поля (микрофон) прячем, как сайт при своём вложении.
-        // Крестик возвращает всё как было.
-        let attached = null;          // { preview, send, hidden: [...] }
+        let attached = null;          
         function detachSticker() {
             if (!attached) return;
             const { preview, send, hidden } = attached;
@@ -5138,9 +4714,6 @@
             send.remove();
             hidden.forEach(b => b.classList.remove('vp-sticker-hide'));
         }
-        // Сайт пускает во вложения только свои файлы («Некоторые файлы не принадлежат вам»): стикер,
-        // загруженный с другого аккаунта, грузим заново от своего имени и запоминаем новый номер в паках.
-        // Картинку качает Tampermonkey (у хранилища картинок нет CORS — fetch страницы её не получит).
         function stickerFile(sticker) {
             return new Promise((resolve, reject) => GM_xmlhttpRequest({
                 method: 'GET', url: sticker.url, responseType: 'blob',
@@ -5195,14 +4768,13 @@
         function insertStickerToComment(sticker) {
             const postId = stickerPostId();
             if (!postId) throw new Error('Post ID not found');
-            detachSticker();                                      // прошлый прикреплённый — снять целиком
+            detachSticker();                                      
             const row = stickerBtn && stickerBtn.closest('.' + SELECTORS.stickerContainer);
             const box = (row && row.closest('.' + SELECTORS.commentPreviewContainer)) || document.querySelector('.' + SELECTORS.commentPreviewContainer);
             const siteSend = (row && row.querySelector('.' + SELECTORS.stickerSendBtn)) || document.querySelector('.' + SELECTORS.stickerSendBtn);
             if (!box || !siteSend) return;
             document.getElementById('temp_sticker_preview')?.remove();
 
-            // строка ввода: поле в капсуле + кнопки вокруг (скрепка, микрофон); превью — над ней
             const line = box.parentElement && box.parentElement.querySelector(':scope > button') ? box.parentElement : box;
             const preview = el('div', '', `<div class="vp-sticker-attach"><div class="vp-sticker-thumb"><img><button type="button" class="vp-sticker-remove">${svgIcon('<path d="M18 6 6 18M6 6l12 12"/>', 14)}</button></div></div>`);
             preview.id = 'temp_sticker_preview';
@@ -5222,7 +4794,6 @@
             hidden.forEach(b => b.classList.add('vp-sticker-hide'));
             attached = { preview, send, hidden };
         }
-        // Enter в поле при прикреплённом стикере — отправить стикер (Shift+Enter — новая строка, как у сайта)
         document.addEventListener('keydown', e => {
             if (!attached || e.key !== 'Enter' || e.shiftKey || !e.target.isContentEditable) return;
             if (!e.target.closest('.' + SELECTORS.commentPreviewContainer)) return;
@@ -5231,12 +4802,10 @@
             attached.send.click();
         }, true);
 
-        // ---- панель
         let stickerPanel = null, scrollContainer = null, tabsRow = null, recentBtn = null;
         let stickerBtn = null, hideTimeout = null;
-        let editPack = null;                                   // ключ пака в режиме правки
+        let editPack = null;                                   
 
-        // колесо над панелью не крутит страницу (сайт крутит #root)
         let blockWheel = null;
         function disablePageScroll() {
             const root = document.getElementById('root');
@@ -5251,7 +4820,6 @@
             blockWheel = null;
         }
 
-        // ширина поля имени — по тексту
         function adjustInputWidth(input) {
             const n = Math.max(1, Math.min(MAX_NAME_LENGTH, input.value.length || input.placeholder.length || DEFAULT_PACK_NAME.length));
             input.style.width = `${n * (14 - n * 0.2)}px`;
@@ -5312,7 +4880,6 @@
             stickerPanel.addEventListener('mouseleave', () => hidePanel(200));
             document.body.appendChild(stickerPanel);
         }
-        // паков стало больше или меньше — панель собираем заново
         function rebuildPanel() {
             if (stickerPanel) stickerPanel.remove();
             stickerPanel = scrollContainer = tabsRow = recentBtn = null;
@@ -5335,7 +4902,6 @@
                 input.maxLength = MAX_NAME_LENGTH;
                 name.appendChild(input);
                 if (key !== 'recent') {
-                    // имя меняется только в режиме правки этого пака; пустое — «Новый пакет»
                     const pack = () => userPacks.find(p => p.id === key);
                     const locked = () => editPack !== key;
                     input.addEventListener('input', () => {
@@ -5374,7 +4940,6 @@
             markEditing();
         }
 
-        // режим правки — классы: vp-editing на ленте паков, vp-cur на шапке и сетке своего пака
         function markEditing() {
             if (!scrollContainer) return;
             scrollContainer.classList.toggle('vp-editing', !!editPack);
@@ -5410,8 +4975,6 @@
             refreshAllPackGrids();
             updateTabButtons();
         }
-        // Плавная перестановка (FLIP): запоминаем места ячеек, меняем порядок, и каждая, что сдвинулась,
-        // едет со старого места на новое
         function flipGrid(grid, mutate) {
             const items = [...grid.children], before = new Map(items.map(e => [e, e.getBoundingClientRect()]));
             mutate();
@@ -5421,22 +4984,14 @@
                     { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' });
             });
         }
-        // Перетаскивание в режиме правки: сдвинул стикер на 6px — он поднимается и едет за мышью/пальцем,
-        // на его месте «дырка»; над другим стикером дырка переезжает туда, соседи разъезжаются;
-        // отпустил — стикер ложится в дырку, порядок сохраняется. У края ленты — прокрутка.
-        // Без сдвига — обычное нажатие (выбрать стикер).
-        // Скорость: «призрак» двигается через transform раз за кадр в последнюю точку пальца (без переходов —
-        // у ячеек transition: all, из-за него он догонял палец с задержкой); ячейка под пальцем — по
-        // запомненным местам ячеек (без elementFromPoint); дрожь и общий наблюдатель мода на это время стоят.
         function startStickerDrag(e, btn, key) {
             if (e.button > 0 || e.target.closest('.vp-sticker-del')) return;
             const grid = btn.parentElement, x0 = e.clientX, y0 = e.clientY;
             let ghost = null, ox = 0, oy = 0, gx = 0, gy = 0, px = x0, py = y0, raf = 0, cells = [], box = null;
-            // места ячеек — по раскладке (offsetLeft/Top), а не по экрану: во время разъезда ячейки ещё в пути
             const measure = () => {
                 const gr = grid.getBoundingClientRect();
                 cells = [...grid.querySelectorAll('.vp-sticker-item')].map(el => {
-                    const left = gr.left + grid.clientLeft + el.offsetLeft, top = gr.top + grid.clientTop + el.offsetTop;   // сетка — offsetParent
+                    const left = gr.left + grid.clientLeft + el.offsetLeft, top = gr.top + grid.clientTop + el.offsetTop;   
                     return { el, r: { left, top, right: left + el.offsetWidth, bottom: top + el.offsetHeight } };
                 });
                 box = scrollContainer.getBoundingClientRect();
@@ -5451,7 +5006,6 @@
                     flipGrid(grid, () => grid.insertBefore(btn, kids.indexOf(target) > kids.indexOf(btn) ? target.nextSibling : target));
                     measure();
                 }
-                // у края ленты — прокрутка (и места ячеек заново)
                 if (py < box.top + 36 || py > box.bottom - 36) {
                     scrollContainer.scrollTop += py < box.top + 36 ? -10 : 10;
                     measure();
@@ -5468,10 +5022,10 @@
                     ghost = btn.cloneNode(true);
                     ghost.className = 'vp-sticker-item vp-sticker-ghost';
                     Object.assign(ghost.style, { width: r.width + 'px', height: r.height + 'px', left: r.left + 'px', top: r.top + 'px' });
-                    domObserver.disconnect();                          // свои перестановки не будят общий проход по странице
+                    domObserver.disconnect();                          
                     document.body.appendChild(ghost);
                     btn.classList.add('vp-hole');
-                    btn._vpDragged = true;                                // клик после перетаскивания — не выбор
+                    btn._vpDragged = true;                                
                     stickerPanel.classList.add('vp-drag');
                     measure();
                 }
@@ -5484,9 +5038,8 @@
                 document.removeEventListener('pointerup', up, true);
                 document.removeEventListener('pointercancel', up, true);
                 if (!ghost) return;
-                if (raf) { cancelAnimationFrame(raf); frame(); cancelAnimationFrame(raf); }   // последняя точка — тоже в счёт
+                if (raf) { cancelAnimationFrame(raf); frame(); cancelAnimationFrame(raf); }   
                 raf = 0;
-                // ложится в дырку
                 const r = btn.getBoundingClientRect(), g = ghost.getBoundingClientRect();
                 ghost.style.transform = '';
                 Object.assign(ghost.style, { left: r.left + 'px', top: r.top + 'px' });
@@ -5498,7 +5051,6 @@
                     ghost.remove();
                     btn.classList.remove('vp-hole');
                     stickerPanel.classList.remove('vp-drag');
-                    // новый порядок — по ячейкам в сетке (у каждой — её прежний номер)
                     const list = packStickers(key);
                     const order = [...grid.querySelectorAll('.vp-sticker-item')].map(b => list[+b.dataset.stickerIndex]);
                     list.splice(0, list.length, ...order);
@@ -5561,10 +5113,6 @@
             if (scrollContainer) allPackKeys().forEach(refreshPackGrid);
         }
 
-        // Стикер — как картинка через скрепку: кладём файл в поле выбора файла сайта рядом с полем
-        // комментария, дальше сайт всё делает сам — превью, отправка, комментарий в списке без
-        // перезагрузки, файл грузится от своего имени (чужие файлы сайт во вложения не пускает).
-        // Поля нет или картинка не скачалась — прикрепляем по-своему (insertStickerToComment).
         async function attachAsSiteFile(sticker) {
             const row = stickerBtn && stickerBtn.closest('.' + SELECTORS.stickerContainer);
             let input = null;
@@ -5590,7 +5138,7 @@
             }
             stickerPanel.classList.remove('vp-open');
             exitEditMode();
-            enablePageScroll();                                   // раньше колесо страницы оставалось заблокированным
+            enablePageScroll();                                   
         }
         function createStickerButton(sticker, key, index, editing) {
             const btn = el('button', 'vp-sticker-item');
@@ -5601,7 +5149,6 @@
             btn.onclick = () => { if (btn._vpDragged) { btn._vpDragged = false; return; } pickSticker(sticker); };
             if (!editing) return btn;
 
-            // правка: дрожь, крестик, перетаскивание внутри пака (мышь и палец)
             btn.classList.add('sticker-editing', `sticker-shake-${(index % 8) + 1}`);
             btn.draggable = false;
             const del = el('div', 'vp-sticker-del', ICONS.DELETE);
@@ -5616,7 +5163,6 @@
             const header = scrollContainer && scrollContainer.querySelector(`.pack-header[data-pack="${key}"]`);
             if (header) header.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-        // подсветка вкладки пака, чья шапка сейчас вверху ленты
         function updateActiveTabFromScroll() {
             if (editPack || !scrollContainer) return;
             const top = scrollContainer.getBoundingClientRect().top + 50;
@@ -5644,16 +5190,14 @@
             clearTimeout(hideTimeout);
             hideTimeout = setTimeout(() => {
                 if (!stickerPanel || !stickerPanel.classList.contains('vp-open')) return;
-                if (stickerPanel.classList.contains('vp-drag')) return hidePanel(delay);   // тащат стикер — не закрывать
-                if (stickerPanel.querySelector('.vp-sp-import')) return hidePanel(delay);   // импорт архива — тоже
+                if (stickerPanel.classList.contains('vp-drag')) return hidePanel(delay);   
+                if (stickerPanel.querySelector('.vp-sp-import')) return hidePanel(delay);   
                 stickerPanel.classList.remove('vp-open');
                 exitEditMode();
                 enablePageScroll();
             }, delay);
         }
 
-        // ---- обрезка стикера: рамка по картинке, тянуть за края/углы или целиком (мышь и палец),
-        // пропорции на выбор, у середины рамка прилипает. Готово — PNG вырезанной части.
         function showCropEditor(imageUrl) {
             return new Promise(resolve => {
                 const modal = el('div', 'vp-crop-modal');
@@ -5665,8 +5209,8 @@
                 const img = view.querySelector('img');
                 const area = modal.querySelector('.vp-crop-area');
                 img.src = imageUrl;
-                let ratio = null;                        // пропорция рамки, null — свободная
-                let action = null;                       // { dir, x, y, w, h, left, top } — что тянут и откуда начали
+                let ratio = null;                        
+                let action = null;                       
 
                 const RATIOS = [['Свободный', null], ['1:1', 1], ['4:3', 4 / 3], ['3:4', 3 / 4], ['16:9', 16 / 9], ['9:16', 9 / 16]];
                 const ratioRow = modal.querySelector('.vp-crop-ratios');
@@ -5681,7 +5225,6 @@
                     ratioRow.appendChild(b);
                 });
 
-                // где на экране картинка внутри квадрата (object-fit: contain)
                 function imageBounds() {
                     const r = view.getBoundingClientRect();
                     const k = img.naturalWidth / img.naturalHeight;
@@ -5701,7 +5244,6 @@
                     const top = Math.max(b.minY, Math.min(parseFloat(area.style.top) || 0, b.maxY - h));
                     place(left, top, Math.min(w, b.width), Math.min(h, b.height));
                 }
-                // у середины картинки рамка прилипает (порог 5px)
                 function snapToCenter() {
                     const b = imageBounds();
                     const left = parseFloat(area.style.left), top = parseFloat(area.style.top);
@@ -5749,8 +5291,6 @@
                     if (d.includes('w')) { w = a.w - dx; x = a.left + dx; }
                     if (d.includes('e')) w = a.w + dx;
                     if (ratio !== null) {
-                        // с пропорцией: за верх/низ тянут высоту, иначе ширину; рамка растёт от
-                        // противоположного края (у боковых — от середины)
                         if (d === 'n' || d === 's') w = h * ratio; else h = w / ratio;
                         if (w > b.width) { w = b.width; h = w / ratio; }
                         if (h > b.height) { h = b.height; w = h * ratio; }
@@ -5767,7 +5307,7 @@
                 };
                 const onUp = () => {
                     if (!action) return;
-                    action = null;                       // курсор «move» остаётся, как было
+                    action = null;                       
                     constrain();
                 };
                 area.addEventListener('pointerdown', onDown);
@@ -5795,7 +5335,6 @@
             });
         }
 
-        // ---- кнопка у поля комментария (перед микрофоном, а если его нет — перед «Отправить»)
         onDom(function stickerButton() {
             const row = document.querySelector('.' + SELECTORS.stickerContainer);
             if (!row || row.querySelector('.sticker-btn')) return;
@@ -5808,20 +5347,7 @@
         });
     })();
 
-    // ================= Личные сообщения: сквозное шифрование в комментариях служебного поста «Яэ Мико» =================
-    // Комментарии публичны — прочитать их может кто угодно, поэтому всё содержимое зашифровано. Стойкость держится
-    // на ключах, а не на секретности кода: код открыт, разобрать его можно — прочитать переписку без ключа нельзя.
-    //  • ключ: у каждого пара ECDH P-256. Открытая часть и закрытая, зашифрованная паролем (PBKDF2-SHA256,
-    //    310 000 проходов → AES-GCM), — в его комментарии «ITDXK1 …». На устройстве ключ запоминается (IndexedDB,
-    //    вынуть его оттуда нельзя), на новом устройстве — один раз пароль
-    //  • сообщение: общий ключ пары = HKDF(ECDH(свой закрытый, чужой открытый); соль — номера аккаунтов) → AES-GCM,
-    //    у каждой записи свой случайный IV. Кому запись — открыто не пишем: получатель пробует расшифровать
-    //  • тома: свои записи — в своих комментариях «ITDXM1 <номер> <данные>»; новое — дописываем правкой (без
-    //    уведомлений), не влезло в 1000 символов — следующий том. Данные — плотно, 14 бит на символ (иероглифы);
-    //    сервер исказил — дальше base64. Автор тома — отправитель (это проверяет сам сервер)
     const MSG_POST_ID = 'a53b53e0-9950-4f62-83f4-91e5985ef6c5', MSG_MAX = 990, MSG_TEXT_MAX = 500;
-    // Поддержка ИТД X — это владелец: чат «Поддержка» у всех — зашифрованная переписка с ним с пометкой «поддержка»
-    // внутри шифра. У владельца вместо одной строки — диалог «🛟 ник» на каждого обратившегося
     const SUPPORT_LOGIN = 'NeuroSFW';
     const msgNet = { keys: new Map(), vols: [], me: null, pairs: new Map(), conv: new Map(), syncing: null };
     const te = new TextEncoder(), td = new TextDecoder();
@@ -5831,7 +5357,6 @@
         enc: u8 => { let s = ''; for (const b of u8) s += String.fromCharCode(b); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); },
         dec: s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - s.length % 4) % 4)), c => c.charCodeAt(0))
     };
-    // 14 бит на символ: иероглифы U+4E00…U+8DFF. Хвост добиваем нулями — нулевая длина записи = конец
     const cjk14 = {
         enc(u8) {
             let out = '', acc = 0, bits = 0;
@@ -5897,8 +5422,6 @@
             return { ts: ((pt[0] << 24) >>> 0) + (pt[1] << 16) + (pt[2] << 8) + pt[3], sup: !!(pt[4] & 1), text: td.decode(pt.slice(5)) };
         } catch (e) { return null; }
     }
-    // все ключи и тома — из комментариев поста; свой ключ с устройства — если совпадает с опубликованным
-    // чтение уже идёт — после него ещё одно: результат не старее вызова (иначе чат открывался без только что пришедшего)
     function msgSync() {
         if (msgNet.syncing) return msgNet.again || (msgNet.again = msgNet.syncing.catch(() => { }).then(() => { msgNet.again = null; return msgSync(); }));
         msgNet.syncing = (async () => {
@@ -5922,13 +5445,13 @@
     async function msgLoadMe() {
         const id = msgMyId(), k = id && msgNet.keys.get(id);
         if (!k) return null;
-        try { const s = await msgIdb.get('me:' + id); if (s && s.pub === k.pubText) msgNet.me = { id, priv: s.priv }; } catch (e) { /* нет IndexedDB — пароль при каждом входе */ }
+        try { const s = await msgIdb.get('me:' + id); if (s && s.pub === k.pubText) msgNet.me = { id, priv: s.priv }; } catch (e) {   }
         return msgNet.me;
     }
     async function msgRemember(id, pk8, pubText) {
         const priv = await crypto.subtle.importKey('pkcs8', pk8, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
         msgNet.me = { id, priv }; msgNet.pairs.clear();
-        try { await msgIdb.set('me:' + id, { priv, pub: pubText }); } catch (e) { /* запомнить не вышло — спросим пароль в следующий раз */ }
+        try { await msgIdb.set('me:' + id, { priv, pub: pubText }); } catch (e) {   }
     }
     async function msgCreateKey(pw) {
         const id = msgMyId();
@@ -5955,7 +5478,6 @@
         await msgRemember(id, pk8, k.pubText);
         await msgDecryptAll();
     }
-    // расшифровать всё: чужие тома — ключом пары с автором; свои — пробуем каждого собеседника (кому — не записано)
     async function msgDecryptAll() {
         const me = msgNet.me;
         if (!me) return;
@@ -5974,8 +5496,6 @@
         conv.forEach(list => list.sort((x, y) => x.ts - y.ts));
         msgNet.conv = conv;
     }
-    // отправить: запись — в свой последний том (правкой); не влезла — новый том. После записи сверяем, что сервер
-    // сохранил символы как есть; нет — переходим на base64 и переписываем том
     async function msgSend(uid, text, sup) {
         const me = msgNet.me, key = await msgPair(uid);
         if (!me || !key) throw new Error('нет ключа');
@@ -6002,7 +5522,6 @@
     }
     const msgKeyOf = login => [...msgNet.keys.values()].find(k => k.login.toLowerCase() === String(login).toLowerCase()) || null;
     const msgIsSupport = () => !!myUsername && myUsername.toLowerCase() === SUPPORT_LOGIN.toLowerCase();
-    // диалог → собеседник (номер аккаунта) и ветка: обычная или поддержка
     function msgTarget(d) {
         if (d.supUid) return { uid: d.supUid, sup: true };
         if (d.support) { const k = msgKeyOf(SUPPORT_LOGIN); return { uid: k && k.id, sup: true, missing: 'Поддержка ещё не подключила сообщения — напиши в тг @NeuroSFW' }; }
@@ -6014,7 +5533,6 @@
     const seenKey = t => (t.sup ? 'sup:' : '') + t.uid;
     function msgMarkSeen(t) { const s = msgSeen(), list = msgThread(t); s[seenKey(t)] = list.length ? list[list.length - 1].ts : 0; GM_setValue('msgSeen', s); }
     const msgTime = ts => { const d = new Date(ts * 1000), t = d.toTimeString().slice(0, 5); return d.toDateString() === new Date().toDateString() ? t : `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')} ${t}`; };
-    // список: кто написал, но не в клубе — тоже в списке; у поддержки — «🛟 ник» на каждого обратившегося
     function msgFillDialogs() {
         const me = msgNet.me;
         if (me) for (const [uid, list] of msgNet.conv) {
@@ -6038,14 +5556,12 @@
             d.unread = list.filter(m => m.dir === 'in' && m.ts > (seen[seenKey(t)] || 0)).length;
         }
     }
-    // непрочитанные — по всем перепискам (обычные и поддержка)
     function msgUnread() {
         const seen = msgSeen();
         let n = 0;
         for (const [uid, list] of msgNet.conv) for (const m of list) if (m.dir === 'in' && m.ts > (seen[(m.sup ? 'sup:' : '') + uid] || 0)) n++;
         return n;
     }
-    // число на пункте «Сообщения» — как у «Уведомлений»: берём классы их числа; числа нет — такой же свой
     function msgBadge() {
         const n = msgUnread(), txt = n > 99 ? '99+' : String(n);
         const site = document.querySelector('a[href="/notifications"] .' + SELECTORS.navIcon + ' > span');
@@ -6059,8 +5575,6 @@
         });
     }
     onDom(function msgBadgeKeep() { if (msgNet.me) msgBadge(); });
-    // Новое сообщение, пока окно закрыто (или открыт другой чат), — всплывашка сверху по центру, как уведомления:
-    // 7 секунд, новая заменяет старую, нажатие — открыть этот чат. Проверка — раз в минуту, пока вкладка на экране
     let msgBase = null, msgToastEl = null;
     function msgOpenFrom(m) {
         if (!messagesOverlay) messagesOverlay = buildMessagesOverlay();
@@ -6097,7 +5611,7 @@
             const open = messagesOverlay && messagesOverlay.classList.contains('vp-open'), cur = open && messagesOverlay.currentTarget && messagesOverlay.currentTarget();
             if (last && !(cur && cur.uid === last.uid && cur.sup === last.sup)) msgToast(last);
         }
-        msgBase = Math.max(msgBase || 0, top);                    // первый проход — только запомнить, что уже было
+        msgBase = Math.max(msgBase || 0, top);                    
         msgBadge();
     }
     setTimeout(msgBackground, 8000);
@@ -6135,9 +5649,6 @@
 
     let messagesOverlay = null;
 
-    // Сообщений на ИТД нет — кнопка открывает «чат», где сервер сначала печатает,
-    // а потом отвечает шуткой. «Ещё раз» — новая шутка, Esc или клик мимо — закрыть.
-    // Ответы бота «Сервер ИТД» в личке (прототип: сообщения никуда не уходят — бот над этим и шутит)
     const MESSAGE_JOKES = [
         ['📨', 'Твоё сообщение отправлено. Куда — лучше не спрашивай'],
         ['🐌', 'Доставляем почтой России. Ориентировочно — к следующему обновлению сайта'],
@@ -6173,27 +5684,18 @@
     const BOT_HELLO = [['👋', 'Привет! Я всё запомню. Ровно до обновления страницы'], ['🫡', 'Здравия желаю! Сообщения — пока нет, а бот — вот он']];
     const BOT_ASK = [['🤔', 'Отличный вопрос. Отвечу, как только личка заработает'], ['🔮', 'Шар предсказаний говорит: «спроси, когда выйдет релиз»']];
 
-    // ================= Личка: прототип сообщений =================
-    // Пока не рабочий: диалоги и переписка — примеры, отправленное видно только тебе. Открывается как
-    // страница, но это окно поверх: на телефоне — весь экран над нижней панелью (панель остаётся сверху,
-    // активный пункт — «Личка»), на компьютере — на месте ленты, меню и правая панель на месте.
-    // «Назад» (кнопка браузера или телефона) закрывает, как при обычном переходе.
-    // Диалоги: бот «Сервер ИТД» и все, у кого стоит ИТД X (тот же список, что в «Клубе ИТД X»).
-    // Переписки пока нет — пусто, пока не напишешь; ничего не сохраняется.
     const MSG_BOT = { id: 'bot', ava: '🤖', name: 'Сервер ИТД', login: '', last: 'Напиши что-нибудь — отвечу. Честно', time: 'сейчас', unread: 1, online: true, bot: true,
         msgs: [['in', 'Привет! Я — Сервер ИТД. Личка пока в разработке 🛠️'], ['in', 'Сообщения никуда не уходят, зато я отвечаю. Проверь 😏']] };
-    // Поддержка ИТД X — отдельный чат: пишешь проблему или идею, отвечает «оператор» (пока тоже прототип)
     const MSG_SUPPORT = { id: 'support', ava: '🛟', name: 'Поддержка ИТД X', login: '', last: 'Нашёл баг или есть идея — пиши сюда', time: '', unread: 0, online: true, support: true,
         msgs: [['in', 'Привет! Это поддержка ИТД X 👋'], ['in', 'Нашёл баг или есть идея — опиши здесь. Личка пока прототип, так что быстрее всего — в тг @NeuroSFW']] };
     let supportTicket = 0;
     let MSG_DIALOGS = [MSG_BOT, MSG_SUPPORT];
-    // закреплённые чаты (как в Telegram): id по порядку закрепления, хранятся в настройках скрипта
     const msgPins = () => GM_getValue('msgPins', []);
     function sortDialogs(list) {
         const pins = msgPins();
         return [...list.filter(d => pins.includes(d.id)).sort((a, b) => pins.indexOf(a.id) - pins.indexOf(b.id)), ...list.filter(d => !pins.includes(d.id))];
     }
-    const msgPeople = new Map();                        // логин → диалог (переписка живёт, пока открыта вкладка)
+    const msgPeople = new Map();                        
     async function loadMsgPeople(onUpdate) {
         const names = verifiedNames().filter(n => !myUsername || n.toLowerCase() !== myUsername.toLowerCase()).sort((a, b) => a.localeCompare(b));
         names.forEach(n => { if (!msgPeople.has(n)) msgPeople.set(n, { id: 'u:' + n, login: n, ava: '👤', name: n, last: 'Тоже с ИТД X · напиши первым', time: '', unread: 0, msgs: [] }); });
@@ -6323,15 +5825,13 @@
         const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
         const root = document.createElement('div');
         root.className = 'vp-msgs';
-        // Колесо и палец над окном крутят только список и переписку. Где крутить нечего (короткий список,
-        // шапка, поле ввода) — никуда: раньше прокрутка уходила странице, и лента с тенями ехала за окном.
         const blockOuterScroll = e => {
             const area = e.target.closest && e.target.closest('.vp-msgs-list, .vp-msgs-feed, textarea');
             if (!area || area.scrollHeight <= area.clientHeight) e.preventDefault();
         };
         root.addEventListener('wheel', blockOuterScroll, { passive: false });
         root.addEventListener('touchmove', blockOuterScroll, { passive: false });
-        root.setAttribute('role', 'region');          // это «страница», не всплывающее окно: без затемнения сайта под окнами
+        root.setAttribute('role', 'region');          
         root.setAttribute('aria-label', 'Сообщения');
         root.innerHTML = `
             <section class="vp-msgs-view vp-msgs-home">
@@ -6408,9 +5908,6 @@
             input.value = ''; send.disabled = true;
         }
         const note = t => { const n = document.createElement('div'); n.className = 'vp-msgs-note'; n.textContent = t; feed.appendChild(n); return n; };
-        // переписка с человеком: нет своего ключа — создать (пароль) или открыть (пароль с другого устройства)
-        // рисовать может только последний вызов: ответы сервера приходят не по порядку, и два рисования
-        // перемешивали ленту (одно стирало, другое дописывало)
         let renderN = 0;
         async function msgOpenPerson(d) {
             const my = ++renderN;
@@ -6449,7 +5946,6 @@
             });
             p1.focus();
         }
-        // пока окно открыто — раз в 20 с новые сообщения: список и открытый чат
         const msgPoll = setInterval(async () => {
             if (!root.isConnected) return clearInterval(msgPoll);
             if (!msgsOpen || !msgNet.me) return;
@@ -6507,7 +6003,6 @@
             }, 900 + Math.random() * 700);
         }
 
-        // Закрепить / открепить чат — долгое нажатие (телефон) или правый клик (компьютер), как в Telegram
         const ctx = document.createElement('div');
         ctx.className = 'vp-msgs-ctx';
         root.appendChild(ctx);
@@ -6553,10 +6048,9 @@
 
         list.addEventListener('click', e => {
             const r = e.target.closest('.vp-msgs-row');
-            if (held) { held = false; return; }                  // это было долгое нажатие — чат не открываем
+            if (held) { held = false; return; }                  
             if (r) openChat(MSG_DIALOGS.find(d => d.id === r.dataset.id));
         });
-        // шапка чата: имя или аватар — в профиль человека
         root.querySelectorAll('.vp-msgs-who, .vp-msgs-chead .vp-msgs-ava').forEach(el => el.onclick = () => {
             if (!current || !current.login) return;
             const login = current.login;
@@ -6583,10 +6077,8 @@
             else bubble('out', text, now() + ' · не отправлено').classList.add('vp-fail');
         });
 
-        // место окна: телефон — весь экран, панель поднимаем над окном; компьютер — колонка ленты
         function place() {
             const nav = document.querySelector('.' + SELECTORS.nav);
-            // нижняя панель телефона — меню в строку внизу экрана (не левое меню компьютера)
             const row = nav && navIsRow(nav) && nav.getBoundingClientRect().top > innerHeight / 2;
             document.querySelectorAll('.vp-msgs-navwrap').forEach(w => w.classList.remove('vp-msgs-navwrap'));
             if (row) {
@@ -6595,7 +6087,6 @@
                 Object.assign(root.style, { left: '0px', right: '0px', top: '0px', bottom: '0px', width: '', borderRadius: '', paddingBottom: bottom + 'px' });
             } else {
                 let cb = contentBox() || lastCb;
-                // магазин и прочие страницы-рамки: колонки нет (ширина 0) — окно по центру, как лента, не заходя на меню
                 if (!cb || cb.right - cb.left < 300) {
                     const side = document.querySelector('.' + SELECTORS.sidebar), sr = side && side.getBoundingClientRect();
                     const w = Math.min(650, innerWidth - 32), l = Math.max(sr ? sr.right + 24 : 16, Math.round(innerWidth / 2 - w / 2));
@@ -6605,7 +6096,7 @@
                 Object.assign(root.style, { left: left + 'px', width: width + 'px', right: '', top: '12px', bottom: '12px', borderRadius: '', paddingBottom: '0px' });
             }
             root.classList.toggle('vp-card', !row);
-            under.classList.remove('vp-on');                  // вместо подложки — лента под окном спрятана (свой фон виден)
+            under.classList.remove('vp-on');                  
             if (!row) Object.assign(under.style, { left: root.style.left, width: root.style.width });
         }
         let openPath = '';
@@ -6624,27 +6115,22 @@
             markActiveNav(); moveNavBlob();
             if (!fromHistory && overlayAt('vpMsgs')) history.back();
         }
-        // «назад»/«вперёд»: запись лички — открыть, другая — закрыть
         addEventListener('popstate', () => {
             const open = root.classList.contains('vp-open');
             if (overlayAt('vpMsgs')) { if (!open) root.open(true); }
             else if (open) close(true);
         });
-        // нажали другой пункт меню той же страницы (открыли личку на ленте и жмут «Ленту») — сайт никуда
-        // не переходит, а личку закрыть надо; на другую страницу — закроет msgsLeft ниже
         document.addEventListener('click', e => {
             if (!root.classList.contains('vp-open')) return;
             const a = e.target.closest && e.target.closest('a.' + SELECTORS.navLink);
-            // тот же пункт — только закрыть личку: иначе сайт считает это повторным нажатием и обновляет страницу
             if (a && a.getAttribute('href') !== '#' && a.getAttribute('href') === location.pathname) { e.preventDefault(); e.stopPropagation(); close(); }
         }, true);
-        // перешли на другую страницу (пункт меню, ссылка) — «страница» лички закрывается
         const msgsLeft = () => { if (root.classList.contains('vp-open') && location.pathname !== openPath) close(true); };
         onDom(msgsLeft);
         document.addEventListener('vp-loc', msgsLeft);
         root.open = fromHistory => {
             if (root.classList.contains('vp-open')) { if (current) closeChat(); return; }
-            if (galOpen) closeGallery(true);                  // одно окно за раз: галерея уступает запись в истории
+            if (galOpen) closeGallery(true);                  
             openPath = location.pathname;
             msgsOpen = true;
             closeChat();
@@ -6664,7 +6150,6 @@
         return root;
     }
 
-    // На телефоне у сайта короткие подписи («Магаз», «Уведы») — и у нас короткая
     function messagesLabel(notificationsLink) {
         return /уведомления/i.test(notificationsLink.textContent) ? 'Сообщения' : 'Личка';
     }
@@ -6683,7 +6168,7 @@
                 nav.insertBefore(messagesLink, notificationsLink);
             }
             const label = messagesLink.children[1], text = messagesLabel(notificationsLink);
-            if (label && label.textContent !== text) label.textContent = text;     // сменилась ширина экрана
+            if (label && label.textContent !== text) label.textContent = text;     
             return;
         }
 
@@ -6697,7 +6182,6 @@
         iconSpan.className = (commonClasses(siteLinks.map(a => a.firstElementChild)) + ' ' + SELECTORS.navIcon).trim();
         iconSpan.innerHTML = ICONS.MESSAGES;
         const textSpan = document.createElement('span');
-        // классы подписи — как у подписей сайта: на телефоне у них свой (мелкий) шрифт
         textSpan.className = commonClasses(siteLinks.map(a => a.children[1]).filter(Boolean));
         textSpan.textContent = messagesLabel(notificationsLink);
         messagesLink.appendChild(iconSpan);
@@ -6708,8 +6192,6 @@
 
     addMessagesButton();
     onDom(addMessagesButton);
-    // Нажатие на «Личку» — один обработчик на всю страницу: кнопку сайт перерисовывает вместе с меню
-    // (и она может остаться от прошлой копии скрипта), а окно создаём при первом открытии
     document.addEventListener('click', e => {
         const a = e.target.closest && e.target.closest('nav a[href="#"]');
         if (!a || !a.closest('.' + SELECTORS.nav)) return;
@@ -6717,8 +6199,6 @@
         if (!messagesOverlay) messagesOverlay = buildMessagesOverlay();
         messagesOverlay.open();
     }, true);
-    // Нижняя панель телефона: у сайта подписи короткие («Магаз», «Уведы»), а «Профиль» — длинная и у самого
-    // края: задевала обводку. Там — «Акк», в тон остальным. На компьютере (полные подписи: «Уведомления») — как у сайта.
     const PROFILE_SHORT = 'Акк';
     onDom(function shortProfileLabel() {
         const nav = document.querySelector('.' + SELECTORS.nav);
@@ -6730,28 +6210,11 @@
         });
     });
 
-    // Ивент: у сайта иконка — картинка-портал (portal-inactive.png), а не значок как у остальных пунктов,
-    // поэтому ни цвет стиля, ни свечение активного пункта на неё не ложились. Свой значок в стиле иконок ИТД
-    // (24×24, цвет текста): звезда с сильно скруглёнными лучами — по закрашенной площади как соседние иконки (~40% поля, как «Лента» и «Уведы»). «Пассив» — звезда с маленькой
-    // вырезанной звёздочкой в центре (как «дырочки» у иконок ИТД); «актив» (сайт вешает
-    // на картинку второй класс — пульсацию, или меняет файл) — та же звезда (того же размера) с голубой звездой прямо поверх и три искры
-    // рядом, пульсирует как у сайта.
     const PORTAL_ICON = {
         idle: { mask: '<path d="M12 4.17L14.35 9.82L20.45 10.31L15.8 14.28L17.22 20.23L12 17.05L6.78 20.23L8.2 14.28L3.55 10.31L9.65 9.82Z" stroke="currentColor" stroke-width="4.4" stroke-linejoin="round"/>', hole: '<path d="M12 11.13L12.59 12.54L14.11 12.66L12.95 13.66L13.3 15.15L12 14.35L10.7 15.15L11.05 13.66L9.89 12.66L11.41 12.54Z" stroke="currentColor" stroke-width="1.9800000000000002" stroke-linejoin="round"/>' },
         live: { mask: '<path d="M12 4.17L14.35 9.82L20.45 10.31L15.8 14.28L17.22 20.23L12 17.05L6.78 20.23L8.2 14.28L3.55 10.31L9.65 9.82Z" stroke="currentColor" stroke-width="4.4" stroke-linejoin="round"/><path d="M20.5 0.8C21.2 2.6 21.2 2.6 23 3.3C21.2 4 21.2 4 20.5 5.8C19.8 4 19.8 4 18 3.3C19.8 2.6 19.8 2.6 20.5 0.8Z"/><path d="M21.7 15C22.09 16.01 22.09 16.01 23.1 16.4C22.09 16.79 22.09 16.79 21.7 17.8C21.31 16.79 21.31 16.79 20.3 16.4C21.31 16.01 21.31 16.01 21.7 15Z"/><path d="M15.9 0.2C16.26 1.14 16.26 1.14 17.2 1.5C16.26 1.86 16.26 1.86 15.9 2.8C15.54 1.86 15.54 1.86 14.6 1.5C15.54 1.14 15.54 1.14 15.9 0.2Z"/>', over: '<path d="M12 9.18L13.1 11.83L15.97 12.06L13.79 13.93L14.45 16.73L12 15.23L9.55 16.73L10.21 13.93L8.03 12.06L10.9 11.83Z" fill="#5cc8ff" stroke="#5cc8ff" stroke-width="2.64" stroke-linejoin="round"/>' }
     };
-    // Нижняя панель телефона: кнопка сайта «Создать пост» (+) — на «бугорке» по центру панели: верхний
-    // край панели плавно поднимается дугой вокруг «+» (раньше «+» стоял справа над панелью, и на него
-    // ложилась наша «наверх»). Фон, размытие и обводка панели рисуются одной фигурой «панель + бугорок»
-    // (SVG под пунктами) — без шва и двойного затемнения; у самой «+» свой круг убран, она лежит на бугорке.
-    // Кнопка та же, сайтовая, — только место: она в том же закреплённом блоке, что и панель, и прячется
-    // вместе с ней. Пункты панели не сдвигаются: купол — над краем панели. Наша «наверх» — на своём месте, а вид
-    // берёт у «+» (классы сайта), чтобы совпадал до пикселя.
-    // Бугорок — одна плавная кривая-«колокол» шириной BUMP_W и высотой BUMP_H над краем панели:
-    // касательные горизонтальны у краёв и на вершине, без стыков разных дуг — без резкого пика.
-    // «+» (BUMP px) — по центру, чуть над краем панели (BUMP_UP): пункты панели не задевает.
     const BUMP = 40, BUMP_UP = 5, BUMP_W = 160, BUMP_H = 21, BUMP_LIFT = BUMP_H;
-    // контур «скруглённая панель + бугорок»: w×h панели, её верх — на y = top
     function bumpPath(w, h, top) {
         const r = h / 2, cx = w / 2, half = BUMP_W / 2, peak = top - BUMP_H, n = v => +v.toFixed(2);
         return `M${r} ${top}H${n(cx - half)}`
@@ -6783,7 +6246,6 @@
             bg.setAttribute('class', 'vp-bump-bg');
             bg.innerHTML = '<defs><linearGradient id="vp-bump-edge" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="1">'
                 + '<stop offset="0" stop-color="rgba(255,255,255,.25)"/><stop offset="1" stop-color="rgba(255,255,255,.05)"/></linearGradient></defs>'
-                // обводка — той же фигурой в 2 px: внешнюю половину срезает обрезка по контуру, остаётся 1 px внутри
                 + '<path class="vp-bump-fill"/><path class="vp-bump-edge" fill="none" stroke="url(#vp-bump-edge)" stroke-width="2"/>';
             nav.prepend(bg);
         }
@@ -6806,7 +6268,7 @@
         document.querySelectorAll('a[href="/event"] img').forEach(img => {
             const own = [...img.classList].filter(c => !c.startsWith('vp-'));
             const state = own.length > 1 || (/portal/.test(img.src) && !/inactive/.test(img.src)) ? 'live' : 'idle';
-            if (!img.classList.contains('vp-portal-img')) img.classList.add('vp-portal-img');   // сайт перерисует — заметим
+            if (!img.classList.contains('vp-portal-img')) img.classList.add('vp-portal-img');   
             let svg = img.parentElement.querySelector(':scope > svg.vp-portal');
             if (!svg) {
                 svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -6817,11 +6279,7 @@
             }
             if (svg.dataset.state !== state) {
                 svg.dataset.state = state;
-                // Значок из нескольких фигур (звезда и искры; у звезды ещё заливка и обводка): у неактивного пункта цвет полупрозрачный,
-                // и на стыках прозрачность складывалась — пересечения светлели. Поэтому фигуры — белым в маске,
-                // а цветом заливаем один раз, как у цельных иконок сайта.
                 const id = 'vp-ev-' + (++eventMaskN);
-                // hole — прорезь в значке (если понадобится), over — цветная деталь поверх (голубая звезда)
                 const ic = PORTAL_ICON[state];
                 svg.innerHTML = `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">`
                     + `<g fill="#fff" style="color:#fff">${ic.mask}</g>`
@@ -6832,8 +6290,6 @@
     });
 
     const postDesignStyle = document.createElement('style');
-    // Оформление карточки — только постам ленты (article). Открытый пост собран иначе:
-    // рамка, отступ и размытый фон на нём съезжали с настоящих краёв блока.
     postDesignStyle.textContent = `
         article.vp-post {
             background: var(--block-bg, rgba(30, 30, 46, 0.8));
@@ -7052,9 +6508,6 @@
         });
     }
 
-    // Свои покраски (ники и аватарки — в радуге каждый кадр) окно не открывают: их пропускаем,
-    // иначе проверка окон с пересчётом раскладки шла бы 20 раз в секунду. Так же — то, что мы
-    // двигаем каждый кадр: посты при прокрутке (сцена), кнопки меню и подложка, баннер, свечение видео.
     const PAINTED = '.vp-nick, .vp-nick-text, .my-avatar-glow, article.vp-post, .vp-nav-link, .vp-nav-icon, .vp-nav-blob, '
         + '.vp-banner > img, .vp-ambient, .vp-bg-canvas, .vp-rail';
     const modalObserver = new MutationObserver(muts => {
@@ -7086,12 +6539,7 @@
     `;
     document.head.appendChild(styleIcons);
 
-    // Размытый фон поста: под карточкой с картинкой — её размытая копия ровно на месте картинки
-    // и тёмная вуаль поверх. Слои — .itd-blur-container > .vp-blur-img + .vp-blur-dim, вид — в CSS;
-    // в style.* только то, что считается: адрес картинки и место слоя.
-    // Место пересчитывает один общий ResizeObserver на все карточки (был свой на каждую пересборку
-    // и не отключался — копились на длинной ленте).
-    const blurCards = new Map();                            // карточка → { img, layer }
+    const blurCards = new Map();                            
     const blurRO = new ResizeObserver(entries => {
         const todo = new Set(entries.map(e => blurCards.has(e.target) ? e.target : e.target._vpBlurCard));
         todo.forEach(card => card && placeBlur(card));
@@ -7099,17 +6547,15 @@
     function placeBlur(card) {
         const b = blurCards.get(card);
         if (!b) return;
-        // карточка ушла со страницы: снимаем, а метку картинки сбрасываем — вернётся, фон соберётся заново
         if (!b.img.isConnected || !card.isConnected) { b.img._vpBlurDone = null; dropBlur(card); return; }
         const ar = card.getBoundingClientRect(), ir = b.img.getBoundingClientRect();
         if (!ar.width || !ir.width) return;
-        const k = card.offsetWidth / ar.width;              // сцена ленты чуть масштабирует пост
+        const k = card.offsetWidth / ar.width;              
         Object.assign(b.layer.style, {
             left: ((ir.left - ar.left) * k - card.clientLeft) + 'px', top: ((ir.top - ar.top) * k - card.clientTop) + 'px',
             width: ir.width * k + 'px', height: ir.height * k + 'px'
         });
     }
-    // снять фон с карточки целиком (пост без картинки, выключили настройку, карточка ушла со страницы)
     function dropBlur(card) {
         const b = blurCards.get(card);
         if (b) { blurRO.unobserve(b.img); blurRO.unobserve(card); blurCards.delete(card); }
@@ -7124,7 +6570,6 @@
         card.setAttribute('data-blur-bg', img.src);
         if (getComputedStyle(card).position === 'static') card.classList.add('vp-blur-rel');
         card.classList.add('itd-blur-active');
-        // только свой слой: у поста с репостом внутри querySelector без :scope находил слой репоста
         let box = card.querySelector(':scope > .itd-blur-container');
         if (!box) {
             box = document.createElement('div');
@@ -7141,13 +6586,9 @@
         placeBlur(card);
     }
     function addBlurBackground() {
-        // Идём от картинок, а не от всех постов: посты без картинки иначе перебирались на каждую правку страницы
         const cards = new Set();
-        // метка — адрес картинки: сайт переиспользует карточки и картинки, и фон от прошлого поста оставался
-        // (фон карточки берётся с её ПЕРВОЙ картинки — с ней и сравниваем: в посте с несколькими картинками
-        // сравнение с каждой давало вечную пересборку фона)
         document.querySelectorAll('img.' + SELECTORS.postMedia).forEach(img => {
-            if (img._vpBlurDone === img.src) return;      // её карточки уже с фоном от неё
+            if (img._vpBlurDone === img.src) return;      
             let pending = false;
             for (const card of [img.closest('.' + SELECTORS.repost), img.closest('article.' + SELECTORS.post)]) {
                 const first = card && card.querySelector('img.' + SELECTORS.postMedia);
@@ -7155,15 +6596,12 @@
             }
             if (!pending) img._vpBlurDone = img.src;
         });
-        // в карточку пришёл пост без картинки — старое размытие убираем
         document.querySelectorAll('[data-blur-bg]').forEach(card => {
             if (!card.querySelector('img.' + SELECTORS.postMedia)) dropBlur(card);
         });
         cards.forEach(card => {
             const img = card.querySelector('img.' + SELECTORS.postMedia);
             if (!img || !img.src || img.src.includes('avatar')) return;
-            // пост, у которого картинка только в репосте, тоже получает свой слой от неё: без слоя карточка
-            // была прозрачной насквозь (просвечивал фон страницы)
             buildBlur(card, img);
         });
     }
@@ -7201,22 +6639,16 @@
 
     onDom(function postBlur() { if (postBlurEnabled) addBlurBackground(); });
 
-    // ==== анти цензура
-    // Картинка уходит на сайт как .gif: меняются имя и тип файла, содержимое то же.
-    // Подмена одна — gifFile; выбор файла, перетаскивание и отправка через XHR зовут её
-    // и смотрят выключатель в момент срабатывания, поэтому вкл/выкл действует без перезагрузки.
     function gifFile(file) {
         if (!(file instanceof File) || !file.type.startsWith('image/') || file.type === 'image/gif') return file;
         return new File([file], file.name.replace(/\.[^.]+$/, '') + '.gif', { type: 'image/gif' });
     }
-    // список файлов с подменой; null — подменять нечего
     function gifTransfer(files) {
         if (!antiCensorshipEnabled || !files || ![...files].some(f => gifFile(f) !== f)) return null;
         const dt = new DataTransfer();
         for (const f of files) dt.items.add(gifFile(f));
         return dt;
     }
-    // поле выбора картинок: подменяем выбранное до обработчиков сайта (перехват на document)
     function gifOnPick(e) {
         const input = e.target;
         if (!(input instanceof HTMLInputElement) || input.type !== 'file') return;
@@ -7224,11 +6656,8 @@
         const dt = gifTransfer(input.files);
         if (dt) input.files = dt.files;
     }
-    // браузер шлёт сначала input, потом change — сайт может слушать любое
     document.addEventListener('input', gifOnPick, true);
     document.addEventListener('change', gifOnPick, true);
-    // перетаскивание: гасим настоящий drop и повторяем его с подменёнными файлами
-    // там же, куда бросили; в повторе подменять уже нечего, он проходит к сайту
     document.addEventListener('drop', function (e) {
         const dt = gifTransfer(e.dataTransfer && e.dataTransfer.files);
         if (!dt) return;
@@ -7236,9 +6665,7 @@
         e.stopPropagation();
         e.target.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY }));
     }, true);
-    // без этого картинка, брошенная мимо поля, открывается вместо страницы
     document.addEventListener('dragover', function (e) { if (antiCensorshipEnabled) e.preventDefault(); }, true);
-    // отправка через XHR — на случай, если файл дошёл до сайта мимо поля выбора
     (function gifOnSend() {
         const X = pageWindow.XMLHttpRequest.prototype, origSend = X.send;
         X.send = function (body) {
@@ -7256,12 +6683,6 @@
         };
     })();
 
-    // ==== подмена текстов ошибок
-    // Только сообщения об ошибках — всплывашки сайта (role=alert/status, aria-live) с текстом
-    // про ошибку: текст меняется на случайную фразу. В 2.9.x подмена ошибочно шла по тексту
-    // уведомлений — маты стояли у всех у ника. Личка и окна мода не трогаются.
-    // Метка — сама подставленная фраза: сайт переиспользует всплывашку, и новая ошибка в том же
-    // элементе раньше оставалась как есть (метка data-replaced висела навсегда).
     const ERROR_TEXT = /ошибк|не удалось|не получилось|попробуйте|что-то пошло не так|error|failed/i;
     const ERROR_REPLIES = [
         'Нет, иди нахуй',
@@ -7288,12 +6709,6 @@
 
     onDom(replaceNotificationTexts);
 
-    // ==== цвет эмодзи
-    // Оттенок карточки по эмодзи-аватарке: рисуем эмодзи на белом холсте 64×64 и берём средний
-    // цвет всего холста (белый фон входит в среднее — отсюда мягкость), затем поднимаем яркость
-    // и насыщенность, иначе тёмные и серые эмодзи давали мутно-бурую заливку.
-    // Результат — строка «r, g, b» для --vp-emoji или null (эмодзи не нарисовалась);
-    // считается один раз на эмодзи, холст один на все.
     const emojiTints = new Map();
     let emojiCanvas = null;
     function emojiTint(emoji) {
@@ -7313,7 +6728,6 @@
         emojiTints.set(emoji, tint);
         return tint;
     }
-    // средний цвет холста с эмодзи: [r, g, b] 0–255
     function measureEmojiColor(emoji) {
         if (!emojiCanvas) {
             emojiCanvas = document.createElement('canvas');
@@ -7348,35 +6762,28 @@
         el.classList.remove('vp-emoji-tint');
         el.style.removeProperty('--vp-emoji');
     }
-    // Сайт переиспользует карточки: в тот же элемент приходит другой пост (новые сверху, подгрузка,
-    // пришли уведомления). Поэтому метка — не «покрашено», а чем покрашено; сменилось — красим заново.
     function colorizePosts() {
         document.querySelectorAll('article.' + SELECTORS.post).forEach(post => {
             const avatar = post.querySelector('.' + SELECTORS.avatarLink + ' .' + SELECTORS.avatar);
             const emoji = avatar ? avatar.textContent.trim() : '';
             const withBlur = postBlurEnabled && !!post.querySelector('.' + SELECTORS.postMedia);
             const key = emoji ? emoji + (withBlur ? '|blur' : '') : '';
-            // сайт сам переставляет className карточки (прочитано, обновилось) и стирает наш класс, а метка
-            // остаётся — поэтому «уже покрашено» = метка совпала И класс на месте
             const tinted = !key || withBlur || post.classList.contains('vp-emoji-tint');
             if ((post.getAttribute('data-post-colored') || '') === key && tinted) return;
             untintCard(post);
             if (!key) { post.removeAttribute('data-post-colored'); return; }
             post.setAttribute('data-post-colored', key);
-            if (!withBlur) tintCard(post, emoji);                // с картинкой фон даёт её размытие
+            if (!withBlur) tintCard(post, emoji);                
         });
-        // репосты могли дорисоваться позже самой карточки
         document.querySelectorAll('article.' + SELECTORS.post + '[data-post-colored] .' + SELECTORS.repost + ':not([data-vp-soft])').forEach(rp => softenRepost(rp.closest('article')));
     }
-    // Репост внутри подкрашенной карточки: у сайта он и плашки в нём залиты сплошным тёмным —
-    // на цветной карточке это чёрная дыра. Сплошные фоны в репосте делаем полупрозрачными.
     function softenRepost(post) {
         post.querySelectorAll('.' + SELECTORS.repost + ':not([data-vp-soft])').forEach(rp => {
             rp.setAttribute('data-vp-soft', '');
             [rp, ...rp.querySelectorAll('div, p, section')].forEach(el => {
                 if (el.closest('button, a, video') || el.querySelector(':scope > img, :scope > video')) return;
                 const m = getComputedStyle(el).backgroundColor.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?/);
-                if (!m || (m[4] !== undefined && +m[4] < .5)) return;           // прозрачный — не трогаем
+                if (!m || (m[4] !== undefined && +m[4] < .5)) return;           
                 el.classList.add('vp-soft-bg');
             });
         });
@@ -7386,8 +6793,6 @@
         if (!location.pathname.includes('/notifications')) colorizePosts();
     });
 
-    // Эмодзи-аватарка пункта: выученный класс аватара в уведомлениях может не совпасть,
-    // поэтому ищем сам лист с одной эмодзи — сначала внутри ссылки на профиль
     const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|[\u200d\ufe0f\u{1F3FB}-\u{1F3FF}])+$/u;
     function emojiAvatarOf(item) {
         const tagged = item.querySelector('.' + SELECTORS.avatar);
@@ -7400,9 +6805,6 @@
     function colorizeNotifications() {
         document.querySelectorAll('.' + SELECTORS.notification).forEach(el => {
             const emoji = emojiAvatarOf(el) || '';
-            // сайт переиспользует пункты списка — перекрашиваем, если эмодзи сменилась (или пропала:
-            // тогда снимаем старый цвет, а не оставляем чужой)
-            // …и если сайт переставил className (новое уведомление пришло, пока открыт список) — класс пропал
             if ((el.getAttribute('data-colored') || '') === emoji && (!emoji || el.classList.contains('vp-emoji-tint'))) return;
             untintCard(el);
             if (emoji) el.setAttribute('data-colored', emoji); else el.removeAttribute('data-colored');
@@ -7416,7 +6818,6 @@
 
 
 
-    // ================= Дизайн и удобство =================
     const designStyle = document.createElement('style');
     designStyle.textContent = `
         /* Оттенок карточки по эмодзи (уведомления, посты без картинки): мягкий градиент от левого
@@ -7519,9 +6920,8 @@
     `;
     document.head.appendChild(designStyle);
 
-    // Активный пункт меню — по адресу страницы (у сайта это хеш-класс, он меняется)
-    let msgsOpen = false;                               // открыта «страница» лички — активный пункт «Личка»
-    let galOpen = false;                                // открыта галерея — активный пункт «Галерея»
+    let msgsOpen = false;                               
+    let galOpen = false;                                
     function markActiveNav() {
         const path = location.pathname;
         document.querySelectorAll('.' + SELECTORS.navLink).forEach(a => {
@@ -7532,8 +6932,6 @@
         });
         msgsNavLook();
     }
-    // Пока открыта личка: какой пункт сайт считает текущим и как у него выглядят текущий и обычный пункты
-    // (цвет, прозрачность, фон — считываем до своих правил и кладём в переменные у меню)
     function msgsNavLook() {
         const links = [...document.querySelectorAll('.' + SELECTORS.navLink)];
         if (!msgsOpen && !galOpen) { links.forEach(a => a.classList.remove('vp-site-cur')); return; }
@@ -7551,7 +6949,6 @@
     onDom(markActiveNav);
     addEventListener('popstate', markActiveNav);
 
-    // ================= 3.0: стекло, переходы, меню, баннер, счётчики, звуки =================
     const fx = document.createElement('style');
     fx.textContent = `
         /* Стекло: блоки сайта полупрозрачные и размывают то, что под ними, — живой фон виден
@@ -7704,10 +7101,7 @@
     document.head.appendChild(fx);
     const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    // --- 1. Стекло
     let glassEnabled = GM_getValue('glassEnabled', true);
-    // Какие блоки сайта стеклянные — берём из его же стилей: правила с фоном var(--block-bg…).
-    // Классы сайта — хеши, а так их знать не нужно. Новые таблицы (подгрузка) — дописываем.
     const glassCss = document.createElement('style');
     document.head.appendChild(glassCss);
     let glassSheets = -1, glassSel = '';
@@ -7724,7 +7118,7 @@
         };
         for (const sh of document.styleSheets) {
             if (sh.ownerNode === glassCss || sh.ownerNode === fx) continue;
-            try { walk(sh.cssRules); } catch (e) { /* чужой домен — пропускаем */ }
+            try { walk(sh.cssRules); } catch (e) {   }
         }
         glassSel = [...sels].join(', ');
         glassCss.textContent = [...sels].map(sel => `html.vp-glass :is(${sel}) { backdrop-filter: var(--vp-glass-filter); -webkit-backdrop-filter: var(--vp-glass-filter); }`).join('\n');
@@ -7735,11 +7129,6 @@
     }
     applyGlass();
     onDom(function glassSheetsCheck() { if (glassEnabled) collectGlass(); });
-    // Всплывающее поверх страницы (уведомления-тосты, выпадашки, окно эмодзи) со стеклом становилось
-    // кашей: сквозь полупрозрачный фон читался текст под ним. Такие слои — плотнее (класс vp-float,
-    // те же переменные, что у шторки комментариев). Всплывающее = блок или его предок до 5 уровней
-    // стоит fixed или absolute поверх (z-index ≥ 5): просто absolute — это посты в ленте, сайт так
-    // раскладывает длинный список. Навигация и сами посты — не всплывающее. Каждый элемент — один раз.
     const floatSeen = new WeakSet();
     let floatAt = 0;
     onDom(function glassFloating() {
@@ -7753,14 +7142,11 @@
                 const cs = getComputedStyle(n);
                 if (cs.position === 'fixed' || (cs.position === 'absolute' && +cs.zIndex >= 5)) { el.classList.add('vp-float'); return; }
             }
-            // Блок того же фона внутри такого же блока (форма ответа в карточке поста): без стекла цвет
-            // сплошной и сливается, а два полупрозрачных слоя дают тёмный прямоугольник — внутренний прозрачный
             const outer = el.parentElement && el.parentElement.closest(`:is(${glassSel})`);
             const bg = getComputedStyle(el).backgroundColor;
             if (outer && !outer.classList.contains('vp-float') && getComputedStyle(outer).backgroundColor === bg && !/^rgba\(0, 0, 0, 0\)$/.test(bg)) el.classList.add('vp-nested');
         });
     });
-    // Шторка комментариев (телефон): самый внешний закреплённый на экране блок вокруг поля комментария
     onDom(function commentsSheet() {
         for (const input of commentInputs()) {
             let sheet = null;
@@ -7771,9 +7157,6 @@
         }
     });
 
-    // Длинный пост, свёрнутый под «Читать далее»: сайт гасит низ текста полосой цвета обычной карточки
-    // (::after с градиентом в --block-bg). На карточке, подкрашенной под эмодзи или картинку, это тёмная
-    // плашка поверх текста. Вместо полосы — прозрачность самого текста (mask): низ тает в любой фон.
     onDom(function clampFade() {
         document.querySelectorAll('.vp-clamp').forEach(el => {
             const b = el.nextElementSibling;
@@ -7786,8 +7169,6 @@
         });
     });
 
-    // Телефон: цвет кнопки поста, пока палец на ней (класс — надёжнее :active, который не во всех браузерах
-    // срабатывает при касании); отпустил — через мгновение гаснет
     document.addEventListener('pointerdown', e => {
         if (e.pointerType !== 'touch') return;
         const b = e.target.closest && e.target.closest('.vp-post-action');
@@ -7798,13 +7179,6 @@
         addEventListener('pointercancel', off, true);
     }, true);
 
-    // Кнопка «назад» на телефоне закрывает окна сайта (комментарии, создание поста и т.п.), а не уводит
-    // на прошлую страницу. Сайт сам таких записей в историю не кладёт: открылось окно — кладём запись
-    // с тем же адресом, «назад» снимает её, а мы закрываем окно (Escape → клик по затемнению → кнопка
-    // «Закрыть»). Окно закрыли сами — снимаем запись, чтобы лишнего шага «назад» не осталось.
-    // Затемнения сайта узнаём по его же стилям: fixed на весь экран, z-index от 1000, тёмный фон.
-    // Стили сайта подгружаются кусками (просмотр картинок — отдельный кусок), поэтому список
-    // пересобираем, когда число таблиц стилей меняется.
     let backdropSel = '', backdropSheets = -1;
     function siteBackdropSelector() {
         if (document.styleSheets.length === backdropSheets) return backdropSel;
@@ -7831,8 +7205,6 @@
         const sel = siteBackdropSelector();
         const list = [...document.querySelectorAll(['[data-comments-modal]', '.vp-comments-sheet', '[role="dialog"]:not(.vp-modal)',
             '[aria-modal="true"]:not(.vp-modal)', sel].filter(Boolean).join(', '))].filter(e => !e.closest('.vp-msg-backdrop, .settings-dropdown'));
-        // верхнее окно — последнее в разметке
-        // окно — только крупное (больше полэкрана): закреплённое поле комментария внизу страницы — не окно
         for (let i = list.length - 1; i >= 0; i--) if (shown(list[i]) && list[i].getBoundingClientRect().height > innerHeight * 0.5) return list[i];
         return null;
     }
@@ -7843,7 +7215,6 @@
         (document.activeElement || document.body).dispatchEvent(esc);
         setTimeout(() => {
             if (gone()) return;
-            // клик по самому затемнению (мимо окна)
             const back = (sel => sel && el.matches(sel) ? el : el.closest(sel || 'body'))(siteBackdropSelector()) || el;
             for (const t of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'])
                 back.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window }));
@@ -7856,7 +7227,7 @@
     }
     window.addEventListener('popstate', () => {
         if (!overlayHist) return;
-        if (history.state && history.state.vpOverlay) return;          // сняли запись нашего меню поверх окна — окно не трогаем
+        if (history.state && history.state.vpOverlay) return;          
         overlayHist = false;
         const el = overlayEl;
         overlayEl = null;
@@ -7874,19 +7245,15 @@
             overlayEl = null;
             if (overlayHist) {
                 overlayHist = false;
-                // запись наша и сверху (сайт никуда не перешёл) — снимаем
                 if (history.state && history.state.vpOverlay) history.back();
             }
         }
     });
 
-    // --- 3. Переходы между страницами: сменился адрес — колонка с содержимым мягко въезжает
     let lastPath = location.pathname;
     function pageColumn() {
         let el = document.querySelector('.' + [SELECTORS.feedBar, SELECTORS.tabs, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .'));
         if (!el) return null;
-        // вверх до колонки, но не до общего контейнера с боковыми меню: сдвиг/размытие предка
-        // уводит их закреплённые (fixed) блоки вместе с ним — меню «уезжало» и размывалось
         const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .' + SELECTORS.nav;
         while (el.parentElement && el.parentElement !== document.body && el.parentElement.getBoundingClientRect().width < 760
             && !el.parentElement.querySelector(side)) el = el.parentElement;
@@ -7905,8 +7272,6 @@
         ], { duration: 340, easing: 'cubic-bezier(.2, .8, .2, 1)' });
     });
 
-    // --- 10. «Жидкая» подложка меню: при смене пункта растягивается от старого к новому и стягивается
-    // меню в строку — нижняя панель телефона; в колонку — левое меню компьютера
     function navIsRow(nav) {
         const links = nav.querySelectorAll(':scope > .' + SELECTORS.navLink);
         return links.length > 1 && Math.abs(links[0].offsetTop - links[1].offsetTop) < 4;
@@ -7917,8 +7282,6 @@
         const active = nav && nav.querySelector(':scope > .' + SELECTORS.navLink + '.vp-active');
         if (!nav) return;
         if (!blob || !nav.contains(blob)) {
-            // Сайт нарисовал меню заново (на телефоне нижняя панель перерисовывается при каждом переходе):
-            // новая подложка встаёт туда, где была старая, — и дальше перетекает к новому пункту
             const was = blob && blobAt && blob.style.opacity === '1' ? blobAt : null;
             blob = document.createElement('div');
             blob.className = 'vp-nav-blob';
@@ -7929,85 +7292,62 @@
                 blob.style.transition = 'none';
                 if (navIsRow(nav)) rowPlace(was); else Object.assign(blob.style, blobBox(was), { borderRadius: blobRadius });
                 blob.style.opacity = '1';
-                blob.offsetWidth;                          // применить без перехода прозрачности
+                blob.offsetWidth;                          
                 blob.style.transition = '';
                 blobAt = was;
-                // меню перерисовали посреди перетекания — новая подложка доигрывает его с того же места
                 if (flow && performance.now() - flow.t0 < BLOB_MS) blobFlow(flow.f, flow.t, flow.t0);
             }
         }
         if (!active) { blob.style.opacity = '0'; return; }
         const row = navIsRow(nav);
         let to = { top: active.offsetTop, left: active.offsetLeft, width: active.offsetWidth, height: active.offsetHeight };
-        // Нижняя панель телефона: у сайта своя подложка (div в панели, 58 px, по 6 px от краёв панели,
-        // скругление 32px). Наша встаёт ровно её размера и формы — по центру активной кнопки, а свою
-        // сайт прячет (стиль .vp-nav-has-blob > div). Нет её — овал чуть шире кнопки.
         const siteInd = row && [...nav.children].find(c => c.tagName === 'DIV' && c !== blob);
         if (siteInd && siteInd.offsetHeight) {
             const w = parseFloat(siteInd.style.width) || siteInd.offsetWidth;
             to = { top: siteInd.offsetTop, height: siteInd.offsetHeight, width: w, left: to.left + (to.width - w) / 2 };
         } else if (row) { const extra = Math.round(to.width * .18); to = { ...to, left: to.left - extra / 2, width: to.width + extra }; }
         if (blobAt && to.top === blobAt.top && to.left === blobAt.left && to.width === blobAt.width && to.height === blobAt.height) return;
-        // У пунктов нижней панели своего скругления нет. Скругление — в px от овала на месте: при растяжке
-        // края остаются теми же полуовалами (выходит капля-пилюля), а не растягиваются сами
         const rad = getComputedStyle(active).borderRadius;
-        // Левое меню компьютера — как было: скругление самого пункта сайта
         blob.style.borderRadius = blobRadius = !row ? rad
             : siteInd && parseFloat(getComputedStyle(siteInd).borderRadius) ? getComputedStyle(siteInd).borderRadius
             : `${to.width / 2}px / ${to.height / 2}px`;
         const from = blobAt && !calm && blob.style.opacity === '1' ? blobAt : null;
         if (from && row) {
-            // Нижняя панель телефона: перетекание — анимация браузера, без кода на каждый кадр и без замеров
-            // по пути (они и тормозили: сайт в этот момент рисует новую страницу)
             blobAnim = null;
             rowPlace(to);
             blobFlow(from, to);
         } else if (from) {
-            // Левое меню компьютера: считаем по кадрам (proxFrame) — подложка по пути сдвигается так же,
-            // как кнопки-«док», мимо которых идёт
             blobAnim = { from, to, t0: performance.now() };
         } else { blobAnim = null; if (row) rowPlace(to); else Object.assign(blob.style, blobBox(to)); }
         blob.style.opacity = '1';
         blobAt = to;
-        if (!row) proxKick();                             // «док» и покадровое перетекание — только у левого меню
+        if (!row) proxKick();                             
     }
     let blobAnim = null, flow = null, blobRadius = '';
     const BLOB_MS = 460;
     const blobBox = r => ({ top: r.top + 'px', left: r.left + 'px', width: r.width + 'px', height: r.height + 'px' });
     const easeIO = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     const lerp = (a, b, t) => a + (b - a) * t;
-    // середина перетекания: подложка растянута от старого пункта до нового
     function blobMid(f, t, row) {
-        if (row) {                                         // меню в строку (телефон): растягивается вбок
+        if (row) {                                         
             const lo = Math.min(f.left, t.left), hi = Math.max(f.left + f.width, t.left + t.width);
             return { left: lo, top: t.top + t.height * .04, height: t.height * .92, width: hi - lo };
         }
         const lo = Math.min(f.top, t.top), hi = Math.max(f.top + f.height, t.top + t.height);
         return { top: lo, left: t.left + t.width * .04, width: t.width * .92, height: hi - lo };
     }
-    // геометрия подложки в момент перетекания: 0–45% — растяжение от старого до нового, дальше — стяжка
     function blobGeom(an, now) {
         const p = Math.min(1, (now - an.t0) / BLOB_MS), f = an.from, t = an.to, mid = blobMid(f, t, false);
         const [a, b, q] = p < .45 ? [f, mid, easeIO(p / .45)] : [mid, t, easeIO((p - .45) / .55)];
         return { g: { top: lerp(a.top, b.top, q), left: lerp(a.left, b.left, q), width: lerp(a.width, b.width, q), height: lerp(a.height, b.height, q) }, done: p >= 1 };
     }
-    // То же перетекание, но без кода на кадр: анимация браузера по положению и размеру, от старого пункта
-    // через растяжку к новому. Не масштабом (transform: scale): тот растягивал и скругления, и обводку —
-    // подложка по пути становилась ромбом. Кривая на каждом отрезке — та же easeIO (cubic-bezier(.65, 0, .35, 1)).
-    // Нижняя панель телефона: подложка из трёх частей — левый полукруг, середина, правый полукруг.
-    // Двигаются и тянутся они только transform'ом — его считает видеокарта, без пересчёта раскладки
-    // на каждом кадре. Раньше анимировались left/width: кадры считал процессор, а он в этот момент
-    // занят — сайт рисует новую страницу, — отсюда рывки.
     function blobParts() {
-        // порядок: середина снизу, полукруги поверх — стыки прячутся под полукругами. Цвета сплошные,
-        // поэтому там, где части заходят друг на друга, ничего не темнеет и не светлеет.
         if (!blob.firstElementChild) blob.innerHTML = '<i class="vp-bm"></i><i class="vp-bl"></i><i class="vp-br"></i>';
         const [m, l, r] = blob.children;
         return [l, m, r];
     }
-    const BM_W = 100;                                     // ширина середины до растяжки: крупная — края не мылятся
+    const BM_W = 100;                                     
     function rowTransforms(r, sy = 1) {
-        // середина: от полукруга до полукруга и на 1,5 px под каждый — стык закрыт, а за скругление не вылезает
         const R = r.height / 2, mid = Math.max(1, r.width - 2 * R + 3);
         return [`translate(${r.left}px, ${r.top}px) scale(1, ${sy})`,
             `translate(${r.left + R - 1.5}px, ${r.top}px) scale(${mid / BM_W}, ${sy})`,
@@ -8035,8 +7375,6 @@
     onDom(moveNavBlob);
     addEventListener('resize', () => { blobAt = null; moveNavBlob(); });
 
-    // Кнопки меню выдвигаются к курсору, как док: сдвиг зависит от того, насколько курсор близко
-    // (колокол по расстоянию до центра кнопки). Ближние ярче, их иконка чуть крупнее.
     const PROX_MAX = 14, PROX_SIGMA = 46;
     let proxY = null, proxRaf = 0, blobK = 0;
     const proxNow = new WeakMap();
@@ -8045,13 +7383,13 @@
         const nav = document.querySelector('.' + SELECTORS.nav);
         if (!nav) return;
         let moving = false, activeK = 0;
-        const rows = [];                                  // центры кнопок и их сдвиг — для перетекания
+        const rows = [];                                  
         nav.querySelectorAll(':scope > .' + SELECTORS.navLink).forEach(a => {
             const r = a.getBoundingClientRect();
             const d = proxY === null ? Infinity : proxY - (r.top + r.height / 2);
             const want = proxY === null ? 0 : Math.exp(-(d * d) / (2 * PROX_SIGMA * PROX_SIGMA));
             const was = proxNow.get(a) || 0;
-            const k = Math.abs(want - was) < 0.004 ? want : was + (want - was) * 0.22;   // плавно догоняет
+            const k = Math.abs(want - was) < 0.004 ? want : was + (want - was) * 0.22;   
             if (k !== want) moving = true;
             proxNow.set(a, k);
             const x = (k * PROX_MAX).toFixed(2);
@@ -8062,10 +7400,7 @@
             if (a.classList.contains('vp-active')) activeK = k;
             rows.push([a.offsetTop + a.offsetHeight / 2, k]);
         });
-        // подложка едет за своей кнопкой отдельно и плавно: после смены пункта она догоняет
-        // сдвиг новой кнопки, а не остаётся со сдвигом старой
         if (blob && blobAnim) {
-            // сдвиг — как у кнопки, через которую сейчас идёт середина подложки (между кнопками — плавно)
             const { g, done } = blobGeom(blobAnim, performance.now());
             const y = g.top + g.height / 2;
             let k = rows.length ? rows[0][1] : 0;
@@ -8088,11 +7423,10 @@
     function proxKick() { if (!proxRaf) proxRaf = requestAnimationFrame(proxFrame); }
     if (!calm) {
         document.addEventListener('pointermove', e => {
-            if (e.pointerType !== 'mouse') return;        // палец по экрану — не «док»
+            if (e.pointerType !== 'mouse') return;        
             const nav = document.querySelector('.' + SELECTORS.nav);
             if (!nav || navIsRow(nav)) return;
             const r = nav.getBoundingClientRect();
-            // зона — меню и немного вокруг, чтобы кнопки начинали выезжать ещё на подходе
             const inside = e.clientX >= r.left - 24 && e.clientX <= r.right + 40 && e.clientY >= r.top - 60 && e.clientY <= r.bottom + 60;
             const y = inside ? e.clientY : null;
             if (y !== proxY) { proxY = y; proxKick(); }
@@ -8100,10 +7434,6 @@
         document.addEventListener('pointerleave', () => { proxY = null; proxKick(); });
     }
 
-    // --- 20. Сцена ленты: посты, уходящие за верх, уменьшаются и тают; снизу — проявляются.
-    // Анимации привязаны к прокрутке средствами браузера (animation-timeline) — без кода на кадр.
-    // (animation-timeline: view() не годится: меряет пост от ближайшего блока с обрезкой, а не от
-    // экрана — у всех постов выходило одно и то же.) Считаем сами, только видимые посты, раз за кадр.
     let sceneEnabled = GM_getValue('sceneEnabled', true) && !calm;
     document.documentElement.classList.toggle('vp-scene', sceneEnabled);
     const sceneSeen = new Set();
@@ -8117,17 +7447,13 @@
         sceneQueued = false;
         if (!sceneEnabled) return;
         const H = innerHeight;
-        // Сначала все замеры, потом все записи: замер после записи заставлял браузер
-        // пересчитывать раскладку страницы заново — на каждый видимый пост в каждом кадре.
         const rects = [...sceneSeen].map(a => [a, a.getBoundingClientRect()]);
         for (const [a, r] of rects) {
-            // Мягко: читать не мешает. Уходящий бледнеет, только когда за верх ушла его четверть,
-            // и не до конца; входящий снизу не тускнеет — лишь чуть поднимается на своё место.
             const out = ease(Math.max(0, Math.min(1, (-r.top - r.height * 0.25) / Math.max(1, r.height * 0.75))));
             const inn = ease(Math.max(0, Math.min(1, (H - r.top) / 220)));
             const so = (1 - 0.45 * out).toFixed(3), ss = (1 - 0.04 * out).toFixed(4), sy = (14 * (1 - inn)).toFixed(1) + 'px';
             const key = so + ss + sy;
-            if (a._vpSceneKey === key) continue;           // пост посреди экрана: ничего не поменялось
+            if (a._vpSceneKey === key) continue;           
             a._vpSceneKey = key;
             a.style.setProperty('--vp-so', so);
             a.style.setProperty('--vp-ss', ss);
@@ -8140,17 +7466,14 @@
     onDom(function sceneWatch() {
         document.querySelectorAll('article.' + SELECTORS.post).forEach(a => {
             if (!a._vpScene) { a._vpScene = true; sceneIO.observe(a); }
-            // обёртка поста в ленте (у сайта — полоса-граница снизу, на телефоне видна между карточками)
             const slot = a.parentElement;
             if (slot && !slot.classList.contains('vp-post-slot')) slot.classList.add('vp-post-slot');
         });
         sceneKick();
     });
 
-    // --- 22. Свечение видео: вокруг видео растекается свет его же кадра (как «эмбиент» у YouTube).
-    // Кадр — в маленький холст раз в 150 мс, размывает его CSS; работает только для видимых видео.
     let ambientEnabled = GM_getValue('ambientEnabled', true);
-    const ambient = new Map();                          // видео → { cv, g, host }
+    const ambient = new Map();                          
     const ambientSeen = new Set();
     const ambientIO = new IntersectionObserver(es => es.forEach(e => e.isIntersecting ? ambientSeen.add(e.target) : ambientSeen.delete(e.target)));
     function ambientScan() {
@@ -8162,7 +7485,6 @@
             cv.className = 'vp-ambient';
             cv.width = 48; cv.height = 27;
             host.classList.add('vp-ambient-host');
-            // поверх размытой подложки поста (если она есть), но под содержимым
             const under = host.querySelector(':scope > .itd-blur-container');
             if (under) under.after(cv); else host.prepend(cv);
             ambient.set(v, { cv, g: cv.getContext('2d'), host });
@@ -8177,10 +7499,8 @@
         const vr = v.getBoundingClientRect(), hr = a.host.getBoundingClientRect(), pad = 26;
         Object.assign(a.cv.style, { left: (vr.left - hr.left - pad) + 'px', top: (vr.top - hr.top - pad) + 'px',
             width: (vr.width + pad * 2) + 'px', height: (vr.height + pad * 2) + 'px' });
-        // новый кадр ложится поверх прошлого полупрозрачно: свечение перетекает за ~секунду,
-        // а не скачет на каждой смене сцены (первый кадр — целиком)
         a.g.globalAlpha = a.cv.classList.contains('vp-on') ? .2 : 1;
-        try { a.g.drawImage(v, 0, 0, 48, 27); a.cv.classList.add('vp-on'); } catch (e) { /* кадр ещё не готов */ }
+        try { a.g.drawImage(v, 0, 0, 48, 27); a.cv.classList.add('vp-on'); } catch (e) {   }
     }
     setInterval(() => {
         if (!ambientEnabled) return;
@@ -8193,8 +7513,6 @@
     }
     onDom(ambientScan);
 
-    // --- 26. Вкладки «Для вас / Лента кланов / Подписки»: бегунок перетекает, как подложка меню.
-    // Сайт двигает бегунок сам (стиль translateX + width) — ловим смену и проигрываем свою анимацию.
     const tabObs = new MutationObserver(muts => muts.forEach(m => liquidTab(m.target, m.oldValue || '')));
     const num = (str, re) => { const m = str.match(re); return m ? parseFloat(m[1]) : null; };
     function liquidTab(ind, old) {
@@ -8219,14 +7537,9 @@
         });
     });
 
-    // --- 27. Карточка профиля при наведении на ник или аватар: баннер, аватар, описание, счётчики
     const hcCache = new Map();
     let hc = null, hcTimer = 0, hcHide = 0, hcUser = null, hcLink = null;
     const loginOf = href => ((href || '').match(/^\/@([\w.]+)/) || [])[1] || null;
-    // Данные профиля: сперва — что уже получил сайт (или ждём его ответ waitMs), свой запрос —
-    // только если сайт этот профиль не запрашивал (карточка при наведении на чужой ник, клуб).
-    // Профили кешируются и между перезагрузками (sessionStorage, 10 мин): карточки при наведении,
-    // личка и счётчик постов не ходят за теми же данными заново после каждого обновления страницы
     const HC_TTL = 10 * 60 * 1000;
     function hcStored(key) {
         try { const v = JSON.parse(sessionStorage.getItem('vp-hc:' + key) || 'null'); return v && Date.now() - v.at < HC_TTL ? v.d : null; } catch (e) { return null; }
@@ -8239,7 +7552,7 @@
         const key = user.toLowerCase();
         if (siteUsers.has(key)) return Promise.resolve(siteUsers.get(key));
         if (!hcCache.has(key)) {
-            const stored = waitMs ? null : hcStored(key);        // счётчик в профиле (ждёт сайт) — всегда свежий
+            const stored = waitMs ? null : hcStored(key);        
             hcCache.set(key, stored ? Promise.resolve(stored) : siteUser(user, waitMs).then(site => site || api('/api/users/' + encodeURIComponent(user))
                 .then(r => r.ok ? r.json() : null)
                 .then(j => j && (j.data || j.user || j))).then(d => hcStore(key, d)).catch(() => null));
@@ -8313,18 +7626,11 @@
         if (a && !a.contains(e.relatedTarget)) { clearTimeout(hcTimer); hcScheduleHide(); }
     }, true);
     addEventListener('scroll', () => { clearTimeout(hcTimer); hcClose(); }, { capture: true, passive: true });
-    // нажали ник — сайт уводит в профиль и убирает ссылку, pointerout не приходит: карточка оставалась
-    // висеть уже в профиле. Закрываем по нажатию и когда ссылка, к которой она привязана, пропала
     document.addEventListener('click', e => { if (e.target.closest && e.target.closest(PROFILE_LINK)) { clearTimeout(hcTimer); hcClose(); } }, true);
     onDom(function hcLinkGone() { if (hc && !(hcLink && hcLink.isConnected)) hcClose(); });
 
-    // --- Галерея (как Пинтерест): картинки и видео из ленты сеткой в 2–4 колонки. Кнопка — рядом с поиском
-    // в полосе ленты, тем же видом, что у сайта. Лента — тем же запросом, что у сайта (/api/posts?tab=…&cursor=…),
-    // страницами по 20; каждая картинка ложится в самую короткую колонку (сетка не перетасовывается при
-    // подгрузке). Видео — без звука и играют, только пока их видно. Нажатие — открыть пост; «назад» закрывает.
-    // иконка — залитая, как у пунктов меню сайта (контурная выбивалась)
     const galIcon = size => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="10" rx="2.5"/><rect x="13" y="3" width="8" height="6" rx="2.5"/><rect x="3" y="15" width="8" height="6" rx="2.5"/><rect x="13" y="11" width="8" height="10" rx="2.5"/></svg>`;
-    const GAL_TABS = [['popular', 'Популярное'], ['clan', 'Кланы'], ['following', 'Подписки']];   // порядок — как у ленты
+    const GAL_TABS = [['popular', 'Популярное'], ['clan', 'Кланы'], ['following', 'Подписки']];   
     const gal = { acts: new Map(), el: null, tab: 'popular', cursor: null, loading: false, done: false, cols: [], heights: [], seen: new Set(), hist: false };
     const galStyle = document.createElement('style');
     galStyle.textContent = `
@@ -8461,7 +7767,6 @@
         @media (max-width: 1172px) { .vp-gal-nav { display: none !important; } }
     `;
     document.head.appendChild(galStyle);
-    // колонок — сколько влезет плиток от ~210 px в ширину галереи (2–4); окно ещё не стоит — по ширине экрана
     const galColsCount = () => {
         const g = gal.el && gal.el.querySelector('.vp-gal-grid'), w = g ? g.clientWidth : 0;
         if (!w) return innerWidth >= 1100 ? 4 : innerWidth >= 700 ? 3 : 2;
@@ -8485,7 +7790,6 @@
         gal.cols[k].appendChild(tile);
         gal.heights[k] += tile._vpRatio + .05;
     }
-    // Кнопки поверх плитки: иконки — те же, что у сайта на постах (контуры 20x20), своё состояние у каждой
     const GAL_ICONS = {
         like: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 4.6a3.7 3.7 0 0 0-5.2-.9C3.2 5 2.4 7.6 3.6 10.2 4.8 12.7 10 17 10 17s5.3-4.3 6.5-6.8c1.2-2.6 0-5.2-1.6-6.5s-4-.8-4.9.9"/>',
         comment: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 17a7 7 0 1 0-6.2-3.7L3 17l3.7-.8a7 7 0 0 0 3.3.8"/>',
@@ -8495,9 +7799,6 @@
         copy: '<g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><rect x="7" y="7" width="10" height="10" rx="2.5"/><path d="M13 4.7A2 2 0 0 0 11.2 3.5H5.5a2 2 0 0 0-2 2v5.7A2 2 0 0 0 4.7 13"/></g>'
     };
     const galIsVideo = att => att.type === 'video' || /\.(mp4|webm|mov)(\?|$)/i.test(att.url || '');
-    // Скопировать картинку в буфер: пиксели с сервера сайта странице читать нельзя (нет разрешения CORS) —
-    // берём файл через Tampermonkey и перегоняем в PNG (буфер обмена браузера принимает картинки только в PNG).
-    // Файл отдаём буферу обещанием — нажатие остаётся «свежим», пока картинка качается
     function galCopyImage(url) {
         if (!url || typeof ClipboardItem !== 'function' || !navigator.clipboard || !navigator.clipboard.write || typeof GM_xmlhttpRequest !== 'function')
             return Promise.resolve(false);
@@ -8521,7 +7822,6 @@
                 .then(() => true, e => { logErr('галерея: скопировать картинку', e); return false; });
         } catch (e) { logErr('галерея: скопировать картинку', e); return Promise.resolve(false); }
     }
-    // пост из галереи — новой записью поверх записи галереи: «назад» из поста вернёт в галерею (как была)
     function galOpenPost(post) {
         const user = post.author && post.author.username;
         if (!user) return;
@@ -8542,8 +7842,6 @@
             row.appendChild(b);
             return b;
         };
-        // Картинок у поста бывает несколько — плиток тоже, а лайк и репост у поста один: состояние общее
-        // (gal.acts: номер поста → { like, repost }), нажатие на любой плитке меняет все плитки этого поста
         if (!gal.acts.has(post.id)) gal.acts.set(post.id, { like: post.isLiked === true, repost: post.isReposted === true });
         const state = gal.acts.get(post.id);
         row.dataset.post = post.id;
@@ -8554,7 +7852,6 @@
             .forEach(b => b.classList.toggle('vp-on', state[act]));
         const busy = (act, on) => document.querySelectorAll(`.vp-gal-acts[data-post="${post.id}"] .vp-gal-act[data-act="${act}"]`)
             .forEach(b => b.classList.toggle('vp-busy', on));
-        // лайк и репост — тем же запросом, что у сайта; состояние меняем сразу, не вышло — возвращаем
         const toggle = async (b, path, confirmText) => {
             const act = b.dataset.act, on = state[act];
             if (state[act + 'Busy']) return;
@@ -8572,7 +7869,6 @@
         like.addEventListener('click', e => { e.stopPropagation(); toggle(like, `/api/posts/${post.id}/like`); });
         repost.addEventListener('click', e => { e.stopPropagation(); toggle(repost, `/api/posts/${post.id}/repost`, 'Сделать репост этого поста?'); });
         comment.addEventListener('click', e => { e.stopPropagation(); galOpenPost(post); });
-        // справа внизу — скопировать картинку и ссылку на пост; скопировалось — на секунду галочка
         const right = document.createElement('div');
         right.className = 'vp-gal-acts vp-gal-acts-r';
         const copyBtn = (act, title, run) => {
@@ -8599,7 +7895,6 @@
         };
         if ((post.attachments || []).some(att => att && att.url && !galIsVideo(att)))
             copyBtn('copy', 'Скопировать картинку', b => {
-                // та картинка, что сейчас на плитке (у поста их может быть несколько)
                 const strip = b.closest('.vp-gal-tile').querySelector('.vp-gal-strip');
                 const slide = strip.children[Math.round(strip.scrollLeft / Math.max(1, strip.clientWidth))] || strip.children[0];
                 const img = slide && slide.querySelector('img');
@@ -8611,18 +7906,14 @@
         out.append(row, right);
         return out;
     }
-    // лайк/репост поставили на сайте (открыли пост из галереи, лайкнули, вернулись) — плитки поста в галерее
-    // (и спрятанной, пока открыт пост) показывают то же
     document.addEventListener('vp-post-act', e => {
         const { id, act, on } = e.detail || {};
         const st = gal.acts.get(id), root = gal.el || gal.kept;
-        if (!st || st[act + 'Busy'] || !root) return;              // своё нажатие в галерее — уже учтено
+        if (!st || st[act + 'Busy'] || !root) return;              
         st[act] = on;
         root.querySelectorAll(`.vp-gal-acts[data-post="${id}"] .vp-gal-act[data-act="${act}"]`).forEach(b => b.classList.toggle('vp-on', on));
     });
     let galN = 0;
-    // Плитка — один пост. Картинок несколько — листаются внутри плитки, как в Инстаграме: полоса со снимками
-    // (телефон — свайп, ПК — стрелки при наведении), счётчик «1/4» и точки. Размер плитки — по первой картинке.
     function galMedia(att) {
         if (galIsVideo(att)) {
             const v = document.createElement('video');
@@ -8639,9 +7930,6 @@
         galImgObs().observe(img);
         return img;
     }
-    // Картинки — обычной ссылкой сайта, как на постах: правой кнопкой копируются и сохраняются. Грузим заранее,
-    // за 1200 px до края окна галереи (наблюдатель — от её прокрутки, иначе картинка ждала появления на экране
-    // и плитки стояли серыми). Показалась одна картинка плитки — грузим и остальные её (листаются вбок)
     let galImgIO = null;
     function galImgObs() {
         const body = gal.el && gal.el.querySelector('.vp-gal-body');
@@ -8662,7 +7950,7 @@
         const tile = document.createElement('div');
         tile.className = 'vp-gal-tile';
         const first = media[0], w = +first.width || 1, h = +first.height || 1;
-        tile._vpRatio = Math.min(2.2, Math.max(.45, h / w));        // очень длинные/широкие — в разумных пределах
+        tile._vpRatio = Math.min(2.2, Math.max(.45, h / w));        
         tile._vpN = galN++;
         tile.style.aspectRatio = `1 / ${tile._vpRatio}`;
         const strip = document.createElement('div');
@@ -8671,8 +7959,6 @@
             const slide = document.createElement('div');
             slide.className = 'vp-gal-slide vp-wait';
             const m = galMedia(att);
-            // пока грузится — заготовка (мерцание и значок); не загрузилась — значок битой картинки,
-            // нажатие по ней — загрузить заново (а не открыть пост)
             const done = () => slide.classList.remove('vp-wait', 'vp-fail');
             const fail = () => { slide.classList.remove('vp-wait'); slide.classList.add('vp-fail'); };
             if (m.tagName === 'IMG') { m.addEventListener('load', done); m.addEventListener('error', fail); }
@@ -8687,7 +7973,6 @@
             strip.appendChild(slide);
         });
         tile.appendChild(strip);
-        // видео: длительность — у первого видео, пока его видно
         const vid = media.find(galIsVideo);
         if (vid && media.length === 1) {
             const badge = document.createElement('span');
@@ -8714,15 +7999,12 @@
                 const i = Math.min(media.length - 1, at());
                 count.textContent = `${i + 1}/${media.length}`;
                 [...dots.children].forEach((d, k) => d.classList.toggle('vp-on', k === i));
-                // крайняя стрелка не пропадает совсем: невидима, но ловит нажатие — рядом с краем пост не открывается
                 prev.classList.toggle('vp-edge', i === 0); next.classList.toggle('vp-edge', i === media.length - 1);
-                strip._vpI = i;                                   // на какой картинке — вернуть после ухода в пост
+                strip._vpI = i;                                   
                 strip.querySelectorAll('video').forEach((v, k) => { if (v.closest('.vp-gal-slide') !== strip.children[i]) v.pause(); });
             };
             strip.addEventListener('scroll', () => requestAnimationFrame(show), { passive: true });
             const go = d => e => { e.stopPropagation(); strip.scrollTo({ left: (at() + d) * strip.clientWidth, behavior: 'smooth' }); };
-            // ПК: потянул мышью вбок — листает, как свайп на телефоне; отпустил — докатывается до ближней
-            // (сдвинул больше чем на 40 px — до следующей). Потянул — это не нажатие: пост не открываем
             strip.addEventListener('pointerdown', e => {
                 if (e.pointerType !== 'mouse' || e.button !== 0) return;
                 const x0 = e.clientX, s0 = strip.scrollLeft, i0 = at();
@@ -8744,8 +8026,8 @@
                     strip.scrollTo({ left: i * strip.clientWidth, behavior: 'smooth' });
                     const snap = () => { strip.style.scrollSnapType = ''; };
                     strip.addEventListener('scrollend', snap, { once: true });
-                    setTimeout(snap, 700);                              // браузер без scrollend
-                    setTimeout(() => { tile._vpDragged = false; }, 0);      // клик после перетаскивания — мимо
+                    setTimeout(snap, 700);                              
+                    setTimeout(() => { tile._vpDragged = false; }, 0);      
                 };
                 strip.addEventListener('pointermove', move);
                 strip.addEventListener('pointerup', up);
@@ -8755,7 +8037,6 @@
             next.addEventListener('click', go(1));
             show();
         }
-        // правая кнопка по картинке — меню самой картинки (сохранить, копировать)
         tile.addEventListener('mousedown', e => { if (e.button === 2) tile.classList.add('vp-ctx'); });
         tile.addEventListener('contextmenu', () => setTimeout(() => tile.classList.remove('vp-ctx'), 300));
         tile.addEventListener('mouseleave', () => tile.classList.remove('vp-ctx'));
@@ -8763,16 +8044,10 @@
         tile.addEventListener('click', () => { if (!tile._vpDragged) galOpenPost(post); });
         return tile;
     }
-    // до низа ленты плиток меньше 1200 px — пора грузить следующую страницу (окно скрыто — не грузим)
     function galNeedMore() {
         const b = gal.el && gal.el.querySelector('.vp-gal-body');
         return !!b && b.clientHeight > 0 && b.scrollTop + b.clientHeight > b.scrollHeight - 1200;
     }
-    // Запросы ленты — бережно: сайт режет частые запросы (перезагрузка страницы с галереей кидала в лимит).
-    // По 50 постов за раз; сама подряд — не больше GAL_CHAIN страниц (в «Популярном» картинок мало, и
-    // галерея раньше листала десятки страниц подряд), дальше — по прокрутке или кнопкой «Показать ещё».
-    // Ответ «слишком часто» (429) — пауза с растущим ожиданием, без повторов подряд.
-    // Собранное держим 10 минут в sessionStorage: перезагрузка страницы и новое открытие — без запросов
     const GAL_CHAIN = 2, GAL_CACHE_MS = 10 * 60 * 1000, GAL_GAP = 700;
     const galCacheKey = tab => 'vpGalCache:' + tab;
     function galCacheRead(tab) {
@@ -8784,9 +8059,8 @@
     function galCacheSave() {
         try {
             sessionStorage.setItem(galCacheKey(gal.tab), JSON.stringify({ t: gal.cacheT || Date.now(), cursor: gal.cursor, done: gal.done, posts: gal.cachePosts.slice(-400) }));
-        } catch (e) { /* место кончилось — просто без кеша */ }
+        } catch (e) {   }
     }
-    // пост → плитка (если есть картинки или видео); для кеша — только нужные галерее поля
     function galAdd(post) {
         if (!post || gal.seen.has(post.id)) return false;
         gal.seen.add(post.id);
@@ -8801,8 +8075,7 @@
     }
     async function galLoad(auto) {
         if (!gal.el || gal.loading || gal.done || (gal.waitUntil || 0) > Date.now()) return;
-        if (!auto) gal.chain = 0;                                                     // прокрутка или кнопка — новый счёт
-        // поток, а не рывок: между запросами не меньше GAL_GAP (прокрутка до низа не шлёт пачку подряд)
+        if (!auto) gal.chain = 0;                                                     
         const gap = (gal.lastReq || 0) + GAL_GAP - Date.now();
         if (gap > 0) { clearTimeout(gal.gapT); const g0 = gal.gen; gal.gapT = setTimeout(() => { if (g0 === gal.gen) galLoad(true); }, gap); return; }
         gal.lastReq = Date.now();
@@ -8814,11 +8087,11 @@
         const url = lim => `/api/posts?limit=${lim}&tab=${tab}` + (gal.cursor ? '&cursor=' + encodeURIComponent(gal.cursor) : '');
         try {
             let res = await api(url(gal.lim || 50));
-            if (res.status === 400 && (gal.lim || 50) !== 20) { gal.lim = 20; res = await api(url(20)); }   // сайт не принял 50
+            if (res.status === 400 && (gal.lim || 50) !== 20) { gal.lim = 20; res = await api(url(20)); }   
             if (res.status === 429) { const e = new Error('лента: 429'); e.retry = +res.headers.get('Retry-After') || 0; throw e; }
             if (!res.ok) throw new Error('лента: ' + res.status);
             const j = await res.json(), d = j.data || j;
-            if (!gal.el || gen !== gal.gen) return;                                    // пока грузили — переключили
+            if (!gal.el || gen !== gal.gen) return;                                    
             const posts = d.posts || [];
             keepSitePosts(j);
             gal.fails = 0;
@@ -8847,8 +8120,6 @@
             more.onclick = () => galLoad();
         }
     }
-    // плитки не заполнили экран — прокручивать нечего, подгрузка по прокрутке не сработает: следующая страница
-    // сама, но подряд не больше GAL_CHAIN; дальше — кнопка (или прокрутка, если уже есть куда)
     function galMore() {
         if (!gal.el || gal.done || gal.loading || !galNeedMore()) return;
         if ((gal.chain = (gal.chain || 0) + 1) < GAL_CHAIN) return galLoad(true);
@@ -8856,13 +8127,11 @@
         more.textContent = 'Показать ещё';
         more.onclick = () => galLoad();
     }
-    // бегунок — под выбранной вкладкой (и после смены ширины окна)
     function galInd() {
         const ind = gal.el && gal.el.querySelector('.vp-gal-ind');
         const i = GAL_TABS.findIndex(([id]) => id === gal.tab);
         if (ind && i >= 0) ind.style.transform = `translateX(${i * 100}%)`;
     }
-    // fresh — повторное нажатие на «Галерею»: мимо кеша, заново с сервера
     function galSwitch(tab, fresh) {
         gal.tab = tab; gal.cursor = null; gal.done = false; gal.seen.clear(); gal.acts.clear(); galN = 0;
         gal.gen = (gal.gen || 0) + 1; gal.loading = false; gal.chain = 0; gal.cachePosts = []; gal.cacheT = 0;
@@ -8885,27 +8154,21 @@
         c.posts.forEach(galAdd);
         gal.cursor = c.cursor; gal.done = !!c.done;
         more.textContent = gal.done ? (gal.seen.size ? 'Это всё' : 'Пусто') : '';
-        gal.chain = GAL_CHAIN;                     // из кеша сама не догружает: только прокрутка или «Показать ещё»
+        gal.chain = GAL_CHAIN;                     
         galMore();
     }
-    // место окна, как у «Сообщений»: телефон (меню — панель внизу) — от верха до панели;
-    // компьютер — карточка от левого меню до правого края экрана (ширина — под экран)
     function galPosition() {
         if (!gal.el) return;
         const nav = document.querySelector('.' + SELECTORS.nav);
         const nr = nav && nav.getBoundingClientRect();
         const row = nav && navIsRow(nav) && nr.top > innerHeight / 2;
         requestAnimationFrame(galInd);
-        // телефон: окно до низа экрана, нижняя панель — поверх (иначе между ними просвечивала лента)
         document.querySelectorAll('.vp-gal-navwrap').forEach(w => w.classList.remove('vp-gal-navwrap'));
         if (row) {
             if (nav.parentElement) nav.parentElement.classList.add('vp-gal-navwrap');
-            // карточка — до низа экрана (под панелью), а последние картинки не прячутся под ней: отступ — у ленты картинок
             Object.assign(gal.el.style, { left: '0px', right: '0px', top: '0px', bottom: '0px', width: '', paddingBottom: '0px' });
             gal.el.style.setProperty('--vp-gal-pb', Math.max(24, innerHeight - nr.top + BUMP_H + 8) + 'px');
         } else {
-            // ПК — три колонки на всю ширину: меню у левого края (как ставит сайт), панель «Статистика/клуб»
-            // у правого, галерея — между ними с зазорами 24; панели нет — до правого края с отступом, как у меню
             placeSidebar(); placeRail();
             const side = document.querySelector('.' + SELECTORS.sidebar) || (nav && nav.closest('aside')) || nav;
             const sr = side && side.getBoundingClientRect();
@@ -8918,14 +8181,10 @@
         }
         gal.el.classList.toggle('vp-card', !row);
     }
-    // Видео и звук страницы под окном мода (галерея, «Сообщения») — на паузу: окно прячет страницу, но не
-    // глушит её (открыл видео со звуком в профиле, открыл галерею — звук играл дальше). Своё не трогаем:
-    // видео галереи, фон мода, заставку
     const OWN_MEDIA = '.vp-gal, .vp-msgs, .vp-bg-media, .vpi-overlay';
     function pauseSiteMedia() {
         document.querySelectorAll('video, audio').forEach(m => { if (!m.paused && !m.closest(OWN_MEDIA)) m.pause(); });
     }
-    // пока окно открыто, страница под ним сама не заиграет (автозапуск видео в спрятанной ленте и т.п.)
     document.addEventListener('play', e => {
         const m = e.target;
         if ((galOpen || msgsOpen) && m && m.pause && !m.closest(OWN_MEDIA)) m.pause();
@@ -8945,7 +8204,6 @@
         };
         document.querySelectorAll('.' + [SELECTORS.tabs, SELECTORS.feedBar, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .'))
             .forEach(e => { const t = up(e); if (!t.closest('.vp-gal, .vp-msgs, nav')) t.classList.add('vp-gal-hidden'); });
-        // остальные страницы (поиск, уведомления…): то, что лежит под окном, — колонку страницы тоже прячем
         const win = gal.el || document.querySelector('.vp-msgs.vp-open');
         const root = document.getElementById('root');
         const r = win && win.getBoundingClientRect();
@@ -8954,7 +8212,6 @@
         for (const [fx, fy] of [[.5, .25], [.5, .6], [.3, .45], [.7, .45]]) {
             for (const e of document.elementsFromPoint(r.left + r.width * fx, r.top + r.height * fy)) {
                 if (!root.contains(e) || e === root || e.closest('.vp-gal, .vp-msgs, nav, ' + side)) continue;
-                // общая обёртка раскладки (внутри неё меню или панели) — не колонка страницы: её не прятать
                 if (e.querySelector(side)) break;
                 if (getComputedStyle(e).position === 'fixed') continue;
                 const t = up(e);
@@ -8964,12 +8221,10 @@
         }
     }
     onDom(function galFeedHidden() { if (gal.el || msgsOpen) galHideFeed(true); });
-    // Открыть: окно, закрытое раньше, возвращается как было (картинки, вкладка, место прокрутки) — без
-    // новой загрузки; обновить — повторное нажатие на «Галерею», как у ленты (galRefresh)
     function openGallery(fromHistory) {
         if (gal.el) return;
         const msgs = document.querySelector('.vp-msgs.vp-open');
-        if (msgs && msgs.close) msgs.close(true);         // одно окно за раз: личка уступает запись в истории
+        if (msgs && msgs.close) msgs.close(true);         
         const kept = gal.kept;
         const el = kept || document.createElement('div');
         if (!kept) {
@@ -8999,9 +8254,8 @@
             top.prepend(copy);
         }
         const body = el.querySelector('.vp-gal-body');
-        if (kept) {                                                  // как было: место прокрутки и видео
+        if (kept) {                                                  
             body.scrollTop = gal.scroll || 0;
-            // карусели: пока галерея была снята со страницы, браузер сбросил их на первую картинку — вернуть
             el.querySelectorAll('.vp-gal-strip').forEach(st => { if (st._vpI) st.scrollLeft = st._vpI * st.clientWidth; });
             galInd();
             return;
@@ -9011,12 +8265,10 @@
         for (const t of ['wheel', 'touchmove']) el.addEventListener(t, e => e.stopPropagation(), { passive: true });
         galSwitch(gal.tab);
     }
-    // обновить (повторное нажатие на «Галерею»): та же вкладка заново, наверх
     function galRefresh() {
         if (!gal.el) return openGallery();
         galSwitch(gal.tab, true);
     }
-    // закрыть: окно убираем со страницы, но держим (gal.kept) — следующее открытие покажет его как было
     function closeGallery(fromBack) {
         if (!gal.el) return;
         gal.el.querySelectorAll('video').forEach(v => v.pause());
@@ -9033,7 +8285,6 @@
         markActiveNav(); moveNavBlob();
         if (!fromBack && overlayAt('vpGal')) history.back();
     }
-    // «назад»/«вперёд»: запись галереи — открыть (как была), другая — закрыть
     addEventListener('popstate', () => {
         if (overlayAt('vpGal')) { if (!gal.el) openGallery(true); }
         else if (gal.el) closeGallery(true);
@@ -9041,25 +8292,19 @@
     const galLeft = () => { if (gal.el && location.pathname !== gal.path) closeGallery(true); };
     onDom(galLeft);
     document.addEventListener('vp-loc', galLeft);
-    // пункт меню: другая страница — закрыть и перейти; пункт той же страницы (галерею открыли с ленты
-    // и жмут «Ленту») — только закрыть: адрес при галерее не менялся, и сайт считал это повторным
-    // нажатием на текущий пункт — прокручивал и обновлял ленту
     document.addEventListener('click', e => {
         if (!gal.el) return;
         const a = e.target.closest && e.target.closest('a.' + SELECTORS.navLink);
         if (!a || a.classList.contains('vp-gal-nav')) return;
-        // та же страница — закрыть с «назад» (запись галереи уходит); другая — закрыть, историю ведёт сайт
         if (a.getAttribute('href') === gal.path) { e.preventDefault(); e.stopPropagation(); closeGallery(); }
         else closeGallery(true);
     }, true);
     addEventListener('keydown', e => { if (e.key === 'Escape' && gal.el) closeGallery(); });
-    // ширина галереи поменялась (окно, меню, телефон ↔ компьютер) — колонки заново; стало видно больше — догрузить
     const galRO = new ResizeObserver(() => {
         if (!gal.el) return;
         if (gal.cols.length && galColsCount() !== gal.cols.length) galLayout();
-        galMore();                                 // через общий счёт: сетка растёт от каждой плитки — не повод грузить без конца
+        galMore();                                 
     });
-    // кнопка — в полосе ленты, перед поиском (круглая кнопка с иконкой у сайта), с её же классами
     onDom(function galleryButton() {
         const bar = document.querySelector('.' + SELECTORS.feedBar);
         if (!bar || bar.querySelector('.vp-gal-btn')) return;
@@ -9075,7 +8320,6 @@
         b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); gal.el ? galRefresh() : openGallery(); });
         search.before(b);
     });
-    // ПК: пункт «Галерея» в боковом меню, перед «Поиском» (рядом с «Лентой») — копия его разметки со своей иконкой и подписью
     onDom(function galleryNav() {
         const search = document.querySelector('nav a[href="/search"]');
         if (!search || search.parentElement.querySelector('.vp-gal-nav')) return;
@@ -9090,8 +8334,6 @@
         search.before(a);
     });
 
-    // Магазин у сайта — отдельная страница в рамке (iframe) во весь экран, с чёрным фоном: закрывала фон мода
-    // (свой и живой). Рамку и её страницу делаем прозрачными: сквозь них виден фон, как на остальных страницах
     function framePages() {
         document.querySelectorAll('iframe').forEach(f => {
             const r = f.getBoundingClientRect();
@@ -9107,7 +8349,7 @@
                     st.textContent = 'html, body { background: transparent !important; }';
                     d.head.appendChild(st);
                     f._vpClear = true;
-                } catch (e) { /* чужой адрес — не трогаем */ }
+                } catch (e) {   }
             };
             if (!f._vpHooked) { f._vpHooked = true; f.addEventListener('load', () => { f._vpClear = false; clear(); }); }
             clear();
@@ -9115,9 +8357,6 @@
     }
     onDom(framePages);
 
-    // Картинки постов (ленты, профиля, поста): пока грузится — заготовка, как в галерее (мерцание и кольцо);
-    // не загрузилась — значок и «нажми»: нажатие грузит заново, а не открывает пост. Рамку картинки сайт
-    // ставит заранее нужного размера — заготовка рисуется в ней
     function postMediaWait() {
         document.querySelectorAll('img[data-post-media-image]:not([data-vp-wait])').forEach(img => {
             const box = img.parentElement;
@@ -9142,11 +8381,8 @@
     }
     onDom(postMediaWait);
 
-    // --- Обновить пост: на своих постах слева от «…» — один запрос счётчиков (как у сайта, POST /api/posts/stats),
-    // лайки, комменты, репосты и просмотры меняются на месте, без перезагрузки; изменившиеся — вспыхивают
     function postIdOf(card) {
         if (!card.matches('article')) { const m = location.pathname.match(/\/post\/([0-9a-f-]{36})/); if (m) return m[1]; }
-        // репост без своего текста: номер — по тому, кто репостнул, и картинке/тексту оригинала (картинки в карточке — чужие)
         const rp = card.querySelector('.' + SELECTORS.repost);
         if (rp) {
             const own = normText([...card.querySelectorAll('.' + SELECTORS.postText)].filter(t => !t.closest('.' + SELECTORS.repost)).map(t => t.textContent).join(' '));
@@ -9164,7 +8400,7 @@
             }
         }
         for (const img of card.querySelectorAll('img')) {
-            if (rp && rp.contains(img)) continue;                          // картинка оригинала — не номер репоста
+            if (rp && rp.contains(img)) continue;                          
             const id = postIndex.byMedia.get(img.currentSrc || img.src); if (id) return id;
         }
         const bg = card.dataset.blurBg && postIndex.byMedia.get(card.dataset.blurBg);
@@ -9178,7 +8414,6 @@
         for (const [id, t] of posts) if (t === text || text.startsWith(t) || t.startsWith(text)) return id;
         return null;
     }
-    // числа в подвале карточки: лайки, комменты, репосты, просмотры — элементы с числом
     function postCounters(card) {
         const foot = card.querySelector('footer');
         if (!foot) return null;
@@ -9226,10 +8461,6 @@
         @keyframes vp-bump { 30% { transform: scale(1.35); color: var(--accent-primary, #3b9eff); } }
     `;
     document.head.appendChild(styleRefresh);
-    // «…» у сайта на ПК стоит поверх в углу карточки, на телефоне — в строке; кнопку ставим в карточку
-    // по месту самого «…»: вплотную слева, по его центру (отступ — от правого края карточки). Место
-    // пересчитываем на каждом проходе и при смене размера: карточка меняется (пометка «(ред.)», картинки,
-    // шрифт) — раньше кнопка оставалась там, где встала сначала, и съезжала до перезагрузки
     function placeRefresh(b) {
         const card = b.parentElement, menu = b._vpMenu;
         if (!card || !menu || !menu.isConnected) return;
@@ -9239,20 +8470,17 @@
         if (b.style.top !== top || b.style.right !== right) Object.assign(b.style, { position: 'absolute', zIndex: '2', top, right });
     }
     addEventListener('resize', () => document.querySelectorAll('.vp-post-tools').forEach(placeRefresh));
-    // картинка поста, которая сейчас на экране (у поста их бывает несколько — листаются вбок)
     function postShownImage(card) {
         const cr = card.getBoundingClientRect();
         const imgs = [...card.querySelectorAll('.' + SELECTORS.postMedia + ' img, img[data-post-media-image]')]
             .filter(i => !i.closest('header') && (i.currentSrc || i.src));
         return imgs.find(i => { const r = i.getBoundingClientRect(), cx = r.left + r.width / 2; return r.width > 0 && cx > cr.left && cx < cr.right; }) || imgs[0] || null;
     }
-    // Кнопки у поста слева от «…», по порядку: «Обновить» (только свои посты), «Скопировать картинку» (если есть
-    // картинка), «Скопировать ссылку» — у всех постов. Скопировалось — на секунду галочка, как в галерее
     const postHeadRow = h => [...h.children].find(c => c.querySelector(PROFILE_LINK)) || h.firstElementChild;
     onDom(function postToolButtons() {
         if (!myUsername) return;
         document.querySelectorAll('.vp-post-tools').forEach(b => {
-            if (b._vpMenu && !b._vpMenu.isConnected) {                  // сайт перерисовал шапку — найти «…» заново
+            if (b._vpMenu && !b._vpMenu.isConnected) {                  
                 const h = b.parentElement && b.parentElement.querySelector('header'), row = h && postHeadRow(h);
                 b._vpMenu = row && [...row.children].reverse().find(c => c.querySelector('svg') && !c.matches('.' + SELECTORS.nickRow + ', a, .vp-post-tools'));
             }
@@ -9311,10 +8539,6 @@
         });
     });
 
-    // --- Всплывашки уведомлений сайта («оценил(а) ваш пост» и т.п.): по одной, сверху по центру (ПК и телефон),
-    // живут 7 секунд; пришла новая — старая сразу закрывается (её же крестиком: сайт убирает её и у себя).
-    // Слой всплывашек — закреплённый блок прямо в #root (рядом с самим приложением): в нём список карточек
-    // (аватар, текст, крестик) и кнопка «Скрыть все». Хеши классов сайта не берём — узнаём по устройству
     const TOAST_MS = 7000;
     let toastSeq = 0;
     const styleToasts = document.createElement('style');
@@ -9347,7 +8571,7 @@
         if (!it.isConnected || it._vpClosed) return;
         it._vpClosed = true;
         it.classList.add('vp-toast-old');
-        const x = [...it.querySelectorAll('button')].pop();                // крестик — последняя кнопка карточки
+        const x = [...it.querySelectorAll('button')].pop();                
         if (x) x.click();
     }
     onDom(function toastsOne() {
@@ -9355,11 +8579,10 @@
         if (!list) return;
         const items = [...list.children].filter(it => !it._vpClosed);
         if (!items.length) return;
-        for (const it of items) if (!it._vpN) {                            // новая: номер по приходу, таймер 7 с
+        for (const it of items) if (!it._vpN) {                            
             it._vpN = ++toastSeq;
             setTimeout(() => closeToast(it), TOAST_MS);
         }
-        // самая новая — пришедшая последней (пришли разом — нижняя в списке, как их ставит сайт)
         const newest = items.reduce((a, b) => (b._vpN >= a._vpN ? b : a));
         items.forEach(it => { if (it !== newest) closeToast(it); });
         const emoji = emojiAvatarOf(newest) || '';
@@ -9369,9 +8592,6 @@
         }
     });
 
-    // --- ПК: навёл мышь на видео (лента, пост, галерея) — звук включается, увёл — снова без звука.
-    // Звук возвращаем только тем видео, которые сами включили. Браузер может не дать включить звук без
-    // нажатия на странице (тогда он ставит видео на паузу) — в этом случае оставляем без звука и играем дальше
     if (matchMedia('(hover: hover) and (pointer: fine)').matches) {
         let hoverVid = null;
         const videoAt = t => {
@@ -9390,7 +8610,6 @@
             const wasPlaying = !v.paused;
             v._vpHoverSound = true;
             v.muted = false;
-            // браузер не разрешил звук — видео встало: без звука, но дальше играет
             setTimeout(() => { if (wasPlaying && v.paused && !v.muted) { v.muted = true; v._vpHoverSound = false; v.play().catch(() => { }); } }, 0);
         };
         const mute = v => { if (v && v._vpHoverSound) { v.muted = true; v._vpHoverSound = false; } };
@@ -9403,18 +8622,14 @@
             unmute(v);
         }, true);
         document.addEventListener('pointerleave', () => { mute(hoverVid); hoverVid = null; });
-        // листнули в плитке галереи на другое видео — звук за курсором
         document.addEventListener('scroll', e => {
             if (!hoverVid || !e.target.classList || !e.target.classList.contains('vp-gal-strip')) return;
             requestAnimationFrame(() => { const el = document.querySelectorAll(':hover'), t = el[el.length - 1], v = videoAt(t); if (v !== hoverVid) { mute(hoverVid); hoverVid = v; unmute(v); } });
         }, true);
     }
 
-    // --- Ссылки в тексте: сайт показывает t.me/…, https://… простым текстом. Текст сайта не трогаем
-    // (вставить свой <a> в текст React — он потом падает на обновлении поста): места ссылок держим
-    // диапазонами, подсвечиваем их CSS-подсветкой (::highlight), нажатие ловим по точке под пальцем.
     const LINK_RE = /(?:https?:\/\/|www\.)[^\s<>"'«»]+|(?<![\w@.\/-])(?:[a-z0-9-]+\.)+(?:com|ru|me|org|net|io|gg|tv|app|dev|xyz|su|ly|co|be|link|site|store|online|info|pro|рф)(?:\/[^\s<>"'«»]*)?(?![\w-])|(?<![\w@.\/-])[а-яё0-9-]+\.(?:com|рф|ru)(?![\w-])/giu;
-    const linkNodes = new Map();                        // текстовый узел → { text, links: [{ start, end, url }] }
+    const linkNodes = new Map();                        
     const linkHl = window.Highlight && CSS.highlights ? new Highlight() : null;
     if (linkHl) CSS.highlights.set('vp-link', linkHl);
     const styleLinks = document.createElement('style');
@@ -9454,7 +8669,6 @@
         linksAt = performance.now();
         scanLinks();
     });
-    // ссылка под точкой экрана (мышь или палец)
     function linkAt(x, y) {
         const pos = document.caretPositionFromPoint ? document.caretPositionFromPoint(x, y) : document.caretRangeFromPoint && document.caretRangeFromPoint(x, y);
         if (!pos) return null;
@@ -9463,7 +8677,6 @@
         if (!info || info.text !== node.nodeValue) return null;
         const l = info.links.find(l => off >= l.start && off <= l.end);
         if (!l) return null;
-        // точка правее конца строки тоже даёт «последний символ» — проверяем, что палец на самих буквах
         const r = new Range(); r.setStart(node, l.start); r.setEnd(node, l.end);
         return [...r.getClientRects()].some(b => x >= b.left - 2 && x <= b.right + 2 && y >= b.top - 2 && y <= b.bottom + 2) ? l : null;
     }
@@ -9484,21 +8697,16 @@
         if (el) el.style.cursor = 'pointer';
     }, { passive: true });
 
-    // --- 13. Баннер с глубиной
-    // Сдвиг считаем по месту самого баннера на экране (один замер на кадр), а не по прокрутке блока,
-    // запомненного раньше: после перехода с прокрученной ленты тот хранил старую прокрутку —
-    // баннер в профиле оставался бледным и сдвинутым
     let bannerQueued = false;
     function bannerDepth() {
         bannerQueued = false;
         const banner = document.querySelector('.' + SELECTORS.banner);
         const img = banner && banner.querySelector(':scope > img[alt="Banner"]');
-        if (!img || bannerEdit.img) return;                                // пока баннер двигают в редакторе — не мешаем
+        if (!img || bannerEdit.img) return;                                
         banner.classList.add('vp-depth');
         const r = banner.getBoundingClientRect();
-        if (r.bottom < -40 || r.top > innerHeight) return;               // за экраном
-        const past = Math.max(0, -r.top);                                  // на сколько баннер ушёл за верх экрана
-        // пишем стиль, только если сдвиг заметно изменился: на прокрутке это каждый кадр
+        if (r.bottom < -40 || r.top > innerHeight) return;               
+        const past = Math.max(0, -r.top);                                  
         const y = Math.round(past * .35);
         if (img._vpY === y && !calm) return;
         img._vpY = y;
@@ -9508,16 +8716,15 @@
     addEventListener('scroll', () => { if (!bannerQueued) { bannerQueued = true; requestAnimationFrame(bannerDepth); } }, { capture: true, passive: true });
     onDom(function bannerDepthDom() { bannerDepth(); });
 
-    // --- 14. Счётчики профиля «накручиваются» до своего числа (один раз на профиль)
     const COUNT_LABEL = /подпис|пост|лайк|друз/i;
-    const counted = new Set();                        // профили, где числа уже накручивались
+    const counted = new Set();                        
     const countKey = () => loginOf(location.pathname) || location.pathname;
     function countUp() {
         if (counted.has(countKey())) return;
         const spans = [...document.querySelectorAll('span')].filter(sp => {
-            const next = sp.nextElementSibling;                          // сначала дешёвые проверки: span-ов тысячи
+            const next = sp.nextElementSibling;                          
             return next && !sp.children.length && /^\d{1,7}$/.test(sp.textContent.trim()) && COUNT_LABEL.test(next.textContent)
-                && !sp.closest('.' + SELECTORS.post + ', .' + SELECTORS.notification + ', nav, .vp-rail');   // панель — свои числа, не накручиваем
+                && !sp.closest('.' + SELECTORS.post + ', .' + SELECTORS.notification + ', nav, .vp-rail');   
         });
         if (!spans.length) return;
         counted.add(countKey());
@@ -9527,28 +8734,24 @@
             sp.style.setProperty('--vp-count-color', getComputedStyle(sp).color);
             sp.classList.add('vp-count');
             sp.addEventListener('animationend', () => sp.classList.remove('vp-count'), { once: true });
-            setTimeout(() => sp.classList.remove('vp-count'), 1400);     // запас, если анимация не доиграет
+            setTimeout(() => sp.classList.remove('vp-count'), 1400);     
         });
     }
     onDom(countUp);
 
-    // Посты в строке профиля: «235 подписчиков · 123 подписок · 572 поста». Число — из профиля
-    // (/api/users/<ник>, поле postsCount), пункт — копия соседнего пункта сайта, вид родной.
     const plural = (n, one, few, many) => n % 10 === 1 && n % 100 !== 11 ? one
         : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? few : many;
     const postsCounted = new Set();
     function profilePostsRow() {
         const login = loginOf(location.pathname);
         if (!login) return;
-        // уже есть на этой странице — не перебираем все span-ы заново на каждом проходе
         const done = document.querySelector('.vp-posts-stat');
         if (done && done.isConnected && done.parentElement && done.parentElement.dataset.vpPosts === login) return;
-        // строка счётчиков: пункт «число + подпись», где подпись — «подписчиков»/«подписок»
         const num = [...document.querySelectorAll('span')].find(sp => sp.nextElementSibling && !sp.children.length && /^\d[\d\s]*$/.test(sp.textContent.trim())
             && /подпис/i.test(sp.nextElementSibling.textContent) && !sp.closest('.' + SELECTORS.post + ', nav, .vp-rail'));
         const item = num && num.parentElement, row = item && item.parentElement;
         if (!row || row.querySelector('.vp-posts-stat')) return;
-        if (row.dataset.vpPosts === login) return;           // уже ждём ответ для этого профиля
+        if (row.dataset.vpPosts === login) return;           
         row.dataset.vpPosts = login;
         hcData(login, 2500).then(d => {
             const total = d && d.postsCount;
@@ -9556,7 +8759,6 @@
             const last = [...row.children].filter(c => c.querySelector('span')).pop() || item;
             const mine = last.cloneNode(true);
             mine.classList.add('vp-posts-stat');
-            // копия могла снять соседа посреди его накрутки — чистим её следы (прозрачный цвет)
             mine.querySelectorAll('.vp-count').forEach(e => { e.classList.remove('vp-count'); ['--vp-to', '--vp-count-color'].forEach(v => e.style.removeProperty(v)); });
             const [n, label] = mine.querySelectorAll('span');
             n.textContent = total;
@@ -9569,8 +8771,7 @@
                 n.classList.add('vp-count');
                 setTimeout(() => n.classList.remove('vp-count'), 1400);
             };
-            if (!postsCounted.has(login)) countUpOnce(n, total);   // накрутка, как у соседних счётчиков, — раз на профиль
-            // свой профиль: справа от постов — лайки за всё время (сумма по всем своим постам)
+            if (!postsCounted.has(login)) countUpOnce(n, total);   
             if (myUsername && login.toLowerCase() === myUsername.toLowerCase()) myLikesTotal().then(likes => {
                 if (typeof likes !== 'number' || !row.isConnected || row.querySelector('.vp-likes-stat') || loginOf(location.pathname) !== login) return;
                 const lk = mine.cloneNode(true);
@@ -9579,7 +8780,7 @@
                 const [ln, llabel] = lk.querySelectorAll('span');
                 ln.classList.remove('vp-count');
                 ln.textContent = likes;
-                llabel.textContent = 'лайков';                 // всегда «лайков» (так попросил владелец: «5371 лайк» читается странно)
+                llabel.textContent = 'лайков';                 
                 mine.after(lk);
                 if (!postsCounted.has(login + '|likes')) { postsCounted.add(login + '|likes'); countUpOnce(ln, likes); }
             });
@@ -9588,11 +8789,8 @@
     }
     onDom(profilePostsRow);
 
-    // --- 19. Тихие звуки интерфейса (по умолчанию выключены): синтез, без файлов
     let uiSoundEnabled = GM_getValue('uiSoundEnabled', false);
     let uiCtx = null;
-    // Телефон: динамик маленький — там те же звуки в 5 раз громче. И мобильный браузер не даёт
-    // играть звук, пока не было касания: на первом касании «разблокируем» звук пустым сэмплом.
     const UI_GAIN = matchMedia('(pointer: coarse)').matches ? 5 : 1;
     function uiAudio() {
         uiCtx = uiCtx || new (window.AudioContext || window.webkitAudioContext)();
@@ -9626,12 +8824,11 @@
                 o.start(t + at);
                 o.stop(t + at + dur + 0.02);
             };
-            // громкости — в 4 раза тише первой версии (владелец дважды просил тише в 2 раза)
-            if (kind === 'like') { tone(520, 880, 0.09, 0.015); tone(880, 1320, 0.12, 0.0113, 'sine', 0.06); }  // «пи-пинь»
-            else if (kind === 'toggle') tone(1400, 900, 0.05, 0.01, 'triangle');                                // щелчок
-            else if (kind === 'nav') tone(300, 220, 0.07, 0.0125);                                               // мягкий «тук»
-            else tone(900, 700, 0.04, 0.0075, 'triangle');                                                       // клик
-        } catch (e) { /* звук не главное */ }
+            if (kind === 'like') { tone(520, 880, 0.09, 0.015); tone(880, 1320, 0.12, 0.0113, 'sine', 0.06); }  
+            else if (kind === 'toggle') tone(1400, 900, 0.05, 0.01, 'triangle');                                
+            else if (kind === 'nav') tone(300, 220, 0.07, 0.0125);                                               
+            else tone(900, 700, 0.04, 0.0075, 'triangle');                                                       
+        } catch (e) {   }
     }
     document.addEventListener('click', e => {
         if (!uiSoundEnabled || !e.isTrusted) return;
@@ -9642,8 +8839,6 @@
         else if (t.closest('.vp-pill-btn, .nick-style-option, .vp-msg-again, button')) uiSound('click');
     }, true);
 
-    // ================= Боковая панель: статистика, клуб ИТД X, игры =================
-    // Стоит в пустой полосе между лентой и правой колонкой сайта. Мало места — прячется.
     let railEnabled = GM_getValue('railEnabled', true);
     const GAMES = [
         { id: 'snake', name: 'Змейка', best: 'vp_snake_best', icon: '<path d="M4 17c0-3 2-4 4-4h8a3 3 0 0 0 0-6H9"/><circle cx="7" cy="7" r="1.6"/>' },
@@ -9708,15 +8903,7 @@
     `;
     document.head.appendChild(railCss);
 
-    // место: от правого края ленты до левого края правой колонки сайта
-    // верх панели — постоянный, вровень с баннером и лентой сайта (у них отступ сверху 36px)
     const RAIL_TOP = 36;
-    // Края колонки с содержимым — по её внешней обёртке: от блока ленты/поста вверх до самой широкой,
-    // где ещё нет боковых меню. Внутренние блоки у открытого поста уже карточки (у неё свои поля),
-    // и по ним меню наезжало на карточку, а панель прилипала к ней.
-    // Посты ленты лежат в одной колонке: путь вверх у них общий. Ответ по каждому предку запоминаем
-    // (memo) — раньше путь и поиск меню внутри обёртки повторялись для каждого поста.
-    // Один ответ на проход: его спрашивают и панель, и левое меню (забываем, как проход закончится).
     let cbCached;
     function contentBox() {
         if (cbCached === undefined) {
@@ -9728,7 +8915,7 @@
     function contentBoxNow() {
         const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail';
         let left = Infinity, right = 0;
-        const memo = new Map(), tops = new Set();         // предок → куда дойдёт путь от него (null — стоп)
+        const memo = new Map(), tops = new Set();         
         const up = el => {
             const p = el.parentElement;
             if (!p || p === document.body) return el;
@@ -9742,15 +8929,11 @@
         });
         if (right) feedCb = { left, right, w: innerWidth };
         if (!right) {
-            // магазин — отдельная страница в рамке (iframe) во весь экран: своей колонки нет, и меню с панелью
-            // встают как при открытии с нуля (меню на месте сайта, панель — в правую колонку), а не по прошлой странице
             const frame = [...document.querySelectorAll('iframe')].find(f => {
                 const r = f.getBoundingClientRect();
                 return r.width >= innerWidth * 0.72 && r.height >= innerHeight * 0.6;
             });
             if (frame) return msgsOpen ? frameColumn() : { left: 0, right: 0 };
-            // страница без ленты, вкладок и постов: колонка — то, что лежит в середине
-            // экрана, поднятое до обёртки без боковых колонок. Иначе меню и панель стояли по прошлой странице
             const skip = side + ', nav, .vp-hc, .vp-msgs, .vpi-overlay';
             for (const y of [0.35, 0.6]) {
                 const hit = document.elementsFromPoint(innerWidth / 2, innerHeight * y).find(e => e !== document.body
@@ -9765,11 +8948,7 @@
         return right ? { left, right } : null;
     }
     let lastCb = null;
-    // Колонка ленты с последней страницы, где она была (и ширина экрана тогда)
     let feedCb = null;
-    // «Сообщения» поверх магазина: колонки у страницы нет, и меню с панелью разъезжались по краям (панель ещё и
-    // сужалась). Пока окно открыто, колонка — где лента стоит на обычных страницах: меню и панель встают вокруг
-    // окна как на ленте; закрыли — снова по раскладке магазина
     function frameColumn() {
         if (feedCb && feedCb.w === innerWidth) return { left: feedCb.left, right: feedCb.right };
         const side = document.querySelector('.' + SELECTORS.sidebar);
@@ -9777,11 +8956,10 @@
         const siteLeft = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-gap')) || 36;
         const w = Math.min(650, innerWidth - 32);
         let left = Math.round(innerWidth / 2 - w / 2);
-        if (sw && left - sw - 24 <= siteLeft + 8) left = Math.round(siteLeft + sw + 24);   // меню не сдвинуть — окно правее него
+        if (sw && left - sw - 24 <= siteLeft + 8) left = Math.round(siteLeft + sw + 24);   
         return { left, right: Math.min(innerWidth - 16, left + w) };
     }
     function placeRail() {
-        // лента на миг пропала (переход страницы) — остаёмся на прежнем месте, а не прыгаем
         const cb = contentBox() || lastCb;
         if (cb) lastCb = cb;
         const edge = cb ? cb.right : 0;
@@ -9789,8 +8967,7 @@
         const right = side ? side.getBoundingClientRect().left : innerWidth;
         const gap = right - edge;
         let box = null;
-        const on = railEnabled && !!myUsername;             // не вошли (страница входа) — панели не место
-        // открыта галерея — панель у правого края экрана, с тем же отступом, что меню у левого
+        const on = railEnabled && !!myUsername;             
         const sideEl = document.querySelector('.' + SELECTORS.sidebar);
         if (on && galOpen && sideEl && innerWidth >= 1173) {
             const margin = Math.max(12, Math.round(sideEl.getBoundingClientRect().left)), width = 300;
@@ -9799,14 +8976,11 @@
             const width = Math.min(300, gap - 48);
             box = { left: Math.round(edge + 24), width, maxH: innerHeight - 48 };
         } else if (on && side) {
-            // узкий экран: в верх правой колонки сайта, над её ссылками (они внизу)
             const sr = side.getBoundingClientRect(), links = side.lastElementChild;
             const maxH = (links ? links.getBoundingClientRect().top : sr.bottom) - 24 - 24;
             if (sr.width >= 180 && maxH >= 220) box = { left: Math.round(sr.left), width: Math.round(sr.width), maxH };
         }
         rail.style.top = RAIL_TOP + 'px';
-        // высота во весь экран — только у панели рядом с лентой; в правой колонке сайта (магазин, узкий экран)
-        // панель кончается над ссылками сайта, иначе закрывала «Статус серверов» и остальные
         if (box && edge > 0 && gap >= 240 && !galOpen) box.maxH = innerHeight - RAIL_TOP - 24;
         rail.classList.toggle('vp-on', !!box);
         if (!box) return;
@@ -9817,16 +8991,11 @@
     addEventListener('resize', placeRail);
     onDom(placeRail);
 
-    // Левое меню — к ленте, симметрично правой панели (у сайта оно прижато к краю экрана).
-    // Место не позволяет — остаётся, где его ставит сайт.
-    // Отступ задаём правилом стилей (переменная на <html>), а не у самого меню: сайт при смене
-    // страницы рисует меню заново, и правило действует на новое сразу — без «прыжка» на 0,2 с.
     function placeSidebar() {
-        // открыта галерея — меню на своём месте у сайта (у левого края): галерея растягивается до него
         if (galOpen) { document.documentElement.classList.remove('vp-side-moved'); return; }
         const side = document.querySelector('.' + SELECTORS.sidebar);
         const cb = contentBox();
-        if (!side || !cb) return;                                   // ленты пока нет — оставляем как было
+        if (!side || !cb) return;                                   
         const siteLeft = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-gap')) || 36;
         const want = Math.round(cb.left - side.getBoundingClientRect().width - 24);
         const on = want > siteLeft + 8 && getComputedStyle(side).position === 'fixed';
@@ -9837,16 +9006,12 @@
     onDom(placeSidebar);
     placeSidebar();
 
-    // --- 35. Статистика: разница за день и за месяц. Снимок чисел — не чаще раза в 6 часов,
-    // история — 40 дней (GM vp_stats_hist). Истории меньше периода — считаем от первого снимка.
     const railStats = rail.querySelector('.vp-stats'), railSince = rail.querySelector('.vp-stats-since');
     const seg = rail.querySelector('.vp-seg');
     const fmtNum = n => n >= 10000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1).replace('.0', '') + 'к' : String(n);
     let statsPeriod = GM_getValue('vp_stats_tab', 'day'), statsNow = null;
     const DAY_MS = 864e5;
     function statsHistory() { try { return JSON.parse(GM_getValue('vp_stats_hist', '[]')); } catch (e) { return []; } }
-    // Лайки за всё время — сумма лайков всех своих постов: стена листается страницами по 50 (как у сайта,
-    // курсором), ~12 запросов на 500 постов. Поэтому не чаще раза в 3 часа (GM vp_likes_total), в промежутке — число из памяти
     let likesPending = null;
     function myLikesTotal() {
         const c = GM_getValue('vp_likes_total', null);
@@ -9871,7 +9036,6 @@
     }
     async function loadStats() {
         if (!myUsername) return setTimeout(loadStats, 1500);
-        // счётчики — из /users/me, если он их отдаёт; иначе ответ сайта про мой профиль / свой запрос
         const d = meData && typeof meData.followersCount === 'number' ? meData : await hcData(myUsername, 2500);
         const now = {
             followers: pick(d && d.followersCount, d && d.followers_count, d && d.stats && d.stats.followers, d && typeof d.followers === 'number' ? d.followers : undefined),
@@ -9892,7 +9056,6 @@
         if (!statsNow) return;
         const span = statsPeriod === 'month' ? 30 * DAY_MS : DAY_MS;
         const hist = statsHistory();
-        // опорный снимок — последний, которому уже есть «период»; нет такого — самый первый
         const base = [...hist].reverse().find(h => Date.now() - h.at >= span) || hist[0] || statsNow;
         const short = Date.now() - base.at < span * 0.9;
         railSince.textContent = short && base.at ? 'с ' + new Date(base.at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
@@ -9923,11 +9086,9 @@
     renderStats();
     loadStats();
 
-    // --- 34. Клуб ИТД X: у кого стоит скрипт (по кодам под служебным постом — те же, что у вериф-бейджа)
     const railClub = rail.querySelector('.vp-club');
     let clubShown = '';
     function openProfile(login) {
-        // переход внутри сайта без перезагрузки: роутер слушает popstate
         history.pushState({}, '', '/@' + login);
         dispatchEvent(new PopStateEvent('popstate'));
     }
@@ -9960,10 +9121,6 @@
     setTimeout(renderClub, 2500);
     setInterval(renderClub, 60 * 1000);
 
-    // --- 39. Игры: в панели — меню (Змейка, Сапёр, Тетрис) с рекордами, сами игры — в большом окне поверх страницы.
-    // Окно: вкладки игр, счёт и рекорд, крестик; Esc или клик мимо окна — закрыть (игра встаёт на паузу).
-    // Каждая игра — { el, pause(), key(e), destroy(), resize() }; клавиши окно отдаёт текущей игре (не только
-    // при фокусе на поле: раньше змейка теряла нажатия, если фокус уходил с холста)
     const gamesList = rail.querySelector('.vp-games-list');
     const bestText = g => {
         const v = GM_getValue(g.best, 0);
@@ -10046,7 +9203,6 @@
     `;
     document.head.appendChild(gamesCss);
     const gameCtx = () => ({ accent: getComputedStyle(document.documentElement).getPropertyValue('--vp-accent').trim() || '#00ff88' });
-    // квадратный холст под окно: сторона — сколько влезает по ширине и высоте окна
     function fitCanvas(cv, cols, rows, sideW = 0, extraH = 0) {
         const body = gw.el && gw.el.querySelector('.vp-games-body');
         const winW = (body ? body.clientWidth : Math.min(760, innerWidth - 24) - 32) - sideW, winH = (body ? body.clientHeight : innerHeight - 140) - extraH;
@@ -10057,8 +9213,6 @@
         return cell * dpr;
     }
 
-    // Змейка: поле 16х16, скорость постоянная (без ускорения). Нажатия копятся в очередь (до 3): быстро нажал
-    // «вверх» и «влево» — сработают оба, по шагу на каждое (раньше второе затирало первое). Сквозь стены
     function snakeGame(setScore) {
         const el = document.createElement('div');
         const cv = document.createElement('canvas');
@@ -10111,7 +9265,7 @@
         function step() {
             if (queue.length) dir = queue.shift();
             const head = { x: (snake[0].x + dir.x + CELLS) % CELLS, y: (snake[0].y + dir.y + CELLS) % CELLS };
-            if (snake.slice(0, -1).some(p => p.x === head.x && p.y === head.y)) {       // хвост в этот шаг уходит — в него можно
+            if (snake.slice(0, -1).some(p => p.x === head.x && p.y === head.y)) {       
                 on = false;
                 if (score > best) { best = score; GM_setValue('vp_snake_best', best); renderGamesMenu(); gamesRecord(); }
                 msg = `Съел себя · ${score}\nнажми — ещё раз`;
@@ -10140,7 +9294,7 @@
         function pause() { if (!on) return; on = false; msg = 'Пауза\nнажми — дальше'; draw(); }
         function turn(x, y) {
             const tail = queue.length ? queue[queue.length - 1] : dir;
-            if ((x === -tail.x && y === -tail.y) || (x === tail.x && y === tail.y)) return;   // назад в себя и то же — мимо
+            if ((x === -tail.x && y === -tail.y) || (x === tail.x && y === tail.y)) return;   
             if (queue.length < 3) queue.push({ x, y });
             if (!on) start();
         }
@@ -10152,10 +9306,9 @@
             const t = TURN[k];
             if (!t) return;
             e.preventDefault();
-            if (e.repeat) return;                             // зажатая клавиша не забивает очередь
+            if (e.repeat) return;                             
             turn(t[0], t[1]);
         }
-        // телефон: свайп по полю — поворот, короткое касание — пауза/старт
         let sx = 0, sy = 0, swiped = false;
         cv.addEventListener('pointerdown', e => { sx = e.clientX; sy = e.clientY; swiped = false; cv.setPointerCapture(e.pointerId); });
         cv.addEventListener('pointermove', e => {
@@ -10168,12 +9321,10 @@
         cv.addEventListener('pointerup', () => { if (!swiped) (on ? pause() : start()); });
         function resize() { cell = fitCanvas(cv, CELLS, CELLS, 0, 34); draw(); }
         reset(); msg = 'Змейка\nнажми или стрелку';
-        el._vpTest = () => ({ head: snake[0], dir, queue: queue.length, on, score });      // для тестов
+        el._vpTest = () => ({ head: snake[0], dir, queue: queue.length, on, score });      
         return { el, key, pause, resize, destroy() { on = false; cancelAnimationFrame(raf); } };
     }
 
-    // Сапёр: 10х10, 15 мин. Первый ход — никогда не мина. Правая кнопка (телефон — долгое нажатие или режим 🚩) —
-    // флажок; нажатие по цифре, вокруг которой стоит столько же флажков, — открыть соседей. Рекорд — лучшее время
     function minesGame(setScore) {
         const W = 10, H = 10, M = 15;
         const el = document.createElement('div');
@@ -10234,7 +9385,7 @@
             const c = cells[i];
             if (c.flag) return;
             if (first) { first = false; plant(i); }
-            if (c.open) {                                     // по цифре: флажков вокруг столько же — открыть соседей
+            if (c.open) {                                     
                 if (c.n && nb(i).filter(j => cells[j].flag).length === c.n) nb(i).forEach(j => { if (!cells[j].open && !cells[j].flag) open(j); });
                 return;
             }
@@ -10266,8 +9417,6 @@
         return { el, key: e => { if (e.key === 'F2' || e.key.toLowerCase() === 'r' || e.key.toLowerCase() === 'к') { e.preventDefault(); reset(); } }, pause() { }, resize, destroy() { clearInterval(timer); } };
     }
 
-    // Тетрис: поле 10х20, семь фигур, тень падения, следующая фигура сбоку. Скорость растёт с уровнем
-    // (каждые 10 линий). Стрелки / WASD, ↑ или X — поворот, Z — назад, пробел — сбросить вниз, P — пауза
     function tetrisGame(setScore) {
         const COLS = 10, ROWS = 20;
         const SHAPES = { I: [[1, 1, 1, 1]], O: [[1, 1], [1, 1]], T: [[0, 1, 0], [1, 1, 1]], S: [[0, 1, 1], [1, 1, 0]],
@@ -10284,7 +9433,7 @@
         pad.innerHTML = ['◀:left', '⟳:rot', '▶:right', '▼:down', '⤓:drop', 'Ⅱ:pause'].map(s => { const [t, a] = s.split(':'); return `<button type="button" data-a="${a}">${t}</button>`; }).join('');
         const hint = document.createElement('div'); hint.className = 'vp-games-hint';
         hint.textContent = '← → — двигать · ↑ или X — поворот · ↓ — быстрее · пробел — сбросить · P — пауза';
-        if (matchMedia('(pointer: coarse)').matches) hint.hidden = true;      // на телефоне — кнопки под полем
+        if (matchMedia('(pointer: coarse)').matches) hint.hidden = true;      
         row.append(cv, side); el.append(row, pad, hint);
         const nx = side.querySelector('canvas'), g = cv.getContext('2d'), ng = nx.getContext('2d');
         let board, cur, next, score, lines, level, on = false, over = false, last = 0, raf = 0, cell = 0, msg = 'Тетрис\nнажми или стрелку';
@@ -10374,10 +9523,6 @@
         return { el, key, pause, resize, destroy() { on = false; cancelAnimationFrame(raf); } };
     }
 
-    // Лидерборд игр: у каждого игрока — один свой комментарий под служебным постом «Резе: Девушка из кафе»:
-    // «ITDXG s26 m42 t1200» (змейка; сапёр — секунды; тетрис). Пишем его один раз, дальше только правим
-    // (новый комментарий шлёт владельцу уведомление, правка — нет; ни ответов, ни удалений). Значение
-    // на сервере не понижаем. Проверить честность без своего сервера нельзя — это таблица друзей
     const GAMES_POST_ID = 'd5f8b7c0-b97d-40cd-bdd4-3c07b3ea0611';
     const LB_KEYS = { snake: 's', mines: 'm', tetris: 't' };
     const parseLB = t => {
@@ -10417,7 +9562,6 @@
             if (gw.el) lbRender();
         } catch (e) { logErr('лидерборд', e); } finally { lbBusy = false; }
     }
-    // новый рекорд — отправить (с задержкой: несколько рекордов подряд — одним запросом)
     function gamesRecord() { clearTimeout(lbT); lbT = setTimeout(lbSubmit, 2000); }
     function lbRender() {
         const view = gw.el && gw.el.querySelector('.vp-games-leads');
@@ -10481,7 +9625,6 @@
         el.innerHTML = `<div class="vp-games-win" role="dialog" aria-label="Игры"><div class="vp-games-head"><div class="vp-games-tabs">${GAMES.map(g => `<button type="button" class="vp-games-tab" data-g="${g.id}">${g.name}</button>`).join('')}<button type="button" class="vp-games-tab" data-g="lead">🏆 Лидеры</button></div>
             <span class="vp-games-score"></span><button type="button" class="vp-games-x" aria-label="Закрыть">${svgIcon('<path d="M6 6l12 12M18 6 6 18"/>', 18)}</button></div><div class="vp-games-body"></div></div>`;
         el.addEventListener('click', e => { if (e.target === el) closeGames(); });
-        // страница под окном не крутится: колесо и палец — только списку лидеров, если ему есть куда
         const still = e => {
             const area = e.target.closest && e.target.closest('.vp-games-lead-list, .vp-games-leads');
             if (!area || area.scrollHeight <= area.clientHeight) e.preventDefault();
@@ -10493,23 +9636,21 @@
         document.body.appendChild(el);
         gw.el = el;
         showGame(id || gw.id);
-        if (!gw.synced) { gw.synced = true; gamesRecord(); }          // рекорды, поставленные до лидерборда, — в таблицу
+        if (!gw.synced) { gw.synced = true; gamesRecord(); }          
     }
     function closeGames() {
         if (!gw.el) return;
         if (gw.cur) { gw.cur.pause(); gw.cur.destroy(); gw.cur = null; }
         gw.el.remove(); gw.el = null;
     }
-    // клавиши — текущей игре, пока открыто окно (в поле ввода не лезем); Esc — закрыть
     addEventListener('keydown', e => {
         if (!gw.el || !gw.cur) return;
         if (e.key === 'Escape') { e.preventDefault(); closeGames(); return; }
         if (e.target.closest && e.target.closest('input, textarea, [contenteditable]')) return;
         gw.cur.key(e);
-        if (['PageUp', 'PageDown', 'Home', 'End', ' ', 'ArrowUp', 'ArrowDown'].includes(e.key)) e.preventDefault();   // и клавиши — не странице
+        if (['PageUp', 'PageDown', 'Home', 'End', ' ', 'ArrowUp', 'ArrowDown'].includes(e.key)) e.preventDefault();   
     }, true);
     addEventListener('resize', () => { if (gw.cur) gw.cur.resize(); });
-    // ушёл с вкладки — пауза
     document.addEventListener('visibilitychange', () => { if (document.hidden && gw.cur) gw.cur.pause(); });
     renderGamesMenu();
 
