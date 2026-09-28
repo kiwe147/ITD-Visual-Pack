@@ -671,3 +671,77 @@
 | 664 | 10503 | line | `// клавиши — текущей игре, пока открыто окно (в поле ввода не лезем); Esc — закрыть` | внутри `function closeGames() {` (стр. 10498) |
 | 665 | 10509 | inline | `// и клавиши — не странице` | строка кода 10509 |
 | 666 | 10512 | line | `// ушёл с вкладки — пауза` | внутри `function closeGames() {` (стр. 10498) |
+
+## 3.4.0 — галочки: карантин
+
+### Константы (стр. ~1420)
+
+| Имя | Значение | Назначение |
+|---|---|---|
+| `OWNER_ID` | UUID владельца | по нему узнаём метки под постом |
+| `QUARANTINE_MS` | 3 дня | сколько ждёт подтверждения |
+| `COOLDOWN_MS` | 7 дней | сколько сидит после отказа |
+
+### Метки в комментариях под `VERIFICATION_POST_ID`
+
+| Метка | Пишет | Формат | Смысл |
+|---|---|---|---|
+| `ITDX-V` | владелец | `<uuid> <uuid> …` | подтверждённые |
+| `ITDX-SEEN` | владелец | `<uuid>:<ts> <uuid>:<ts> …` | когда впервые увидел |
+| `ITDX-C` | владелец | `<uuid>:<until_ts> …` | кулдаун до |
+
+### Функции
+
+| Функция | Стр. | Что делает |
+|---|---|---|
+| `parseOwnerList` | ~3710 | читает метки определённого префикса |
+| `parseAllOwnerLists` | ~3728 | читает все три сразу |
+| `resolveVerifyState` | ~3736 | вычисляет state по id и меткам |
+| `checkAllComments` | ~3760 | обновлён: пишет `state` в localStorage |
+| `verifiedNames` | ~3706 | теперь только `approved` |
+| `verifiedPending` | новая | только `quarantine` |
+| `addVerifyBadge` | ~3944 | принимает `state`, красит серым при quarantine |
+| `markVerifiedUsers` | ~3952 | держит два сета: approved и pending |
+
+### Правило парсинга
+
+Метки читаются **только** из комментариев, чей `author.id === OWNER_ID`.
+Подделка (Вася написал `ITDX-V <свой_id>`) игнорируется — проверено `test/verify.js`.
+
+### Тесты
+
+`test/verify.js снимок.html` — проверяет шесть сценариев:
+`approved` / `none` (просрочен SEEN) / `quarantine` (свежий SEEN) / `none` (кулдаун) / `quarantine` (без меток) / `quarantine` (подделка).
+
+## 3.4.0 — Часть 2: админка галочек
+
+### Кнопка в админ-островке
+
+`data-act="verify"` → `adminVerify()`. Видна только по `ADMINS.includes(myUsername.toLowerCase())`.
+Открывает панель `.vp-verify-panel` со списком quarantine-юзеров.
+
+### Функции
+
+| Функция | Что делает |
+|---|---|
+| `vpVerifyEnsureStyle()` | один раз добавляет стили `.vp-verify-*` |
+| `ownerMarkPush(prefix, token)` | PATCH в свой комментарий с префиксом, если влезает; иначе POST новый |
+| `showVerifyPanel(pending)` | панель очереди, кнопки «Подтвердить» / «Отклонить» |
+| `adminVerify()` | читает quarantine, шлёт ITDX-SEEN, показывает панель |
+
+### Логика кнопок
+
+- **Подтвердить** → `ownerMarkPush('ITDX-V', <uuid>)`.
+- **Отклонить** → `ownerMarkPush('ITDX-C', <uuid>:<now + 7 дней>)`.
+- Обе кнопки после успеха зовут `checkAllComments(true)` — обновляют state.
+
+### Кого не показываем в очереди
+
+- `state !== 'quarantine'` — approved / none.
+- `info.id === OWNER_ID` — сам владелец.
+
+### Тест `test/verify.js`
+
+22 проверки: 6 по состояниям, 7 по очереди, 4 по PATCH, 1 по ошибкам.
+Мокается `/api/posts/<VERIFICATION_POST_ID>/comments` — отдаёт заготовленные данные.
+Перехват PATCH и POST на комментарии — записывается в `sentRequests`, проверяется содержимое.
