@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.5
+// @version      3.3.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -9776,6 +9776,7 @@
             for (const c of all) {
                 const o = parseLB(c.content), a = c.author;
                 if (!o || !o[k] || !a) continue;
+                if (!lbIsMe(a) && !isApprovedAuthor(a)) continue;
                 const key = a.id || a.username, cur = best.get(key);
                 if (!cur || lbBetter(k, cur.v, o[k]) !== cur.v) best.set(key, { v: o[k], name: a.displayName || a.username || '?', me: lbIsMe(a) });
             }
