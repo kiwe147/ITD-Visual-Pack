@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.6.3
+// @version      3.3.7
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -78,7 +78,7 @@
 
     const siteUsers = new Map(), siteUsersWait = new Map();
     const siteAuth = { token: null, at: 0, me: null, meWait: [] };
-    const OVERLAY_KEYS = ['vpGal', 'vpMsgs'];
+    const OVERLAY_KEYS = ['vpGal', 'vpMsgs', 'vpMenu'];
     function overlayEnter(key) {
         const st = Object.assign({}, history.state);
         const had = OVERLAY_KEYS.some(k => st[k]);
@@ -3373,6 +3373,14 @@
                     b.textContent = 'ИТД X';
                     b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openSettingsMenu(b); });
                     nuksta.after(b);
+                    if (innerWidth <= 1172 && !nuksta.parentElement.querySelector('.vp-menu-btn')) {
+                        const m = document.createElement('button');
+                        m.type = 'button';
+                        m.className = b.className.replace('vp-itdx-btn', '').trim() + ' vp-menu-btn';
+                        m.textContent = 'Меню';
+                        m.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openMobileMenu(); });
+                        b.after(m);
+                    }
                 }
                 document.querySelectorAll('.nick-controls-panel').forEach(p => p.remove());
                 return;
@@ -3605,6 +3613,9 @@
         }
 
         const CHANGELOG = [
+            ['3.3.7', '29 сентября 2026', [
+                'Телефон: рядом с «ИТД X» в профиле — кнопка «Меню»: статистика, клуб ИТД X и игры в полноэкранном окне (раньше на телефоне панели не было совсем)',
+                '«Назад» на телефоне и Esc закрывают меню; открытое окно помечается в истории — листается как галерея и личка']],
             ['3.3.5 – 3.3.6', '28 сентября 2026', [
                 'Галочка «пользуется ИТД X» теперь выдаётся вручную: новая — серая и ждёт подтверждения, после подтверждения становится радужной',
                 'Личные сообщения и лидеры игр — только для подтверждённых: без галочки эти разделы пустые']],
@@ -9032,6 +9043,7 @@
         }, true);
 
         let railEnabled = GM_getValue('railEnabled', true);
+        let mobileMenuOpen = false, mobileMenuEl = null;
         const GAMES = [
             { id: 'snake', name: 'Змейка', best: 'vp_snake_best', icon: '<path d="M4 17c0-3 2-4 4-4h8a3 3 0 0 0 0-6H9"/><circle cx="7" cy="7" r="1.6"/>' },
             { id: 'mines', name: 'Сапёр', best: 'vp_mines_best', icon: '<circle cx="12" cy="13" r="6"/><path d="M12 3v4M19.5 6 17 8.5M4.5 6 7 8.5"/>' },
@@ -9093,7 +9105,24 @@
         @keyframes vpRailIn { from { opacity: 0; transform: translateX(10px); } }
         @media (prefers-reduced-motion: reduce) { .vp-rail.vp-on { animation: none; } }
     `;
-        document.head.appendChild(railCss);
+                document.head.appendChild(railCss);
+
+        const menuBtnCss = document.createElement('style');
+        menuBtnCss.textContent = `.vp-menu-btn { display: none !important; }
+        @media (max-width: 1172px) { .vp-menu-btn { display: inline-flex !important; } }
+        .vp-menu { position: fixed; inset: 0; z-index: 2147483000; display: flex; flex-direction: column; box-sizing: border-box;
+            background: var(--bg-primary, #000); color: var(--text-primary, #fff); font-family: inherit; animation: vpMenuIn .22s ease-out; overflow: hidden; }
+        @keyframes vpMenuIn { from { opacity: 0; } }
+        @media (prefers-reduced-motion: reduce) { .vp-menu { animation: none; } }
+        .vp-menu-top { display: flex; align-items: center; gap: 10px; padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px 10px; }
+        .vp-menu-title { flex: 1; min-width: 0; font-size: 22px; font-weight: 700; }
+        .vp-menu-close { width: 40px; height: 40px; flex-shrink: 0; border: 0; border-radius: 50%; padding: 0; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; background: var(--block-bg, #1c1c1c); color: var(--text-primary, #fff); }
+        .vp-menu-close:active { transform: scale(.94); }
+        .vp-menu-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 16px calc(env(safe-area-inset-bottom, 0px) + 16px); -webkit-overflow-scrolling: touch; }
+        .vp-menu-body .vp-rail { position: static !important; width: auto !important; max-height: none !important; left: auto !important; top: auto !important; animation: none !important; }
+        html.vp-menu-open .itd-scroll-top-btn { opacity: 0 !important; visibility: hidden !important; }`;
+        document.head.appendChild(menuBtnCss);
 
         const RAIL_TOP = 36;
         let cbCached;
@@ -9151,7 +9180,54 @@
             if (sw && left - sw - 24 <= siteLeft + 8) left = Math.round(siteLeft + sw + 24);
             return { left, right: Math.min(innerWidth - 16, left + w) };
         }
+        function onMenuKey(e) {
+            if (e.key === 'Escape' && mobileMenuOpen) { e.stopPropagation(); closeMobileMenu(); }
+        }
+        function openMobileMenu(fromHistory) {
+            if (mobileMenuEl) return;
+            const el = document.createElement('div');
+            el.className = 'vp-menu';
+            el.innerHTML = `<div class="vp-menu-top"><div class="vp-menu-title">ИТД X · Меню</div><button type="button" class="vp-menu-close" aria-label="Закрыть">${svgIcon('<path d="M6 6l12 12M18 6 6 18"/>', 22)}</button></div><div class="vp-menu-body"></div>`;
+            document.body.appendChild(el);
+            mobileMenuEl = el;
+            mobileMenuOpen = true;
+            document.documentElement.classList.add('vp-menu-open');
+            el.querySelector('.vp-menu-body').appendChild(rail);
+            rail.classList.add('vp-on');
+            rail.style.position = 'static';
+            rail.style.left = 'auto';
+            rail.style.top = 'auto';
+            rail.style.width = 'auto';
+            rail.style.maxHeight = 'none';
+            el.querySelector('.vp-menu-close').addEventListener('click', () => closeMobileMenu());
+            el.addEventListener('click', e => { if (e.target === el) closeMobileMenu(); });
+            document.addEventListener('keydown', onMenuKey, true);
+            if (fromHistory !== true) overlayEnter('vpMenu');
+        }
+        function closeMobileMenu(fromHistory) {
+            if (!mobileMenuEl) return;
+            const el = mobileMenuEl;
+            mobileMenuEl = null;
+            mobileMenuOpen = false;
+            document.documentElement.classList.remove('vp-menu-open');
+            document.removeEventListener('keydown', onMenuKey, true);
+            rail.classList.remove('vp-on');
+            rail.style.position = '';
+            rail.style.left = '';
+            rail.style.top = '';
+            rail.style.width = '';
+            rail.style.maxHeight = '';
+            document.body.appendChild(rail);
+            el.remove();
+            placeRail();
+            if (fromHistory !== true && overlayAt('vpMenu')) history.back();
+        }
+        addEventListener('popstate', () => {
+            if (overlayAt('vpMenu') && !mobileMenuOpen) openMobileMenu(true);
+            else if (mobileMenuOpen && !overlayAt('vpMenu')) closeMobileMenu(true);
+        });
         function placeRail() {
+            if (mobileMenuOpen) return;
             const cb = contentBox() || lastCb;
             if (cb) lastCb = cb;
             const edge = cb ? cb.right : 0;
