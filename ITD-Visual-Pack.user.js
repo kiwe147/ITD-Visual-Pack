@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.2
+// @version      3.3.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3833,6 +3833,12 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.3.3', '28 сентября 2026', [
+            'Сообщения заработали: личка с теми, у кого ИТД X, — со сквозным шифрованием (прочитать можете только вы двое, даже зная код мода)',
+            'Сообщения хранятся в зашифрованном виде; пароль сообщений открывает переписку на любом устройстве — придумай надёжный',
+            'Поддержка ИТД X — настоящая: вопрос уходит разработчику, ответ приходит в тот же чат',
+            'Сообщения: видно, кто в сети, и когда человек был в сети последний раз',
+            'Сообщения: число непрочитанных на пункте меню (как у уведомлений) и всплывашка о новом сообщении — нажми, чтобы открыть чат']],
         ['3.3.1 – 3.3.2', '28 сентября 2026', [
             'Долгая прокрутка ленты: память под служебные записи о постах больше не растёт всю сессию',
             'Меньше лишней работы на каждом обновлении страницы',
@@ -5798,6 +5804,331 @@
         });
     })();
 
+    // ================= Личные сообщения: сквозное шифрование в комментариях служебного поста «Яэ Мико» =================
+    // Комментарии публичны — прочитать их может кто угодно, поэтому всё содержимое зашифровано. Стойкость держится
+    // на ключах, а не на секретности кода: код открыт, разобрать его можно — прочитать переписку без ключа нельзя.
+    //  • ключ: у каждого пара ECDH P-256. Открытая часть и закрытая, зашифрованная паролем (PBKDF2-SHA256,
+    //    310 000 проходов → AES-GCM), — в его комментарии «ITDXK1 …». На устройстве ключ запоминается (IndexedDB,
+    //    вынуть его оттуда нельзя), на новом устройстве — один раз пароль
+    //  • сообщение: общий ключ пары = HKDF(ECDH(свой закрытый, чужой открытый); соль — номера аккаунтов) → AES-GCM,
+    //    у каждой записи свой случайный IV. Кому запись — открыто не пишем: получатель пробует расшифровать
+    //  • тома: свои записи — в своих комментариях «ITDXM1 <номер> <данные>»; новое — дописываем правкой (без
+    //    уведомлений), не влезло в 1000 символов — следующий том. Данные — плотно, 14 бит на символ (иероглифы);
+    //    сервер исказил — дальше base64. Автор тома — отправитель (это проверяет сам сервер)
+    const MSG_POST_ID = 'a53b53e0-9950-4f62-83f4-91e5985ef6c5', MSG_MAX = 990, MSG_TEXT_MAX = 500;
+    // Поддержка ИТД X — это владелец: чат «Поддержка» у всех — зашифрованная переписка с ним с пометкой «поддержка»
+    // внутри шифра. У владельца вместо одной строки — диалог «🛟 ник» на каждого обратившегося
+    const SUPPORT_LOGIN = 'NeuroSFW';
+    const msgNet = { keys: new Map(), vols: [], me: null, pairs: new Map(), conv: new Map(), syncing: null };
+    const te = new TextEncoder(), td = new TextDecoder();
+    const cat = (...a) => { const o = new Uint8Array(a.reduce((n, x) => n + x.length, 0)); let i = 0; for (const x of a) { o.set(x, i); i += x.length; } return o; };
+    const rnd = n => crypto.getRandomValues(new Uint8Array(n));
+    const b64u = {
+        enc: u8 => { let s = ''; for (const b of u8) s += String.fromCharCode(b); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); },
+        dec: s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - s.length % 4) % 4)), c => c.charCodeAt(0))
+    };
+    // 14 бит на символ: иероглифы U+4E00…U+8DFF. Хвост добиваем нулями — нулевая длина записи = конец
+    const cjk14 = {
+        enc(u8) {
+            let out = '', acc = 0, bits = 0;
+            for (const b of u8) { acc = (acc << 8) | b; bits += 8; while (bits >= 14) { bits -= 14; out += String.fromCharCode(0x4E00 + ((acc >> bits) & 0x3FFF)); } acc &= (1 << bits) - 1; }
+            if (bits) out += String.fromCharCode(0x4E00 + ((acc << (14 - bits)) & 0x3FFF));
+            return out;
+        },
+        dec(s) {
+            const out = [];
+            let acc = 0, bits = 0;
+            for (const ch of s) {
+                const v = ch.charCodeAt(0) - 0x4E00;
+                if (v < 0 || v > 0x3FFF) throw new Error('том: чужой символ');
+                acc = (acc << 14) | v; bits += 14;
+                while (bits >= 8) { bits -= 8; out.push((acc >> bits) & 255); }
+                acc &= (1 << bits) - 1;
+            }
+            return new Uint8Array(out);
+        }
+    };
+    const pack = recs => cat(...recs.map(r => cat(new Uint8Array([r.length >> 8, r.length & 255]), r)));
+    function unpack(u8) {
+        const out = [];
+        for (let i = 0; i + 2 <= u8.length;) {
+            const n = (u8[i] << 8) | u8[i + 1];
+            if (!n || i + 2 + n > u8.length) break;
+            out.push(u8.slice(i + 2, i + 2 + n)); i += 2 + n;
+        }
+        return out;
+    }
+    const volText = (seq, mode, recs) => `ITDXM1 ${seq} ${mode}${(mode === 'c' ? cjk14 : b64u).enc(pack(recs))}`;
+    const volRecs = v => unpack(v.mode === 'c' ? cjk14.dec(v.data) : b64u.dec(v.data));
+    const msgIdb = (() => {
+        let db = null;
+        const open = () => db || (db = new Promise((ok, no) => {
+            const r = indexedDB.open('itdx-msg', 1);
+            r.onupgradeneeded = () => r.result.createObjectStore('keys');
+            r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error);
+        }));
+        const run = (mode, fn) => open().then(d => new Promise((ok, no) => { const t = d.transaction('keys', mode), q = fn(t.objectStore('keys')); t.oncomplete = () => ok(q.result); t.onerror = () => no(t.error); }));
+        return { get: k => run('readonly', s => s.get(k)), set: (k, v) => run('readwrite', s => s.put(v, k)) };
+    })();
+    const msgMyId = () => (meData && meData.id) || (siteAuth.me && siteAuth.me.id) || null;
+    async function pwKey(pw, salt) {
+        const base = await crypto.subtle.importKey('raw', te.encode(pw), 'PBKDF2', false, ['deriveKey']);
+        return crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 310000 }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+    }
+    function msgPair(uid) {
+        if (!msgNet.pairs.has(uid)) msgNet.pairs.set(uid, (async () => {
+            const k = msgNet.keys.get(uid), me = msgNet.me;
+            if (!k || !me) return null;
+            const pub = await crypto.subtle.importKey('raw', k.pub, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+            const bits = await crypto.subtle.deriveBits({ name: 'ECDH', public: pub }, me.priv, 256);
+            const hk = await crypto.subtle.importKey('raw', bits, 'HKDF', false, ['deriveKey']);
+            return crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: te.encode([me.id, uid].sort().join('|')), info: te.encode('itdx-msg-v1') },
+                hk, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+        })().catch(() => null));
+        return msgNet.pairs.get(uid);
+    }
+    async function msgOpenRec(key, rec) {
+        try {
+            const pt = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: rec.slice(0, 12) }, key, rec.slice(12)));
+            return { ts: ((pt[0] << 24) >>> 0) + (pt[1] << 16) + (pt[2] << 8) + pt[3], sup: !!(pt[4] & 1), text: td.decode(pt.slice(5)) };
+        } catch (e) { return null; }
+    }
+    // все ключи и тома — из комментариев поста; свой ключ с устройства — если совпадает с опубликованным
+    // чтение уже идёт — после него ещё одно: результат не старее вызова (иначе чат открывался без только что пришедшего)
+    function msgSync() {
+        if (msgNet.syncing) return msgNet.again || (msgNet.again = msgNet.syncing.catch(() => { }).then(() => { msgNet.again = null; return msgSync(); }));
+        msgNet.syncing = (async () => {
+            const keys = new Map(), vols = [];
+            for (const c of await allComments(MSG_POST_ID, 30)) {
+                const a = c.author, t = String(c.content || '');
+                if (!a || !a.id) continue;
+                let m;
+                if ((m = t.match(/^ITDXK1 ([\w-]+) ([\w-]+)$/))) {
+                    if (!keys.has(a.id)) keys.set(a.id, { id: a.id, login: a.username || '', cid: c.id, pubText: m[1], pub: b64u.dec(m[1]), sealed: m[2] });
+                } else if ((m = t.match(/^ITDXM1 (\d+) ([cb])([\s\S]*)$/))) vols.push({ cid: c.id, author: a.id, seq: +m[1], mode: m[2], data: m[3] });
+            }
+            const changed = [...keys].some(([id, k]) => !msgNet.keys.get(id) || msgNet.keys.get(id).pubText !== k.pubText) || keys.size !== msgNet.keys.size;
+            msgNet.keys = keys; msgNet.vols = vols.sort((x, y) => x.seq - y.seq);
+            if (changed) msgNet.pairs.clear();
+            if (!msgNet.me) await msgLoadMe();
+            await msgDecryptAll();
+        })().finally(() => { msgNet.syncing = null; });
+        return msgNet.syncing;
+    }
+    async function msgLoadMe() {
+        const id = msgMyId(), k = id && msgNet.keys.get(id);
+        if (!k) return null;
+        try { const s = await msgIdb.get('me:' + id); if (s && s.pub === k.pubText) msgNet.me = { id, priv: s.priv }; } catch (e) { /* нет IndexedDB — пароль при каждом входе */ }
+        return msgNet.me;
+    }
+    async function msgRemember(id, pk8, pubText) {
+        const priv = await crypto.subtle.importKey('pkcs8', pk8, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
+        msgNet.me = { id, priv }; msgNet.pairs.clear();
+        try { await msgIdb.set('me:' + id, { priv, pub: pubText }); } catch (e) { /* запомнить не вышло — спросим пароль в следующий раз */ }
+    }
+    async function msgCreateKey(pw) {
+        const id = msgMyId();
+        if (!id) throw new Error('Не вошёл в аккаунт');
+        const kp = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+        const pub = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey)), pk8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', kp.privateKey));
+        const salt = rnd(16), iv = rnd(12), ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await pwKey(pw, salt), pk8));
+        const content = `ITDXK1 ${b64u.enc(pub)} ${b64u.enc(cat(salt, iv, ct))}`;
+        const old = msgNet.keys.get(id);
+        const res = old
+            ? await api(`/api/comments/${old.cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) })
+            : await api(`/api/posts/${MSG_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) });
+        if (!res.ok) throw new Error('Ключ не сохранился: ' + res.status);
+        await msgRemember(id, pk8, b64u.enc(pub));
+        await msgSync();
+    }
+    async function msgUnlock(pw) {
+        const id = msgMyId(), k = id && msgNet.keys.get(id);
+        if (!k) throw new Error('Ключа ещё нет');
+        const raw = b64u.dec(k.sealed);
+        let pk8;
+        try { pk8 = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw.slice(16, 28) }, await pwKey(pw, raw.slice(0, 16)), raw.slice(28))); }
+        catch (e) { throw new Error('Неверный пароль'); }
+        await msgRemember(id, pk8, k.pubText);
+        await msgDecryptAll();
+    }
+    // расшифровать всё: чужие тома — ключом пары с автором; свои — пробуем каждого собеседника (кому — не записано)
+    async function msgDecryptAll() {
+        const me = msgNet.me;
+        if (!me) return;
+        const conv = new Map(), add = (uid, dir, m) => { if (!conv.has(uid)) conv.set(uid, []); conv.get(uid).push({ dir, ...m }); };
+        const others = [...msgNet.keys.keys()].filter(id => id !== me.id);
+        for (const v of msgNet.vols) {
+            let recs;
+            try { recs = volRecs(v); } catch (e) { continue; }
+            if (v.author === me.id) {
+                for (const r of recs) for (const uid of others) { const k = await msgPair(uid), m = k && await msgOpenRec(k, r); if (m) { add(uid, 'out', m); break; } }
+            } else {
+                const k = await msgPair(v.author);
+                if (k) for (const r of recs) { const m = await msgOpenRec(k, r); if (m) add(v.author, 'in', m); }
+            }
+        }
+        conv.forEach(list => list.sort((x, y) => x.ts - y.ts));
+        msgNet.conv = conv;
+    }
+    // отправить: запись — в свой последний том (правкой); не влезла — новый том. После записи сверяем, что сервер
+    // сохранил символы как есть; нет — переходим на base64 и переписываем том
+    async function msgSend(uid, text, sup) {
+        const me = msgNet.me, key = await msgPair(uid);
+        if (!me || !key) throw new Error('нет ключа');
+        const ts = Math.floor(Date.now() / 1000), iv = rnd(12);
+        const pt = cat(new Uint8Array([ts >>> 24, (ts >> 16) & 255, (ts >> 8) & 255, ts & 255, sup ? 1 : 0]), te.encode(text.slice(0, MSG_TEXT_MAX)));
+        const rec = cat(iv, new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, pt)));
+        await msgSync();
+        const write = async mode => {
+            const last = msgNet.vols.filter(v => v.author === me.id).pop();
+            let recs = [], seq = 1, cid = null;
+            if (last) { try { recs = volRecs(last); } catch (e) { recs = []; } seq = last.seq; cid = last.cid; }
+            let content = volText(seq, mode, [...recs, rec]);
+            if (!last || content.length > MSG_MAX) { content = volText(last ? seq + 1 : 1, mode, [rec]); cid = null; }
+            const res = cid
+                ? await api(`/api/comments/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) })
+                : await api(`/api/posts/${MSG_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) });
+            if (!res.ok) throw new Error('сообщение: ' + res.status);
+            const saved = await res.json().then(j => { const d = j && (j.data || j.comment || j); return d && d.content; }).catch(() => null);
+            return saved == null || saved === content;
+        };
+        const mode = GM_getValue('msgMode', 'c');
+        if (!(await write(mode)) && mode === 'c') { GM_setValue('msgMode', 'b'); await msgSync(); await write('b'); }
+        await msgSync();
+    }
+    const msgKeyOf = login => [...msgNet.keys.values()].find(k => k.login.toLowerCase() === String(login).toLowerCase()) || null;
+    const msgIsSupport = () => !!myUsername && myUsername.toLowerCase() === SUPPORT_LOGIN.toLowerCase();
+    // диалог → собеседник (номер аккаунта) и ветка: обычная или поддержка
+    function msgTarget(d) {
+        if (d.supUid) return { uid: d.supUid, sup: true };
+        if (d.support) { const k = msgKeyOf(SUPPORT_LOGIN); return { uid: k && k.id, sup: true, missing: 'Поддержка ещё не подключила сообщения — напиши в тг @NeuroSFW' }; }
+        const k = msgKeyOf(d.login);
+        return { uid: k && k.id, sup: false, missing: `У ${d.name} ещё нет ключа сообщений — появится, когда откроет «Сообщения» в ИТД X 3.3.3` };
+    }
+    const msgThread = t => t.uid ? (msgNet.conv.get(t.uid) || []).filter(m => m.sup === t.sup) : [];
+    const msgSeen = () => GM_getValue('msgSeen', {});
+    const seenKey = t => (t.sup ? 'sup:' : '') + t.uid;
+    function msgMarkSeen(t) { const s = msgSeen(), list = msgThread(t); s[seenKey(t)] = list.length ? list[list.length - 1].ts : 0; GM_setValue('msgSeen', s); }
+    const msgTime = ts => { const d = new Date(ts * 1000), t = d.toTimeString().slice(0, 5); return d.toDateString() === new Date().toDateString() ? t : `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')} ${t}`; };
+    // список: кто написал, но не в клубе — тоже в списке; у поддержки — «🛟 ник» на каждого обратившегося
+    function msgFillDialogs() {
+        const me = msgNet.me;
+        if (me) for (const [uid, list] of msgNet.conv) {
+            const k = msgNet.keys.get(uid);
+            if (!k) continue;
+            if (list.some(m => !m.sup) && !msgPeople.has(k.login) && k.login.toLowerCase() !== SUPPORT_LOGIN.toLowerCase())
+                msgPeople.set(k.login, { id: 'u:' + k.login, login: k.login, ava: '👤', name: k.login, last: '', time: '', unread: 0, msgs: [] });
+            if (msgIsSupport() && list.some(m => m.sup) && !MSG_DIALOGS.some(d => d.supUid === uid))
+                MSG_DIALOGS.push({ id: 'sup:' + uid, supUid: uid, ava: '🛟', name: '🛟 ' + k.login, login: '', last: '', time: '', unread: 0, msgs: [] });
+        }
+        if (msgIsSupport()) MSG_DIALOGS = MSG_DIALOGS.filter(d => !d.support);
+        for (const d of msgPeople.values()) if (!MSG_DIALOGS.includes(d)) MSG_DIALOGS.push(d);
+        const seen = msgSeen();
+        for (const d of MSG_DIALOGS) {
+            if (d.bot) continue;
+            const t = msgTarget(d), list = msgThread(t);
+            if (!list.length) continue;
+            const last = list[list.length - 1];
+            d.last = (last.dir === 'out' ? 'Ты: ' : '') + last.text;
+            d.time = msgTime(last.ts);
+            d.unread = list.filter(m => m.dir === 'in' && m.ts > (seen[seenKey(t)] || 0)).length;
+        }
+    }
+    // непрочитанные — по всем перепискам (обычные и поддержка)
+    function msgUnread() {
+        const seen = msgSeen();
+        let n = 0;
+        for (const [uid, list] of msgNet.conv) for (const m of list) if (m.dir === 'in' && m.ts > (seen[(m.sup ? 'sup:' : '') + uid] || 0)) n++;
+        return n;
+    }
+    // число на пункте «Сообщения» — как у «Уведомлений»: берём классы их числа; числа нет — такой же свой
+    function msgBadge() {
+        const n = msgUnread(), txt = n > 99 ? '99+' : String(n);
+        const site = document.querySelector('a[href="/notifications"] .' + SELECTORS.navIcon + ' > span');
+        const cls = (site ? site.className.split(/\s+/).filter(c => c && !c.startsWith('vp-')).join(' ') + ' ' : '') + 'vp-msg-badge';
+        document.querySelectorAll('nav a[href="#"] .' + SELECTORS.navIcon).forEach(ic => {
+            let b = ic.querySelector(':scope > .vp-msg-badge');
+            if (!n) { if (b) b.remove(); return; }
+            if (!b) { b = document.createElement('span'); ic.appendChild(b); }
+            if (b.className !== cls) b.className = cls;
+            if (b.textContent !== txt) b.textContent = txt;
+        });
+    }
+    onDom(function msgBadgeKeep() { if (msgNet.me) msgBadge(); });
+    // Новое сообщение, пока окно закрыто (или открыт другой чат), — всплывашка сверху по центру, как уведомления:
+    // 7 секунд, новая заменяет старую, нажатие — открыть этот чат. Проверка — раз в минуту, пока вкладка на экране
+    let msgBase = null, msgToastEl = null;
+    function msgOpenFrom(m) {
+        if (!messagesOverlay) messagesOverlay = buildMessagesOverlay();
+        if (!messagesOverlay.classList.contains('vp-open')) messagesOverlay.open();
+        const k = msgNet.keys.get(m.uid);
+        const id = m.sup ? (msgIsSupport() ? 'sup:' + m.uid : 'support') : 'u:' + (k ? k.login : '');
+        setTimeout(() => messagesOverlay.openDialog && messagesOverlay.openDialog(id), 60);
+    }
+    function msgToast(m) {
+        const k = msgNet.keys.get(m.uid);
+        if (!k) return;
+        const who = (msgPeople.get(k.login) || {}).name || k.login;
+        if (msgToastEl) msgToastEl.remove();
+        const el = document.createElement('div');
+        el.className = 'vp-msg-toast';
+        el.innerHTML = '<b></b><span></span>';
+        el.children[0].textContent = (m.sup ? '🛟 ' + (msgIsSupport() ? who : 'Поддержка ИТД X') : '💬 ' + who);
+        el.children[1].textContent = m.text;
+        el.onclick = () => { el.remove(); msgOpenFrom(m); };
+        document.body.appendChild(el);
+        msgToastEl = el;
+        setTimeout(() => el.remove(), 7000);
+    }
+    async function msgBackground() {
+        if (document.hidden || !myUsername) return;
+        try { await msgSync(); } catch (e) { return; }
+        if (!msgNet.me) return;
+        const incoming = [];
+        for (const [uid, list] of msgNet.conv) for (const m of list) if (m.dir === 'in') incoming.push({ uid, ...m });
+        incoming.sort((a, b) => a.ts - b.ts);
+        const top = incoming.length ? incoming[incoming.length - 1].ts : 0;
+        if (msgBase !== null) {
+            const fresh = incoming.filter(m => m.ts > msgBase), last = fresh[fresh.length - 1];
+            const open = messagesOverlay && messagesOverlay.classList.contains('vp-open'), cur = open && messagesOverlay.currentTarget && messagesOverlay.currentTarget();
+            if (last && !(cur && cur.uid === last.uid && cur.sup === last.sup)) msgToast(last);
+        }
+        msgBase = Math.max(msgBase || 0, top);                    // первый проход — только запомнить, что уже было
+        msgBadge();
+    }
+    setTimeout(msgBackground, 8000);
+    setInterval(msgBackground, 60000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) msgBackground(); });
+    const msgToastCss = document.createElement('style');
+    msgToastCss.textContent = `
+        .vp-msg-badge { position: absolute; top: -6px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; font-size: 11px; font-weight: 600;
+            line-height: 18px; text-align: center; color: #fff; background-color: var(--accent-like, #f91880); border-radius: 9px; pointer-events: none; }
+        nav a[href="#"] .vp-nav-icon:has(> .vp-msg-badge) { position: relative; }
+        .vp-msg-toast { position: fixed; top: 16px; left: 50vw; transform: translateX(-50%); z-index: 2147483000; width: min(420px, calc(100vw - 24px)); box-sizing: border-box;
+            display: flex; flex-direction: column; gap: 3px; padding: 12px 18px; border-radius: 24px; cursor: pointer; color: var(--text-primary, #fff);
+            background: var(--block-bg, #1c1c1c); border: 1px solid var(--border-color, rgba(255, 255, 255, .12)); box-shadow: 0 14px 36px rgba(0, 0, 0, .45);
+            backdrop-filter: var(--vp-glass-filter, blur(18px)); -webkit-backdrop-filter: var(--vp-glass-filter, blur(18px)); animation: vpMsgToastIn .25s ease-out; }
+        .vp-msg-toast b { font-size: 14px; }
+        .vp-msg-toast span { font-size: 14px; color: var(--text-secondary, #aaa); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        @keyframes vpMsgToastIn { from { opacity: 0; transform: translate(-50%, -8px); } }
+        @media (max-width: 1172px) { .vp-msg-toast { top: calc(env(safe-area-inset-top, 0px) + 10px); } }
+        @media (prefers-reduced-motion: reduce) { .vp-msg-toast { animation: none; } }
+    `;
+    document.head.appendChild(msgToastCss);
+    const msgKeyCss = document.createElement('style');
+    msgKeyCss.textContent = `
+        .vp-msgs-beta { display: inline-block; vertical-align: middle; margin-left: 6px; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 700;
+            letter-spacing: .03em; color: var(--vp-accent, #fff); box-shadow: inset 0 0 0 1px var(--vp-accent, #fff); }
+        .vp-msgs-key { display: flex; flex-direction: column; gap: 10px; max-width: 360px; margin: 12px auto; }
+        .vp-msgs-key input { padding: 11px 14px; border-radius: 14px; border: 1px solid var(--border-color, rgba(255,255,255,.14)); background: rgba(255,255,255,.06);
+            color: inherit; font: inherit; font-size: 15px; outline: none; }
+        .vp-msgs-key input:focus { border-color: var(--vp-accent, #fff); }
+        .vp-msgs-key button { padding: 11px; border: 0; border-radius: 14px; cursor: pointer; font: inherit; font-weight: 600; background: var(--vp-accent, #fff); color: #000; }
+        .vp-msgs-key button:disabled { opacity: .5; cursor: default; }
+        .vp-msgs-keyerr { min-height: 18px; font-size: 13px; text-align: center; color: var(--text-secondary, #8a8a8a); }
+    `;
+    document.head.appendChild(msgKeyCss);
+
     let messagesOverlay = null;
 
     // Сообщений на ИТД нет — кнопка открывает «чат», где сервер сначала печатает,
@@ -5869,6 +6200,7 @@
             if (!d || !p) return;
             p.name = pick(d.displayName, d.display_name, n);
             p.ava = pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl, d.emoji, '👤');
+            p.online = !!d.online; p.lastSeen = d.lastSeen || null;
         }));
         onUpdate();
     }
@@ -5999,7 +6331,7 @@
         root.setAttribute('aria-label', 'Сообщения');
         root.innerHTML = `
             <section class="vp-msgs-view vp-msgs-home">
-                <div class="vp-msgs-top"><div class="vp-msgs-title">Сообщения</div>
+                <div class="vp-msgs-top"><div class="vp-msgs-title">Сообщения <span class="vp-msgs-beta" title="Сообщения в бета-версии: возможны сбои — пиши в «Поддержку»">Beta</span></div>
                     <button class="vp-msgs-ib vp-msgs-new" title="Новый чат (пока не работает)">${MSG_ICON.edit}</button></div>
                 <label class="vp-msgs-search">${MSG_ICON.search}<input type="search" placeholder="Поиск"></label>
                 <div class="vp-msgs-sub"></div>
@@ -6060,15 +6392,79 @@
             $('.vp-msgs-chead .vp-msgs-ava').innerHTML = avaHtml(d.ava);
             $('.vp-msgs-chead .vp-msgs-ava').classList.toggle('vp-online', !!d.online);
             $('.vp-msgs-who b').textContent = d.name;
-            $('.vp-msgs-who small').textContent = d.bot ? 'бот · всегда в сети' : d.support ? 'поддержка · на связи' : '@' + d.login + ' · с ИТД X';
+            const seenAgo = t => { const d0 = new Date(t); if (isNaN(d0)) return ''; const h = d0.toTimeString().slice(0, 5);
+                return d0.toDateString() === new Date().toDateString() ? 'в ' + h : `${d0.getDate()}.${String(d0.getMonth() + 1).padStart(2, '0')} в ${h}`; };
+            $('.vp-msgs-who small').textContent = d.bot ? 'бот · всегда в сети' : d.support ? 'поддержка · на связи' : d.supUid ? 'обращение в поддержку'
+                : '@' + d.login + ' · ' + (d.online ? 'в сети' : d.lastSeen && seenAgo(d.lastSeen) ? 'был(а) в сети ' + seenAgo(d.lastSeen) : 'с ИТД X');
+            if (d.login || d.support || d.supUid) { home.hidden = true; chat.hidden = false; input.value = ''; send.disabled = true; msgOpenPerson(d); return; }
             feed.innerHTML = '<div class="vp-msgs-note">🧪 Прототип: сообщения пока никуда не отправляются и не сохраняются</div>'
                 + (d.msgs.length ? '<div class="vp-msgs-note">Сегодня</div>' : `<div class="vp-msgs-note">Это начало переписки с ${esc(d.name)}</div>`);
             d.msgs.forEach(([dir, text]) => bubble(dir, text, dir === 'out' ? now() + ' ✓✓' : now()));
             home.hidden = true; chat.hidden = false;
             input.value = ''; send.disabled = true;
         }
+        const note = t => { const n = document.createElement('div'); n.className = 'vp-msgs-note'; n.textContent = t; feed.appendChild(n); return n; };
+        // переписка с человеком: нет своего ключа — создать (пароль) или открыть (пароль с другого устройства)
+        // рисовать может только последний вызов: ответы сервера приходят не по порядку, и два рисования
+        // перемешивали ленту (одно стирало, другое дописывало)
+        let renderN = 0;
+        async function msgOpenPerson(d) {
+            const my = ++renderN;
+            feed.textContent = ''; input.disabled = true; input.maxLength = MSG_TEXT_MAX;
+            const wait = note('🔒 Загрузка переписки…');
+            try { await msgSync(); } catch (e) { if (my === renderN) wait.textContent = 'Не загрузилось — открой чат ещё раз'; logErr('сообщения', e); return; }
+            if (current !== d || my !== renderN) return;
+            if (!msgNet.me) return msgKeyForm(d);
+            feed.textContent = '';
+            note('🔒 Сквозное шифрование: переписку можете прочитать только вы двое');
+            const t = msgTarget(d);
+            if (!t.uid) { note(t.missing); return; }
+            const list = msgThread(t);
+            if (!list.length) note(d.support ? 'Опиши проблему или идею — ответ придёт сюда' : `Это начало переписки с ${d.name}`);
+            list.forEach(m => bubble(m.dir, m.text, msgTime(m.ts) + (m.dir === 'out' ? ' ✓' : '')));
+            d.shown = list.length;
+            input.disabled = false; input.focus();
+            msgMarkSeen(t); d.unread = 0; msgBadge();
+        }
+        function msgKeyForm(d) {
+            const has = !!msgNet.keys.get(msgMyId());
+            feed.innerHTML = `<form class="vp-msgs-key"><div class="vp-msgs-note"></div><input type="password" minlength="8" required>`
+                + (has ? '' : '<input type="password" minlength="8" required>') + `<button type="submit"></button><div class="vp-msgs-keyerr"></div></form>`;
+            const f = feed.firstChild, [p1, p2] = f.querySelectorAll('input'), err = f.querySelector('.vp-msgs-keyerr'), btn = f.querySelector('button');
+            f.firstChild.textContent = has ? '🔒 Введи пароль сообщений — он откроет твой ключ на этом устройстве'
+                : '🔒 Придумай пароль для сообщений: им шифруется твой ключ, с ним переписка откроется на любом устройстве. Лучше несколько слов или 10+ символов — простой пароль можно подобрать. Забудешь — старые сообщения не прочитать';
+            p1.placeholder = 'Пароль'; p1.autocomplete = has ? 'current-password' : 'new-password';
+            if (p2) { p2.placeholder = 'Ещё раз'; p2.autocomplete = 'new-password'; }
+            btn.textContent = has ? 'Открыть' : 'Создать ключ';
+            f.addEventListener('submit', async e => {
+                e.preventDefault();
+                if (p2 && p1.value !== p2.value) { err.textContent = 'Пароли не совпадают'; return; }
+                btn.disabled = true; err.textContent = has ? 'Открываю…' : 'Создаю ключ…';
+                try { has ? await msgUnlock(p1.value) : await msgCreateKey(p1.value); msgOpenPerson(d); }
+                catch (x) { err.textContent = x.message || 'Не вышло'; btn.disabled = false; }
+            });
+            p1.focus();
+        }
+        // пока окно открыто — раз в 20 с новые сообщения: список и открытый чат
+        const msgPoll = setInterval(async () => {
+            if (!root.isConnected) return clearInterval(msgPoll);
+            if (!msgsOpen || !msgNet.me) return;
+            try { await msgSync(); } catch (e) { return; }
+            msgFillDialogs();
+            if (!current) return renderList();
+            if (current.bot) return;
+            const list = msgThread(msgTarget(current));
+            if (list.length !== current.shown && !input.value) msgOpenPerson(current);
+        }, 20000);
+        root.openDialog = id => {
+            msgFillDialogs();
+            const d = MSG_DIALOGS.find(x => x.id === id) || (id.startsWith('u:') && msgPeople.get(id.slice(2)));
+            if (d) openChat(d);
+        };
+        root.currentTarget = () => current && !current.bot ? msgTarget(current) : null;
         function closeChat() {
             clearTimeout(botTimer);
+            if (current && msgNet.me) msgSync().then(() => { msgFillDialogs(); msgBadge(); if (!current) renderList(); }).catch(() => { });
             current = null;
             chat.hidden = true; home.hidden = false;
             renderList();
@@ -6174,8 +6570,13 @@
             current.msgs.push(['out', text]);
             current.last = 'Ты: ' + text; current.time = now();
             if (current.bot) { bubble('out', text, now() + ' ✓'); botReply(); }
-            else if (current.support) { bubble('out', text, now() + ' ✓'); supportReply(); }
-            else bubble('out', text, now() + ' · не отправлено (прототип)').classList.add('vp-fail');
+            else if (current.support && !(msgNet.me && msgTarget(current).uid)) { bubble('out', text, now() + ' ✓'); supportReply(); }
+            else if (msgNet.me && msgTarget(current).uid) {
+                const b = bubble('out', text, now() + ' · отправка…'), d = current, t = msgTarget(d);
+                msgSend(t.uid, text, t.sup).then(() => { b.lastChild.textContent = now() + ' ✓'; d.shown = (d.shown || 0) + 1; msgFillDialogs(); },
+                    e => { b.lastChild.textContent = now() + ' · не отправлено'; b.classList.add('vp-fail'); logErr('сообщения', e); });
+            }
+            else bubble('out', text, now() + ' · не отправлено').classList.add('vp-fail');
         });
 
         // место окна: телефон — весь экран, панель поднимаем над окном; компьютер — колонка ленты
@@ -6244,6 +6645,7 @@
             msgsOpen = true;
             closeChat();
             loadMsgPeople(() => { if (!current) renderList(); });
+            msgSync().then(() => { msgFillDialogs(); if (!current) renderList(); }).catch(() => { });
             place();
             placeSidebar(); placeRail();
             root.classList.add('vp-open');
