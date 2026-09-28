@@ -3812,7 +3812,9 @@
             'Галерея: картинки не обрезаются — очень широкие и высокие видны целиком',
             'Галерея на телефоне: стрелки листания видны всегда; на компьютере — перетаскивание мышью докатывается плавно',
             'Под галереей и «Сообщениями» не просвечивает страница (поиск и другие), и не мешает кнопка «наверх»',
-            'Настройки → «Ещё»: ползунок громкости для всех звуков ИТД X']],
+            'Настройки → «Ещё»: ползунок громкости для всех звуков ИТД X',
+            'Всплывающие уведомления — по одному, сверху по центру (компьютер и телефон), живут 7 секунд; новое сразу заменяет старое',
+            'Компьютер: навёл мышь на видео в ленте или галерее — звук включается, увёл — выключается']],
         ['3.2.22 – 3.2.22.3', '28 сентября 2026', [
             'Галерея: если первые картинки не заполнили экран, следующие подгружаются сами (раньше внизу оставалась пустота)',
             'Галерея: кнопка «Скопировать картинку» рядом со ссылкой; правой кнопкой мыши картинка тоже копируется сразу',
@@ -8860,6 +8862,97 @@
             placeRefresh(box);
         });
     });
+
+    // --- Всплывашки уведомлений сайта («оценил(а) ваш пост» и т.п.): по одной, сверху по центру (ПК и телефон),
+    // живут 7 секунд; пришла новая — старая сразу закрывается (её же крестиком: сайт убирает её и у себя).
+    // Слой всплывашек — закреплённый блок прямо в #root (рядом с самим приложением): в нём список карточек
+    // (аватар, текст, крестик) и кнопка «Скрыть все». Хеши классов сайта не берём — узнаём по устройству
+    const TOAST_MS = 7000;
+    let toastSeq = 0;
+    const styleToasts = document.createElement('style');
+    styleToasts.textContent = `
+        .vp-toasts { top: 16px !important; bottom: auto !important; left: 50vw !important; right: auto !important;   /* 50vw: отсчёт у слоя сайта — не весь экран */
+            transform: translateX(-50%) !important; align-items: center !important;
+            width: min(420px, calc(100vw - 24px)) !important; max-width: none !important; }
+        .vp-toasts > button { display: none !important; }                 /* «Скрыть все» — при одной не нужна */
+        .vp-toasts > div > * { width: 100%; }
+        .vp-toast-old { display: none !important; }
+        @media (max-width: 1172px) { .vp-toasts { top: calc(env(safe-area-inset-top, 0px) + 10px) !important; } }
+    `;
+    document.head.appendChild(styleToasts);
+    function toastBox() {
+        const root = document.getElementById('root');
+        if (!root) return null;
+        for (const el of root.children) {
+            if (el.classList.contains('vp-toasts')) return el;
+            if (el.childElementCount > 3 || !el.querySelector(':scope > div') || getComputedStyle(el).position !== 'fixed') continue;
+            if (!el.querySelector('p') && !el.querySelector(':scope > button')) continue;
+            el.classList.add('vp-toasts');
+            return el;
+        }
+        return null;
+    }
+    function closeToast(it) {
+        if (!it.isConnected || it._vpClosed) return;
+        it._vpClosed = true;
+        it.classList.add('vp-toast-old');
+        const x = [...it.querySelectorAll('button')].pop();                // крестик — последняя кнопка карточки
+        if (x) x.click();
+    }
+    onDom(function toastsOne() {
+        const box = toastBox(), list = box && box.querySelector(':scope > div');
+        if (!list) return;
+        const items = [...list.children].filter(it => !it._vpClosed);
+        if (!items.length) return;
+        for (const it of items) if (!it._vpN) {                            // новая: номер по приходу, таймер 7 с
+            it._vpN = ++toastSeq;
+            setTimeout(() => closeToast(it), TOAST_MS);
+        }
+        // самая новая — пришедшая последней (пришли разом — нижняя в списке, как их ставит сайт)
+        const newest = items.reduce((a, b) => (b._vpN >= a._vpN ? b : a));
+        items.forEach(it => { if (it !== newest) closeToast(it); });
+    });
+
+    // --- ПК: навёл мышь на видео (лента, пост, галерея) — звук включается, увёл — снова без звука.
+    // Звук возвращаем только тем видео, которые сами включили. Браузер может не дать включить звук без
+    // нажатия на странице (тогда он ставит видео на паузу) — в этом случае оставляем без звука и играем дальше
+    if (matchMedia('(hover: hover) and (pointer: fine)').matches) {
+        let hoverVid = null;
+        const videoAt = t => {
+            if (!t || !t.closest) return null;
+            const tile = t.closest('.vp-gal-tile');
+            if (tile) {
+                const strip = tile.querySelector('.vp-gal-strip'), slide = strip && strip.children[strip._vpI || 0];
+                return slide ? slide.querySelector('video') : null;
+            }
+            if (t.tagName === 'VIDEO') return t;
+            const box = t.closest('.' + SELECTORS.postMedia);
+            return box ? [...box.querySelectorAll('video')].find(v => v.getBoundingClientRect().width > 0) || null : null;
+        };
+        const unmute = v => {
+            if (!v || !v.muted) return;
+            const wasPlaying = !v.paused;
+            v._vpHoverSound = true;
+            v.muted = false;
+            // браузер не разрешил звук — видео встало: без звука, но дальше играет
+            setTimeout(() => { if (wasPlaying && v.paused && !v.muted) { v.muted = true; v._vpHoverSound = false; v.play().catch(() => { }); } }, 0);
+        };
+        const mute = v => { if (v && v._vpHoverSound) { v.muted = true; v._vpHoverSound = false; } };
+        document.addEventListener('pointerover', e => {
+            if (e.pointerType !== 'mouse') return;
+            const v = videoAt(e.target);
+            if (v === hoverVid) return;
+            mute(hoverVid);
+            hoverVid = v;
+            unmute(v);
+        }, true);
+        document.addEventListener('pointerleave', () => { mute(hoverVid); hoverVid = null; });
+        // листнули в плитке галереи на другое видео — звук за курсором
+        document.addEventListener('scroll', e => {
+            if (!hoverVid || !e.target.classList || !e.target.classList.contains('vp-gal-strip')) return;
+            requestAnimationFrame(() => { const el = document.querySelectorAll(':hover'), t = el[el.length - 1], v = videoAt(t); if (v !== hoverVid) { mute(hoverVid); hoverVid = v; unmute(v); } });
+        }, true);
+    }
 
     // --- Ссылки в тексте: сайт показывает t.me/…, https://… простым текстом. Текст сайта не трогаем
     // (вставить свой <a> в текст React — он потом падает на обновлении поста): места ссылок держим
