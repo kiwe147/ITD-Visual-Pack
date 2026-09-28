@@ -54,12 +54,13 @@ const page = (n, next) => ({ data: { posts: Array.from({ length: 50 }, (_, i) =>
   await start();
   let s = await state();
   console.log(`—    запросов ${asked.length} (limit=${asked.map(a => a.lim).join(',')}), плиток ${s.tiles}, внизу «${s.more}»`);
-  check(asked.length === 4, `подряд сама — 4 страницы (было: пока не заполнит экран, десятки): ${asked.length}`);
+  check(asked.length === 2, `одно обновление — 100 постов, 2 страницы (было: десятки подряд): ${asked.length}`);
+  check(asked.length < 2 || asked[1].at - asked[0].at >= 650, `потоком: между запросами ${asked.length > 1 ? asked[1].at - asked[0].at : 0} мс`);
   check(asked.every(a => a.lim === '50'), 'по 50 постов за запрос');
   check(s.more === 'Показать ещё', 'дальше — кнопка «Показать ещё»');
   await p.$eval('.vp-gal-more', m => m.click());
   await p.waitForTimeout(2500);
-  check(asked.length === 8, `«Показать ещё» — ещё до 4 страниц: всего ${asked.length}`);
+  check(asked.length === 4, `«Показать ещё» — ещё 2 страницы: всего ${asked.length}`);
 
   // 2. перезагрузка страницы — из кеша, без запросов
   const before = (await state()).tiles, n0 = asked.length;

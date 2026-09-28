@@ -46,10 +46,12 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     await p.waitForTimeout(2500);
     await p.click('.vp-game-row >> nth=0');
     await p.waitForTimeout(3500);
+    await p.click('.vp-games-tab[data-g="lead"]');
+    await p.waitForTimeout(800);
     console.log(`—    ${name}: запись ${JSON.stringify(writes)}`);
     check(writes.length === 1 && writes[0].method === expect.method && writes[0].path === expect.path && writes[0].text === expect.text,
       `${name}: ${expect.method === 'PATCH' ? 'правка своего комментария' : 'один новый комментарий'} «${expect.text}»`);
-    const rows = await p.$$eval('.vp-games-lead-row', rs => rs.map(r => r.textContent + (r.classList.contains('vp-me') ? ' ←ты' : '')));
+    const rows = await p.$$eval('[data-lead="snake"] .vp-games-lead-row', rs => rs.map(r => r.textContent + (r.classList.contains('vp-me') ? ' ←ты' : '')));
     console.log(`—    таблица: ${rows.join(' | ')}`);
     check(rows.length === 2 && /Боб40/.test(rows[0]) && /26 ←ты/.test(rows[1]), `${name}: таблица — Боб 40 первый, ты 26 вторым и подсвечен`);
     check(!errors.length, `${name}: ошибок нет` + (errors.length ? ': ' + errors.join(' | ') : ''));
