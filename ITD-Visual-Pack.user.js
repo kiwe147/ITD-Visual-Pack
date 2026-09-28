@@ -3833,7 +3833,7 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
-        ['3.3.3.1 – 3.3.3.2', '28 сентября 2026', ['Игры: окно не меняет размер при смене вкладок; поле каждой игры целиком влезает в окно, без прокрутки']],
+        ['3.3.3.1 – 3.3.3.2', '28 сентября 2026', ['Игры: окно не меняет размер при смене вкладок; поле каждой игры целиком влезает в окно, без прокрутки; страница под окном не крутится']],
         ['3.3.3', '28 сентября 2026', [
             'Сообщения заработали: личка с теми, у кого ИТД X, — со сквозным шифрованием (прочитать можете только вы двое, даже зная код мода)',
             'Сообщения хранятся в зашифрованном виде; пароль сообщений открывает переписку на любом устройстве — придумай надёжный',
@@ -10481,6 +10481,13 @@
         el.innerHTML = `<div class="vp-games-win" role="dialog" aria-label="Игры"><div class="vp-games-head"><div class="vp-games-tabs">${GAMES.map(g => `<button type="button" class="vp-games-tab" data-g="${g.id}">${g.name}</button>`).join('')}<button type="button" class="vp-games-tab" data-g="lead">🏆 Лидеры</button></div>
             <span class="vp-games-score"></span><button type="button" class="vp-games-x" aria-label="Закрыть">${svgIcon('<path d="M6 6l12 12M18 6 6 18"/>', 18)}</button></div><div class="vp-games-body"></div></div>`;
         el.addEventListener('click', e => { if (e.target === el) closeGames(); });
+        // страница под окном не крутится: колесо и палец — только списку лидеров, если ему есть куда
+        const still = e => {
+            const area = e.target.closest && e.target.closest('.vp-games-lead-list, .vp-games-leads');
+            if (!area || area.scrollHeight <= area.clientHeight) e.preventDefault();
+        };
+        el.addEventListener('wheel', still, { passive: false });
+        el.addEventListener('touchmove', still, { passive: false });
         el.querySelector('.vp-games-x').addEventListener('click', closeGames);
         el.querySelectorAll('.vp-games-tab').forEach(t => t.addEventListener('click', () => showGame(t.dataset.g)));
         document.body.appendChild(el);
@@ -10499,6 +10506,7 @@
         if (e.key === 'Escape') { e.preventDefault(); closeGames(); return; }
         if (e.target.closest && e.target.closest('input, textarea, [contenteditable]')) return;
         gw.cur.key(e);
+        if (['PageUp', 'PageDown', 'Home', 'End', ' ', 'ArrowUp', 'ArrowDown'].includes(e.key)) e.preventDefault();   // и клавиши — не странице
     }, true);
     addEventListener('resize', () => { if (gw.cur) gw.cur.resize(); });
     // ушёл с вкладки — пауза

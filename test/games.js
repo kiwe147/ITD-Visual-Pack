@@ -59,6 +59,11 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   const t1 = await st();
   const moved = (t0.head.x - t1.head.x + 16) % 16;
   check(moved >= 9 && moved <= 11, `скорость постоянная: за 1,15 с — ${moved} клеток (шаг 115 мс)`);
+  // страница под окном не крутится (колесо над окном и мимо поля)
+  const y0 = await p.evaluate(() => scrollY);
+  await p.mouse.move(200, 400); await p.mouse.wheel(0, 1200); await p.waitForTimeout(300);
+  await p.keyboard.press('PageDown'); await p.waitForTimeout(300);
+  check(await p.evaluate(() => scrollY) === y0, 'страница под окном игр не прокручивается');
   // Esc — окно закрыто, змейка не бежит дальше
   await p.keyboard.press('Escape');
   await p.waitForTimeout(200);
