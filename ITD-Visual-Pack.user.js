@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.3.1
+// @version      3.3.3.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3833,7 +3833,7 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
-        ['3.3.3.1', '28 сентября 2026', ['Игры: окно не меняет размер при смене вкладок']],
+        ['3.3.3.1 – 3.3.3.2', '28 сентября 2026', ['Игры: окно не меняет размер при смене вкладок; поле каждой игры целиком влезает в окно, без прокрутки']],
         ['3.3.3', '28 сентября 2026', [
             'Сообщения заработали: личка с теми, у кого ИТД X, — со сквозным шифрованием (прочитать можете только вы двое, даже зная код мода)',
             'Сообщения хранятся в зашифрованном виде; пароль сообщений открывает переписку на любом устройстве — придумай надёжный',
@@ -10010,7 +10010,8 @@
         .vp-games-score { margin-left: auto; font-size: 14px; font-weight: 600; color: var(--text-secondary, #8a8a8a); white-space: nowrap; }
         .vp-games-x { width: 36px; height: 36px; border: 0; border-radius: 50%; cursor: pointer; background: rgba(255, 255, 255, .08); color: inherit;
             display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
-        .vp-games-body { display: flex; justify-content: center; align-items: flex-start; gap: 16px; min-height: 0; flex: 1 1 auto; overflow: auto; }
+        .vp-games-body { display: flex; justify-content: center; align-items: flex-start; gap: 16px; min-height: 0; flex: 1 1 auto; overflow: hidden; }
+        .vp-games-body > .vp-games-leads { max-height: 100%; overflow-y: auto; }
         .vp-games-hint { font-size: 12px; text-align: center; color: var(--text-secondary, #8a8a8a); }
         .vp-g-canvas { display: block; border-radius: 20px; background: var(--bg-primary, #000); touch-action: none; outline: none; cursor: pointer; }
         .vp-g-side { display: flex; flex-direction: column; gap: 10px; min-width: 110px; font-size: 14px; }
@@ -10046,8 +10047,9 @@
     document.head.appendChild(gamesCss);
     const gameCtx = () => ({ accent: getComputedStyle(document.documentElement).getPropertyValue('--vp-accent').trim() || '#00ff88' });
     // квадратный холст под окно: сторона — сколько влезает по ширине и высоте окна
-    function fitCanvas(cv, cols, rows, sideW = 0) {
-        const winW = Math.min(760, innerWidth - 24) - 32 - sideW, winH = innerHeight - 24 - 32 - 60 - 24 - (matchMedia('(pointer: coarse)').matches ? 124 : 0) - (innerWidth < 520 ? 28 : 0);
+    function fitCanvas(cv, cols, rows, sideW = 0, extraH = 0) {
+        const body = gw.el && gw.el.querySelector('.vp-games-body');
+        const winW = (body ? body.clientWidth : Math.min(760, innerWidth - 24) - 32) - sideW, winH = (body ? body.clientHeight : innerHeight - 140) - extraH;
         const cell = Math.max(10, Math.floor(Math.min(winW / cols, winH / rows)));
         const dpr = devicePixelRatio || 1;
         cv.style.width = cols * cell + 'px'; cv.style.height = rows * cell + 'px';
@@ -10164,7 +10166,7 @@
             Math.abs(dx) > Math.abs(dy) ? turn(Math.sign(dx), 0) : turn(0, Math.sign(dy));
         });
         cv.addEventListener('pointerup', () => { if (!swiped) (on ? pause() : start()); });
-        function resize() { cell = fitCanvas(cv, CELLS, CELLS); draw(); }
+        function resize() { cell = fitCanvas(cv, CELLS, CELLS, 0, 34); draw(); }
         reset(); msg = 'Змейка\nнажми или стрелку';
         el._vpTest = () => ({ head: snake[0], dir, queue: queue.length, on, score });      // для тестов
         return { el, key, pause, resize, destroy() { on = false; cancelAnimationFrame(raf); } };
@@ -10256,7 +10258,8 @@
         el.querySelector('[data-a="new"]').addEventListener('click', reset);
         flagBtn.addEventListener('click', () => { flagMode = !flagMode; flagBtn.classList.toggle('vp-on', flagMode); });
         function resize() {
-            const side = Math.min(Math.min(760, innerWidth - 24) - 32, innerHeight - 24 - 32 - 60 - 110);
+            const body = gw.el && gw.el.querySelector('.vp-games-body');
+            const side = Math.min(body ? body.clientWidth : innerWidth - 56, (body ? body.clientHeight : innerHeight - 180) - 90);
             grid.style.setProperty('--vp-mc', Math.max(24, Math.floor((side - 3 * (W - 1)) / W)) + 'px');
         }
         reset();
@@ -10363,7 +10366,7 @@
         cv.addEventListener('click', () => (on ? pause() : start()));
         function resize() {
             const coarse = matchMedia('(pointer: coarse)').matches;
-            cell = fitCanvas(cv, COLS, ROWS, innerWidth < 520 ? 90 : 140);
+            cell = fitCanvas(cv, COLS, ROWS, innerWidth < 520 ? 90 : 140, coarse ? 124 : 40);
             const dpr = devicePixelRatio || 1; nx.width = nx.height = Math.round(88 * dpr);
             draw();
         }
