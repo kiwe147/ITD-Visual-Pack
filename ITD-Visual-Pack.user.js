@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.2.22.3
+// @version      3.3.0
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -114,7 +114,7 @@
     }
     // Номера постов: в карточке ленты ссылки на пост нет — берём из ответов сайта (лента, профиль, пост)
     // и узнаём карточку по картинке вложения или по автору и тексту
-    const postIndex = { byMedia: new Map(), byUser: new Map() };
+    const postIndex = { byMedia: new Map(), byUser: new Map(), byRepost: new Map() };
     const normText = t => String(t || '').replace(/\s+/g, ' ').trim();
     const POSTS_URL = /\/api\/posts(?:\/user\/[^/?#]+(?:\/liked)?|\/[0-9a-f-]{36})?\/?(?:[?#]|$)/;
     function keepSitePosts(body) {
@@ -125,6 +125,12 @@
                 if (!p || !p.id || !p.author) continue;
                 (p.attachments || []).forEach(a => a && a.url && postIndex.byMedia.set(a.url, p.id));
                 const user = String(p.author.username || '').toLowerCase(), text = normText(p.content);
+                const o = p.originalPost;
+                if (o && user) {
+                    (o.attachments || []).forEach(a => a && a.url && postIndex.byRepost.set(user + '|' + a.url, p.id));
+                    const ot = normText(o.content);
+                    if (ot) postIndex.byRepost.set(user + '|' + ot, p.id);
+                }
                 if (!user || !text) continue;
                 const mine = postIndex.byUser.get(user) || new Map();
                 mine.set(p.id, text);
@@ -216,6 +222,8 @@
     // Заставка при входе: белые буквы ИТД прилетают целиком, как части костюма, и с ударом
     // встают на место — лёгкая тряска, вспышка, искры, звук. Всё — анимации с задержками,
     // поэтому любой кадр можно остановить и проверить (test/intro.py).
+    // общая громкость звуков мода (ползунок «Громкость» в настройках → «Ещё»), 0…1
+    const soundVolume = () => Math.max(0, Math.min(100, +GM_getValue('soundVolume', 100))) / 100;
     const INTRO = {
         LOCK: [620, 1020, 1420],             // когда буква встаёт на место, мс
         FLY: 520,                            // полёт до касания
@@ -277,7 +285,7 @@
         const out = ctx.createDynamicsCompressor();
         out.connect(ctx.destination);
         const master = ctx.createGain();
-        master.gain.value = INTRO.VOLUME;
+        master.gain.value = INTRO.VOLUME * soundVolume();
         master.connect(out);
         const noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
         const nd = noise.getChannelData(0);
@@ -2013,6 +2021,13 @@
         .settings-option:hover {
             background: var(--bg-hover, rgba(0, 128, 255, 0.15)) !important;
         }
+        .vp-vol-row { cursor: default; }
+        .vp-vol { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+        .vp-vol b { min-width: 38px; text-align: right; font-weight: 500; font-size: 13px; color: var(--text-secondary, #8a8a8a); }
+        .vp-vol input { -webkit-appearance: none; appearance: none; width: 120px; height: 4px; border-radius: 4px; margin: 0; cursor: pointer;
+            background: linear-gradient(to right, var(--vp-accent, #fff) var(--vp-vol, 100%), rgba(128,128,128,.35) var(--vp-vol, 100%)); }
+        .vp-vol input::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+        .vp-vol input::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #fff; }
         .toggle-switch {
             width: 40px !important;
             height: 22px !important;
@@ -3019,7 +3034,7 @@
         { id: 'bg', name: 'Фон', items: ['Фон'] },
         { id: 'look', name: 'Вид', items: ['Стекло', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Версия для ПК на планшете'] },
         { id: 'likes', name: 'Лайки', items: ['Автолайки'] },
-        { id: 'misc', name: 'Ещё', items: ['Анти цензура', 'Звуки интерфейса', 'Заставка при входе'] },
+        { id: 'misc', name: 'Ещё', items: ['Анти цензура', 'Звуки интерфейса', 'Громкость', 'Заставка при входе'] },
         { id: 'icon', name: 'Иконка' }
     ];
     function settingRow(opt, after) {
@@ -3058,6 +3073,21 @@
         };
         return row;
     }
+    // Громкость всех звуков мода (заставка, звуки интерфейса): ползунок 0–100 %, отпустил — короткий звук-проба
+    function volumeRow() {
+        const row = document.createElement('div');
+        row.className = 'settings-option vp-vol-row';
+        row.innerHTML = `<span class="vp-setting-label">${ICONS.settings['Звуки интерфейса'] || ''}<span>Громкость</span></span>`
+            + `<span class="vp-vol"><input type="range" min="0" max="100" step="5" aria-label="Громкость"><b></b></span>`;
+        const inp = row.querySelector('input'), out = row.querySelector('b');
+        inp.value = Math.round(soundVolume() * 100);
+        const show = () => { out.textContent = inp.value + '%'; inp.style.setProperty('--vp-vol', inp.value + '%'); };
+        show();
+        inp.addEventListener('input', () => { GM_setValue('soundVolume', +inp.value); show(); });
+        inp.addEventListener('change', () => { const was = uiSoundEnabled; uiSoundEnabled = true; uiSound('toggle'); uiSoundEnabled = was; });
+        row.onclick = e => e.stopPropagation();
+        return row;
+    }
     const secTitle = (text) => {
         const t = document.createElement('div');
         t.className = 'vp-sec-title';
@@ -3093,6 +3123,7 @@
             else for (const label of tab.items) {
                 // на телефоне у заставки три варианта вместо переключателя
                 if (label === 'Заставка при входе' && IS_PHONE) { body.appendChild(introModeRow()); continue; }
+                if (label === 'Громкость') { body.appendChild(volumeRow()); continue; }
                 body.appendChild(settingRow(SETTINGS.find(o => o.label === label), id === 'bg' ? redraw : null));
             }
             if (id === 'nick') {
@@ -3773,6 +3804,15 @@
     // Мелкие патчи — одной записью на диапазон версий; служебное (админка и т.п.) сюда не пишем.
     // Редкие заставки — сюрприз, в журнал не пишем.
     const CHANGELOG = [
+        ['3.3.0', '28 сентября 2026', [
+            'У всех постов рядом с «…» — кнопки «Скопировать картинку» и «Скопировать ссылку», как в галерее; «Обновить» — по-прежнему только у своих постов, теперь и у репостов, и у закреплённого',
+            'Галерея грузится бережно: по 50 постов за раз и не больше 4 страниц подряд, дальше — «Показать ещё» или прокрутка (раньше листала десятки страниц и сайт мог ограничить запросы)',
+            'Галерея помнит загруженное 10 минут: перезагрузка страницы — картинки сразу, без новых запросов; повторное нажатие на «Галерею» — обновить',
+            'Сайт просит подождать — галерея ждёт и пробует снова сама, без потока повторов',
+            'Галерея: картинки не обрезаются — очень широкие и высокие видны целиком',
+            'Галерея на телефоне: стрелки листания видны всегда; на компьютере — перетаскивание мышью докатывается плавно',
+            'Под галереей и «Сообщениями» не просвечивает страница (поиск и другие), и не мешает кнопка «наверх»',
+            'Настройки → «Ещё»: ползунок громкости для всех звуков ИТД X']],
         ['3.2.22 – 3.2.22.3', '28 сентября 2026', [
             'Галерея: если первые картинки не заполнили экран, следующие подгружаются сами (раньше внизу оставалась пустота)',
             'Галерея: кнопка «Скопировать картинку» рядом со ссылкой; правой кнопкой мыши картинка тоже копируется сразу',
@@ -7881,6 +7921,7 @@
             color: rgba(255, 255, 255, .5); white-space: nowrap; transition: color .2s; }
         html.vp-light .vp-gal-tab { color: rgba(0, 0, 0, .5); }
         .vp-gal-tab.vp-on { color: var(--text-primary, #f5f5f5); }
+        html.vp-gal-open .itd-scroll-top-btn, html.vp-msgs-open .itd-scroll-top-btn { display: none !important; }
         .vp-gal-body { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 24px; }
         .vp-gal-grid { display: flex; gap: 8px; align-items: flex-start; max-width: 1400px; margin: 0 auto; }
         .vp-gal-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -7906,7 +7947,7 @@
         .vp-gal-slide.vp-fail, .vp-media-fail { cursor: pointer; }
         @keyframes vpGalShine { from { background-position: 125% 0; } to { background-position: -125% 0; } }
         @keyframes vpGalSpin { to { transform: rotate(360deg); } }
-        .vp-gal-slide > img, .vp-gal-slide > video { display: block; width: 100%; height: 100%; object-fit: cover; }
+        .vp-gal-slide > img, .vp-gal-slide > video { display: block; width: 100%; height: 100%; object-fit: contain; background: #000; }
         .vp-gal-count { position: absolute; right: 8px; top: 8px; padding: 3px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
             color: #fff; pointer-events: none; background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4);
             box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset; }
@@ -7926,7 +7967,7 @@
         .vp-gal-arrow:active { transform: scale(.9); }
         @media (hover: hover) and (pointer: fine) { .vp-gal-tile:hover .vp-gal-arrow { opacity: 1; } }
         .vp-gal-tile .vp-gal-arrow.vp-edge { opacity: 0; cursor: default; }
-        @media not ((hover: hover) and (pointer: fine)) { .vp-gal-arrow { display: none; } }
+        @media not ((hover: hover) and (pointer: fine)) { .vp-gal-arrow { opacity: 1; } }
         /* картинка не ловит наведение — браузер не вешает на неё свою панель (Яндекс: Алиса, лупа…); нажатие — у плитки.
            Правая кнопка — картинка на миг снова ловит мышь (vp-ctx): обычное меню «Сохранить / Копировать картинку» */
         .vp-gal-slide > img { pointer-events: none; -webkit-user-drag: none; user-select: none; }
@@ -8254,8 +8295,10 @@
                     if (!moved) return;
                     const dx = ev.clientX - x0;
                     const i = Math.max(0, Math.min(media.length - 1, i0 + (dx < -40 ? 1 : dx > 40 ? -1 : 0)));
-                    strip.style.scrollSnapType = '';
                     strip.scrollTo({ left: i * strip.clientWidth, behavior: 'smooth' });
+                    const snap = () => { strip.style.scrollSnapType = ''; };
+                    strip.addEventListener('scrollend', snap, { once: true });
+                    setTimeout(snap, 700);                              // браузер без scrollend
                     setTimeout(() => { tile._vpDragged = false; }, 0);      // клик после перетаскивания — мимо
                 };
                 strip.addEventListener('pointermove', move);
@@ -8279,41 +8322,89 @@
         const b = gal.el && gal.el.querySelector('.vp-gal-body');
         return !!b && b.clientHeight > 0 && b.scrollTop + b.clientHeight > b.scrollHeight - 1200;
     }
-    async function galLoad() {
-        if (!gal.el || gal.loading || gal.done) return;
-        gal.loading = true;
-        const more = gal.el.querySelector('.vp-gal-more');
-        more.textContent = 'Загрузка…';
-        const tab = gal.tab;
+    // Запросы ленты — бережно: сайт режет частые запросы (перезагрузка страницы с галереей кидала в лимит).
+    // По 50 постов за раз; сама подряд — не больше GAL_CHAIN страниц (в «Популярном» картинок мало, и
+    // галерея раньше листала десятки страниц подряд), дальше — по прокрутке или кнопкой «Показать ещё».
+    // Ответ «слишком часто» (429) — пауза с растущим ожиданием, без повторов подряд.
+    // Собранное держим 10 минут в sessionStorage: перезагрузка страницы и новое открытие — без запросов
+    const GAL_CHAIN = 4, GAL_CACHE_MS = 10 * 60 * 1000;
+    const galCacheKey = tab => 'vpGalCache:' + tab;
+    function galCacheRead(tab) {
         try {
-            const res = await api(`/api/posts?limit=20&tab=${tab}` + (gal.cursor ? '&cursor=' + encodeURIComponent(gal.cursor) : ''));
+            const c = JSON.parse(sessionStorage.getItem(galCacheKey(tab)) || 'null');
+            return c && Array.isArray(c.posts) && Date.now() - c.t < GAL_CACHE_MS ? c : null;
+        } catch (e) { return null; }
+    }
+    function galCacheSave() {
+        try {
+            sessionStorage.setItem(galCacheKey(gal.tab), JSON.stringify({ t: gal.cacheT || Date.now(), cursor: gal.cursor, done: gal.done, posts: gal.cachePosts.slice(-400) }));
+        } catch (e) { /* место кончилось — просто без кеша */ }
+    }
+    // пост → плитка (если есть картинки или видео); для кеша — только нужные галерее поля
+    function galAdd(post) {
+        if (!post || gal.seen.has(post.id)) return false;
+        gal.seen.add(post.id);
+        const media = (post.attachments || []).filter(att => att && att.url && (!att.type || /image|video/.test(att.type))).slice(0, 10);
+        if (!media.length) return false;
+        galPlace(galTile(post, media));
+        const st = gal.acts.get(post.id);
+        gal.cachePosts.push({ id: post.id, author: post.author && { username: post.author.username },
+            attachments: media.map(({ type, url, width, height, duration, thumbnailUrl }) => ({ type, url, width, height, duration, thumbnailUrl })),
+            isLiked: st ? st.like : post.isLiked, isReposted: st ? st.repost : post.isReposted });
+        return true;
+    }
+    async function galLoad(auto) {
+        if (!gal.el || gal.loading || gal.done || (gal.waitUntil || 0) > Date.now()) return;
+        if (!auto) gal.chain = 0;                                                     // прокрутка или кнопка — новый счёт
+        gal.loading = true;
+        const gen = gal.gen, tab = gal.tab;
+        const more = gal.el.querySelector('.vp-gal-more');
+        more.onclick = null;
+        more.textContent = 'Загрузка…';
+        const url = lim => `/api/posts?limit=${lim}&tab=${tab}` + (gal.cursor ? '&cursor=' + encodeURIComponent(gal.cursor) : '');
+        try {
+            let res = await api(url(gal.lim || 50));
+            if (res.status === 400 && (gal.lim || 50) !== 20) { gal.lim = 20; res = await api(url(20)); }   // сайт не принял 50
+            if (res.status === 429) { const e = new Error('лента: 429'); e.retry = +res.headers.get('Retry-After') || 0; throw e; }
             if (!res.ok) throw new Error('лента: ' + res.status);
             const j = await res.json(), d = j.data || j;
-            if (!gal.el || tab !== gal.tab) return;                                    // пока грузили — переключили
+            if (!gal.el || gen !== gal.gen) return;                                    // пока грузили — переключили
             const posts = d.posts || [];
             keepSitePosts(j);
-            let added = 0;
-            for (const post of posts) {
-                if (gal.seen.has(post.id)) continue;
-                gal.seen.add(post.id);
-                const media = (post.attachments || []).filter(att => att && att.url && (!att.type || /image|video/.test(att.type))).slice(0, 10);
-                if (!media.length) continue;
-                galPlace(galTile(post, media));
-                added++;
-            }
+            gal.fails = 0;
+            if (!gal.cacheT) gal.cacheT = Date.now();
+            posts.forEach(galAdd);
             gal.cursor = (d.pagination && d.pagination.nextCursor) || d.nextCursor || d.cursor || null;
             gal.done = !gal.cursor || !posts.length;
+            galCacheSave();
             more.textContent = gal.done ? (gal.seen.size ? 'Это всё' : 'Пусто') : '';
             gal.loading = false;
-            // плитки не заполнили экран (страница почти без картинок или картинки мелкие) — прокручивать нечего,
-            // и подгрузка по прокрутке не сработает: сразу следующая, пока экран не заполнится с запасом
-            if (!gal.done && (added < 4 || galNeedMore())) galLoad();
+            galMore();
         } catch (e) {
+            if (gen !== gal.gen) return;
+            gal.loading = false;
+            if (e.retry !== undefined) {
+                gal.fails = (gal.fails || 0) + 1;
+                const wait = Math.min(60, e.retry || 2 ** gal.fails * 2);
+                gal.waitUntil = Date.now() + wait * 1000;
+                more.textContent = `Сайт просит подождать — ещё раз через ${wait} с`;
+                clearTimeout(gal.waitT);
+                gal.waitT = setTimeout(() => { gal.waitUntil = 0; if (gal.el && gen === gal.gen) galLoad(); }, wait * 1000);
+                return;
+            }
             logErr('галерея', e);
             more.textContent = 'Не загрузилось — нажми, чтобы повторить';
-            more.onclick = () => { more.onclick = null; galLoad(); };
-            gal.loading = false;
+            more.onclick = () => galLoad();
         }
+    }
+    // плитки не заполнили экран — прокручивать нечего, подгрузка по прокрутке не сработает: следующая страница
+    // сама, но подряд не больше GAL_CHAIN; дальше — кнопка (или прокрутка, если уже есть куда)
+    function galMore() {
+        if (!gal.el || gal.done || gal.loading || !galNeedMore()) return;
+        if ((gal.chain = (gal.chain || 0) + 1) < GAL_CHAIN) return galLoad(true);
+        const more = gal.el.querySelector('.vp-gal-more');
+        more.textContent = 'Показать ещё';
+        more.onclick = () => galLoad();
     }
     // бегунок — под выбранной вкладкой (и после смены ширины окна)
     function galInd() {
@@ -8321,8 +8412,11 @@
         const i = GAL_TABS.findIndex(([id]) => id === gal.tab);
         if (ind && i >= 0) ind.style.transform = `translateX(${i * 100}%)`;
     }
-    function galSwitch(tab) {
+    // fresh — повторное нажатие на «Галерею»: мимо кеша, заново с сервера
+    function galSwitch(tab, fresh) {
         gal.tab = tab; gal.cursor = null; gal.done = false; gal.seen.clear(); gal.acts.clear(); galN = 0;
+        gal.gen = (gal.gen || 0) + 1; gal.loading = false; gal.chain = 0; gal.cachePosts = []; gal.cacheT = 0;
+        clearTimeout(gal.waitT); gal.waitUntil = 0;
         gal.el.querySelectorAll('.vp-gal-tab').forEach(b => b.classList.toggle('vp-on', b.dataset.tab === tab));
         galInd();
         gal.cols.forEach(c => c.querySelectorAll('video').forEach(v => galVideoIO.unobserve(v)));
@@ -8330,7 +8424,19 @@
         gal.cols = [];
         galLayout();
         gal.el.querySelector('.vp-gal-body').scrollTop = 0;
-        galLoad();
+        const more = gal.el.querySelector('.vp-gal-more');
+        more.onclick = null; more.textContent = '';
+        const c = !fresh && galCacheRead(tab);
+        if (!c) {
+            if (fresh) try { sessionStorage.removeItem(galCacheKey(tab)); } catch (e) { }
+            return galLoad();
+        }
+        gal.cacheT = c.t;
+        c.posts.forEach(galAdd);
+        gal.cursor = c.cursor; gal.done = !!c.done;
+        more.textContent = gal.done ? (gal.seen.size ? 'Это всё' : 'Пусто') : '';
+        gal.chain = GAL_CHAIN;                     // из кеша сама не догружает: только прокрутка или «Показать ещё»
+        galMore();
     }
     // место окна, как у «Сообщений»: телефон (меню — панель внизу) — от верха до панели;
     // компьютер — карточка от левого меню до правого края экрана (ширина — под экран)
@@ -8389,6 +8495,23 @@
         };
         document.querySelectorAll('.' + [SELECTORS.tabs, SELECTORS.feedBar, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .'))
             .forEach(e => { const t = up(e); if (!t.closest('.vp-gal, .vp-msgs, nav')) t.classList.add('vp-gal-hidden'); });
+        // остальные страницы (поиск, уведомления…): то, что лежит под окном, — колонку страницы тоже прячем
+        const win = gal.el || document.querySelector('.vp-msgs.vp-open');
+        const root = document.getElementById('root');
+        const r = win && win.getBoundingClientRect();
+        if (!r || !r.width || !root || performance.now() - (galHideFeed.at || 0) < 400) return;
+        galHideFeed.at = performance.now();
+        for (const [fx, fy] of [[.5, .25], [.5, .6], [.3, .45], [.7, .45]]) {
+            for (const e of document.elementsFromPoint(r.left + r.width * fx, r.top + r.height * fy)) {
+                if (!root.contains(e) || e === root || e.closest('.vp-gal, .vp-msgs, nav, ' + side)) continue;
+                // общая обёртка раскладки (внутри неё меню или панели) — не колонка страницы: её не прятать
+                if (e.querySelector(side)) break;
+                if (getComputedStyle(e).position === 'fixed') continue;
+                const t = up(e);
+                if (t !== root && !t.closest('.vp-gal, .vp-msgs, nav')) t.classList.add('vp-gal-hidden');
+                break;
+            }
+        }
     }
     onDom(function galFeedHidden() { if (gal.el || msgsOpen) galHideFeed(true); });
     // Открыть: окно, закрытое раньше, возвращается как было (картинки, вкладка, место прокрутки) — без
@@ -8441,7 +8564,7 @@
     // обновить (повторное нажатие на «Галерею»): та же вкладка заново, наверх
     function galRefresh() {
         if (!gal.el) return openGallery();
-        galSwitch(gal.tab);
+        galSwitch(gal.tab, true);
     }
     // закрыть: окно убираем со страницы, но держим (gal.kept) — следующее открытие покажет его как было
     function closeGallery(fromBack) {
@@ -8484,7 +8607,7 @@
     const galRO = new ResizeObserver(() => {
         if (!gal.el) return;
         if (gal.cols.length && galColsCount() !== gal.cols.length) galLayout();
-        if (galNeedMore()) galLoad();
+        galMore();                                 // через общий счёт: сетка растёт от каждой плитки — не повод грузить без конца
     });
     // кнопка — в полосе ленты, перед поиском (круглая кнопка с иконкой у сайта), с её же классами
     onDom(function galleryButton() {
@@ -8573,7 +8696,27 @@
     // лайки, комменты, репосты и просмотры меняются на месте, без перезагрузки; изменившиеся — вспыхивают
     function postIdOf(card) {
         if (!card.matches('article')) { const m = location.pathname.match(/\/post\/([0-9a-f-]{36})/); if (m) return m[1]; }
-        for (const img of card.querySelectorAll('img')) { const id = postIndex.byMedia.get(img.currentSrc || img.src); if (id) return id; }
+        // репост без своего текста: номер — по тому, кто репостнул, и картинке/тексту оригинала (картинки в карточке — чужие)
+        const rp = card.querySelector('.' + SELECTORS.repost);
+        if (rp) {
+            const own = normText([...card.querySelectorAll('.' + SELECTORS.postText)].filter(t => !t.closest('.' + SELECTORS.repost)).map(t => t.textContent).join(' '));
+            const hl = card.querySelector('header ' + PROFILE_LINK) || card.querySelector(PROFILE_LINK);
+            const who = hl && (loginOf(hl.getAttribute('href')) || '').toLowerCase();
+            if (!own && who) {
+                for (const img of rp.querySelectorAll('img')) { const id = postIndex.byRepost.get(who + '|' + (img.currentSrc || img.src)); if (id) return id; }
+                const ot = normText([...rp.querySelectorAll('.' + SELECTORS.postText)].map(t => t.textContent).join(' '));
+                if (ot) for (const [k, id] of postIndex.byRepost) {
+                    if (!k.startsWith(who + '|')) continue;
+                    const t = k.slice(who.length + 1);
+                    if (t === ot || ot.startsWith(t) || t.startsWith(ot)) return id;
+                }
+                return null;
+            }
+        }
+        for (const img of card.querySelectorAll('img')) {
+            if (rp && rp.contains(img)) continue;                          // картинка оригинала — не номер репоста
+            const id = postIndex.byMedia.get(img.currentSrc || img.src); if (id) return id;
+        }
         const bg = card.dataset.blurBg && postIndex.byMedia.get(card.dataset.blurBg);
         if (bg) return bg;
         const link = card.querySelector('header ' + PROFILE_LINK) || card.querySelector(PROFILE_LINK);
@@ -8622,9 +8765,11 @@
     }
     const styleRefresh = document.createElement('style');
     styleRefresh.textContent = `
-        .vp-post-refresh { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; margin-right: 2px;
+        .vp-post-tools { display: flex; align-items: center; gap: 0; }
+        .vp-post-tool { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; margin-right: 2px;
             border: 0; border-radius: 50%; background: none; color: var(--text-secondary, #8a8a8a); cursor: pointer; flex: 0 0 auto; }
-        .vp-post-refresh:hover { background: var(--block-hover-bg, rgba(128,128,128,.15)); color: var(--text-primary, #fff); }
+        .vp-post-tool:hover { background: var(--block-hover-bg, rgba(128,128,128,.15)); color: var(--text-primary, #fff); }
+        .vp-post-tool.vp-busy { opacity: .5; pointer-events: none; }
         .vp-post-refresh.vp-spin svg { animation: vp-refresh-spin .6s linear infinite; }
         @keyframes vp-refresh-spin { to { transform: rotate(360deg); } }
         .vp-bump { animation: vp-bump .7s ease-out; display: inline-block; }
@@ -8643,36 +8788,76 @@
         const top = Math.round(mr.top - cr.top + (mr.height - 32) / 2) + 'px', right = Math.round(cr.right - mr.left + 2) + 'px';
         if (b.style.top !== top || b.style.right !== right) Object.assign(b.style, { position: 'absolute', zIndex: '2', top, right });
     }
-    addEventListener('resize', () => document.querySelectorAll('.vp-post-refresh').forEach(placeRefresh));
-    onDom(function postRefreshButtons() {
+    addEventListener('resize', () => document.querySelectorAll('.vp-post-tools').forEach(placeRefresh));
+    // картинка поста, которая сейчас на экране (у поста их бывает несколько — листаются вбок)
+    function postShownImage(card) {
+        const cr = card.getBoundingClientRect();
+        const imgs = [...card.querySelectorAll('.' + SELECTORS.postMedia + ' img, img[data-post-media-image]')]
+            .filter(i => !i.closest('header') && (i.currentSrc || i.src));
+        return imgs.find(i => { const r = i.getBoundingClientRect(), cx = r.left + r.width / 2; return r.width > 0 && cx > cr.left && cx < cr.right; }) || imgs[0] || null;
+    }
+    // Кнопки у поста слева от «…», по порядку: «Обновить» (только свои посты), «Скопировать картинку» (если есть
+    // картинка), «Скопировать ссылку» — у всех постов. Скопировалось — на секунду галочка, как в галерее
+    const postHeadRow = h => [...h.children].find(c => c.querySelector(PROFILE_LINK)) || h.firstElementChild;
+    onDom(function postToolButtons() {
         if (!myUsername) return;
-        document.querySelectorAll('.vp-post-refresh').forEach(b => {
+        document.querySelectorAll('.vp-post-tools').forEach(b => {
             if (b._vpMenu && !b._vpMenu.isConnected) {                  // сайт перерисовал шапку — найти «…» заново
-                const row = b.parentElement && b.parentElement.querySelector('header > :first-child');
-                b._vpMenu = row && [...row.children].reverse().find(c => c.querySelector('svg') && !c.matches('.' + SELECTORS.nickRow + ', a, .vp-post-refresh'));
+                const h = b.parentElement && b.parentElement.querySelector('header'), row = h && postHeadRow(h);
+                b._vpMenu = row && [...row.children].reverse().find(c => c.querySelector('svg') && !c.matches('.' + SELECTORS.nickRow + ', a, .vp-post-tools'));
             }
             placeRefresh(b);
         });
         const me = myUsername.toLowerCase();
         document.querySelectorAll('header').forEach(h => {
-            const row = h.firstElementChild;
+            const row = postHeadRow(h);
             if (!row) return;
             const card = h.closest('article') || h.closest('div:has(> footer)') || (h.parentElement && h.parentElement.closest('div:has(footer)'));
-            if (!card || card.querySelector(':scope > .vp-post-refresh') || !card.querySelector('footer') || card.closest('.vp-msgs')) return;
+            if (!card || card.querySelector(':scope > .vp-post-tools') || !card.querySelector('footer') || card.closest('.vp-msgs, .vp-gal')) return;
             const link = h.querySelector(PROFILE_LINK) || card.querySelector(PROFILE_LINK);
-            if (!link || (loginOf(link.getAttribute('href')) || '').toLowerCase() !== me) return;
+            const user = link && loginOf(link.getAttribute('href'));
+            if (!user) return;
             const menu = [...row.children].reverse().find(c => c.querySelector('svg') && !c.matches('.' + SELECTORS.nickRow + ', a'));
-            if (!menu || !postIdOf(card)) return;
-            const b = document.createElement('button');
-            b.type = 'button';
-            b.className = 'vp-post-refresh';
-            b.title = 'Обновить лайки и комменты';
-            b.innerHTML = svgIcon('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>', 18);
-            b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); refreshPost(card, b); });
+            const id = menu && postIdOf(card);
+            if (!id) return;
+            const box = document.createElement('div');
+            box.className = 'vp-post-tools';
+            const tool = (cls, title, html) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'vp-post-tool ' + cls;
+                b.title = title;
+                b.innerHTML = html;
+                box.appendChild(b);
+                return b;
+            };
+            if (user.toLowerCase() === me) {
+                const b = tool('vp-post-refresh', 'Обновить лайки и комменты', svgIcon('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>', 18));
+                b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); refreshPost(card, b); });
+            }
+            const icon = k => `<svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">${GAL_ICONS[k]}</svg>`;
+            const copyTool = (act, title, run) => {
+                const b = tool('vp-post-copy', title, icon(act));
+                b.dataset.act = act;
+                b.addEventListener('click', e => {
+                    e.preventDefault(); e.stopPropagation();
+                    if (b.classList.contains('vp-busy')) return;
+                    b.classList.add('vp-busy');
+                    Promise.resolve(run()).then(ok => {
+                        b.classList.remove('vp-busy');
+                        b.innerHTML = icon(ok ? 'done' : act);
+                        b.title = ok ? 'Скопировано' : 'Не вышло скопировать';
+                        clearTimeout(b._vpT);
+                        b._vpT = setTimeout(() => { b.innerHTML = icon(act); b.title = title; }, 1400);
+                    });
+                });
+            };
+            if (postShownImage(card)) copyTool('copy', 'Скопировать картинку', () => { const img = postShownImage(card); return img ? galCopyImage(img.currentSrc || img.src) : false; });
+            copyTool('link', 'Скопировать ссылку', () => copyText(`${location.origin}/@${user}/post/${id}`));
             if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
-            b._vpMenu = menu;
-            card.appendChild(b);
-            placeRefresh(b);
+            box._vpMenu = menu;
+            card.appendChild(box);
+            placeRefresh(box);
         });
     });
 
@@ -8886,7 +9071,7 @@
                 o.frequency.setValueAtTime(f0, t + at);
                 o.frequency.exponentialRampToValueAtTime(f1, t + at + dur);
                 g.gain.setValueAtTime(0.0001, t + at);
-                g.gain.exponentialRampToValueAtTime(vol * UI_GAIN, t + at + 0.006);
+                g.gain.exponentialRampToValueAtTime(Math.max(0.0001, vol * UI_GAIN * soundVolume()), t + at + 0.006);
                 g.gain.exponentialRampToValueAtTime(0.0001, t + at + dur);
                 o.connect(g).connect(uiCtx.destination);
                 o.start(t + at);
