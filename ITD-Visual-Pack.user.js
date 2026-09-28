@@ -168,14 +168,39 @@
             setTimeout(() => res(siteUsers.get(key) || null), ms);
         });
     }
+    // Служебные посты владельца (галочки, стикеры, личка, лидерборд игр): под ними комментарии пишет мод, и
+    // владельцу на каждый приходило уведомление — всплывашка и звук. Из живого потока уведомлений сайта
+    // (/api/notifications/stream, события SSE) такие события выкидываем: ни всплывашки, ни звука.
+    // Во вкладке «Уведомления» они остаются — её сайт грузит отдельным запросом (/notifications/)
+    const SERVICE_POSTS = ['a0d6625a-b3ec-44c4-98da-48422af101d5', '92f2913c-18be-499a-bc03-97aed0947b34',
+        'a53b53e0-9950-4f62-83f4-91e5985ef6c5', 'd5f8b7c0-b97d-40cd-bdd4-3c07b3ea0611'];
+    const isServiceEvent = text => SERVICE_POSTS.some(id => text.includes(id));
+    function quietServiceStream(res) {
+        return res.then(r => {
+            if (!r.ok || !r.body || typeof TransformStream !== 'function') return r;
+            const dec = new TextDecoder(), enc = new TextEncoder();
+            let buf = '';
+            const body = r.body.pipeThrough(new TransformStream({
+                transform(chunk, out) {
+                    buf += dec.decode(chunk, { stream: true });
+                    const events = buf.split('\n\n');                 // событие SSE кончается пустой строкой
+                    buf = events.pop();
+                    for (const ev of events) if (!isServiceEvent(ev)) out.enqueue(enc.encode(ev + '\n\n'));
+                },
+                flush(out) { if (buf && !isServiceEvent(buf)) out.enqueue(enc.encode(buf)); }
+            }));
+            return new Response(body, { status: r.status, statusText: r.statusText, headers: r.headers });
+        });
+    }
     (function watchSiteRequests() {
         const w = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
         try {
             const origFetch = w.fetch;
             w.fetch = function (input, init) {
-                const res = origFetch.apply(this, arguments);
+                let res = origFetch.apply(this, arguments);
                 try {
                     const url = typeof input === 'string' ? input : input && input.url;
+                    if (url && /\/notifications\/stream(?:[?#]|$)/.test(url)) res = quietServiceStream(res);
                     const method = (init && init.method) || (input && input.method) || 'GET';
                     if (url && /^get$/i.test(method) && USER_URL.test(url)) {
                         res.then(r => r.ok && r.clone().text().then(t => keepSiteUser(url, t))).catch(() => { });
@@ -3811,7 +3836,8 @@
         ['3.3.1', '28 сентября 2026', [
             'Долгая прокрутка ленты: память под служебные записи о постах больше не растёт всю сессию',
             'Меньше лишней работы на каждом обновлении страницы',
-            'Игры: общий лидерборд — топ-10 по каждой игре внизу окна, твои рекорды попадают туда сами']],
+            'Игры: общий лидерборд — топ-10 по каждой игре внизу окна, твои рекорды попадают туда сами',
+            'Владелец служебных постов ИТД X больше не получает всплывашки и звук на комментарии мода под ними (во вкладке «Уведомления» они остаются)']],
         ['3.3.0', '28 сентября 2026', [
             'У всех постов рядом с «…» — кнопки «Скопировать картинку» и «Скопировать ссылку», как в галерее; «Обновить» — по-прежнему только у своих постов, теперь и у репостов, и у закреплённого',
             'Галерея грузится бережно: по 50 постов за раз и не больше 4 страниц подряд, дальше — «Показать ещё» или прокрутка (раньше листала десятки страниц и сайт мог ограничить запросы)',
