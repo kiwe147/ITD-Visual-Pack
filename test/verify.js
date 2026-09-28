@@ -17,6 +17,7 @@ const URL0 = 'https://xn--d1ah4a.com' + pagePath;
 
 const fails = [];
 const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + what); if (!ok) fails.push(what); };
+const sentRequests = [];
 
 const SECRET_SALT = 'ITD_MOD_2026_SECRET_SALT_NEUROSFW';
 function hashString(str) {
@@ -61,8 +62,17 @@ const comments = [
 
     await p.route('**/*', r => {
         const u = r.request().url();
+        const m = r.request().method();
         if (u.includes('/auth/refresh')) return r.fulfill({ contentType: 'application/json', body: '{"accessToken":"t"}' });
         if (u.endsWith('/api/users/me')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ id: OWNER_ID, username: 'NeuroSFW', displayName: 'NeuroSFW' }) });
+        if (m === 'PATCH' && /\/api\/comments\/[^/?#]+/.test(u)) {
+            sentRequests.push({ m, u, body: r.request().postData() || '' });
+            return r.fulfill({ contentType: 'application/json', body: '{}' });
+        }
+        if (m === 'POST' && u.includes('/api/posts/a0d6625a-b3ec-44c4-98da-48422af101d5/comments')) {
+            sentRequests.push({ m, u, body: r.request().postData() || '' });
+            return r.fulfill({ contentType: 'application/json', body: '{}' });
+        }
         if (u.includes('/api/posts/a0d6625a-b3ec-44c4-98da-48422af101d5/comments')) {
             return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ comments, nextCursor: null, hasMore: false }) });
         }
@@ -102,6 +112,44 @@ const comments = [
     check(state.Dave === 'none', 'Dave в CD, ts в будущем → none     (получено: ' + state.Dave + ')');
     check(state.Eve === 'quarantine', 'Eve без меток → quarantine         (получено: ' + state.Eve + ')');
     check(state.Attacker === 'quarantine', 'Attacker подделал ITDX-V → quarantine (получено: ' + state.Attacker + ')');
+
+    await p.click('.vp-fab-btn');
+    await p.waitForTimeout(300);
+    await p.click('[data-act="verify"]');
+    await p.waitForTimeout(2500);
+
+    const queue = await p.$$eval('.vp-verify-row .vp-verify-name', els => els.map(e => e.textContent));
+    check(queue.length === 3, 'в очереди 3 человека (Carl, Eve, Attacker) — получено: ' + queue.length + ' [' + queue.join(', ') + ']');
+    check(queue.some(n => n === '@Carl'), 'Carl в очереди');
+    check(queue.some(n => n === '@Eve'), 'Eve в очереди');
+    check(queue.some(n => n === '@Attacker'), 'Attacker в очереди');
+    check(!queue.some(n => n === '@Alice'), 'Alice (approved) в очереди нет');
+    check(!queue.some(n => n === '@Bob'), 'Bob (cooldown истёк) в очереди нет');
+    check(!queue.some(n => n === '@NeuroSFW'), 'владелец сам себя в очередь не ставит');
+
+    const seenReqs = sentRequests.filter(r => /ITDX-SEEN/.test(r.body));
+    check(seenReqs.length >= 2, 'ITDX-SEEN отправлен для Eve и Attacker (получено: ' + seenReqs.length + ')');
+    check(!seenReqs.some(r => r.body.includes(ALICE_ID)), 'SEEN для Alice не отправлен (в SEEN уже есть)');
+
+    const beforeCount = sentRequests.length;
+    const rowCarl = await p.$$eval('.vp-verify-row', rows => rows.findIndex(r => r.textContent.includes('@Carl')));
+    await p.$$eval('.vp-verify-row', (rows, i) => rows[i].querySelector('.vp-verify-ok').click(), rowCarl);
+    await p.waitForTimeout(800);
+
+    const vReq = sentRequests.slice(beforeCount).find(r => /ITDX-V/.test(r.body));
+    check(!!vReq, 'при «Подтвердить» отправлен ITDX-V');
+    check(vReq && vReq.body.includes(CARL_ID), 'ITDX-V содержит ID Carl');
+
+    const beforeCount2 = sentRequests.length;
+    const rowEve = await p.$$eval('.vp-verify-row', rows => rows.findIndex(r => r.textContent.includes('@Eve')));
+    await p.$$eval('.vp-verify-row', (rows, i) => rows[i].querySelector('.vp-verify-no').click(), rowEve);
+    await p.waitForTimeout(800);
+
+    const cReq = sentRequests.slice(beforeCount2).find(r => /ITDX-C/.test(r.body));
+    check(!!cReq, 'при «Отклонить» отправлен ITDX-C');
+    check(cReq && cReq.body.includes(EVE_ID), 'ITDX-C содержит ID Eve');
+    const eveTsMatch = cReq && cReq.body.match(new RegExp(EVE_ID + ':(\\d+)'));
+    check(!!eveTsMatch && +eveTsMatch[1] > Math.floor(Date.now() / 1000), 'ITDX-C содержит будущий timestamp (кулдаун)');
 
     check(errors.length === 0, 'ошибок на странице нет' + (errors.length ? ': ' + errors.join(' | ') : ''));
 

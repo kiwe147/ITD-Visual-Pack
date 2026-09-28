@@ -3104,6 +3104,88 @@
             box.querySelector('button').onclick = () => box.remove();
             document.body.appendChild(box);
         }
+        function vpVerifyEnsureStyle() {
+            if (document.getElementById('vp-verify-style')) return;
+            const st = document.createElement('style');
+            st.id = 'vp-verify-style';
+            st.textContent = `.vp-verify-list { max-height: 320px; overflow-y: auto; padding: 4px 0; }
+.vp-verify-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.vp-verify-ava { font-size: 20px; width: 28px; text-align: center; }
+.vp-verify-name { flex: 1; font-size: 14px; }
+.vp-verify-ok, .vp-verify-no { padding: 6px 12px; border-radius: 8px; border: 0; cursor: pointer; font-size: 13px; }
+.vp-verify-ok { background: #2e7d32; color: #fff; }
+.vp-verify-no { background: #444; color: #ddd; }
+.vp-verify-row.vp-busy { opacity: .5; pointer-events: none; }
+.vp-verify-row.vp-done-ok { background: rgba(46,125,50,.15); }
+.vp-verify-row.vp-done-no { background: rgba(120,120,120,.15); }
+.vp-verify-empty { padding: 20px; text-align: center; opacity: .6; }`;
+            document.head.appendChild(st);
+        }
+        async function ownerMarkPush(prefix, token) {
+            const fresh = await loadVerificationComments(true);
+            const mine = fresh.filter(c => c.author && c.author.id === OWNER_ID && String(c.content || '').startsWith(prefix + ' '));
+            for (const c of mine) {
+                const txt = String(c.content || '').trim();
+                if (txt.split(/\s+/).includes(token)) return true;
+                if (txt.length + 1 + token.length <= 990) {
+                    const res = await api(`/api/comments/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: txt + ' ' + token }) });
+                    if (res.ok) return true;
+                }
+            }
+            const res = await api(`/api/posts/${VERIFICATION_POST_ID}/comments`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: prefix + ' ' + token })
+            });
+            return res.ok;
+        }
+        function showVerifyPanel(pending) {
+            vpVerifyEnsureStyle();
+            document.querySelectorAll('.vp-verify-panel').forEach(p => p.remove());
+            const box = document.createElement('div');
+            box.className = 'vp-admin-panel vp-verify-panel';
+            box.innerHTML = `<div class="vp-admin-head"><b>Галочки</b><span>${pending.length ? 'ждут: ' + pending.length : 'пусто'}</span><button type="button" aria-label="Закрыть">×</button></div><div class="vp-verify-list"></div>`;
+            const list = box.querySelector('.vp-verify-list');
+            if (!pending.length) list.innerHTML = '<div class="vp-verify-empty">Никого нет в очереди</div>';
+            for (const p of pending) {
+                const row = document.createElement('div');
+                row.className = 'vp-verify-row';
+                row.innerHTML = '<span class="vp-verify-ava"></span><span class="vp-verify-name"></span><button type="button" class="vp-verify-ok">Подтвердить</button><button type="button" class="vp-verify-no">Отклонить</button>';
+                row.querySelector('.vp-verify-ava').textContent = p.avatar || '👤';
+                row.querySelector('.vp-verify-name').textContent = '@' + p.name;
+                row.querySelector('.vp-verify-ok').onclick = async () => {
+                    row.classList.add('vp-busy');
+                    const ok = await ownerMarkPush('ITDX-V', p.id);
+                    if (ok) { await checkAllComments(true); row.classList.add('vp-done-ok'); setTimeout(() => row.remove(), 800); }
+                    else { row.classList.remove('vp-busy'); alert('Не вышло — попробуй ещё'); }
+                };
+                row.querySelector('.vp-verify-no').onclick = async () => {
+                    row.classList.add('vp-busy');
+                    const until = Math.floor((Date.now() + COOLDOWN_MS) / 1000);
+                    const ok = await ownerMarkPush('ITDX-C', p.id + ':' + until);
+                    if (ok) { await checkAllComments(true); row.classList.add('vp-done-no'); setTimeout(() => row.remove(), 800); }
+                    else { row.classList.remove('vp-busy'); alert('Не вышло — попробуй ещё'); }
+                };
+                list.appendChild(row);
+            }
+            box.querySelector('button').onclick = () => box.remove();
+            document.body.appendChild(box);
+        }
+        async function adminVerify() {
+            await checkAllComments(true);
+            const comments = await loadVerificationComments(true);
+            const lists = parseAllOwnerLists(comments);
+            const nowSec = Math.floor(Date.now() / 1000);
+            const all = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}') || {};
+            const pending = [];
+            for (const [name, info] of Object.entries(all)) {
+                if (!info || info.state !== 'quarantine' || !info.id) continue;
+                if (String(info.id) === OWNER_ID) continue;
+                pending.push({ name, id: info.id, displayName: info.displayName || name, avatar: info.avatar || '👤' });
+                if (!lists.seen.has(String(info.id).toLowerCase())) {
+                    try { await ownerMarkPush('ITDX-SEEN', info.id + ':' + nowSec); } catch (e) { }
+                }
+            }
+            showVerifyPanel(pending);
+        }
         let fpsBox = null;
         function toggleFps() {
             if (fpsBox) { fpsBox.remove(); fpsBox = null; return; }
@@ -3126,6 +3208,7 @@
             <div class="vp-fab-menu"><button type="button" data-act="snap">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 18)}<span>Снимок для Claude</span></button>
                 <button type="button" data-act="report">${svgIcon('<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h4"/>', 18)}<span>Скопировать отчёт</span></button>
                 <button type="button" data-act="diag">${svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4M8.5 11l1.8 1.8 3.4-3.6"/>', 18)}<span>Диагностика</span></button>
+                <button type="button" data-act="verify">${svgIcon('<path d="M12 2.5l2.9 6 6.6.6-5 4.4 1.5 6.5L12 16.8 5.9 20 7.4 13.5l-5-4.4 6.6-.6z"/>', 18)}<span>Галочки</span></button>
                 <button type="button" data-act="rare">${svgIcon('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.3 6L12 16.4 6.6 19.4l1.3-6L3.4 9.3l6-.7z"/>', 18)}<span>Редкая заставка</span></button>
                 <button type="button" data-act="assemble">${svgIcon('<path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z"/>', 18)}<span>Заставка «сборка»</span></button>
                 <button type="button" data-act="twist">${svgIcon('<path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/>', 18)}<span>Заставка «обманка»</span></button>
@@ -3183,6 +3266,7 @@
             act('snap', () => setTimeout(pageSnapshot, 200));
             act('report', () => copyText(adminReport()).then(ok => adminToast(ok ? 'Отчёт скопирован — вставь его Claude' : 'Не вышло скопировать')));
             act('diag', adminDiag);
+            act('verify', () => adminVerify());
             act('fps', toggleFps);
             act('rare', () => playIntro(IS_PHONE ? 'silent' : 'desk', true));
             act('assemble', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'assemble'));

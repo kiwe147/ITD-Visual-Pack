@@ -712,3 +712,36 @@
 
 `test/verify.js снимок.html` — проверяет шесть сценариев:
 `approved` / `none` (просрочен SEEN) / `quarantine` (свежий SEEN) / `none` (кулдаун) / `quarantine` (без меток) / `quarantine` (подделка).
+
+## 3.4.0 — Часть 2: админка галочек
+
+### Кнопка в админ-островке
+
+`data-act="verify"` → `adminVerify()`. Видна только по `ADMINS.includes(myUsername.toLowerCase())`.
+Открывает панель `.vp-verify-panel` со списком quarantine-юзеров.
+
+### Функции
+
+| Функция | Что делает |
+|---|---|
+| `vpVerifyEnsureStyle()` | один раз добавляет стили `.vp-verify-*` |
+| `ownerMarkPush(prefix, token)` | PATCH в свой комментарий с префиксом, если влезает; иначе POST новый |
+| `showVerifyPanel(pending)` | панель очереди, кнопки «Подтвердить» / «Отклонить» |
+| `adminVerify()` | читает quarantine, шлёт ITDX-SEEN, показывает панель |
+
+### Логика кнопок
+
+- **Подтвердить** → `ownerMarkPush('ITDX-V', <uuid>)`.
+- **Отклонить** → `ownerMarkPush('ITDX-C', <uuid>:<now + 7 дней>)`.
+- Обе кнопки после успеха зовут `checkAllComments(true)` — обновляют state.
+
+### Кого не показываем в очереди
+
+- `state !== 'quarantine'` — approved / none.
+- `info.id === OWNER_ID` — сам владелец.
+
+### Тест `test/verify.js`
+
+22 проверки: 6 по состояниям, 7 по очереди, 4 по PATCH, 1 по ошибкам.
+Мокается `/api/posts/<VERIFICATION_POST_ID>/comments` — отдаёт заготовленные данные.
+Перехват PATCH и POST на комментарии — записывается в `sentRequests`, проверяется содержимое.
