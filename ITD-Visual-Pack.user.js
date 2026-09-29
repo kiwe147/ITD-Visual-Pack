@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.7.3
+// @version      3.3.8
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -87,9 +87,12 @@
         history[had ? 'replaceState' : 'pushState'](st, '', location.href);
     }
     const overlayAt = key => !!(history.state && history.state[key]);
-    if (OVERLAY_KEYS.some(overlayAt)) {
+    const STACK_KEYS = ['vpGames', 'vpNews'];
+    function stackEnter(key) { history.pushState(Object.assign({}, history.state, { [key]: 1 }), '', location.href); }
+    function stackLeave(key) { if (overlayAt(key)) history.back(); }
+    if ([...OVERLAY_KEYS, ...STACK_KEYS].some(overlayAt)) {
         const st = Object.assign({}, history.state);
-        OVERLAY_KEYS.forEach(k => delete st[k]);
+        [...OVERLAY_KEYS, ...STACK_KEYS].forEach(k => delete st[k]);
         history.replaceState(st, '', location.href);
     }
     const postIndex = { byMedia: new Map(), byUser: new Map(), byRepost: new Map() };
@@ -3632,9 +3635,11 @@
         }
 
         const CHANGELOG = [
-            ['3.3.7 – 3.3.7.3', '29 сентября 2026', [
+            ['3.3.8', '29 сентября 2026', [
                 'Статистика: у лайков снова виден прирост за день и месяц (раньше стоял 0)',
                 'Галочка: если не подтвердили, через неделю мод сам отправит запрос снова — достаточно просто зайти на сайт',
+                '«Назад» (и кнопка «назад» на телефоне) закрывает окна «Игры» и «Что нового», а не уводит со страницы']],
+            ['3.3.7 – 3.3.7.2', '29 сентября 2026', [
                 'Сообщения без подтверждённой галочки: пароль больше не спрашивается заново при каждом входе, чат с поддержкой работает сразу, переписка с людьми — после подтверждения',
                 'Телефон: рядом с «ИТД X» в профиле — кнопка «Меню»: статистика, клуб ИТД X и игры в полноэкранном окне (раньше на телефоне панели не было совсем)',
                 '«Назад» на телефоне и Esc закрывают меню; открытое окно помечается в истории — листается как галерея и личка',
@@ -3784,12 +3789,18 @@
                 for (const t of items) { const li = document.createElement('li'); li.textContent = t; sec.lastChild.appendChild(li); }
                 list.appendChild(sec);
             }
-            const close = () => { back.remove(); removeEventListener('keydown', onKey, true); };
+            const close = fromHistory => {
+                back.remove(); removeEventListener('keydown', onKey, true); removeEventListener('popstate', onPop);
+                if (fromHistory !== true) stackLeave('vpNews');
+            };
             const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+            const onPop = () => { if (!overlayAt('vpNews')) close(true); };
             back.addEventListener('click', e => { if (e.target === back) close(); });
-            back.querySelector('.vp-news-x').onclick = close;
+            back.querySelector('.vp-news-x').onclick = () => close();
             addEventListener('keydown', onKey, true);
             document.body.appendChild(back);
+            stackEnter('vpNews');
+            addEventListener('popstate', onPop);
             GM_setValue('changelogSeen', GM_info.script.version);
             markChangelogChips();
         }
@@ -10049,12 +10060,15 @@
             gw.el = el;
             showGame(id || gw.id);
             if (!gw.synced) { gw.synced = true; gamesRecord(); }
+            stackEnter('vpGames');
         }
-        function closeGames() {
+        function closeGames(fromHistory) {
             if (!gw.el) return;
             if (gw.cur) { gw.cur.pause(); gw.cur.destroy(); gw.cur = null; }
             gw.el.remove(); gw.el = null;
+            if (fromHistory !== true) stackLeave('vpGames');
         }
+        addEventListener('popstate', () => { if (gw.el && !overlayAt('vpGames')) closeGames(true); });
         addEventListener('keydown', e => {
             if (!gw.el || !gw.cur) return;
             if (e.key === 'Escape') { e.preventDefault(); closeGames(); return; }
