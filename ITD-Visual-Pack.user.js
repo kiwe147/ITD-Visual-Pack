@@ -3672,6 +3672,7 @@
             ['3.3.8', '29 сентября 2026', [
                 'Статистика: у лайков снова виден прирост за день и месяц (раньше стоял 0)',
                 '«Назад» (и кнопка «назад» на телефоне) закрывает окна «Игры» и «Что нового», а не уводит со страницы',
+                'Сообщения: свои сообщения подкрашены цветом стиля и читаются на любом стиле и теме; под полем ввода — сколько символов из 500',
                 'Несколько аккаунтов на одном устройстве: рекорды игр, статистика, прочитанное в сообщениях и автолайки у каждого аккаунта свои']],
             ['3.3.7 – 3.3.7.3', '29 сентября 2026', [
                 'Галочка: если не подтвердили, через неделю мод сам отправит запрос снова — достаточно просто зайти на сайт',
@@ -6119,6 +6120,8 @@
         .vp-msgs-field { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 14px; min-height: 44px; border-radius: 22px;
             background: var(--block-bg, rgba(28, 28, 28, .72)); }
         .vp-msgs-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
+        .vp-msgs-count { font-size: 12px; color: var(--text-secondary, #8a8a8a); white-space: nowrap; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+        .vp-msgs-count.vp-warn { color: #ff5c5c; }
         .vp-msgs-ghost { width: 36px; height: 36px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
             background: transparent; color: var(--text-secondary, #8a8a8a); cursor: pointer; flex-shrink: 0; }
         .vp-msgs-send { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;
@@ -6159,7 +6162,7 @@
                     <button class="vp-msgs-ib" title="Ещё (пока не работает)">${MSG_ICON.more}</button></div>
                 <div class="vp-msgs-feed" aria-live="polite"></div>
                 <form class="vp-msgs-bar"><div class="vp-msgs-field"><button type="button" class="vp-msgs-ghost" title="Вложение (пока не работает)">${MSG_ICON.clip}</button>
-                    <input type="text" placeholder="Сообщение" enterkeyhint="send" autocomplete="off">
+                    <input type="text" placeholder="Сообщение" enterkeyhint="send" autocomplete="off"><span class="vp-msgs-count" hidden></span>
                     <button type="button" class="vp-msgs-ghost" title="Эмодзи (пока не работает)">${MSG_ICON.smile}</button></div>
                     <button type="submit" class="vp-msgs-send" title="Отправить" disabled>${MSG_ICON.send}</button></form>
             </section>`;
@@ -6171,6 +6174,13 @@
             const $ = s => root.querySelector(s);
             const list = $('.vp-msgs-list'), home = $('.vp-msgs-home'), chat = $('.vp-msgs-chat'), feed = $('.vp-msgs-feed');
             const input = $('.vp-msgs-bar input'), send = $('.vp-msgs-send'), search = $('.vp-msgs-search input');
+            const countEl = $('.vp-msgs-count');
+            const msgCount = () => {
+                const n = input.value.length, max = input.maxLength > 0 ? input.maxLength : MSG_TEXT_MAX;
+                countEl.hidden = !n;
+                countEl.textContent = `${n} / ${max}`;
+                countEl.classList.toggle('vp-warn', n >= max * 0.9);
+            };
             let current = null, botTimer = 0, lastJoke = -1;
             const isUrl = a => /^https?:|^\//.test(a);
             const avaHtml = a => isUrl(a) ? `<img src="${esc(a)}" alt="">` : esc(a);
@@ -6214,12 +6224,12 @@
                 };
                 $('.vp-msgs-who small').textContent = d.bot ? 'бот · всегда в сети' : d.support ? 'поддержка · на связи' : d.supUid ? 'обращение в поддержку'
                     : '@' + d.login + ' · ' + (d.online ? 'в сети' : d.lastSeen && seenAgo(d.lastSeen) ? 'был(а) в сети ' + seenAgo(d.lastSeen) : 'с ИТД X');
-                if (d.login || d.support || d.supUid) { home.hidden = true; chat.hidden = false; input.value = ''; send.disabled = true; msgOpenPerson(d); return; }
+                if (d.login || d.support || d.supUid) { home.hidden = true; chat.hidden = false; input.value = ''; send.disabled = true; msgCount(); msgOpenPerson(d); return; }
                 feed.innerHTML = '<div class="vp-msgs-note">🧪 Прототип: сообщения пока никуда не отправляются и не сохраняются</div>'
                     + (d.msgs.length ? '<div class="vp-msgs-note">Сегодня</div>' : `<div class="vp-msgs-note">Это начало переписки с ${esc(d.name)}</div>`);
                 d.msgs.forEach(([dir, text]) => bubble(dir, text, dir === 'out' ? now() + ' ✓✓' : now()));
                 home.hidden = true; chat.hidden = false;
-                input.value = ''; send.disabled = true;
+                input.value = ''; send.disabled = true; msgCount();
             }
             const note = t => { const n = document.createElement('div'); n.className = 'vp-msgs-note'; n.textContent = t; feed.appendChild(n); return n; };
             let renderN = 0;
@@ -6378,12 +6388,12 @@
             });
             search.addEventListener('input', renderList);
             $('.vp-msgs-back').onclick = closeChat;
-            input.addEventListener('input', () => { send.disabled = !input.value.trim(); });
+            input.addEventListener('input', () => { send.disabled = !input.value.trim(); msgCount(); });
             $('.vp-msgs-bar').addEventListener('submit', e => {
                 e.preventDefault();
                 const text = input.value.trim();
                 if (!text || !current) return;
-                input.value = ''; send.disabled = true;
+                input.value = ''; send.disabled = true; msgCount();
                 current.msgs.push(['out', text]);
                 current.last = 'Ты: ' + text; current.time = now();
                 if (current.bot) { bubble('out', text, now() + ' ✓'); botReply(); }
