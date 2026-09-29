@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.7.3
+// @version      3.3.8
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -87,9 +87,12 @@
         history[had ? 'replaceState' : 'pushState'](st, '', location.href);
     }
     const overlayAt = key => !!(history.state && history.state[key]);
-    if (OVERLAY_KEYS.some(overlayAt)) {
+    const STACK_KEYS = ['vpGames', 'vpNews'];
+    function stackEnter(key) { history.pushState(Object.assign({}, history.state, { [key]: 1 }), '', location.href); }
+    function stackLeave(key) { if (overlayAt(key)) history.back(); }
+    if ([...OVERLAY_KEYS, ...STACK_KEYS].some(overlayAt)) {
         const st = Object.assign({}, history.state);
-        OVERLAY_KEYS.forEach(k => delete st[k]);
+        [...OVERLAY_KEYS, ...STACK_KEYS].forEach(k => delete st[k]);
         history.replaceState(st, '', location.href);
     }
     const postIndex = { byMedia: new Map(), byUser: new Map(), byRepost: new Map() };
@@ -1432,6 +1435,18 @@
         function isApprovedAuthor(author) {
             return !!(author && isApprovedId(author.id));
         }
+        function acctKey(base) {
+            const id = (meData && meData.id) || (siteAuth.me && siteAuth.me.id) || '';
+            if (!id) return base;
+            const k = base + '@' + id;
+            if (GM_getValue(k, undefined) === undefined) {
+                const owner = GM_getValue('vp_acct_owner', null);
+                if (!owner) GM_setValue('vp_acct_owner', id);
+                const legacy = GM_getValue(base, undefined);
+                if ((!owner || owner === id) && legacy !== undefined) GM_setValue(k, legacy);
+            }
+            return k;
+        }
         function loadApprovedIds() {
             let all = {};
             try { all = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}') || {}; } catch (e) { }
@@ -1477,14 +1492,21 @@
         const DAY = 24 * 60 * 60 * 1000;
 
         function saveAutoLikeUsers() {
-            GM_setValue('itd_auto_like_users', JSON.stringify(autoLikeUsers));
+            GM_setValue(acctKey('itd_auto_like_users'), JSON.stringify(autoLikeUsers));
         }
 
         const autoLikeIds = JSON.parse(GM_getValue('itd_auto_like_ids', '{}') || '{}');
         const autoLikeGone = new Set();
+        function reloadAutoLike() {
+            try { autoLikeUsers = JSON.parse(GM_getValue(acctKey('itd_auto_like_users'), '{}')) || {}; } catch (e) { autoLikeUsers = {}; }
+            let ids = {};
+            try { ids = JSON.parse(GM_getValue(acctKey('itd_auto_like_ids'), '{}') || '{}') || {}; } catch (e) { }
+            Object.keys(autoLikeIds).forEach(k => delete autoLikeIds[k]);
+            Object.assign(autoLikeIds, ids);
+        }
         function rememberAutoLikeId(username) {
             const id = (verifiedInfo(username) || {}).id;
-            if (id && autoLikeIds[username] !== id) { autoLikeIds[username] = id; GM_setValue('itd_auto_like_ids', JSON.stringify(autoLikeIds)); }
+            if (id && autoLikeIds[username] !== id) { autoLikeIds[username] = id; GM_setValue(acctKey('itd_auto_like_ids'), JSON.stringify(autoLikeIds)); }
         }
         function renamedAutoLike(username) {
             const id = autoLikeIds[username];
@@ -1498,7 +1520,7 @@
             autoLikeIds[now] = id;
             delete autoLikeIds[username];
             saveAutoLikeUsers();
-            GM_setValue('itd_auto_like_ids', JSON.stringify(autoLikeIds));
+            GM_setValue(acctKey('itd_auto_like_ids'), JSON.stringify(autoLikeIds));
             return now;
         }
         async function likePostsForUser(username) {
@@ -2561,9 +2583,24 @@
             if (rootKey !== paintRootKey) {
                 paintRootKey = rootKey;
                 const slow = rainbow ? `hsl(${Math.round(h / 30) * 30}, 100%, ${dark ? 62 : 45}%)` : accent;
-                root.cssText = `--vp-accent: ${slow}; --vp-on-accent: ${dark ? '#0b0b0f' : '#fff'}; scrollbar-color: color-mix(in srgb, ${slow} 55%, transparent) transparent;`;
+                root.cssText = `--vp-accent: ${slow}; --vp-on-accent: ${onAccentFor(slow, dark)}; scrollbar-color: color-mix(in srgb, ${slow} 55%, transparent) transparent;`;
                 selection.cssText = `background: color-mix(in srgb, ${slow} 45%, transparent) !important;`;
             }
+        }
+        let accentProbe = null;
+        function onAccentFor(color, dark) {
+            try {
+                if (!accentProbe) { accentProbe = document.createElement('i'); accentProbe.style.display = 'none'; }
+                if (!accentProbe.isConnected) (document.body || document.documentElement).appendChild(accentProbe);
+                accentProbe.style.color = '';
+                accentProbe.style.color = color;
+                const c = getComputedStyle(accentProbe).color, n = (c.match(/[\d.]+/g) || []).map(Number);
+                if (n.length < 3) return dark ? '#0b0b0f' : '#fff';
+                const k = /^color\(/.test(c) ? 1 : 1 / 255;
+                const lin = v => { v *= k; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+                const L = 0.2126 * lin(n[0]) + 0.7152 * lin(n[1]) + 0.0722 * lin(n[2]);
+                return (L + 0.05) / 0.05 >= 1.05 / (L + 0.05) ? '#0b0b0f' : '#fff';
+            } catch (e) { return dark ? '#0b0b0f' : '#fff'; }
         }
         function accentOf(style) {
             if (style.color && style.color.startsWith('#')) return style.color;
@@ -2741,7 +2778,8 @@
             custom: { name: 'Своя картинка', icon: svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>') }
         };
         function renderAutoLikeUsers(list, footer, usersData) {
-            const users = Object.keys(usersData).sort((a, b) => a === 'NeuroSFW' ? -1 : b === 'NeuroSFW' ? 1 : a.localeCompare(b));
+            const own = n => (usersData[n] && usersData[n].id) === OWNER_ID;
+            const users = Object.keys(usersData).sort((a, b) => own(a) ? -1 : own(b) ? 1 : a.localeCompare(b));
             const count = () => { footer.textContent = `Активно: ${Object.keys(autoLikeUsers).length}`; };
             count();
             if (!users.length) {
@@ -3230,7 +3268,7 @@
         }
 
         function adminFab() {
-            if (document.querySelector('.vp-fab') || !myUsername || !ADMINS.includes(myUsername.toLowerCase())) return;
+            if (document.querySelector('.vp-fab') || !myUsername || !(meData && meData.id ? meData.id === OWNER_ID : ADMINS.includes(myUsername.toLowerCase()))) return;
             const fab = document.createElement('div');
             fab.className = 'vp-fab';
             fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка">${fabFace()}</button>
@@ -3631,6 +3669,12 @@
         }
 
         const CHANGELOG = [
+            ['3.3.8', '29 сентября 2026', [
+                'Статистика: у лайков снова виден прирост за день и месяц (раньше стоял 0)',
+                '«Назад» (и кнопка «назад» на телефоне) закрывает окна «Игры» и «Что нового», а не уводит со страницы',
+                'Сообщения: свои сообщения подкрашены цветом стиля и читаются на любом стиле и теме; под полем ввода — сколько символов из 500',
+                'Сообщения: кнопка эмодзи заработала — окно с категориями и «Недавними»',
+                'Несколько аккаунтов на одном устройстве: рекорды игр, статистика, прочитанное в сообщениях и автолайки у каждого аккаунта свои']],
             ['3.3.7 – 3.3.7.3', '29 сентября 2026', [
                 'Галочка: если не подтвердили, через неделю мод сам отправит запрос снова — достаточно просто зайти на сайт',
                 'Сообщения без подтверждённой галочки: пароль больше не спрашивается заново при каждом входе, чат с поддержкой работает сразу, переписка с людьми — после подтверждения',
@@ -3782,12 +3826,18 @@
                 for (const t of items) { const li = document.createElement('li'); li.textContent = t; sec.lastChild.appendChild(li); }
                 list.appendChild(sec);
             }
-            const close = () => { back.remove(); removeEventListener('keydown', onKey, true); };
+            const close = fromHistory => {
+                back.remove(); removeEventListener('keydown', onKey, true); removeEventListener('popstate', onPop);
+                if (fromHistory !== true) stackLeave('vpNews');
+            };
             const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+            const onPop = () => { if (!overlayAt('vpNews')) close(true); };
             back.addEventListener('click', e => { if (e.target === back) close(); });
-            back.querySelector('.vp-news-x').onclick = close;
+            back.querySelector('.vp-news-x').onclick = () => close();
             addEventListener('keydown', onKey, true);
             document.body.appendChild(back);
+            stackEnter('vpNews');
+            addEventListener('popstate', onPop);
             GM_setValue('changelogSeen', GM_info.script.version);
             markChangelogChips();
         }
@@ -4103,6 +4153,7 @@
                 if (!me || !me.username) return;
                 meData = me;
                 myUsername = me.username;
+                reloadAutoLike();
                 myDisplayName = me.displayName || me.username;
                 tagAll();
                 try { placeRail(); } catch (e) { }
@@ -5604,7 +5655,6 @@
         })();
 
         const MSG_POST_ID = 'a53b53e0-9950-4f62-83f4-91e5985ef6c5', MSG_MAX = 990, MSG_TEXT_MAX = 500;
-        const SUPPORT_LOGIN = 'NeuroSFW';
         const msgNet = { keys: new Map(), vols: [], me: null, pairs: new Map(), conv: new Map(), syncing: null };
         const te = new TextEncoder(), td = new TextDecoder();
         const cat = (...a) => { const o = new Uint8Array(a.reduce((n, x) => n + x.length, 0)); let i = 0; for (const x of a) { o.set(x, i); i += x.length; } return o; };
@@ -5780,24 +5830,24 @@
             await msgSync();
         }
         const msgKeyOf = login => [...msgNet.keys.values()].find(k => k.login.toLowerCase() === String(login).toLowerCase()) || null;
-        const msgIsSupport = () => !!myUsername && myUsername.toLowerCase() === SUPPORT_LOGIN.toLowerCase();
+        const msgIsSupport = () => msgMyId() === OWNER_ID;
         function msgTarget(d) {
             if (d.supUid) return { uid: d.supUid, sup: true };
-            if (d.support) { const k = msgKeyOf(SUPPORT_LOGIN); return { uid: k && k.id, sup: true, missing: 'Поддержка ещё не подключила сообщения — напиши в тг @NeuroSFW' }; }
+            if (d.support) { const k = msgNet.keys.get(OWNER_ID); return { uid: k && k.id, sup: true, missing: 'Поддержка ещё не подключила сообщения — напиши в тг @NeuroSFW' }; }
             const k = msgKeyOf(d.login);
             return { uid: k && k.id, sup: false, missing: `У ${d.name} ещё нет ключа сообщений — появится, когда откроет «Сообщения» в ИТД X 3.3.3` };
         }
         const msgThread = t => t.uid ? (msgNet.conv.get(t.uid) || []).filter(m => m.sup === t.sup) : [];
-        const msgSeen = () => GM_getValue('msgSeen', {});
+        const msgSeen = () => GM_getValue(acctKey('msgSeen'), {});
         const seenKey = t => (t.sup ? 'sup:' : '') + t.uid;
-        function msgMarkSeen(t) { const s = msgSeen(), list = msgThread(t); s[seenKey(t)] = list.length ? list[list.length - 1].ts : 0; GM_setValue('msgSeen', s); }
+        function msgMarkSeen(t) { const s = msgSeen(), list = msgThread(t); s[seenKey(t)] = list.length ? list[list.length - 1].ts : 0; GM_setValue(acctKey('msgSeen'), s); }
         const msgTime = ts => { const d = new Date(ts * 1000), t = d.toTimeString().slice(0, 5); return d.toDateString() === new Date().toDateString() ? t : `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')} ${t}`; };
         function msgFillDialogs() {
             const me = msgNet.me;
             if (me) for (const [uid, list] of msgNet.conv) {
                 const k = msgNet.keys.get(uid);
                 if (!k) continue;
-                if (list.some(m => !m.sup) && !msgPeople.has(k.login) && k.login.toLowerCase() !== SUPPORT_LOGIN.toLowerCase())
+                if (list.some(m => !m.sup) && !msgPeople.has(k.login) && uid !== OWNER_ID)
                     msgPeople.set(k.login, { id: 'u:' + k.login, login: k.login, ava: '👤', name: k.login, last: '', time: '', unread: 0, msgs: [] });
                 if (msgIsSupport() && list.some(m => m.sup) && !MSG_DIALOGS.some(d => d.supUid === uid))
                     MSG_DIALOGS.push({ id: 'sup:' + uid, supUid: uid, ava: '🛟', name: '🛟 ' + k.login, login: '', last: '', time: '', unread: 0, msgs: [] });
@@ -5953,7 +6003,7 @@
         };
         let supportTicket = 0;
         let MSG_DIALOGS = [MSG_BOT, MSG_SUPPORT];
-        const msgPins = () => GM_getValue('msgPins', []);
+        const msgPins = () => GM_getValue(acctKey('msgPins'), []);
         function sortDialogs(list) {
             const pins = msgPins();
             return [...list.filter(d => pins.includes(d.id)).sort((a, b) => pins.indexOf(a.id) - pins.indexOf(b.id)), ...list.filter(d => !pins.includes(d.id))];
@@ -5984,6 +6034,120 @@
             pin: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M15 3l6 6-3 1-4 4 .5 4.5-1.5 1.5-4-4-5 5-1-1 5-5-4-4L5.5 9.5 10 10l4-4Z"/></svg>'
         };
 
+        const EMOJI_SETS = [
+            ['😀', 'Смайлы', '😀 😃 😄 😁 😆 😅 🤣 😂 🙂 🙃 🫠 😉 😊 😇 🥰 😍 🤩 😘 😗 😚 😙 🥲 😋 😛 😜 🤪 😝 🤑 🤗 🤭 🫢 🫣 🤫 🤔 🫡 🤐 🤨 😐 😑 😶 🫥 😏 😒 🙄 😬 🤥 😌 😔 😪 🤤 😴 😷 🤒 🤕 🤢 🤮 🤧 🥵 🥶 🥴 😵 🤯 🤠 🥳 🥸 😎 🤓 🧐 😕 🫤 😟 🙁 😮 😯 😲 😳 🥺 🥹 😦 😧 😨 😰 😥 😢 😭 😱 😖 😣 😞 😓 😩 😫 🥱 😤 😡 😠 🤬 😈 👿 💀 ☠️ 💩 🤡 👹 👺 👻 👽 👾 🤖 😺 😸 😹 😻 😼 😽 🙀 😿 😾'],
+            ['👍', 'Жесты и люди', '👋 🤚 🖐️ ✋ 🖖 🫱 🫲 👌 🤌 🤏 ✌️ 🤞 🫰 🤟 🤘 🤙 👈 👉 👆 🖕 👇 ☝️ 🫵 👍 👎 ✊ 👊 🤛 🤜 👏 🙌 🫶 👐 🤲 🤝 🙏 ✍️ 💅 🤳 💪 🦾 🦵 🦶 👂 👃 🧠 🫀 👀 👁️ 👅 👄 🫦 👶 🧒 👦 👧 🧑 👱 👨 🧔 👩 🧓 👴 👵 🙍 🙎 🙅 🙆 💁 🙋 🧏 🙇 🤦 🤷 👮 🕵️ 💂 🥷 👷 🤴 👸 👳 🤵 👰 🤰 👼 🎅 🦸 🦹 🧙 🧚 🧛 🧜 🧝 🧞 🧟 💆 💇 🚶 🧍 🧎 🏃 💃 🕺 👯 🧖 🧗 🤺 🏇 ⛷️ 🏂 🏄 🚣 🏊 🚴 🤸 🤼 🤽 🤾 🤹 🧘 🛀 🛌 👭 👫 👬 💏 💑 👪'],
+            ['🐱', 'Животные и природа', '🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🙈 🙉 🙊 🐒 🐔 🐧 🐦 🐤 🦆 🦅 🦉 🦇 🐺 🐗 🐴 🦄 🐝 🪱 🐛 🦋 🐌 🐞 🐜 🪰 🕷️ 🦂 🐢 🐍 🦎 🦖 🦕 🐙 🦑 🦐 🦞 🦀 🐡 🐠 🐟 🐬 🐳 🐋 🦈 🐊 🐅 🐆 🦓 🦍 🦧 🐘 🦛 🦏 🐪 🐫 🦒 🦘 🐃 🐂 🐄 🐎 🐖 🐏 🐑 🦙 🐐 🦌 🐕 🐩 🐈 🐓 🦃 🦚 🦜 🦢 🦩 🕊️ 🐇 🦝 🦨 🦡 🦫 🦦 🦥 🐁 🐀 🐿️ 🦔 🐾 🐉 🐲 🌵 🎄 🌲 🌳 🌴 🌱 🌿 ☘️ 🍀 🍃 🍂 🍁 🍄 🌾 💐 🌷 🌹 🥀 🌺 🌸 🌼 🌻 🌞 🌝 🌚 🌙 🌎 🪐 ⭐ 🌟 ✨ ⚡ ☄️ 💥 🔥 🌪️ 🌈 ☀️ 🌤️ ⛅ ☁️ 🌧️ ⛈️ 🌩️ ❄️ ☃️ ⛄ 💨 💧 💦 🌊'],
+            ['🍔', 'Еда и напитки', '🍏 🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🫐 🍈 🍒 🍑 🥭 🍍 🥥 🥝 🍅 🍆 🥑 🥦 🥬 🥒 🌶️ 🫑 🌽 🥕 🧄 🧅 🥔 🍠 🥐 🥯 🍞 🥖 🥨 🧀 🥚 🍳 🧈 🥞 🧇 🥓 🥩 🍗 🍖 🌭 🍔 🍟 🍕 🫓 🥪 🥙 🧆 🌮 🌯 🫔 🥗 🥘 🫕 🥫 🍝 🍜 🍲 🍛 🍣 🍱 🥟 🦪 🍤 🍙 🍚 🍘 🍥 🥠 🥮 🍢 🍡 🍧 🍨 🍦 🥧 🧁 🍰 🎂 🍮 🍭 🍬 🍫 🍿 🍩 🍪 🌰 🥜 🍯 🥛 🍼 ☕ 🍵 🧃 🥤 🧋 🍶 🍺 🍻 🥂 🍷 🥃 🍸 🍹 🧉 🍾 🧊 🥄 🍴 🍽️'],
+            ['⚽', 'Занятия', '⚽ 🏀 🏈 ⚾ 🥎 🎾 🏐 🏉 🥏 🎱 🪀 🏓 🏸 🏒 🏑 🥍 🏏 🪃 🥅 ⛳ 🪁 🏹 🎣 🤿 🥊 🥋 🎽 🛹 🛼 🛷 ⛸️ 🥌 🎿 🏋️ 🏆 🥇 🥈 🥉 🏅 🎖️ 🎗️ 🎫 🎟️ 🎪 🎭 🩰 🎨 🎬 🎤 🎧 🎼 🎹 🥁 🪘 🎷 🎺 🪗 🎸 🪕 🎻 🎲 ♟️ 🎯 🎳 🎮 🕹️ 🎰 🧩'],
+            ['🚗', 'Поездки и места', '🚗 🚕 🚙 🚌 🚎 🏎️ 🚓 🚑 🚒 🚐 🛻 🚚 🚛 🚜 🛴 🚲 🛵 🏍️ 🛺 🚨 🚔 🚍 🚘 🚖 🚡 🚠 🚟 🚃 🚋 🚞 🚝 🚄 🚅 🚈 🚂 🚆 🚇 🚊 🚉 ✈️ 🛫 🛬 🛩️ 💺 🛰️ 🚀 🛸 🚁 🛶 ⛵ 🚤 🛥️ 🛳️ ⛴️ 🚢 ⚓ ⛽ 🚧 🚦 🚥 🗺️ 🗿 🗽 🗼 🏰 🏯 🏟️ 🎡 🎢 🎠 ⛲ ⛱️ 🏖️ 🏝️ 🏜️ 🌋 ⛰️ 🏔️ 🗻 🏕️ ⛺ 🏠 🏡 🏘️ 🏚️ 🏗️ 🏭 🏢 🏬 🏣 🏤 🏥 🏦 🏨 🏪 🏫 🏩 💒 🏛️ ⛪ 🕌 🕍 🛕 🕋 ⛩️ 🌅 🌄 🌠 🎇 🎆 🌇 🌆 🏙️ 🌃 🌌 🌉 🌁'],
+            ['💡', 'Предметы', '⌚ 📱 📲 💻 ⌨️ 🖥️ 🖨️ 🖱️ 💽 💾 💿 📀 📼 📷 📸 📹 🎥 📽️ 🎞️ 📞 ☎️ 📟 📠 📺 📻 🎙️ ⏱️ ⏰ 🕰️ ⌛ ⏳ 📡 🔋 🔌 💡 🔦 🕯️ 🧯 💸 💵 💴 💶 💷 🪙 💰 💳 💎 ⚖️ 🧰 🔧 🔨 ⚒️ 🛠️ ⛏️ 🔩 ⚙️ 🧱 ⛓️ 🧲 🔫 💣 🧨 🪓 🔪 🗡️ ⚔️ 🛡️ 🚬 ⚰️ 🔮 📿 🧿 💈 ⚗️ 🔭 🔬 🕳️ 🩹 🩺 💊 💉 🩸 🧬 🦠 🧫 🧪 🌡️ 🧹 🧺 🧻 🚽 🚿 🛁 🧼 🪥 🪒 🧽 🧴 🛎️ 🔑 🗝️ 🚪 🪑 🛋️ 🛏️ 🧸 🪆 🖼️ 🪞 🪟 🛍️ 🛒 🎁 🎈 🎏 🎀 🪄 🪅 🎊 🎉 🎎 🏮 🎐 🧧 ✉️ 📩 📨 📧 💌 📥 📤 📦 🏷️ 📪 📬 📭 📮 📯 📜 📃 📄 📑 🧾 📊 📈 📉 🗒️ 🗓️ 📆 📅 🗑️ 📇 🗃️ 🗳️ 🗄️ 📋 📁 📂 🗂️ 🗞️ 📰 📓 📔 📒 📕 📗 📘 📙 📚 📖 🔖 🧷 🔗 📎 🖇️ 📐 📏 🧮 📌 📍 ✂️ 🖊️ 🖋️ ✒️ 🖌️ 🖍️ 📝 ✏️ 🔍 🔎 🔏 🔐 🔒 🔓'],
+            ['❤️', 'Символы', '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❤️‍🔥 ❤️‍🩹 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 ☮️ ✝️ ☪️ 🕉️ ☸️ ✡️ 🔯 ☯️ ☦️ ♈ ♉ ♊ ♋ ♌ ♍ ♎ ♏ ♐ ♑ ♒ ♓ ⚛️ ☢️ ☣️ 📴 📳 ✴️ 🆚 💮 🅰️ 🅱️ 🆎 🆑 🅾️ 🆘 ❌ ⭕ 🛑 ⛔ 📛 🚫 💯 💢 ♨️ 🔞 📵 🚭 ❗ ❕ ❓ ❔ ‼️ ⁉️ 🔅 🔆 ⚠️ 🚸 🔱 ⚜️ 🔰 ♻️ ✅ 💹 ❇️ ✳️ ❎ 🌐 💠 🌀 💤 🚾 ♿ 🅿️ 🚹 🚺 🚼 ⚧️ 🚻 🎦 📶 🔣 ℹ️ 🔤 🆖 🆗 🆙 🆒 🆕 🆓 🔟 🔢 ▶️ ⏸️ ⏹️ ⏺️ ⏭️ ⏮️ ⏩ ⏪ ◀️ 🔼 🔽 ➡️ ⬅️ ⬆️ ⬇️ ↗️ ↘️ ↙️ ↖️ ↕️ ↔️ ↪️ ↩️ ⤴️ ⤵️ 🔀 🔁 🔂 🔄 🔃 🎵 🎶 ➕ ➖ ➗ ✖️ ♾️ 💲 💱 ™️ ©️ ®️ 〰️ ➰ ➿ 🔚 🔙 🔛 🔝 🔜 ✔️ ☑️ 🔘 🔴 🟠 🟡 🟢 🔵 🟣 ⚫ ⚪ 🟤 🔺 🔻 🔸 🔹 🔶 🔷 🔳 🔲 ▪️ ▫️ ◾ ◽ ◼️ ◻️ 🟥 🟧 🟨 🟩 🟦 🟪 ⬛ ⬜ 🟫 🔈 🔇 🔉 🔊 🔔 🔕 📣 📢 💬 💭 🗯️ ♠️ ♣️ ♥️ ♦️ 🃏 🎴 🀄'],
+            ['🏳️', 'Флаги', '🏳️ 🏴 🏁 🚩 🏳️‍🌈 🏳️‍⚧️ 🏴‍☠️ 🇷🇺 🇺🇦 🇧🇾 🇰🇿 🇺🇸 🇬🇧 🇩🇪 🇫🇷 🇮🇹 🇪🇸 🇵🇱 🇹🇷 🇯🇵 🇰🇷 🇨🇳 🇮🇳 🇧🇷 🇨🇦 🇦🇺 🇦🇲 🇬🇪 🇦🇿 🇺🇿 🇰🇬 🇹🇯 🇲🇩 🇱🇻 🇱🇹 🇪🇪 🇫🇮 🇸🇪 🇳🇴 🇩🇰 🇳🇱 🇧🇪 🇨🇭 🇦🇹 🇨🇿 🇸🇰 🇭🇺 🇷🇴 🇧🇬 🇷🇸 🇬🇷 🇮🇱 🇦🇪 🇪🇬 🇲🇽 🇦🇷 🇹🇭 🇻🇳 🇮🇩']
+        ];
+        const EMOJI_RECENT_MAX = 24;
+        const emojiRecent = () => { const r = GM_getValue(acctKey('vp_emoji_recent'), []); return Array.isArray(r) ? r : []; };
+        function emojiRemember(e) { GM_setValue(acctKey('vp_emoji_recent'), [e, ...emojiRecent().filter(x => x !== e)].slice(0, EMOJI_RECENT_MAX)); }
+        const vpEmojiCss = document.createElement('style');
+        vpEmojiCss.textContent = `
+        .vp-emoji { position: fixed; z-index: 2147483600; width: 280px; height: 380px; display: flex; flex-direction: column; border-radius: 18px; overflow: hidden;
+            background: var(--block-bg, #1c1c1c); color: var(--text-primary, #fff); box-shadow: 0 12px 40px rgba(0, 0, 0, .45), 0 0 0 1px var(--border-color, rgba(255, 255, 255, .08));
+            animation: vp-emoji-in .15s ease-out both; }
+        .vp-emoji.vp-closing { animation: vp-emoji-out .15s ease-in both; }
+        @keyframes vp-emoji-in { from { opacity: 0; transform: scale(.94); } }
+        @keyframes vp-emoji-out { to { opacity: 0; transform: scale(.94); } }
+        .vp-emoji-tabs { display: flex; gap: 2px; padding: 6px 6px 4px; border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, .08)); flex-shrink: 0; }
+        .vp-emoji-tabs button { flex: 1; min-width: 0; height: 30px; border: 0; padding: 0; border-radius: 8px; background: transparent; font-size: 17px; line-height: 1; cursor: pointer;
+            filter: grayscale(1); opacity: .6; transition: opacity .15s, filter .15s, background-color .15s; }
+        .vp-emoji-tabs button:hover, .vp-emoji-tabs button.vp-on { filter: none; opacity: 1; background: var(--block-hover-bg, rgba(255, 255, 255, .06)); }
+        .vp-emoji-body { flex: 1; overflow-y: auto; padding: 0 6px 8px; overscroll-behavior: contain; scrollbar-width: thin; }
+        .vp-emoji-sec b { display: block; position: sticky; top: 0; padding: 8px 4px 4px; font-size: 12px; font-weight: 600; color: var(--text-secondary, #8a8a8a);
+            background-color: var(--block-bg, #1c1c1c); z-index: 1; }
+        .vp-emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); }
+        .vp-emoji-grid button { aspect-ratio: 1; border: 0; padding: 0; border-radius: 8px; background: transparent; font-size: 22px; line-height: 1; cursor: pointer;
+            font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; transition: transform .1s, background-color .1s; }
+        .vp-emoji-grid button:hover { background: var(--block-hover-bg, rgba(255, 255, 255, .08)); transform: scale(1.15); }
+        .vp-emoji-empty { padding: 6px 4px; font-size: 12px; color: var(--text-secondary, #8a8a8a); }`;
+        document.head.appendChild(vpEmojiCss);
+        function attachEmojiPicker(btn, onPick) {
+            let el = null, openT = 0, closeT = 0;
+            const hover = matchMedia('(hover: hover) and (pointer: fine)').matches;
+            const place = () => {
+                const r = btn.getBoundingClientRect(), W = 280, H = 380, gap = 8;
+                const top = innerHeight - r.bottom >= H + gap ? r.bottom + gap : Math.max(gap, r.top - H - gap);
+                const left = innerWidth - r.left >= W || innerWidth - r.left > r.right ? Math.min(r.left, innerWidth - W - gap) : Math.max(gap, r.right - W);
+                el.style.top = top + 'px';
+                el.style.left = Math.max(gap, left) + 'px';
+                el.style.transformOrigin = `${top < r.top ? 'bottom' : 'top'} ${left <= r.left ? 'left' : 'right'}`;
+            };
+            const outside = e => { if (el && !el.contains(e.target) && !btn.contains(e.target)) close(); };
+            const onKey = e => { if (e.key === 'Escape' && el) { e.stopPropagation(); close(); } };
+            function close() {
+                clearTimeout(openT); clearTimeout(closeT);
+                if (!el) return;
+                const old = el;
+                el = null;
+                old.classList.add('vp-closing');
+                setTimeout(() => old.remove(), 150);
+                document.removeEventListener('pointerdown', outside, true);
+                removeEventListener('keydown', onKey, true);
+                removeEventListener('resize', close);
+            }
+            function later() { clearTimeout(closeT); closeT = setTimeout(close, 250); }
+            function build() {
+                el = document.createElement('div');
+                el.className = 'vp-emoji';
+                const recent = emojiRecent();
+                const secs = [['🕘', 'Недавние', recent], ...EMOJI_SETS.map(([i, n, e]) => [i, n, e.split(' ')])];
+                el.innerHTML = `<div class="vp-emoji-tabs">${secs.map(([i, n], k) => `<button type="button" title="${n}" data-k="${k}">${i}</button>`).join('')}</div><div class="vp-emoji-body"></div>`;
+                const body = el.querySelector('.vp-emoji-body');
+                secs.forEach(([, n, list], k) => {
+                    const sec = document.createElement('section');
+                    sec.className = 'vp-emoji-sec';
+                    sec.dataset.k = k;
+                    sec.innerHTML = '<b></b><div class="vp-emoji-grid"></div>';
+                    sec.firstChild.textContent = n;
+                    if (!list.length) sec.lastChild.outerHTML = '<div class="vp-emoji-empty">Здесь появятся эмодзи, которые ты выбирал</div>';
+                    else sec.lastChild.innerHTML = list.map(e => `<button type="button">${e}</button>`).join('');
+                    body.appendChild(sec);
+                });
+                const tabs = [...el.querySelectorAll('.vp-emoji-tabs button')];
+                const mark = () => {
+                    const y = body.scrollTop + 4;
+                    let cur = 0;
+                    body.querySelectorAll('.vp-emoji-sec').forEach(sc => { if (sc.offsetTop <= y) cur = +sc.dataset.k; });
+                    tabs.forEach(t => t.classList.toggle('vp-on', +t.dataset.k === cur));
+                };
+                body.addEventListener('scroll', mark, { passive: true });
+                el.querySelector('.vp-emoji-tabs').addEventListener('click', e => {
+                    const t = e.target.closest('button');
+                    if (!t) return;
+                    const sc = body.querySelector(`.vp-emoji-sec[data-k="${t.dataset.k}"]`);
+                    if (sc) body.scrollTo({ top: sc.offsetTop, behavior: 'smooth' });
+                });
+                body.addEventListener('click', e => {
+                    const b = e.target.closest('.vp-emoji-grid button');
+                    if (!b) return;
+                    const em = b.textContent;
+                    if (onPick(em) !== false) emojiRemember(em);
+                });
+                el.addEventListener('mousedown', e => e.preventDefault());
+                if (hover) { el.addEventListener('mouseenter', () => clearTimeout(closeT)); el.addEventListener('mouseleave', later); }
+                document.body.appendChild(el);
+                place();
+                if (!recent.length) body.scrollTop = body.querySelector('.vp-emoji-sec[data-k="1"]').offsetTop;
+                mark();
+                document.addEventListener('pointerdown', outside, true);
+                addEventListener('keydown', onKey, true);
+                addEventListener('resize', close);
+            }
+            btn.addEventListener('click', e => { e.preventDefault(); if (el) close(); else build(); });
+            if (hover) {
+                btn.addEventListener('mouseenter', () => { clearTimeout(closeT); if (!el) { clearTimeout(openT); openT = setTimeout(() => { if (!el) build(); }, 100); } });
+                btn.addEventListener('mouseleave', () => { clearTimeout(openT); if (el) later(); });
+            }
+            return { close };
+        }
         function buildMessagesOverlay() {
             const style = document.createElement('style');
             style.textContent = `
@@ -6060,7 +6224,8 @@
         .vp-msgs-b { max-width: 78%; padding: 9px 13px 7px; border-radius: 20px; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere;
             animation: vpMsgsPop .2s ease-out; }
         .vp-msgs-b.vp-in { align-self: flex-start; background: var(--block-bg, #1c1c1c); border-bottom-left-radius: 6px; }
-        .vp-msgs-b.vp-out { align-self: flex-end; background: var(--vp-accent, #0080ff); color: var(--vp-on-accent, #fff); border-bottom-right-radius: 6px; }
+        .vp-msgs-b.vp-out { align-self: flex-end; background: color-mix(in srgb, var(--vp-accent, #0080ff) 26%, var(--block-bg, #1c1c1c)); color: var(--text-primary, #fff);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 45%, transparent); border-bottom-right-radius: 6px; }
         .vp-msgs-b i { display: block; margin-top: 2px; font-style: normal; font-size: 11px; opacity: .6; text-align: right; }
         .vp-msgs-b.vp-fail i { opacity: .85; }
         .vp-msgs-typing { display: flex; gap: 5px; padding: 14px 16px; }
@@ -6070,6 +6235,8 @@
         .vp-msgs-field { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 14px; min-height: 44px; border-radius: 22px;
             background: var(--block-bg, rgba(28, 28, 28, .72)); }
         .vp-msgs-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
+        .vp-msgs-count { font-size: 12px; color: var(--text-secondary, #8a8a8a); white-space: nowrap; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+        .vp-msgs-count.vp-warn { color: #ff5c5c; }
         .vp-msgs-ghost { width: 36px; height: 36px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
             background: transparent; color: var(--text-secondary, #8a8a8a); cursor: pointer; flex-shrink: 0; }
         .vp-msgs-send { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;
@@ -6110,8 +6277,8 @@
                     <button class="vp-msgs-ib" title="Ещё (пока не работает)">${MSG_ICON.more}</button></div>
                 <div class="vp-msgs-feed" aria-live="polite"></div>
                 <form class="vp-msgs-bar"><div class="vp-msgs-field"><button type="button" class="vp-msgs-ghost" title="Вложение (пока не работает)">${MSG_ICON.clip}</button>
-                    <input type="text" placeholder="Сообщение" enterkeyhint="send" autocomplete="off">
-                    <button type="button" class="vp-msgs-ghost" title="Эмодзи (пока не работает)">${MSG_ICON.smile}</button></div>
+                    <input type="text" placeholder="Сообщение" enterkeyhint="send" autocomplete="off"><span class="vp-msgs-count" hidden></span>
+                    <button type="button" class="vp-msgs-ghost vp-msgs-emoji" title="Эмодзи">${MSG_ICON.smile}</button></div>
                     <button type="submit" class="vp-msgs-send" title="Отправить" disabled>${MSG_ICON.send}</button></form>
             </section>`;
             document.body.appendChild(root);
@@ -6122,6 +6289,13 @@
             const $ = s => root.querySelector(s);
             const list = $('.vp-msgs-list'), home = $('.vp-msgs-home'), chat = $('.vp-msgs-chat'), feed = $('.vp-msgs-feed');
             const input = $('.vp-msgs-bar input'), send = $('.vp-msgs-send'), search = $('.vp-msgs-search input');
+            const countEl = $('.vp-msgs-count');
+            const msgCount = () => {
+                const n = input.value.length, max = input.maxLength > 0 ? input.maxLength : MSG_TEXT_MAX;
+                countEl.hidden = !n;
+                countEl.textContent = `${n} / ${max}`;
+                countEl.classList.toggle('vp-warn', n >= max * 0.9);
+            };
             let current = null, botTimer = 0, lastJoke = -1;
             const isUrl = a => /^https?:|^\//.test(a);
             const avaHtml = a => isUrl(a) ? `<img src="${esc(a)}" alt="">` : esc(a);
@@ -6165,12 +6339,12 @@
                 };
                 $('.vp-msgs-who small').textContent = d.bot ? 'бот · всегда в сети' : d.support ? 'поддержка · на связи' : d.supUid ? 'обращение в поддержку'
                     : '@' + d.login + ' · ' + (d.online ? 'в сети' : d.lastSeen && seenAgo(d.lastSeen) ? 'был(а) в сети ' + seenAgo(d.lastSeen) : 'с ИТД X');
-                if (d.login || d.support || d.supUid) { home.hidden = true; chat.hidden = false; input.value = ''; send.disabled = true; msgOpenPerson(d); return; }
+                if (d.login || d.support || d.supUid) { home.hidden = true; chat.hidden = false; input.value = ''; send.disabled = true; msgCount(); msgOpenPerson(d); return; }
                 feed.innerHTML = '<div class="vp-msgs-note">🧪 Прототип: сообщения пока никуда не отправляются и не сохраняются</div>'
                     + (d.msgs.length ? '<div class="vp-msgs-note">Сегодня</div>' : `<div class="vp-msgs-note">Это начало переписки с ${esc(d.name)}</div>`);
                 d.msgs.forEach(([dir, text]) => bubble(dir, text, dir === 'out' ? now() + ' ✓✓' : now()));
                 home.hidden = true; chat.hidden = false;
-                input.value = ''; send.disabled = true;
+                input.value = ''; send.disabled = true; msgCount();
             }
             const note = t => { const n = document.createElement('div'); n.className = 'vp-msgs-note'; n.textContent = t; feed.appendChild(n); return n; };
             let renderN = 0;
@@ -6284,7 +6458,7 @@
                     e.stopPropagation();
                     const pins = msgPins().filter(p => p !== id);
                     if (!pinned) pins.push(id);
-                    GM_setValue('msgPins', pins);
+                    GM_setValue(acctKey('msgPins'), pins);
                     hideCtx();
                     renderList();
                 };
@@ -6329,12 +6503,20 @@
             });
             search.addEventListener('input', renderList);
             $('.vp-msgs-back').onclick = closeChat;
-            input.addEventListener('input', () => { send.disabled = !input.value.trim(); });
+            input.addEventListener('input', () => { send.disabled = !input.value.trim(); msgCount(); });
+            attachEmojiPicker($('.vp-msgs-emoji'), em => {
+                if (input.disabled) return false;
+                const max = input.maxLength > 0 ? input.maxLength : MSG_TEXT_MAX;
+                if (input.value.length + em.length > max) return false;
+                const a = input.selectionStart ?? input.value.length, z = input.selectionEnd ?? a;
+                input.setRangeText(em, a, z, 'end');
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            });
             $('.vp-msgs-bar').addEventListener('submit', e => {
                 e.preventDefault();
                 const text = input.value.trim();
                 if (!text || !current) return;
-                input.value = ''; send.disabled = true;
+                input.value = ''; send.disabled = true; msgCount();
                 current.msgs.push(['out', text]);
                 current.last = 'Ты: ' + text; current.time = now();
                 if (current.bot) { bubble('out', text, now() + ' ✓'); botReply(); }
@@ -9350,7 +9532,7 @@
         const fmtNum = n => n >= 10000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1).replace('.0', '') + 'к' : String(n);
         let statsPeriod = GM_getValue('vp_stats_tab', 'day'), statsNow = null;
         const DAY_MS = 864e5;
-        function statsHistory() { try { return JSON.parse(GM_getValue('vp_stats_hist', '[]')); } catch (e) { return []; } }
+        function statsHistory() { try { return JSON.parse(GM_getValue(acctKey('vp_stats_hist'), '[]')); } catch (e) { return []; } }
         let likesPending = null;
         function myLikesTotal() {
             const c = GM_getValue('vp_likes_total', null);
@@ -9385,7 +9567,7 @@
             if (typeof likes === 'number') now.likes = likes;
             const hist = statsHistory().filter(h => Date.now() - h.at < 40 * DAY_MS);
             if (!hist.length || Date.now() - hist[hist.length - 1].at > 6 * 3600e3) hist.push({ at: Date.now(), ...now });
-            GM_setValue('vp_stats_hist', JSON.stringify(hist));
+            GM_setValue(acctKey('vp_stats_hist'), JSON.stringify(hist));
             statsNow = now;
             renderStats();
         }
@@ -9402,9 +9584,17 @@
             const rows = [['followers', 'подписчиков'], ['following', 'подписок'], ['posts', 'постов'], ['likes', 'лайков']].filter(([k]) => typeof statsNow[k] === 'number');
             if (!rows.length) { railStats.innerHTML = '<div class="vp-menu-note">Сайт не отдал числа</div>'; return; }
             railStats.innerHTML = '';
+            const baseFor = k => {
+                if (typeof base[k] === 'number') return base;
+                const hk = hist.filter(h => typeof h[k] === 'number');
+                return [...hk].reverse().find(h => Date.now() - h.at >= span) || hk[0] || null;
+            };
             rows.forEach(([k, label]) => {
-                const diff = typeof base[k] === 'number' ? statsNow[k] - base[k] : 0;
+                const b = baseFor(k);
+                const diff = b ? statsNow[k] - b[k] : 0;
                 const row = document.createElement('div');
+                if (b && b !== base && b.at) row.title = 'изменение с ' + new Date(b.at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
+                    + ', ' + new Date(b.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
                 row.className = 'vp-stat';
                 row.innerHTML = '<span class="vp-stat-val"></span><span class="vp-stat-label"></span><span class="vp-stat-diff"></span>';
                 row.children[0].textContent = fmtNum(statsNow[k]);
@@ -9462,7 +9652,7 @@
 
         const gamesList = rail.querySelector('.vp-games-list');
         const bestText = g => {
-            const v = GM_getValue(g.best, 0);
+            const v = GM_getValue(acctKey(g.best), 0);
             if (!v) return 'не играл';
             return g.id === 'mines' ? `лучшее ${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}` : `рекорд ${v}`;
         };
@@ -9562,7 +9752,7 @@
             el.append(cv, hint);
             const g = cv.getContext('2d'), CELLS = 16, STEP = 115;
             let snake, prev, dir, queue, food, on = false, dead = false, score = 0, last = 0, raf = 0, msg = 'Змейка\nнажми или стрелку', cell = 0;
-            let best = GM_getValue('vp_snake_best', 0);
+            let best = GM_getValue(acctKey('vp_snake_best'), 0);
             const show = () => setScore(`${score} · рекорд ${best}`);
             const rnd = () => ({ x: Math.random() * CELLS | 0, y: Math.random() * CELLS | 0, ch: MATRIX_CHARS[Math.random() * MATRIX_CHARS.length | 0] });
             function reset() {
@@ -9606,7 +9796,7 @@
                 const head = { x: (snake[0].x + dir.x + CELLS) % CELLS, y: (snake[0].y + dir.y + CELLS) % CELLS };
                 if (snake.slice(0, -1).some(p => p.x === head.x && p.y === head.y)) {
                     on = false;
-                    if (score > best) { best = score; GM_setValue('vp_snake_best', best); renderGamesMenu(); gamesRecord(); }
+                    if (score > best) { best = score; GM_setValue(acctKey('vp_snake_best'), best); renderGamesMenu(); gamesRecord(); }
                     msg = `Съел себя · ${score}\nнажми — ещё раз`;
                     show(); draw(); dead = true;
                     return;
@@ -9677,7 +9867,7 @@
             const nb = i => { const x = i % W, y = i / W | 0, out = []; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nx = x + dx, ny = y + dy; if ((dx || dy) && nx >= 0 && ny >= 0 && nx < W && ny < H) out.push(ny * W + nx); } return out; };
             const secs = () => t0 ? Math.floor((performance.now() - t0) / 1000) : 0;
             const fmt = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-            const show = () => { const b = GM_getValue('vp_mines_best', 0); setScore(`💣 ${M - flags} · ${fmt(secs())}` + (b ? ` · лучшее ${fmt(b)}` : '')); };
+            const show = () => { const b = GM_getValue(acctKey('vp_mines_best'), 0); setScore(`💣 ${M - flags} · ${fmt(secs())}` + (b ? ` · лучшее ${fmt(b)}` : '')); };
             function reset() {
                 cells = Array.from({ length: W * H }, () => ({ mine: false, n: 0, open: false, flag: false }));
                 first = true; over = false; opened = 0; flags = 0; t0 = 0; clearInterval(timer); msgEl.textContent = '';
@@ -9715,8 +9905,8 @@
                 if (boom != null) cells[boom].b.classList.add('vp-boom');
                 const s = secs();
                 if (win) {
-                    const b = GM_getValue('vp_mines_best', 0);
-                    if (!b || s < b) { GM_setValue('vp_mines_best', s); renderGamesMenu(); gamesRecord(); }
+                    const b = GM_getValue(acctKey('vp_mines_best'), 0);
+                    if (!b || s < b) { GM_setValue(acctKey('vp_mines_best'), s); renderGamesMenu(); gamesRecord(); }
                     msgEl.textContent = `Разминировано за ${fmt(s)}!`;
                 } else msgEl.textContent = 'Бум! Нажми «Новая игра»';
                 show();
@@ -9780,7 +9970,7 @@
             row.append(cv, side); el.append(row, pad, hint);
             const nx = side.querySelector('canvas'), g = cv.getContext('2d'), ng = nx.getContext('2d');
             let board, cur, next, score, lines, level, on = false, over = false, last = 0, raf = 0, cell = 0, msg = 'Тетрис\nнажми или стрелку';
-            let best = GM_getValue('vp_tetris_best', 0);
+            let best = GM_getValue(acctKey('vp_tetris_best'), 0);
             const bag = []; const take = () => { if (!bag.length) bag.push(...Object.keys(SHAPES).sort(() => Math.random() - .5)); return bag.pop(); };
             const piece = t => ({ t, m: SHAPES[t].map(r => [...r]), x: 0, y: 0 });
             const speed = () => Math.max(90, 800 - (level - 1) * 70);
@@ -9799,7 +9989,7 @@
             function reset() { board = Array.from({ length: ROWS }, () => Array(COLS).fill(null)); score = 0; lines = 0; level = 1; over = false; next = null; spawn(); show(); }
             function gameOver() {
                 on = false; over = true;
-                if (score > best) { best = score; GM_setValue('vp_tetris_best', best); renderGamesMenu(); gamesRecord(); }
+                if (score > best) { best = score; GM_setValue(acctKey('vp_tetris_best'), best); renderGamesMenu(); gamesRecord(); }
                 msg = `Конец · ${score}\nнажми — ещё раз`; show(); draw();
             }
             function lock() {
@@ -9911,16 +10101,16 @@
             return 'ITDXG2 ' + lbEncode('ITDXG' + parts.join(''));
         };
         const lbBetter = (k, a, b) => !a ? b : !b ? a : k === 'm' ? Math.min(a, b) : Math.max(a, b);
-        const lbLocal = () => ({ s: +GM_getValue('vp_snake_best', 0) || 0, m: +GM_getValue('vp_mines_best', 0) || 0, t: +GM_getValue('vp_tetris_best', 0) || 0 });
+        const lbLocal = () => ({ s: +GM_getValue(acctKey('vp_snake_best'), 0) || 0, m: +GM_getValue(acctKey('vp_mines_best'), 0) || 0, t: +GM_getValue(acctKey('vp_tetris_best'), 0) || 0 });
         const LB_LOCAL_KEYS = { s: 'vp_snake_best', m: 'vp_mines_best', t: 'vp_tetris_best' };
         function lbMergeIntoLocal(remote) {
             if (!remote) return;
             for (const k of ['s', 'm', 't']) {
                 const rv = +remote[k] || 0;
                 if (!rv) continue;
-                const lv = +GM_getValue(LB_LOCAL_KEYS[k], 0) || 0;
+                const lv = +GM_getValue(acctKey(LB_LOCAL_KEYS[k]), 0) || 0;
                 const best = lbBetter(k, rv, lv);
-                if (best && best !== lv) GM_setValue(LB_LOCAL_KEYS[k], best);
+                if (best && best !== lv) GM_setValue(acctKey(LB_LOCAL_KEYS[k]), best);
             }
         }
         async function lbSyncFromServer() {
@@ -9951,7 +10141,7 @@
                 const was = mine ? parseLB(mine.content, true) : {}, loc = lbLocal(), now = {};
                 for (const k of ['s', 'm', 't']) {
                     now[k] = lbBetter(k, was[k], loc[k]);
-                    if (now[k] && now[k] !== loc[k]) GM_setValue(LB_LOCAL_KEYS[k], now[k]);
+                    if (now[k] && now[k] !== loc[k]) GM_setValue(acctKey(LB_LOCAL_KEYS[k]), now[k]);
                 }
                 const text = lbText(now);
                 if (!text || (mine && String(mine.content).trim() === text)) return;
@@ -10040,12 +10230,15 @@
             gw.el = el;
             showGame(id || gw.id);
             if (!gw.synced) { gw.synced = true; gamesRecord(); }
+            stackEnter('vpGames');
         }
-        function closeGames() {
+        function closeGames(fromHistory) {
             if (!gw.el) return;
             if (gw.cur) { gw.cur.pause(); gw.cur.destroy(); gw.cur = null; }
             gw.el.remove(); gw.el = null;
+            if (fromHistory !== true) stackLeave('vpGames');
         }
+        addEventListener('popstate', () => { if (gw.el && !overlayAt('vpGames')) closeGames(true); });
         addEventListener('keydown', e => {
             if (!gw.el || !gw.cur) return;
             if (e.key === 'Escape') { e.preventDefault(); closeGames(); return; }

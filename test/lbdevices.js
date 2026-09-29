@@ -1,6 +1,7 @@
 // Рекорды на двух устройствах одного человека (ПК и телефон, у каждого своё хранилище GM, сервер общий).
 // А: ПК 40 → телефон 65 → ПК зашёл снова — у ПК 65. Б: телефон 65 → ПК 40 — сервер не понижается, у ПК 65.
 // В: сапёр (меньше — лучше): ПК 0:50, телефон 0:40 — везде 0:40.
+// Г (3.3.8): два аккаунта на одном устройстве — рекорды у каждого свои (ключ GM с id), второй не уносит рекорд первого.
 // Запуск:  node test/lbdevices.js снимок-ленты.html
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -11,14 +12,15 @@ const ORIGIN = 'https://xn--d1ah4a.com', POST = 'd5f8b7c0-b97d-40cd-bdd4-3c07b3e
 const LB_KEY = src.match(/const LB_KEY = '([^']+)'/)[1];
 const xor = buf => { const k = Buffer.from(LB_KEY); return Buffer.from(buf.map((b, i) => b ^ k[i % k.length])); };
 const dec = t => t && t.startsWith('ITDXG2 ') ? xor(Buffer.from(t.slice(7).replace(/-/g, '+').replace(/_/g, '/'), 'base64')).toString() : t;
-const me = { id: 'u1', username: 'NeuroSFW' };
+const me = { id: 'u1', username: 'NeuroSFW' }, alt = { id: 'u2', username: 'alt' };
+const val = (st, k, id = 'u1') => st[k + '@' + id] !== undefined ? st[k + '@' + id] : st[k];
 const fails = [];
 const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + what); if (!ok) fails.push(what); };
 let server = [];
 
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
-  const device = async (store, openGames) => {
+  const device = async (store, openGames, who = me) => {
     const p = await b.newPage({ viewport: { width: 1700, height: 950 } });
     p.errors = [];
     p.on('pageerror', e => p.errors.push(e.message));
@@ -27,12 +29,12 @@ let server = [];
       if (u.origin === ORIGIN && t === 'document') return r.fulfill({ contentType: 'text/html; charset=utf-8', body: snap });
       if (['image', 'stylesheet', 'font'].includes(t)) return r.continue();
       if (u.pathname.includes('/auth/refresh')) return r.fulfill({ contentType: 'application/json', body: '{"accessToken":"t"}' });
-      if (u.pathname === '/api/users/me') return r.fulfill({ contentType: 'application/json', body: JSON.stringify(me) });
+      if (u.pathname === '/api/users/me') return r.fulfill({ contentType: 'application/json', body: JSON.stringify(who) });
       if (u.pathname === `/api/posts/${POST}/comments` && req.method() === 'GET') return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { comments: server, hasMore: false } }) });
       if (req.method() === 'PATCH' || (req.method() === 'POST' && u.pathname.endsWith('/comments'))) {
         const text = JSON.parse(req.postData() || '{}').content;
         if (req.method() === 'PATCH') server = server.map(c => c.id === u.pathname.split('/').pop() ? { ...c, content: text } : c);
-        else server = [...server, { id: 'c' + server.length, author: me, content: text }];
+        else server = [...server, { id: 'c' + server.length, author: who, content: text }];
         return r.fulfill({ contentType: 'application/json', body: '{}' });
       }
       return r.fulfill({ status: 404, body: '' });
@@ -53,7 +55,7 @@ let server = [];
     check(!p.errors.length, 'ошибок нет' + (p.errors.length ? ': ' + p.errors.join(' | ') : ''));
     await p.close();
   };
-  const onServer = () => dec((server.find(c => c.author.id === me.id) || {}).content || '');
+  const onServer = (id = me.id) => dec((server.find(c => c.author.id === id) || {}).content || '');
 
   console.log('— А: ПК 40, потом телефон 65, потом ПК заходит снова');
   server = [];
@@ -63,8 +65,8 @@ let server = [];
   await device(phA, true);
   check(onServer() === 'ITDXG s65', `телефон отправил 65 — на сервере «${onServer()}»`);
   await device(pcA, false);
-  check(pcA.vp_snake_best === 65, `ПК зашёл снова — рекорд на ПК ${pcA.vp_snake_best} (ждём 65)`);
-  check(phA.vp_snake_best === 65, `на телефоне ${phA.vp_snake_best} (ждём 65)`);
+  check(val(pcA, 'vp_snake_best') === 65, `ПК зашёл снова — рекорд на ПК ${val(pcA, 'vp_snake_best')} (ждём 65)`);
+  check(val(phA, 'vp_snake_best') === 65, `на телефоне ${val(phA, 'vp_snake_best')} (ждём 65)`);
 
   console.log('— Б: телефон 65, потом ПК 40');
   server = [];
@@ -72,7 +74,7 @@ let server = [];
   await device(phB, true);
   await device(pcB, true);
   check(onServer() === 'ITDXG s65', `ПК с 40 не понизил сервер — на сервере «${onServer()}»`);
-  check(pcB.vp_snake_best === 65, `на ПК стало ${pcB.vp_snake_best} (ждём 65)`);
+  check(val(pcB, 'vp_snake_best') === 65, `на ПК стало ${val(pcB, 'vp_snake_best')} (ждём 65)`);
 
   console.log('— В: сапёр, меньше — лучше: ПК 0:50, телефон 0:40');
   server = [];
@@ -81,7 +83,16 @@ let server = [];
   await device(phC, true);
   await device(pcC, false);
   check(onServer() === 'ITDXG m40', `на сервере «${onServer()}» (ждём m40)`);
-  check(pcC.vp_mines_best === 40, `на ПК ${pcC.vp_mines_best} с (ждём 40)`);
+  check(val(pcC, 'vp_mines_best') === 40, `на ПК ${val(pcC, 'vp_mines_best')} с (ждём 40)`);
+
+  console.log('— Г: на одном телефоне аккаунт NeuroSFW (змейка 40), потом аккаунт alt');
+  server = [];
+  const shared = { vp_snake_best: 40 };
+  await device(shared, true, me);
+  await device(shared, true, alt);
+  check(onServer('u1') === 'ITDXG s40', `у NeuroSFW на сервере «${onServer('u1')}»`);
+  check(!onServer('u2'), `alt не отправил чужой рекорд — у alt на сервере «${onServer('u2')}»`);
+  check(val(shared, 'vp_snake_best', 'u1') === 40 && !shared['vp_snake_best@u2'], `на телефоне: NeuroSFW ${val(shared, 'vp_snake_best', 'u1')}, alt ${shared['vp_snake_best@u2'] || 0}`);
 
   await b.close();
   console.log(fails.length ? `\nНе прошло: ${fails.length}` : '\nВсё прошло');
