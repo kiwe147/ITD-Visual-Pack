@@ -32,7 +32,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
       const req = r.request(), u = new URL(req.url()), t = req.resourceType();
       if (u.origin === ORIGIN && t === 'document') return r.fulfill({ contentType: 'text/html; charset=utf-8', body: snap });
       if (u.hostname.startsWith('cdn.')) return r.fulfill({ contentType: 'image/png', body: TALL });
-      if (u.pathname === '/api/files/upload') { uploads++; return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ id: 'f1', url: `https://cdn.xn--d1ah4a.com/images/${IMG_ID}.webp` }) }); }
+      if (u.pathname === '/api/files/upload') { uploads++; const id = uploads === 1 ? IMG_ID : IMG_ID.slice(0, -2) + String(uploads).padStart(2, '0'); return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ id: 'f' + uploads, url: `https://cdn.xn--d1ah4a.com/images/${id}.webp` }) }); }
       if (['image', 'stylesheet', 'font'].includes(t)) return r.continue();
       if (u.pathname.includes('/auth/refresh')) return r.fulfill({ contentType: 'application/json', body: '{"accessToken":"t"}' });
       if (u.pathname === '/api/users/me') return r.fulfill({ contentType: 'application/json', body: JSON.stringify(USERS[who]) });
@@ -217,6 +217,33 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   await chatWith(A.p, 'bot', 1); await A.p.$eval('.vp-msgs-back', b => b.click()); await A.p.waitForTimeout(500);
   const order2 = await A.p.$$eval('.vp-msgs-row', rs => rs.map(r => r.dataset.id));
   check(order2[0] === 'bot', `зашёл к боту — бот поднялся наверх (${order2.slice(0, 3).join(', ')})`);
+  // альбом: bob выбирает 3 картинки разом
+  await chatWith(B2.p, 'u:NeuroSFW', 1);
+  const up0 = uploads;
+  await B2.p.setInputFiles('.vp-msgs-file', [1, 2, 3].map(i => ({ name: `a${i}.png`, mimeType: 'image/png', buffer: TALL })));
+  await B2.p.waitForTimeout(300);
+  const thumbs = await B2.p.$$eval('.vp-msgs-pend-t', t => t.length);
+  check(thumbs === 3 && uploads === up0, `альбом: в превью 3 миниатюры, ещё не отправлено (${thumbs})`);
+  await B2.p.click('.vp-msgs-send');
+  await B2.p.waitForFunction(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return b && /✓|не отправлено/.test(b.lastChild.textContent); }, null, { timeout: 20000 }).catch(() => { });
+  const aSent = await B2.p.evaluate(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return { meta: b.lastChild.textContent, cells: b.querySelectorAll('.vp-msgs-album .vp-msgs-imgw').length }; });
+  check(uploads - up0 === 3 && aSent.cells === 3 && /✓/.test(aSent.meta), `альбом отправлен одним сообщением: загрузок ${uploads - up0}, ${JSON.stringify(aSent)}`);
+  await A.p.$eval('.vp-msgs-back', b => b.click()).catch(() => { }); await A.p.waitForTimeout(3000);
+  const aPrev = await A.p.$eval('.vp-msgs-row[data-id="u:bob"] .vp-msgs-last', e => e.textContent).catch(() => '');
+  check(aPrev === '🖼 3 фото', `в списке у NeuroSFW: «${aPrev}»`);
+  await chatWith(A.p, 'u:bob', 1); await A.p.waitForTimeout(800);
+  const aGot = await A.p.evaluate(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return [...b.querySelectorAll('.vp-msgs-album img')].map(i => i.src.slice(-8)); });
+  check(aGot.length === 3 && new Set(aGot).size === 3, `NeuroSFW видит альбом из 3 разных картинок ${JSON.stringify(aGot)}`);
+  await A.p.screenshot({ path: path.join(__dirname, 'out', 'dm-album.png') });
+  await A.p.click('.vp-msgs-feed .vp-msgs-album .vp-msgs-imgw >> nth=0'); await A.p.waitForTimeout(300);
+  await A.p.click('.vp-msgs-lb .vp-next'); await A.p.waitForTimeout(150);
+  const n2 = await A.p.$eval('.vp-msgs-lb-n', e => e.textContent);
+  await A.p.keyboard.press('ArrowRight'); await A.p.waitForTimeout(150);
+  const n3 = await A.p.$eval('.vp-msgs-lb-n', e => e.textContent);
+  await A.p.keyboard.press('ArrowRight'); await A.p.waitForTimeout(150);
+  const n1 = await A.p.$eval('.vp-msgs-lb-n', e => e.textContent);
+  check(n2 === '2 / 3' && n3 === '3 / 3' && n1 === '1 / 3', `просмотр листается: ${n2}, ${n3}, по кругу ${n1}`);
+  await A.p.keyboard.press('Escape'); await A.p.waitForTimeout(300);
   for (const x of [A.p, B2.p, C2.p]) check(!x.errors.length, 'ошибок нет' + (x.errors.length ? ': ' + x.errors.join(' | ') : ''));
   await b.close();
   console.log(fails.length ? `\nНе прошло: ${fails.length}` : '\nВсё прошло');

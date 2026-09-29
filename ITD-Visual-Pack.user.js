@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.10.1
+// @version      3.3.10.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3786,7 +3786,8 @@
         }
 
         const CHANGELOG = [
-            ['3.3.10 – 3.3.10.1', '29 сентября 2026', [
+            ['3.3.10 – 3.3.10.2', '29 сентября 2026', [
+                'Сообщения: альбомы — до 10 картинок в одном сообщении, сеткой как в Телеграме; в просмотре листаются стрелками, клавишами ← → и свайпом; список диалогов обновляется сразу, как пришло новое',
                 'Клуб ИТД X в боковой панели: ники и аватарки — в стиле каждого, твоя строка — в твоём',
                 'Стили других: ники и аватарки людей с ИТД X — в их стиле и свечении, а на их профиле — их фон (свой фон-картинку видно тоже, у видео — кадр). Выключается в настройках «Стили других»',
                 'Сапёр: щелчок колёсиком мыши по клетке оставляет рамку 3×3 — видно зону цифры; кнопка «❓ Как играть» — правила прямо в окне игры',
@@ -5846,7 +5847,8 @@
         const msgImgUrl = img => `https://cdn.xn--d1ah4a.com/images/${img.id}.${MSG_IMG_EXT[img.ext] || 'png'}`;
         const msgUuidBytes = u => Uint8Array.from(u.replace(/-/g, '').match(/../g), h => parseInt(h, 16));
         const msgBytesUuid = b => [...b].map(x => x.toString(16).padStart(2, '0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
-        const msgPreview = m => m.img ? '🖼 ' + (m.text || 'Фото') : m.text;
+        const MSG_ALBUM_MAX = 10;
+        const msgPreview = m => m.imgs && m.imgs.length > 1 ? `🖼 ${m.imgs.length} фото` + (m.text ? ' · ' + m.text : '') : m.img ? '🖼 ' + (m.text || 'Фото') : m.text;
         const msgNet = { keys: new Map(), vols: [], me: null, pairs: new Map(), conv: new Map(), syncing: null };
         const te = new TextEncoder(), td = new TextDecoder();
         const cat = (...a) => { const o = new Uint8Array(a.reduce((n, x) => n + x.length, 0)); let i = 0; for (const x of a) { o.set(x, i); i += x.length; } return o; };
@@ -5918,7 +5920,16 @@
             try {
                 const pt = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: rec.slice(0, 12) }, key, rec.slice(12)));
                 const out = { ts: ((pt[0] << 24) >>> 0) + (pt[1] << 16) + (pt[2] << 8) + pt[3], sup: !!(pt[4] & 1) };
-                if (pt[4] & 2 && pt.length >= 22) { out.img = { ext: pt[5], id: msgBytesUuid(pt.slice(6, 22)) }; out.text = td.decode(pt.slice(22)); }
+                if (pt[4] & 2 && pt.length >= 22) {
+                    const imgs = [{ ext: pt[5], id: msgBytesUuid(pt.slice(6, 22)) }];
+                    let o = 22;
+                    if (pt[4] & 4 && pt.length > 22) {
+                        const k = pt[22];
+                        o = 23;
+                        for (let j = 0; j < k && o + 17 <= pt.length; j++, o += 17) imgs.push({ ext: pt[o], id: msgBytesUuid(pt.slice(o + 1, o + 17)) });
+                    }
+                    out.img = imgs[0]; out.imgs = imgs; out.text = td.decode(pt.slice(o));
+                }
                 else out.text = td.decode(pt.slice(5));
                 return out;
             } catch (e) { return null; }
@@ -6027,8 +6038,12 @@
             const me = msgNet.me, key = await msgPair(uid);
             if (!me || !key) throw new Error('нет ключа');
             const ts = Math.floor(Date.now() / 1000), iv = rnd(12);
-            const pt = cat(new Uint8Array([ts >>> 24, (ts >> 16) & 255, (ts >> 8) & 255, ts & 255, (sup ? 1 : 0) | (img ? 2 : 0)]),
-                img ? cat(new Uint8Array([img.ext]), msgUuidBytes(img.id)) : new Uint8Array(0), te.encode(text.slice(0, MSG_TEXT_MAX)));
+            const imgs = !img ? [] : Array.isArray(img) ? img.slice(0, MSG_ALBUM_MAX) : [img];
+            const one = x => cat(new Uint8Array([x.ext]), msgUuidBytes(x.id));
+            const imgBytes = !imgs.length ? new Uint8Array(0)
+                : imgs.length === 1 ? one(imgs[0]) : cat(one(imgs[0]), new Uint8Array([imgs.length - 1]), ...imgs.slice(1).map(one));
+            const pt = cat(new Uint8Array([ts >>> 24, (ts >> 16) & 255, (ts >> 8) & 255, ts & 255, (sup ? 1 : 0) | (imgs.length ? 2 : 0) | (imgs.length > 1 ? 4 : 0)]),
+                imgBytes, te.encode(text.slice(0, MSG_TEXT_MAX)));
             const rec = cat(iv, new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, pt)));
             await msgSync();
             const write = async mode => {
@@ -6142,6 +6157,7 @@
             }
             msgBase = Math.max(msgBase || 0, top);
             msgBadge();
+            if (messagesOverlay && messagesOverlay.classList.contains('vp-open') && messagesOverlay.refreshList) messagesOverlay.refreshList();
         }
         setTimeout(msgBackground, 8000);
         setInterval(msgBackground, 60000);
@@ -6476,6 +6492,28 @@
         .vp-msgs-lb-top a { margin-left: auto; flex-shrink: 0; padding: 7px 12px; border-radius: 9999px; background: rgba(255, 255, 255, .1); color: #fff; font-size: 13px; text-decoration: none; }
         .vp-msgs-pend { display: flex; align-items: center; gap: 10px; padding: 6px 8px; margin: 0 0 6px; border-radius: 16px; background: var(--block-bg, #1c1c1c); }
         .vp-msgs-pend[hidden] { display: none; }
+        .vp-msgs-pend-list { display: flex; gap: 8px; overflow-x: auto; flex: 0 1 auto; max-width: 62%; padding: 4px 4px 2px; scrollbar-width: thin; }
+        .vp-msgs-pend .vp-msgs-pend-t { position: relative; flex-shrink: 0; }
+        .vp-msgs-pend .vp-msgs-pend-t button { position: absolute; top: -5px; right: -5px; width: 20px; height: 20px; font-size: 10px; line-height: 20px; padding: 0;
+            background: rgba(0, 0, 0, .7); color: #fff; }
+        .vp-msgs-album { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; width: min(330px, 66vw); margin: 0 0 6px; border-radius: 16px; overflow: hidden; }
+        .vp-msgs-album[data-n="2"], .vp-msgs-album[data-n="3"], .vp-msgs-album[data-n="4"] { grid-template-columns: repeat(2, 1fr); }
+        .vp-msgs-album .vp-msgs-imgw { margin: 0; aspect-ratio: 1; }
+        .vp-msgs-album .vp-wide2 { grid-column: span 2; aspect-ratio: 2 / 1; }
+        .vp-msgs-album .vp-wide3 { grid-column: span 3; aspect-ratio: 3 / 1; }
+        .vp-msgs-album[data-n] { grid-template-columns: repeat(6, 1fr); }
+        .vp-msgs-album[data-n="2"], .vp-msgs-album[data-n="3"], .vp-msgs-album[data-n="4"] { grid-template-columns: repeat(2, 1fr); }
+        .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-msgs-imgw { grid-column: span 2; }
+        .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-half { grid-column: span 3; aspect-ratio: 3 / 2; }
+        .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-wide3 { grid-column: span 6; }
+        .vp-msgs-album .vp-msgs-img { width: 100%; height: 100%; max-width: none; max-height: none; min-width: 0; min-height: 0; object-fit: cover; border-radius: 0; }
+        .vp-msgs-lb-n { color: rgba(255, 255, 255, .8); font-size: 13px; font-weight: 600; margin-left: auto; flex-shrink: 0; }
+        .vp-msgs-lb-n:empty { display: none; }
+        .vp-msgs-lb-n:not(:empty) + a { margin-left: 8px; }
+        .vp-msgs-lb-nav { position: absolute; top: 50%; z-index: 1; width: 44px; height: 44px; margin-top: -22px; border: 0; border-radius: 50%; cursor: pointer;
+            background: rgba(255, 255, 255, .14); color: #fff; font-size: 26px; line-height: 40px; padding: 0; }
+        .vp-msgs-lb-nav[hidden] { display: none; }
+        .vp-msgs-lb-nav.vp-prev { left: 12px; } .vp-msgs-lb-nav.vp-next { right: 12px; }
         .vp-msgs-pend img { width: 52px; height: 52px; object-fit: cover; border-radius: 10px; flex-shrink: 0; }
         .vp-msgs-pend span { flex: 1; min-width: 0; font-size: 13px; color: var(--text-secondary, #8a8a8a); }
         .vp-msgs-pend button { width: 30px; height: 30px; border: 0; border-radius: 50%; background: rgba(127, 127, 127, .2); color: var(--text-primary, #fff); cursor: pointer; flex-shrink: 0; }
@@ -6564,20 +6602,36 @@
             }
             const now = () => new Date().toTimeString().slice(0, 5);
             function bubble(dir, text, meta, imgUrl) {
+                const urls = !imgUrl ? [] : Array.isArray(imgUrl) ? imgUrl : [imgUrl];
                 const b = document.createElement('div');
-                b.className = 'vp-msgs-b vp-' + dir + (imgUrl ? ' vp-has-img' : '');
+                b.className = 'vp-msgs-b vp-' + dir + (urls.length ? ' vp-has-img' : '');
                 b.textContent = text;
-                if (imgUrl) {
-                    const wrap = document.createElement('span');
-                    wrap.className = 'vp-msgs-imgw';
-                    const im = document.createElement('img');
-                    im.className = 'vp-msgs-img';
-                    im.src = imgUrl; im.alt = ''; im.loading = 'lazy'; im.decoding = 'async'; im.draggable = false;
-                    im.addEventListener('load', () => { if (feed.scrollHeight - feed.scrollTop - feed.clientHeight < 400) feed.scrollTop = feed.scrollHeight; }, { once: true });
-                    wrap.appendChild(im);
-                    wrap.addEventListener('click', () => openImg(im.src, text));
-                    b.prepend(wrap);
-                    if (text) { b.childNodes[1].remove(); const cap = document.createElement('span'); cap.className = 'vp-msgs-cap'; cap.textContent = text; wrap.after(cap); }
+                if (urls.length) {
+                    const cell = (u, i) => {
+                        const wrap = document.createElement('span');
+                        wrap.className = 'vp-msgs-imgw';
+                        const im = document.createElement('img');
+                        im.className = 'vp-msgs-img';
+                        im.src = u; im.alt = ''; im.loading = 'lazy'; im.decoding = 'async'; im.draggable = false;
+                        im.addEventListener('load', () => { if (feed.scrollHeight - feed.scrollTop - feed.clientHeight < 400) feed.scrollTop = feed.scrollHeight; }, { once: true });
+                        wrap.appendChild(im);
+                        wrap.addEventListener('click', () => openImg(urls, i, text));
+                        return wrap;
+                    };
+                    let box;
+                    if (urls.length === 1) box = cell(urls[0], 0);
+                    else {
+                        box = document.createElement('div');
+                        box.className = 'vp-msgs-album';
+                        box.dataset.n = urls.length;
+                        urls.forEach((u, i) => box.appendChild(cell(u, i)));
+                        const n = urls.length, cols = n === 2 || n === 4 || n === 3 ? 2 : 3;
+                        if (n === 3) box.firstChild.classList.add('vp-wide2');
+                        else if (cols === 3 && n % 3 === 1) box.lastChild.classList.add('vp-wide3');
+                        else if (cols === 3 && n % 3 === 2) { box.lastChild.classList.add('vp-half'); box.lastChild.previousSibling.classList.add('vp-half'); }
+                    }
+                    b.prepend(box);
+                    if (text) { b.childNodes[1].remove(); const cap = document.createElement('span'); cap.className = 'vp-msgs-cap'; cap.textContent = text; box.after(cap); }
                 }
                 const i = document.createElement('i');
                 i.textContent = meta || now();
@@ -6632,7 +6686,7 @@
                 if (!t.uid) { note(t.missing); return; }
                 const list = msgThread(t);
                 if (!list.length) note(d.support ? 'Опиши проблему или идею — ответ придёт сюда' : `Это начало переписки с ${d.name}`);
-                list.forEach(m => bubble(m.dir, m.text, msgTime(m.ts) + (m.dir === 'out' ? ' ✓' : ''), m.img && msgImgUrl(m.img)));
+                list.forEach(m => bubble(m.dir, m.text, msgTime(m.ts) + (m.dir === 'out' ? ' ✓' : ''), (m.imgs || (m.img ? [m.img] : [])).map(msgImgUrl)));
                 d.shown = list.length;
                 input.disabled = false; input.focus();
                 msgMarkSeen(t); d.unread = 0; msgBadge();
@@ -6666,6 +6720,7 @@
                 const list = msgThread(msgTarget(current));
                 if (list.length !== current.shown && !input.value) msgOpenPerson(current);
             }, 20000);
+            root.refreshList = () => { if (!current) { msgFillDialogs(); renderList(); } };
             root.openDialog = (id, fromHistory) => {
                 msgFillDialogs();
                 const d = MSG_DIALOGS.find(x => x.id === id) || (id.startsWith('u:') && msgPeople.get(id.slice(2)));
@@ -6782,22 +6837,49 @@
                 input.dispatchEvent(new Event('input', { bubbles: true }));
             });
             let lb = null;
-            function openImg(src, cap) {
+            let lbKey = null;
+            function openImg(list, idx, cap) {
+                if (typeof list === 'string') list = [list];
+                idx = idx || 0;
                 if (lb) closeImg(true);
                 lb = document.createElement('div');
                 lb.className = 'vp-msgs-lb';
-                lb.innerHTML = `<div class="vp-msgs-lb-top"><button type="button" class="vp-msgs-ib" title="Назад">${MSG_ICON.back}</button><span></span><a target="_blank" rel="noopener">Открыть оригинал ↗</a></div><div class="vp-msgs-lb-body"><img alt="" draggable="false"></div>`;
-                const orig = lb.querySelector('a');
-                if (/^https:\/\/cdn\./.test(src)) orig.href = src; else orig.remove();
-                lb.querySelector('span').textContent = cap || '';
-                lb.querySelector('img').src = src;
+                lb.innerHTML = `<div class="vp-msgs-lb-top"><button type="button" class="vp-msgs-ib" title="Назад">${MSG_ICON.back}</button><span class="vp-msgs-lb-cap"></span>`
+                    + `<b class="vp-msgs-lb-n"></b><a target="_blank" rel="noopener">Открыть оригинал ↗</a></div>`
+                    + `<div class="vp-msgs-lb-body"><button type="button" class="vp-msgs-lb-nav vp-prev" title="Назад">‹</button><img alt="" draggable="false"><button type="button" class="vp-msgs-lb-nav vp-next" title="Дальше">›</button></div>`;
+                const orig = lb.querySelector('a'), img = lb.querySelector('img'), num = lb.querySelector('.vp-msgs-lb-n');
+                const prev = lb.querySelector('.vp-prev'), next = lb.querySelector('.vp-next');
+                const show = i => {
+                    idx = (i + list.length) % list.length;
+                    img.src = list[idx];
+                    if (/^https:\/\/cdn\./.test(list[idx])) { orig.href = list[idx]; orig.hidden = false; } else orig.hidden = true;
+                    num.textContent = list.length > 1 ? `${idx + 1} / ${list.length}` : '';
+                };
+                prev.hidden = next.hidden = list.length < 2;
+                prev.addEventListener('click', e => { e.stopPropagation(); show(idx - 1); });
+                next.addEventListener('click', e => { e.stopPropagation(); show(idx + 1); });
+                lb.querySelector('.vp-msgs-lb-cap').textContent = cap || '';
+                show(idx);
                 lb.querySelector('.vp-msgs-ib').addEventListener('click', () => closeImg());
-                lb.addEventListener('click', e => { if (e.target === lb || e.target.classList.contains('vp-msgs-lb-body')) closeImg(); });
+                let downX = null;
+                lb.addEventListener('pointerdown', e => { downX = e.clientX; });
+                lb.addEventListener('click', e => {
+                    const dx = downX == null ? 0 : e.clientX - downX;
+                    downX = null;
+                    if (list.length > 1 && Math.abs(dx) > 40) { show(idx + (dx < 0 ? 1 : -1)); return; }
+                    if (e.target === lb || e.target.classList.contains('vp-msgs-lb-body')) closeImg();
+                });
+                lbKey = e => {
+                    if (e.key === 'ArrowLeft' && list.length > 1) { e.preventDefault(); e.stopPropagation(); show(idx - 1); }
+                    else if (e.key === 'ArrowRight' && list.length > 1) { e.preventDefault(); e.stopPropagation(); show(idx + 1); }
+                };
+                document.addEventListener('keydown', lbKey, true);
                 root.appendChild(lb);
                 history.pushState(Object.assign({}, history.state, { vpImg: 1 }), '', location.href);
             }
             function closeImg(fromHistory) {
                 if (!lb) return;
+                if (lbKey) { document.removeEventListener('keydown', lbKey, true); lbKey = null; }
                 lb.remove(); lb = null;
                 if (fromHistory !== true && overlayAt('vpImg')) history.back();
             }
@@ -6806,49 +6888,78 @@
             const pendEl = document.createElement('div');
             pendEl.className = 'vp-msgs-pend';
             pendEl.hidden = true;
-            pendEl.innerHTML = '<img alt=""><span>Картинка · можно добавить подпись</span><button type="button" title="Убрать">✕</button>';
-            function setPending(file) {
-                if (!file || !/^image\//.test(file.type)) return;
+            pendEl.innerHTML = '<div class="vp-msgs-pend-list"></div><span></span><button type="button" class="vp-msgs-pend-all" title="Убрать все">✕</button>';
+            const pendList = pendEl.querySelector('.vp-msgs-pend-list');
+            function renderPending() {
+                pendList.textContent = '';
+                (pendingImg || []).forEach((p, i) => {
+                    const t = document.createElement('span');
+                    t.className = 'vp-msgs-pend-t';
+                    t.innerHTML = '<img alt=""><button type="button" title="Убрать">✕</button>';
+                    t.firstChild.src = p.url;
+                    t.lastChild.addEventListener('click', () => removePending(i));
+                    pendList.appendChild(t);
+                });
+                const n = pendingImg ? pendingImg.length : 0;
+                pendEl.querySelector('span:not(.vp-msgs-pend-t)').textContent = n > 1 ? `${n} ${plural(n, 'картинка', 'картинки', 'картинок')} из ${MSG_ALBUM_MAX} · можно добавить подпись` : 'Картинка · можно добавить подпись';
+                pendEl.hidden = !n;
+                send.disabled = !n && !input.value.trim();
+            }
+            function setPending(files) {
+                files = (Array.isArray(files) ? files : [files]).filter(f => f && /^image\//.test(f.type));
+                if (!files.length) return;
                 const t = current && msgNet.me && !current.bot ? msgTarget(current) : null;
                 if (!t || !t.uid) { note('Картинки можно отправлять в переписке с людьми и поддержкой'); return; }
-                clearPending();
-                pendingImg = { file, url: URL.createObjectURL(file) };
-                pendEl.querySelector('img').src = pendingImg.url;
-                pendEl.hidden = false;
-                send.disabled = false;
+                pendingImg = pendingImg || [];
+                const room = MSG_ALBUM_MAX - pendingImg.length;
+                if (files.length > room) note(`В одном сообщении — не больше ${MSG_ALBUM_MAX} картинок`);
+                files.slice(0, Math.max(0, room)).forEach(file => pendingImg.push({ file, url: URL.createObjectURL(file) }));
+                renderPending();
                 input.focus();
             }
-            function clearPending() {
-                if (pendingImg) URL.revokeObjectURL(pendingImg.url);
-                pendingImg = null;
-                pendEl.hidden = true;
-                pendEl.querySelector('img').removeAttribute('src');
-                send.disabled = !input.value.trim();
+            function removePending(i) {
+                if (!pendingImg) return;
+                const [p] = pendingImg.splice(i, 1);
+                if (p) URL.revokeObjectURL(p.url);
+                if (!pendingImg.length) pendingImg = null;
+                renderPending();
             }
-            pendEl.querySelector('button').addEventListener('click', clearPending);
-            function sendImage(file) {
-                if (!file || !/^image\//.test(file.type) || !current) return;
+            function clearPending() {
+                (pendingImg || []).forEach(p => URL.revokeObjectURL(p.url));
+                pendingImg = null;
+                renderPending();
+            }
+            pendEl.querySelector('.vp-msgs-pend-all').addEventListener('click', clearPending);
+            function sendImages(files) {
+                if (!files.length || !current) return;
                 const t = msgNet.me && !current.bot ? msgTarget(current) : null;
                 if (!t || !t.uid) { note('Картинки можно отправлять в переписке с людьми и поддержкой'); return; }
-                const caption = input.value.trim(), d = current, local = URL.createObjectURL(file);
+                const caption = input.value.trim(), d = current, locals = files.map(f => URL.createObjectURL(f));
                 input.value = ''; send.disabled = true; msgCount();
-                const b = bubble('out', caption, now() + ' · загрузка…', local);
-                msgUploadImage(file)
-                    .then(img => { b.lastChild.textContent = now() + ' · отправка…'; return msgSend(t.uid, caption, t.sup, img); })
-                    .then(() => { b.lastChild.textContent = now() + ' ✓'; d.shown = (d.shown || 0) + 1; msgFillDialogs(); },
-                        e => { b.lastChild.textContent = now() + ' · не отправлено: ' + (e.message || e); b.classList.add('vp-fail'); logErr('картинка', e); });
+                const b = bubble('out', caption, now() + ' · загрузка…', locals);
+                (async () => {
+                    const imgs = [];
+                    for (const f of files) {
+                        if (files.length > 1) b.lastChild.textContent = now() + ` · загрузка ${imgs.length + 1} из ${files.length}…`;
+                        imgs.push(await msgUploadImage(f));
+                    }
+                    b.lastChild.textContent = now() + ' · отправка…';
+                    await msgSend(t.uid, caption, t.sup, imgs);
+                })().then(() => { b.lastChild.textContent = now() + ' ✓'; d.shown = (d.shown || 0) + 1; msgFillDialogs(); },
+                    e => { b.lastChild.textContent = now() + ' · не отправлено: ' + (e.message || e); b.classList.add('vp-fail'); logErr('картинка', e); });
             }
             const fileIn = $('.vp-msgs-file');
+            fileIn.multiple = true;
             $('.vp-msgs-attach').addEventListener('click', () => { if (!input.disabled) fileIn.click(); });
-            fileIn.addEventListener('change', () => { const f = fileIn.files && fileIn.files[0]; fileIn.value = ''; setPending(f); });
+            fileIn.addEventListener('change', () => { const f = [...(fileIn.files || [])]; fileIn.value = ''; setPending(f); });
             input.addEventListener('paste', e => {
-                const f = [...(e.clipboardData && e.clipboardData.files || [])].find(x => /^image\//.test(x.type));
-                if (f) { e.preventDefault(); setPending(f); }
+                const f = [...(e.clipboardData && e.clipboardData.files || [])].filter(x => /^image\//.test(x.type));
+                if (f.length) { e.preventDefault(); setPending(f); }
             });
             $('.vp-msgs-bar').before(pendEl);
             $('.vp-msgs-bar').addEventListener('submit', e => {
                 e.preventDefault();
-                if (pendingImg && current) { const f = pendingImg.file; clearPending(); sendImage(f); return; }
+                if (pendingImg && current) { const f = pendingImg.map(p => p.file); clearPending(); sendImages(f); return; }
                 const text = input.value.trim();
                 if (!text || !current) return;
                 input.value = ''; send.disabled = true; msgCount();
