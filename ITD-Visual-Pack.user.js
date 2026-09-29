@@ -3261,7 +3261,7 @@
         .vp-call-btns button:hover { filter: brightness(1.12); }
         .vp-call-btns button:active { transform: scale(.96); }
         .vp-call-btns svg { width: 18px; height: 18px; }
-        .vp-call-no { background: #da373c; }
+        .vp-call-no { background: #248046; }
         .vp-call-yes { background: #248046; }
         .vp-call.vp-talk .vp-call-btns { visibility: hidden; }
         .vp-call.vp-out { animation: vpCallOut .3s ease forwards; }
@@ -8194,7 +8194,6 @@
         a[href^="/event"] img[src*="/portal/"], img.vp-portal-img { display: none !important; }
         [data-vp-stack] { grid-template-columns: minmax(0, 1fr) !important; row-gap: 14px !important; }
         [data-vp-stack] > * { grid-area: auto !important; grid-column: 1 / -1 !important; }
-        .vp-banner > [aria-label="Стекло"] { display: none !important; }
         @media (prefers-reduced-motion: reduce) { .vp-portal { animation: none !important; } }
         .vp-portal[data-state="live"] { animation: vpPortalPulse 2s ease-in-out infinite; }
         @keyframes vpPortalPulse {
@@ -8218,7 +8217,7 @@
             transition: opacity .25s ease, background-color .4s ease; }
 
         .vp-banner.vp-depth { background: transparent !important; }
-        .vp-banner.vp-depth > img[alt="Banner"] { will-change: transform; transform-origin: 50% 50%;
+        .vp-banner.vp-depth > img[alt="Banner"], .vp-banner.vp-depth > [aria-label="Стекло"] { will-change: transform; transform-origin: 50% 50%;
             -webkit-mask-image: linear-gradient(to bottom, #000 58%, transparent); mask-image: linear-gradient(to bottom, #000 58%, transparent); }
 
         @property --vp-n { syntax: '<integer>'; inherits: false; initial-value: 0; }
@@ -9955,10 +9954,12 @@
             if (r.bottom < -40 || r.top > innerHeight) return;
             const past = Math.max(0, -r.top);
             const y = Math.round(past * .35);
-            if (img._vpY === y && !calm) return;
-            img._vpY = y;
-            img.style.transform = calm ? '' : `translateY(${y}px) scale(1.15)`;
-            img.style.opacity = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
+            const glass = banner.querySelector(':scope > [aria-label="Стекло"]');
+            const tf = calm ? '' : `translateY(${y}px) scale(1.15)`, op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
+            for (const el of glass ? [img, glass] : [img]) {
+                if (el.style.transform !== tf) el.style.transform = tf;
+                if (el.style.opacity !== op) el.style.opacity = op;
+            }
         }
         addEventListener('scroll', () => { if (!bannerQueued) { bannerQueued = true; requestAnimationFrame(bannerDepth); } }, { capture: true, passive: true });
         onDom(function bannerDepthDom() { bannerDepth(); });

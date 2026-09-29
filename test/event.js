@@ -1,5 +1,5 @@
 // Ивент «Алиса AI» (29.09): пункт «Ивент» ведёт на /event/alice-ai — иконка мода всё равно ставится; виджет «Сбор на шторы»
-// не наезжает на статистику профиля (посты и лайки мода); «стекло» ивента на баннере мода спрятано.
+// не наезжает на статистику профиля (посты и лайки мода); окно ивента на баннере двигается и масштабируется вместе с картинкой.
 // Запуск:  node test/event.js "../ITD/itd-snapshot-NeuroSFW-2048px (1).html"
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -49,12 +49,13 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     const glass = document.querySelector('.vp-banner > [aria-label="Стекло"]');
     return { href: a && a.getAttribute('href'), imgHidden: !!img && getComputedStyle(img).display === 'none', icon: !!svg,
       stats: stats.length, overlap: !!w && stats.some(s => hit(s, w)), stacked: !!document.querySelector('[data-vp-stack]'),
-      glass: glass ? getComputedStyle(glass).display : 'нет' };
+      glass: glass ? getComputedStyle(glass).display : 'нет', same: (() => { const im = document.querySelector('.vp-banner > img[alt="Banner"]'); if (!glass || !im) return false;
+        const a = glass.getBoundingClientRect(), c = im.getBoundingClientRect(); return Math.abs(a.left - c.left) < 2 && Math.abs(a.right - c.right) < 2 && Math.abs(a.top - c.top) < 2 && Math.abs(a.bottom - c.bottom) < 2 && getComputedStyle(glass).opacity === getComputedStyle(im).opacity; })() };
   });
   console.log('—    ' + JSON.stringify(r));
   check(r.href === '/event/alice-ai' && r.imgHidden && r.icon, 'пункт «Ивент» (/event/alice-ai): иконка мода вместо картинки сайта');
   check(r.stats === 2 && !r.overlap && r.stacked, 'посты и лайки в статистике, виджет «Сбор на шторы» под ней, не наезжает');
-  check(r.glass === 'none', `«стекло» ивента на баннере мода спрятано (${r.glass})`);
+  check(r.glass !== 'none' && r.glass !== 'нет' && r.same, `окно ивента на баннере видно и совпадает с картинкой баннера (${r.glass}, совпадает: ${r.same})`);
   const card = await p.$eval('.vp-banner', e => { const r = e.getBoundingClientRect(); return { x: Math.max(0, r.x - 20), y: Math.max(0, r.y - 20), width: r.width + 40, height: 760 }; });
   await p.screenshot({ path: path.join(__dirname, 'out', 'event-profile.png'), clip: card });
   check(!errors.length, 'ошибок нет' + (errors.length ? ': ' + errors.join(' | ') : ''));

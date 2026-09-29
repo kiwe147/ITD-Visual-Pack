@@ -44,18 +44,18 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
       const el = document.querySelector('.vp-call'), card = el && el.querySelector('.vp-call-card'), r = card && card.getBoundingClientRect();
       const hit = r && document.elementFromPoint(8, 8);
       return el && { name: el.querySelector('.vp-call-name').textContent, sub: el.querySelector('.vp-call-sub').textContent,
-        btns: [...el.querySelectorAll('.vp-call-btns button')].map(x => x.textContent.trim()), inWin: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight,
+        btns: [...el.querySelectorAll('.vp-call-btns button')].map(x => x.textContent.trim()), green: [...el.querySelectorAll('.vp-call-btns button')].every(x => getComputedStyle(x).backgroundColor === 'rgb(36, 128, 70)'), inWin: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight,
         cover: !!hit && el.contains(hit), osc: window.__osc };
     });
     console.log(`—    ${name}: ` + JSON.stringify(st));
-    check(st && st.name === 'Смерть в итдолизме' && st.sub === 'Илья Новки звонит…' && st.btns.join('|') === 'Принять|Принять', `${name}: карточка звонка, обе кнопки «Принять»`);
+    check(st && st.name === 'Смерть в итдолизме' && st.sub === 'Илья Новки звонит…' && st.btns.join('|') === 'Принять|Принять' && st.green, `${name}: карточка звонка, обе кнопки «Принять» и обе зелёные`);
     check(st && st.inWin && st.cover, `${name}: карточка целиком на экране, экран закрыт затемнением`);
     check(st && st.osc >= 4, `${name}: звонок звучит (генераторов звука: ${st && st.osc})`);
     await p.screenshot({ path: path.join(__dirname, 'out', `call-${name}.png`) });
     await p.click('.vp-call-no');
     await p.waitForTimeout(2000);
     const talk = await p.$eval('.vp-call-sub', e => e.textContent).catch(() => '');
-    check(/^00:0\d$/.test(talk), `${name}: красная «Принять» тоже принимает — идёт разговор (${talk})`);
+    check(/^00:0\d$/.test(talk), `${name}: левая «Принять» тоже принимает — идёт разговор (${talk})`);
     await p.waitForTimeout(3000);
     const drop = await p.$eval('.vp-call-sub', e => e.textContent).catch(() => '');
     check(/сервер ИТД упал/.test(drop), `${name}: «${drop}»`);
