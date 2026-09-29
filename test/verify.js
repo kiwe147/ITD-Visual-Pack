@@ -1,5 +1,8 @@
 // Проверка системы верификации: как распределяются состояния approved/quarantine/none
-// в зависимости от комментариев владельца (ITDX-V, ITDX-SEEN, ITDX-C) под VERIFICATION_POST_ID.
+// в зависимости от комментариев владельца (ITDX-V, ITDX-SEEN, ITDX-C) под VERIFICATION_POST_ID
+// и запросов самих людей (ITDX-R, 3.3.7.2).
+// Схема владельца: таймер 3 дня — с момента, как владелец открыл очередь (SEEN); не решил — перерыв 7 дней;
+// «Отклонить» — перерыв 7 дней; после перерыва мод человека сам шлёт ITDX-R — снова в очереди.
 // Запуск: node test/verify.js путь/к/снимку.html
 // Нужен Playwright с Chromium (как в smoke.js). Сайт по сети не нужен — API замокан.
 const { chromium } = require('playwright');
@@ -34,43 +37,60 @@ const CARL_ID = '33333333-3333-3333-3333-333333333333';
 const DAVE_ID = '44444444-4444-4444-4444-444444444444';
 const EVE_ID = '55555555-5555-5555-5555-555555555555';
 const ATTACKER_ID = '66666666-6666-6666-6666-666666666666';
+const FRANK_ID = '77777777-7777-7777-7777-777777777777';
+const GINA_ID = '88888888-8888-8888-8888-888888888888';
+const HANK_ID = '99999999-9999-9999-9999-999999999999';
+const IVAN_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
+const D = 24 * 60 * 60;
 const nowSec = Math.floor(Date.now() / 1000);
 const seenFresh = nowSec - 60 * 60;
-const seenOld = nowSec - 5 * 24 * 60 * 60;
-const cdFuture = nowSec + 5 * 24 * 60 * 60;
+const seenOld = nowSec - 5 * D;
+const cdFuture = nowSec + 5 * D;
+const seenLong = nowSec - 12 * D;
+const cdPast = nowSec - 1 * D, seenBeforeReject = nowSec - 9 * D;
 
+const user = (id, username, extra) => ({ id, username, displayName: username, ...extra });
 const comments = [
-    { id: 'c0', content: genCode(OWNER_ID) + '1', author: { id: OWNER_ID, username: 'NeuroSFW', displayName: 'NeuroSFW' } },
-    { id: 'c1', content: genCode(ALICE_ID) + '1', author: { id: ALICE_ID, username: 'Alice', displayName: 'Alice', avatar: '🅰️' } },
-    { id: 'c2', content: genCode(BOB_ID) + '1', author: { id: BOB_ID, username: 'Bob', displayName: 'Bob', avatar: '🅱️' } },
-    { id: 'c3', content: genCode(CARL_ID) + '1', author: { id: CARL_ID, username: 'Carl', displayName: 'Carl', avatar: '🇨' } },
-    { id: 'c4', content: genCode(DAVE_ID) + '1', author: { id: DAVE_ID, username: 'Dave', displayName: 'Dave', avatar: '🅳' } },
-    { id: 'c5', content: genCode(EVE_ID) + '1', author: { id: EVE_ID, username: 'Eve', displayName: 'Eve', avatar: '🇪' } },
-    { id: 'c6', content: genCode(ATTACKER_ID) + '1', author: { id: ATTACKER_ID, username: 'Attacker', displayName: 'Attacker', avatar: '😈' } },
+    { id: 'c0', content: genCode(OWNER_ID) + '1', author: user(OWNER_ID, 'NeuroSFW') },
+    { id: 'c1', content: genCode(ALICE_ID) + '1', author: user(ALICE_ID, 'Alice', { avatar: '🅰️' }) },
+    { id: 'c2', content: genCode(BOB_ID) + '1', author: user(BOB_ID, 'Bob', { avatar: '🅱️' }) },
+    { id: 'c3', content: genCode(CARL_ID) + '1', author: user(CARL_ID, 'Carl', { avatar: '🇨' }) },
+    { id: 'c4', content: genCode(DAVE_ID) + '1', author: user(DAVE_ID, 'Dave', { avatar: '🅳' }) },
+    { id: 'c5', content: genCode(EVE_ID) + '1', author: user(EVE_ID, 'Eve', { avatar: '🇪' }) },
+    { id: 'c6', content: genCode(ATTACKER_ID) + '1', author: user(ATTACKER_ID, 'Attacker', { avatar: '😈' }) },
+    { id: 'c7', content: genCode(FRANK_ID) + '1', author: user(FRANK_ID, 'Frank') },
+    { id: 'c8', content: genCode(GINA_ID) + '1', author: user(GINA_ID, 'Gina') },
+    { id: 'c9', content: genCode(HANK_ID) + '1', author: user(HANK_ID, 'Hank') },
+    { id: 'c10', content: genCode(IVAN_ID) + '1', author: user(IVAN_ID, 'Ivan') },
     { id: 'm1', content: 'ITDX-V ' + ALICE_ID, author: { id: OWNER_ID, username: 'NeuroSFW' } },
-    { id: 'm2', content: 'ITDX-SEEN ' + BOB_ID + ':' + seenOld + ' ' + CARL_ID + ':' + seenFresh, author: { id: OWNER_ID, username: 'NeuroSFW' } },
-    { id: 'm3', content: 'ITDX-C ' + DAVE_ID + ':' + cdFuture, author: { id: OWNER_ID, username: 'NeuroSFW' } },
+    {
+        id: 'm2', author: { id: OWNER_ID, username: 'NeuroSFW' },
+        content: 'ITDX-SEEN ' + [[BOB_ID, seenOld], [CARL_ID, seenFresh], [FRANK_ID, seenLong], [GINA_ID, seenLong],
+            [HANK_ID, seenBeforeReject], [IVAN_ID, seenBeforeReject]].map(([i, t]) => i + ':' + t).join(' ')
+    },
+    { id: 'm3', content: 'ITDX-C ' + [[DAVE_ID, cdFuture], [HANK_ID, cdPast], [IVAN_ID, cdPast]].map(([i, t]) => i + ':' + t).join(' '), author: { id: OWNER_ID, username: 'NeuroSFW' } },
+    { id: 'r1', content: 'ITDX-R ' + (nowSec - 1 * D), author: { id: GINA_ID, username: 'Gina' } },
+    { id: 'r2', content: 'ITDX-R ' + (nowSec - 12 * 60 * 60), author: { id: HANK_ID, username: 'Hank' } },
     { id: 'f1', content: 'ITDX-V ' + ATTACKER_ID, author: { id: ATTACKER_ID, username: 'Attacker' } },
+    { id: 'f2', content: 'ITDX-R ' + nowSec, author: { id: ATTACKER_ID, username: 'Attacker' } },
 ];
 
-(async () => {
-    const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
+const openAs = async (browser, me, sink) => {
     const p = await browser.newPage({ viewport: { width: 1280, height: 860 } });
-    const errors = [];
-    p.on('pageerror', e => errors.push(e.message));
-
+    p.errors = [];
+    p.on('pageerror', e => p.errors.push(e.message));
     await p.route('**/*', r => {
         const u = r.request().url();
         const m = r.request().method();
         if (u.includes('/auth/refresh')) return r.fulfill({ contentType: 'application/json', body: '{"accessToken":"t"}' });
-        if (u.endsWith('/api/users/me')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ id: OWNER_ID, username: 'NeuroSFW', displayName: 'NeuroSFW' }) });
+        if (u.endsWith('/api/users/me')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify(me) });
         if (m === 'PATCH' && /\/api\/comments\/[^/?#]+/.test(u)) {
-            sentRequests.push({ m, u, body: r.request().postData() || '' });
+            sink.push({ m, u, body: r.request().postData() || '' });
             return r.fulfill({ contentType: 'application/json', body: '{}' });
         }
         if (m === 'POST' && u.includes('/api/posts/a0d6625a-b3ec-44c4-98da-48422af101d5/comments')) {
-            sentRequests.push({ m, u, body: r.request().postData() || '' });
+            sink.push({ m, u, body: r.request().postData() || '' });
             return r.fulfill({ contentType: 'application/json', body: '{}' });
         }
         if (u.includes('/api/posts/a0d6625a-b3ec-44c4-98da-48422af101d5/comments')) {
@@ -79,7 +99,6 @@ const comments = [
         if (u === URL0) return r.fulfill({ contentType: 'text/html; charset=utf-8', body: snap });
         return r.fulfill({ status: 404, body: '' });
     });
-
     await p.addInitScript(m => {
         const s = { introEnabled: false, introMobile: 'off' };
         window.GM_getValue = (k, d) => k in s ? s[k] : d;
@@ -88,11 +107,16 @@ const comments = [
         window.GM_info = { script: { version: 'test' }, scriptMetaStr: m };
         window.unsafeWindow = window;
     }, meta);
-
     await p.goto(URL0);
     await p.evaluate(() => document.querySelectorAll('.vp-nav-blob, .vp-fab, .vp-fps, .settings-dropdown, .nick-controls-panel, .vp-itdx-btn, .vp-msgs').forEach(e => e.remove()));
     await p.addScriptTag({ content: src });
     await p.waitForTimeout(2500);
+    return p;
+};
+
+(async () => {
+    const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
+    const p = await openAs(browser, user(OWNER_ID, 'NeuroSFW'), sentRequests);
 
     const state = await p.evaluate(() => {
         try {
@@ -102,17 +126,20 @@ const comments = [
             return o;
         } catch (e) { return { __error: String(e) }; }
     });
-
-    console.log('Состояния:', JSON.stringify(state, null, 2));
+    console.log('Состояния:', JSON.stringify(state));
     console.log('');
 
-    check(state.NeuroSFW === 'approved', 'владелец всегда approved            (получено: ' + state.NeuroSFW + ')');
-    check(state.Alice === 'approved', 'Alice в ITDX-V → approved          (получено: ' + state.Alice + ')');
-    check(state.Bob === 'none', 'Bob в SEEN, ts просрочен → none    (получено: ' + state.Bob + ')');
-    check(state.Carl === 'quarantine', 'Carl в SEEN, ts свежий → quarantine(получено: ' + state.Carl + ')');
-    check(state.Dave === 'none', 'Dave в CD, ts в будущем → none     (получено: ' + state.Dave + ')');
-    check(state.Eve === 'quarantine', 'Eve без меток → quarantine         (получено: ' + state.Eve + ')');
+    check(state.NeuroSFW === 'approved', 'владелец всегда approved (получено: ' + state.NeuroSFW + ')');
+    check(state.Alice === 'approved', 'Alice в ITDX-V → approved (получено: ' + state.Alice + ')');
+    check(state.Bob === 'none', 'Bob: увидел 5 дней назад, 3 дня прошли → перерыв 7 дней, none (получено: ' + state.Bob + ')');
+    check(state.Carl === 'quarantine', 'Carl: увидел час назад → quarantine, таймер идёт (получено: ' + state.Carl + ')');
+    check(state.Dave === 'none', 'Dave: отклонён, перерыв идёт → none (получено: ' + state.Dave + ')');
+    check(state.Eve === 'quarantine', 'Eve без меток → quarantine (получено: ' + state.Eve + ')');
     check(state.Attacker === 'quarantine', 'Attacker подделал ITDX-V → quarantine (получено: ' + state.Attacker + ')');
+    check(state.Frank === 'none', 'Frank: 3 + 7 дней прошли, запроса нет → none (получено: ' + state.Frank + ')');
+    check(state.Gina === 'quarantine', 'Gina: перерыв прошёл, запрос после него → quarantine (получено: ' + state.Gina + ')');
+    check(state.Hank === 'quarantine', 'Hank: отказ истёк, запрос после → quarantine (получено: ' + state.Hank + ')');
+    check(state.Ivan === 'none', 'Ivan: отказ истёк, запроса нет → none (получено: ' + state.Ivan + ')');
 
     await p.click('.vp-fab-btn');
     await p.waitForTimeout(300);
@@ -120,23 +147,28 @@ const comments = [
     await p.waitForTimeout(2500);
 
     const queue = await p.$$eval('.vp-verify-row .vp-verify-name', els => els.map(e => e.textContent));
-    check(queue.length === 3, 'в очереди 3 человека (Carl, Eve, Attacker) — получено: ' + queue.length + ' [' + queue.join(', ') + ']');
-    check(queue.some(n => n === '@Carl'), 'Carl в очереди');
-    check(queue.some(n => n === '@Eve'), 'Eve в очереди');
-    check(queue.some(n => n === '@Attacker'), 'Attacker в очереди');
-    check(!queue.some(n => n === '@Alice'), 'Alice (approved) в очереди нет');
-    check(!queue.some(n => n === '@Bob'), 'Bob (cooldown истёк) в очереди нет');
-    check(!queue.some(n => n === '@NeuroSFW'), 'владелец сам себя в очередь не ставит');
+    check(queue.length === 5, 'в очереди 5 человек (Carl, Eve, Attacker, Gina, Hank) — получено: ' + queue.length + ' [' + queue.join(', ') + ']');
+    check(queue.includes('@Gina') && queue.includes('@Hank'), 'Gina и Hank снова в очереди');
+    check(!queue.includes('@Frank') && !queue.includes('@Ivan') && !queue.includes('@Dave'), 'Frank, Ivan (без запроса) и Dave (перерыв) — не в очереди');
+    check(!queue.includes('@Alice'), 'Alice (approved) в очереди нет');
+    check(!queue.includes('@Bob'), 'Bob (перерыв 7 дней) в очереди нет');
+    check(!queue.includes('@NeuroSFW'), 'владелец сам себя в очередь не ставит');
+    const left = await p.$$eval('.vp-verify-row', rows => Object.fromEntries(rows.map(r => [r.querySelector('.vp-verify-name').textContent, r.querySelector('.vp-verify-left').textContent])));
+    console.log('—    осталось: ' + JSON.stringify(left));
+    check(left['@Carl'] === '3 д' && left['@Eve'] === '3 д', 'у каждого в очереди видно, сколько осталось');
 
-    const seenReqs = sentRequests.filter(r => /ITDX-SEEN/.test(r.body));
-    check(seenReqs.length >= 2, 'ITDX-SEEN отправлен для Eve и Attacker (получено: ' + seenReqs.length + ')');
-    check(!seenReqs.some(r => r.body.includes(ALICE_ID)), 'SEEN для Alice не отправлен (в SEEN уже есть)');
+    const added = sentRequests.filter(r => /ITDX-SEEN/.test(r.body)).map(r => (JSON.parse(r.body).content || '').split(/\s+/).pop());
+    const seenFor = id => added.some(t => t.startsWith(id + ':'));
+    console.log('—    дописано SEEN: ' + added.map(t => t.slice(0, 8)).join(', '));
+    check(seenFor(EVE_ID) && seenFor(ATTACKER_ID), 'ITDX-SEEN отправлен для Eve и Attacker');
+    check(!seenFor(ALICE_ID), 'SEEN для Alice не отправлен');
+    check(seenFor(GINA_ID) && seenFor(HANK_ID), 'новый круг: SEEN заново для Gina и Hank');
+    check(!seenFor(CARL_ID), 'Carl: таймер уже идёт — SEEN не повторяется');
 
     const beforeCount = sentRequests.length;
     const rowCarl = await p.$$eval('.vp-verify-row', rows => rows.findIndex(r => r.textContent.includes('@Carl')));
     await p.$$eval('.vp-verify-row', (rows, i) => rows[i].querySelector('.vp-verify-ok').click(), rowCarl);
     await p.waitForTimeout(800);
-
     const vReq = sentRequests.slice(beforeCount).find(r => /ITDX-V/.test(r.body));
     check(!!vReq, 'при «Подтвердить» отправлен ITDX-V');
     check(vReq && vReq.body.includes(CARL_ID), 'ITDX-V содержит ID Carl');
@@ -145,14 +177,23 @@ const comments = [
     const rowEve = await p.$$eval('.vp-verify-row', rows => rows.findIndex(r => r.textContent.includes('@Eve')));
     await p.$$eval('.vp-verify-row', (rows, i) => rows[i].querySelector('.vp-verify-no').click(), rowEve);
     await p.waitForTimeout(800);
-
     const cReq = sentRequests.slice(beforeCount2).find(r => /ITDX-C/.test(r.body));
     check(!!cReq, 'при «Отклонить» отправлен ITDX-C');
     check(cReq && cReq.body.includes(EVE_ID), 'ITDX-C содержит ID Eve');
     const eveTsMatch = cReq && cReq.body.match(new RegExp(EVE_ID + ':(\\d+)'));
     check(!!eveTsMatch && +eveTsMatch[1] > Math.floor(Date.now() / 1000), 'ITDX-C содержит будущий timestamp (кулдаун)');
+    check(!p.errors.length, 'ошибок на странице нет' + (p.errors.length ? ': ' + p.errors.join(' | ') : ''));
 
-    check(errors.length === 0, 'ошибок на странице нет' + (errors.length ? ': ' + errors.join(' | ') : ''));
+    const ivanReqs = [];
+    const pi = await openAs(browser, user(IVAN_ID, 'Ivan'), ivanReqs);
+    await pi.waitForTimeout(2500);
+    const reqs = ivanReqs.filter(x => /ITDX-R \d+/.test(x.body));
+    check(reqs.length === 1 && reqs[0].m === 'POST', 'Ivan: перерыв кончился — его мод сам отправил запрос ITDX-R (' + reqs.length + ')');
+    check(!pi.errors.length, 'Ivan: ошибок нет' + (pi.errors.length ? ': ' + pi.errors.join(' | ') : ''));
+    const bobReqs = [];
+    const pb = await openAs(browser, user(BOB_ID, 'Bob'), bobReqs);
+    await pb.waitForTimeout(2500);
+    check(!bobReqs.some(x => /ITDX-R/.test(x.body)), 'Bob: перерыв ещё идёт — запроса нет');
 
     await browser.close();
     console.log(fails.length ? `\nНе прошло: ${fails.length}` : '\nВсё прошло');
