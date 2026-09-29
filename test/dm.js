@@ -19,6 +19,7 @@ const fails = [];
 const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + what); if (!ok) fails.push(what); };
 let comments = [], n = 0, posts = 0, patches = 0, uploads = 0;
 const IMG_ID = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+const TALL = fs.readFileSync(path.join(__dirname, 'tall.png'));
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP4z8DwnwEIGP4zMDAwAAA2ygX7vK9Y8AAAAABJRU5ErkJggg==', 'base64');
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
@@ -30,7 +31,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
     await p.route('**/*', async r => {
       const req = r.request(), u = new URL(req.url()), t = req.resourceType();
       if (u.origin === ORIGIN && t === 'document') return r.fulfill({ contentType: 'text/html; charset=utf-8', body: snap });
-      if (u.hostname.startsWith('cdn.')) return r.fulfill({ contentType: 'image/png', body: PNG });
+      if (u.hostname.startsWith('cdn.')) return r.fulfill({ contentType: 'image/png', body: TALL });
       if (u.pathname === '/api/files/upload') { uploads++; return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ id: 'f1', url: `https://cdn.xn--d1ah4a.com/images/${IMG_ID}.webp` }) }); }
       if (['image', 'stylesheet', 'font'].includes(t)) return r.continue();
       if (u.pathname.includes('/auth/refresh')) return r.fulfill({ contentType: 'application/json', body: '{"accessToken":"t"}' });
@@ -174,7 +175,11 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   // картинка: bob → NeuroSFW, с подписью
   await chatWith(B2.p, 'u:NeuroSFW', 1);
   await B2.p.fill('.vp-msgs-bar input', 'котик');
-  await B2.p.setInputFiles('.vp-msgs-file', { name: 'cat.png', mimeType: 'image/png', buffer: PNG });
+  await B2.p.setInputFiles('.vp-msgs-file', { name: 'cat.png', mimeType: 'image/png', buffer: TALL });
+  await B2.p.waitForTimeout(300);
+  const pend = await B2.p.evaluate(() => ({ shown: getComputedStyle(document.querySelector('.vp-msgs-pend')).display !== 'none', sendOn: !document.querySelector('.vp-msgs-send').disabled, bubbles: document.querySelectorAll('.vp-msgs-feed .vp-msgs-b').length }));
+  check(pend.shown && pend.sendOn && uploads === 0, `после выбора — превью над полем, ещё не отправлено ${JSON.stringify(pend)}`);
+  await B2.p.click('.vp-msgs-send');
   await B2.p.waitForFunction(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return b && /✓|не отправлено/.test(b.lastChild.textContent); }, null, { timeout: 15000 }).catch(() => { });
   const sentB = await B2.p.evaluate(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return { meta: b.lastChild.textContent, img: !!b.querySelector('img') }; });
   check(uploads === 1 && sentB.img && /✓/.test(sentB.meta), `bob: картинка загружена и отправлена (${sentB.meta})`);
@@ -187,6 +192,21 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   await A.p.waitForTimeout(800);
   const gotImg = await A.p.evaluate(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); const im = b && b.querySelector('img'); return { src: im && im.src, text: b && b.firstChild && b.childNodes[1] && b.childNodes[1].textContent, loaded: !!(im && im.complete && im.naturalWidth) }; });
   check(gotImg.src === `https://cdn.xn--d1ah4a.com/images/${IMG_ID}.webp` && gotImg.text === 'котик' && gotImg.loaded, `NeuroSFW видит картинку с сервера ИТД и подпись ${JSON.stringify(gotImg)}`);
+  const size = await A.p.evaluate(() => { const im = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-img')].pop(); const b = im.closest('.vp-msgs-b'); return { w: Math.round(im.getBoundingClientRect().width), h: Math.round(im.getBoundingClientRect().height), bw: Math.round(b.getBoundingClientRect().width) }; });
+  check(Math.abs(size.h / size.w - 1.5) < 0.03 && size.bw - size.w < 20, `картинка 600х900 в своих пропорциях, пузырь по ней ${JSON.stringify(size)}`);
+  await A.p.screenshot({ path: path.join(__dirname, 'out', 'dm-image.png') });
+  await A.p.click('.vp-msgs-feed .vp-msgs-img >> nth=-1'); await A.p.waitForTimeout(400);
+  const lbOpen = await A.p.evaluate(() => !!document.querySelector('.vp-msgs .vp-msgs-lb img'));
+  check(lbOpen, 'нажатие по картинке — крупно внутри окна сообщений');
+  await A.p.screenshot({ path: path.join(__dirname, 'out', 'dm-lightbox.png') });
+  await A.p.goBack({ waitUntil: 'commit' }).catch(() => { }); await A.p.waitForTimeout(500);
+  const afterBack = await A.p.evaluate(() => ({ lb: !!document.querySelector('.vp-msgs-lb'), chat: !!document.querySelector('.vp-msgs.vp-open .vp-msgs-chat:not([hidden])') }));
+  check(await A.p.evaluate(() => getComputedStyle(document.querySelector('.vp-msgs-pend')).display === 'none'), 'у получателя полосы превью нет');
+  check(!afterBack.lb && afterBack.chat, `«назад» — просмотр закрыт, чат на месте ${JSON.stringify(afterBack)}`);
+  await A.p.click('.vp-msgs-feed .vp-msgs-img >> nth=-1'); await A.p.waitForTimeout(300);
+  await A.p.keyboard.press('Escape'); await A.p.waitForTimeout(300);
+  const afterEsc = await A.p.evaluate(() => ({ lb: !!document.querySelector('.vp-msgs-lb'), chat: !!document.querySelector('.vp-msgs.vp-open .vp-msgs-chat:not([hidden])') }));
+  check(!afterEsc.lb && afterEsc.chat, `Esc — просмотр закрыт, чат на месте ${JSON.stringify(afterEsc)}`);
   await A.p.$eval('.vp-msgs-back', b => b.click()); await A.p.waitForTimeout(500);
   const order = await A.p.$$eval('.vp-msgs-row', rs => rs.map(r => r.dataset.id));
   console.log('—    порядок у NeuroSFW: ' + order.join(', '));
