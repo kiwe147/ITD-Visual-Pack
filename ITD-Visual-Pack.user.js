@@ -83,12 +83,12 @@
         const st = Object.assign({}, history.state);
         const had = OVERLAY_KEYS.some(k => st[k]);
         OVERLAY_KEYS.forEach(k => delete st[k]);
-        delete st.vpChat;
+        delete st.vpChat; delete st.vpImg;
         st[key] = 1;
         history[had ? 'replaceState' : 'pushState'](st, '', location.href);
     }
     const overlayAt = key => !!(history.state && history.state[key]);
-    const STACK_KEYS = ['vpGames', 'vpNews', 'vpChat'];
+    const STACK_KEYS = ['vpGames', 'vpNews', 'vpChat', 'vpImg'];
     function stackEnter(key) { history.pushState(Object.assign({}, history.state, { [key]: 1 }), '', location.href); }
     function stackLeave(key) { if (overlayAt(key)) history.back(); }
     if ([...OVERLAY_KEYS, ...STACK_KEYS].some(overlayAt)) {
@@ -3671,6 +3671,7 @@
 
         const CHANGELOG = [
             ['3.3.9 – 3.3.9.1', '29 сентября 2026', [
+                'Картинки в сообщениях: перед отправкой — превью с крестиком, можно дописать подпись; картинка показывается целиком, без обрезки; по нажатию — крупно прямо в окне сообщений («назад» и Esc закрывают)',
                 'Сцена ленты плавнее при прокрутке, а на слабых телефонах выключается сама, если не успевает (раньше лента дёргалась, особенно при прокрутке вверх)',
                 'Сообщения: можно отправлять картинки — скрепкой или вставкой из буфера (Ctrl+V), с подписью. Картинка сжимается перед отправкой, ссылка на неё шифруется вместе с сообщением',
                 'Сообщения: сверху — чаты, где было последнее сообщение или куда ты последний раз заходил, как в Телеграме']],
@@ -6282,9 +6283,21 @@
         .vp-msgs-field { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 14px; min-height: 44px; border-radius: 22px;
             background: var(--block-bg, rgba(28, 28, 28, .72)); }
         .vp-msgs-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
-        .vp-msgs-b.vp-has-img { width: min(78%, 330px); padding: 4px 4px 6px; }
-        .vp-msgs-img { display: block; width: 100%; max-height: 360px; min-height: 64px; margin: 0 0 6px; border-radius: 16px;
-            object-fit: cover; cursor: zoom-in; background: rgba(127, 127, 127, .15); }
+        .vp-msgs-b.vp-has-img { width: min-content; max-width: 78%; padding: 4px 4px 6px; }
+        .vp-msgs-img { display: block; width: auto; height: auto; max-width: min(330px, 66vw); max-height: 420px; min-width: 120px; min-height: 60px;
+            margin: 0 0 6px; border-radius: 16px; cursor: zoom-in; background: rgba(127, 127, 127, .15); }
+        .vp-msgs-lb { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; background: rgba(0, 0, 0, .92); border-radius: inherit;
+            animation: vp-emoji-in .15s ease-out both; }
+        .vp-msgs-lb-top { display: flex; align-items: center; gap: 8px; padding: 10px; flex-shrink: 0; }
+        .vp-msgs-lb-top .vp-msgs-ib { color: #fff; background: rgba(255, 255, 255, .1); }
+        .vp-msgs-lb-top span { color: rgba(255, 255, 255, .8); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msgs-lb-body { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 10px 14px; }
+        .vp-msgs-lb-body img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; }
+        .vp-msgs-pend { display: flex; align-items: center; gap: 10px; padding: 6px 8px; margin: 0 0 6px; border-radius: 16px; background: var(--block-bg, #1c1c1c); }
+        .vp-msgs-pend[hidden] { display: none; }
+        .vp-msgs-pend img { width: 52px; height: 52px; object-fit: cover; border-radius: 10px; flex-shrink: 0; }
+        .vp-msgs-pend span { flex: 1; min-width: 0; font-size: 13px; color: var(--text-secondary, #8a8a8a); }
+        .vp-msgs-pend button { width: 30px; height: 30px; border: 0; border-radius: 50%; background: rgba(127, 127, 127, .2); color: var(--text-primary, #fff); cursor: pointer; flex-shrink: 0; }
         .vp-msgs-b.vp-has-img { overflow-wrap: anywhere; }
         .vp-msgs-b.vp-has-img > i { margin-right: 6px; }
         .vp-msgs-cap { display: block; padding: 0 8px; }
@@ -6378,7 +6391,7 @@
                     im.className = 'vp-msgs-img';
                     im.src = imgUrl; im.alt = ''; im.loading = 'lazy'; im.decoding = 'async';
                     im.addEventListener('load', () => { if (feed.scrollHeight - feed.scrollTop - feed.clientHeight < 400) feed.scrollTop = feed.scrollHeight; }, { once: true });
-                    im.addEventListener('click', () => { if (!/^blob:/.test(im.src)) window.open(im.src, '_blank', 'noopener'); });
+                    im.addEventListener('click', () => openImg(im.src, text));
                     b.prepend(im);
                     if (text) { b.childNodes[1].remove(); const cap = document.createElement('span'); cap.className = 'vp-msgs-cap'; cap.textContent = text; im.after(cap); }
                 }
@@ -6395,6 +6408,7 @@
                     const st = Object.assign({}, history.state, { vpChat: d.id });
                     history[overlayAt('vpChat') ? 'replaceState' : 'pushState'](st, '', location.href);
                 }
+                if (current !== d) clearPending();
                 current = d;
                 d.unread = 0;
                 msgMarkOpened(d.id);
@@ -6475,6 +6489,8 @@
             };
             root.currentTarget = () => current && !current.bot ? msgTarget(current) : null;
             function closeChat(fromHistory) {
+                clearPending();
+                closeImg(true);
                 if (fromHistory !== true && current && overlayAt('vpChat')) { chatBackPending = true; history.back(); }
                 clearTimeout(botTimer);
                 if (current && msgNet.me) msgSync().then(() => { msgFillDialogs(); msgBadge(); if (!current) renderList(); }).catch(() => { });
@@ -6572,7 +6588,7 @@
             });
             search.addEventListener('input', renderList);
             $('.vp-msgs-back').onclick = closeChat;
-            input.addEventListener('input', () => { send.disabled = !input.value.trim(); msgCount(); });
+            input.addEventListener('input', () => { send.disabled = !input.value.trim() && !pendingImg; msgCount(); });
             attachEmojiPicker($('.vp-msgs-emoji'), em => {
                 if (input.disabled) return false;
                 const max = input.maxLength > 0 ? input.maxLength : MSG_TEXT_MAX;
@@ -6581,6 +6597,49 @@
                 input.setRangeText(em, a, z, 'end');
                 input.dispatchEvent(new Event('input', { bubbles: true }));
             });
+            let lb = null;
+            function openImg(src, cap) {
+                if (lb) closeImg(true);
+                lb = document.createElement('div');
+                lb.className = 'vp-msgs-lb';
+                lb.innerHTML = `<div class="vp-msgs-lb-top"><button type="button" class="vp-msgs-ib" title="Назад">${MSG_ICON.back}</button><span></span></div><div class="vp-msgs-lb-body"><img alt=""></div>`;
+                lb.querySelector('span').textContent = cap || '';
+                lb.querySelector('img').src = src;
+                lb.querySelector('.vp-msgs-ib').addEventListener('click', () => closeImg());
+                lb.addEventListener('click', e => { if (e.target === lb || e.target.classList.contains('vp-msgs-lb-body')) closeImg(); });
+                root.appendChild(lb);
+                history.pushState(Object.assign({}, history.state, { vpImg: 1 }), '', location.href);
+            }
+            function closeImg(fromHistory) {
+                if (!lb) return;
+                lb.remove(); lb = null;
+                if (fromHistory !== true && overlayAt('vpImg')) history.back();
+            }
+            root.imgOpen = () => !!lb;
+            let pendingImg = null;
+            const pendEl = document.createElement('div');
+            pendEl.className = 'vp-msgs-pend';
+            pendEl.hidden = true;
+            pendEl.innerHTML = '<img alt=""><span>Картинка · можно добавить подпись</span><button type="button" title="Убрать">✕</button>';
+            function setPending(file) {
+                if (!file || !/^image\//.test(file.type)) return;
+                const t = current && msgNet.me && !current.bot ? msgTarget(current) : null;
+                if (!t || !t.uid) { note('Картинки можно отправлять в переписке с людьми и поддержкой'); return; }
+                clearPending();
+                pendingImg = { file, url: URL.createObjectURL(file) };
+                pendEl.querySelector('img').src = pendingImg.url;
+                pendEl.hidden = false;
+                send.disabled = false;
+                input.focus();
+            }
+            function clearPending() {
+                if (pendingImg) URL.revokeObjectURL(pendingImg.url);
+                pendingImg = null;
+                pendEl.hidden = true;
+                pendEl.querySelector('img').removeAttribute('src');
+                send.disabled = !input.value.trim();
+            }
+            pendEl.querySelector('button').addEventListener('click', clearPending);
             function sendImage(file) {
                 if (!file || !/^image\//.test(file.type) || !current) return;
                 const t = msgNet.me && !current.bot ? msgTarget(current) : null;
@@ -6595,13 +6654,15 @@
             }
             const fileIn = $('.vp-msgs-file');
             $('.vp-msgs-attach').addEventListener('click', () => { if (!input.disabled) fileIn.click(); });
-            fileIn.addEventListener('change', () => { const f = fileIn.files && fileIn.files[0]; fileIn.value = ''; sendImage(f); });
+            fileIn.addEventListener('change', () => { const f = fileIn.files && fileIn.files[0]; fileIn.value = ''; setPending(f); });
             input.addEventListener('paste', e => {
                 const f = [...(e.clipboardData && e.clipboardData.files || [])].find(x => /^image\//.test(x.type));
-                if (f) { e.preventDefault(); sendImage(f); }
+                if (f) { e.preventDefault(); setPending(f); }
             });
+            $('.vp-msgs-bar').before(pendEl);
             $('.vp-msgs-bar').addEventListener('submit', e => {
                 e.preventDefault();
+                if (pendingImg && current) { const f = pendingImg.file; clearPending(); sendImage(f); return; }
                 const text = input.value.trim();
                 if (!text || !current) return;
                 input.value = ''; send.disabled = true; msgCount();
@@ -6640,7 +6701,7 @@
                 if (!row) Object.assign(under.style, { left: root.style.left, width: root.style.width });
             }
             let openPath = '';
-            function onKey(e) { if (e.key === 'Escape' && root.classList.contains('vp-open')) { e.stopPropagation(); current ? closeChat() : close(); } }
+            function onKey(e) { if (e.key === 'Escape' && root.classList.contains('vp-open')) { e.stopPropagation(); lb ? closeImg() : current ? closeChat() : close(); } }
             function close(fromHistory) {
                 if (!root.classList.contains('vp-open')) return;
                 clearTimeout(botTimer);
@@ -6653,6 +6714,7 @@
                 placeSidebar(); placeRail();
                 if (!galOpen) galHideFeed(false);
                 markActiveNav(); moveNavBlob();
+                if (lb) { lb.remove(); lb = null; if (!fromHistory && overlayAt('vpImg')) { history.go(overlayAt('vpChat') ? -3 : -2); return; } }
                 if (!fromHistory) {
                     if (overlayAt('vpChat')) history.go(-2);
                     else if (overlayAt('vpMsgs')) history.back();
@@ -6660,6 +6722,7 @@
             }
             addEventListener('popstate', () => {
                 const open = root.classList.contains('vp-open');
+                if (lb && !overlayAt('vpImg')) { closeImg(true); return; }
                 if (chatBackPending) {
                     chatBackPending = false;
                     if (current && overlayAt('vpMsgs') && !overlayAt('vpChat')) history.pushState(Object.assign({}, history.state, { vpChat: current.id }), '', location.href);
