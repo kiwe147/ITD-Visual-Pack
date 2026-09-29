@@ -3670,7 +3670,7 @@
 
         const CHANGELOG = [
             ['3.3.8', '29 сентября 2026', [
-                'Статистика: у лайков снова виден прирост за день и месяц (раньше стоял 0)',
+                'Статистика: у лайков снова виден прирост за день и месяц (раньше стоял 0); «День» больше не показывает прирост за недели — если давно не заходил, видно, с какого числа считается',
                 '«Назад» (и кнопка «назад» на телефоне) закрывает окна «Игры» и «Что нового», а не уводит со страницы',
                 'Сообщения: свои сообщения подкрашены цветом стиля и читаются на любом стиле и теме; под полем ввода — сколько символов из 500',
                 'Сообщения: кнопка эмодзи заработала — окно с категориями и «Недавними»',
@@ -9577,18 +9577,20 @@
             if (!statsNow) return;
             const span = statsPeriod === 'month' ? 30 * DAY_MS : DAY_MS;
             const hist = statsHistory();
-            const base = [...hist].reverse().find(h => Date.now() - h.at >= span) || hist[0] || statsNow;
-            const short = Date.now() - base.at < span * 0.9;
-            railSince.textContent = short && base.at ? 'с ' + new Date(base.at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
+            const now = Date.now();
+            const pickBase = list => {
+                const old = list.filter(h => now - h.at >= 3600e3);
+                if (!old.length) return list[0] || null;
+                return old.reduce((b, h) => Math.abs(now - h.at - span) < Math.abs(now - b.at - span) ? h : b);
+            };
+            const base = pickBase(hist) || statsNow;
+            const off = base.at && Math.abs(now - base.at - span) > span * 0.1;
+            railSince.textContent = off ? 'с ' + new Date(base.at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
                 + ', ' + new Date(base.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
             const rows = [['followers', 'подписчиков'], ['following', 'подписок'], ['posts', 'постов'], ['likes', 'лайков']].filter(([k]) => typeof statsNow[k] === 'number');
             if (!rows.length) { railStats.innerHTML = '<div class="vp-menu-note">Сайт не отдал числа</div>'; return; }
             railStats.innerHTML = '';
-            const baseFor = k => {
-                if (typeof base[k] === 'number') return base;
-                const hk = hist.filter(h => typeof h[k] === 'number');
-                return [...hk].reverse().find(h => Date.now() - h.at >= span) || hk[0] || null;
-            };
+            const baseFor = k => typeof base[k] === 'number' ? base : pickBase(hist.filter(h => typeof h[k] === 'number'));
             rows.forEach(([k, label]) => {
                 const b = baseFor(k);
                 const diff = b ? statsNow[k] - b[k] : 0;
