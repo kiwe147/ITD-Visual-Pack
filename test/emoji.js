@@ -44,9 +44,9 @@ const ORIGIN = 'https://xn--d1ah4a.com';
     await p.evaluate(() => {
       const feed = document.querySelector('.vp-msgs-feed');
       feed.innerHTML = '';
-      const add = (dir, t, meta) => { const d = document.createElement('div'); d.className = 'vp-msgs-b vp-' + dir; d.textContent = t; const i = document.createElement('i'); i.textContent = meta; d.appendChild(i); feed.appendChild(d); };
+      const add = (dir, t, meta) => { const d = document.createElement('div'); d.className = 'vp-msgs-b vp-' + dir; d.textContent = t; const i = document.createElement('i'); const tk = /✓✓$/.test(meta) ? 2 : /✓$/.test(meta) ? 1 : 0; i.textContent = meta.replace(/\s*✓+$/, ''); if (tk) i.dataset.tick = tk; d.appendChild(i); feed.appendChild(d); };
       add('in', 'Привет! Как дела?', '19:25');
-      add('out', 'Нормально, делаю мод', '19:27 ✓');
+      add('out', 'Нормально, делаю мод', '19:27 ✓✓');
       add('in', 'Покажешь?', '19:32');
       add('out', 'Как дела? Вот так выглядит длинное сообщение в две строки, чтобы проверить перенос', '15:09 ✓');
       const inp = document.querySelector('.vp-msgs-bar input'); inp.disabled = false; inp.value = 'Черновик';

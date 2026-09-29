@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.12
+// @version      3.3.13
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3242,6 +3242,76 @@
                 `Ошибки (${vpErrors.length}):` + (vpErrors.length ? '\n' + vpErrors.join('\n') : ' нет')
             ].join('\n');
         }
+        const CALL_CSS = `
+        .vp-call { position: fixed; inset: 0; z-index: 2147483600; display: flex; align-items: center; justify-content: center; padding: 16px;
+            background: rgba(0, 0, 0, .9); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); animation: vpCallIn .25s ease; font-family: inherit; }
+        .vp-call-card { width: min(300px, 100%); box-sizing: border-box; padding: 34px 22px 24px; border-radius: 22px; background: #2b2d31; color: #f2f3f5; text-align: center;
+            box-shadow: 0 24px 70px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(255, 255, 255, .06); }
+        .vp-call-ava { position: relative; width: 132px; height: 132px; margin: 0 auto 22px; border-radius: 50%; background: #f4f4f4; display: grid; place-items: center; }
+        .vp-call-ava::before, .vp-call-ava::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .5); animation: vpCallRing 1.6s ease-out infinite; }
+        .vp-call-ava::after { animation-delay: .8s; }
+        .vp-call.vp-talk .vp-call-ava::before, .vp-call.vp-talk .vp-call-ava::after { animation: none; opacity: 0; }
+        .vp-call-ava b { font: 900 54px/1 Arial Black, Arial, sans-serif; color: #111; letter-spacing: -3px; transform: skewX(-8deg);
+            text-shadow: 3px 0 0 rgba(0, 0, 0, .35), -2px 0 0 rgba(0, 0, 0, .2); }
+        .vp-call-name { font-size: 19px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; line-height: 1.2; }
+        .vp-call-sub { margin-top: 6px; font-size: 15px; color: #b5bac1; min-height: 20px; font-variant-numeric: tabular-nums; }
+        .vp-call-btns { display: flex; gap: 14px; justify-content: center; margin-top: 26px; }
+        .vp-call-btns button { flex: 1 1 0; max-width: 118px; height: 48px; border: 0; border-radius: 12px; color: #fff; font: 700 15px/1 inherit; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 7px; transition: filter .15s, transform .15s; }
+        .vp-call-btns button:hover { filter: brightness(1.12); }
+        .vp-call-btns button:active { transform: scale(.96); }
+        .vp-call-btns svg { width: 18px; height: 18px; }
+        .vp-call-no { background: #248046; }
+        .vp-call-yes { background: #248046; }
+        .vp-call.vp-talk .vp-call-btns { visibility: hidden; }
+        .vp-call.vp-out { animation: vpCallOut .3s ease forwards; }
+        @keyframes vpCallIn { from { opacity: 0; } }
+        @keyframes vpCallOut { to { opacity: 0; } }
+        @keyframes vpCallRing { from { transform: scale(1); opacity: .8; } to { transform: scale(1.35); opacity: 0; } }
+        @media (prefers-reduced-motion: reduce) { .vp-call-ava::before, .vp-call-ava::after { animation: none; opacity: .4; } }`;
+        function fakeCall() {
+            if (document.querySelector('.vp-call')) return;
+            if (!document.getElementById('vp-call-css')) { const st = document.createElement('style'); st.id = 'vp-call-css'; st.textContent = CALL_CSS; document.head.appendChild(st); }
+            const phone = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>';
+            const el = document.createElement('div');
+            el.className = 'vp-call';
+            el.innerHTML = `<div class="vp-call-card" role="dialog" aria-label="Входящий звонок"><div class="vp-call-ava"><b>ИТД</b></div>
+                <div class="vp-call-name">Смерть в итдолизме</div><div class="vp-call-sub">Илья Новки звонит…</div>
+                <div class="vp-call-btns"><button type="button" class="vp-call-no">${phone}Принять</button><button type="button" class="vp-call-yes">${phone}Принять</button></div></div>`;
+            document.body.appendChild(el);
+            const sub = el.querySelector('.vp-call-sub'), timers = [];
+            let ac = null, ringT = 0;
+            try {
+                ac = new (window.AudioContext || window.webkitAudioContext)();
+                const burst = at => {
+                    const g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
+                    g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(.16, at + .02); g.gain.setValueAtTime(.16, at + .38); g.gain.linearRampToValueAtTime(0, at + .42);
+                    lfo.frequency.value = 22; lg.gain.value = .5; lfo.connect(lg).connect(g.gain);
+                    [440, 480].forEach(f => { const o = ac.createOscillator(); o.frequency.value = f; o.connect(g); o.start(at); o.stop(at + .45); });
+                    lfo.start(at); lfo.stop(at + .45);
+                    g.connect(ac.destination);
+                };
+                const ring = () => { const t0 = ac.currentTime + .05; burst(t0); burst(t0 + .6); };
+                ring(); ringT = setInterval(ring, 3000);
+            } catch (e) { ac = null; }
+            const stopRing = () => { clearInterval(ringT); if (ac) { ac.close().catch(() => { }); ac = null; } };
+            const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+            const close = () => { stopRing(); timers.forEach(clearTimeout); el.classList.add('vp-out'); setTimeout(() => el.remove(), 320); };
+            const answer = () => {
+                if (el.classList.contains('vp-talk')) return;
+                stopRing(); timers.forEach(clearTimeout); timers.length = 0;
+                el.classList.add('vp-talk');
+                sub.textContent = 'Соединение…';
+                later(() => {
+                    let sec = 0;
+                    sub.textContent = '00:00';
+                    const tick = setInterval(() => { sec++; sub.textContent = '00:0' + sec; }, 1000);
+                    later(() => { clearInterval(tick); sub.textContent = 'Звонок сброшен: сервер ИТД упал'; later(close, 2200); }, 3200);
+                }, 1300);
+            };
+            el.querySelectorAll('.vp-call-btns button').forEach(b => b.addEventListener('click', answer));
+            later(() => { stopRing(); el.classList.add('vp-talk'); sub.textContent = 'Пропущенный звонок'; later(close, 2000); }, 30000);
+        }
         function adminDiag() {
             document.querySelectorAll('.vp-admin-panel').forEach(p => p.remove());
             const rows = diagRows();
@@ -3374,6 +3444,7 @@
                 <button type="button" data-act="rare">${svgIcon('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.3 6L12 16.4 6.6 19.4l1.3-6L3.4 9.3l6-.7z"/>', 18)}<span>Редкая заставка</span></button>
                 <button type="button" data-act="assemble">${svgIcon('<path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z"/>', 18)}<span>Заставка «сборка»</span></button>
                 <button type="button" data-act="twist">${svgIcon('<path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/>', 18)}<span>Заставка «обманка»</span></button>
+                <button type="button" data-act="call">${svgIcon('<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>', 18)}<span>Звонок-розыгрыш</span></button>
                 <button type="button" data-act="fps">${svgIcon('<path d="M3 17l5-6 4 3 5-7 4 4"/>', 18)}<span>Счётчик FPS</span></button>
                 <button type="button" data-act="face">${svgIcon('<rect x="4" y="4" width="16" height="16" rx="8"/><path d="M8 15l2.5-3 2 2 1.5-2 2 3"/>', 18)}<span>Своя картинка кнопки</span></button>
                 <button type="button" data-act="off">${svgIcon('<path d="M12 3v8"/><path d="M6.3 7a8 8 0 1 0 11.4 0"/>', 18)}<span>Мод выкл (до закрытия вкладки)</span></button></div>`;
@@ -3433,6 +3504,7 @@
             act('rare', () => playIntro(IS_PHONE ? 'silent' : 'desk', true));
             act('assemble', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'assemble'));
             act('twist', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'twist'));
+            act('call', fakeCall);
             act('face', () => {
                 if (GM_getValue('fabFace', '') && confirm('Вернуть обычную «A»? (Отмена — выбрать другую картинку)')) {
                     GM_setValue('fabFace', ''); btn.innerHTML = fabFace(); return;
@@ -3761,7 +3833,12 @@
         }
 
         const CHANGELOG = [
-            ['3.3.11 – 3.3.12', '29 сентября 2026', [
+            ['3.3.11 – 3.3.13', '29 сентября 2026', [
+                'Ивент «Алиса AI»: иконка ИТД X на пункте «Ивент», «Сбор на шторы» больше не наезжает на статистику профиля, окно ивента не ломает баннер',
+                'Сообщения: окно больше не мигает — новые сообщения, реакции и галочки появляются на месте',
+                'Сообщения: реакция ставится сразу и не пропадает, перезаходить не нужно',
+                'Сообщения: галочки как в Телеграме — одна «доставлено», двойная «прочитано»',
+                'Сообщения: порядок верный, даже если у кого-то неправильно идут часы на устройстве; новые сообщения от такого человека не теряются',
                 'Клуб ИТД X: видно, кто сейчас в сети — зелёная точка на аватарке, такие люди наверху списка; наведи на строку — «в сети» или когда был(а)',
                 'Статистика в боковой панели — общая для всех твоих устройств: на телефоне тот же прирост за день и месяц, что на компьютере',
                 'Сообщения: прочитанное на одном устройстве не висит непрочитанным на другом',
@@ -3983,8 +4060,18 @@
             }
             return tokenPending;
         }
+        function noteServerTime(res, t0, t1) {
+            const d = Date.parse((res && res.headers && res.headers.get('date')) || '');
+            if (!d) return;
+            const s = noteServerTime.s || (noteServerTime.s = []);
+            s.push(d + 500 - (t0 + t1) / 2);
+            if (s.length > 9) s.shift();
+            const o = s.slice().sort((a, b) => a - b);
+            noteServerTime.v = o[o.length >> 1];
+        }
+        function srvNow() { const v = noteServerTime.v || 0; return Date.now() + (Math.abs(v) > 1500 ? v : 0); }
         async function api(path, opts = {}) {
-            const call = t => fetch(path, { credentials: 'include', ...opts, headers: { ...opts.headers, Authorization: `Bearer ${t}` } });
+            const call = async t => { const t0 = Date.now(), r = await fetch(path, { credentials: 'include', ...opts, headers: { ...opts.headers, Authorization: `Bearer ${t}` } }); noteServerTime(r, t0, Date.now()); return r; };
             let res = await call(await getAccessToken());
             if (res.status === 401) res = await call(await getAccessToken(true));
             return res;
@@ -5942,7 +6029,7 @@
                     let m;
                     if ((m = t.match(/^ITDXK1 ([\w-]+) ([\w-]+)$/))) {
                         if (!keys.has(a.id)) keys.set(a.id, { id: a.id, login: a.username || '', cid: c.id, pubText: m[1], pub: b64u.dec(m[1]), sealed: m[2] });
-                    } else if ((m = t.match(/^ITDXM1 (\d+) ([cb])([\s\S]*)$/))) vols.push({ cid: c.id, author: a.id, seq: +m[1], mode: m[2], data: m[3] });
+                    } else if ((m = t.match(/^ITDXM1 (\d+) ([cb])([\s\S]*)$/))) vols.push({ cid: c.id, author: a.id, seq: +m[1], mode: m[2], data: m[3], made: Date.parse(c.createdAt || c.created_at || '') || 0 });
                 }
                 const changed = [...keys].some(([id, k]) => !msgNet.keys.get(id) || msgNet.keys.get(id).pubText !== k.pubText) || keys.size !== msgNet.keys.size;
                 msgNet.keys = keys; msgNet.vols = vols.sort((x, y) => x.seq - y.seq);
@@ -5991,19 +6078,29 @@
         async function msgDecryptAll() {
             const me = msgNet.me;
             if (!me) return;
-            const conv = new Map(), add = (uid, dir, m) => { if (!conv.has(uid)) conv.set(uid, []); conv.get(uid).push({ dir, ...m }); };
+            const conv = new Map(), add = (uid, dir, m, v, i) => { if (!conv.has(uid)) conv.set(uid, []); conv.get(uid).push({ dir, ...m, _v: v, _i: i }); };
             const others = [...msgNet.keys.keys()].filter(id => id !== me.id);
             for (const v of msgNet.vols) {
                 let recs;
                 try { recs = volRecs(v); } catch (e) { continue; }
                 if (v.author === me.id) {
-                    for (const r of recs) for (const uid of others) { const k = await msgPair(uid), m = k && await msgOpenRec(k, r); if (m) { add(uid, 'out', m); break; } }
+                    for (const [i, r] of recs.entries()) for (const uid of others) { const k = await msgPair(uid), m = k && await msgOpenRec(k, r); if (m) { add(uid, 'out', m, v, i); break; } }
                 } else {
                     const k = await msgPair(v.author);
-                    if (k) for (const r of recs) { const m = await msgOpenRec(k, r); if (m) add(v.author, 'in', m); }
+                    if (k) for (const [i, r] of recs.entries()) { const m = await msgOpenRec(k, r); if (m) add(v.author, 'in', m, v, i); }
                 }
             }
-            conv.forEach(list => list.sort((x, y) => x.ts - y.ts));
+            const volSkew = new Map(), authSkew = new Map();
+            conv.forEach(list => list.forEach(m => { if (m._i === 0 && m._v.made) volSkew.set(m._v, m.ts - m._v.made / 1000); }));
+            volSkew.forEach((k, v) => { if (!authSkew.has(v.author)) authSkew.set(v.author, []); authSkew.get(v.author).push(k); });
+            const mid = a => a.slice().sort((x, y) => x - y)[a.length >> 1];
+            conv.forEach(list => list.forEach(m => {
+                let k = volSkew.has(m._v) ? volSkew.get(m._v) : authSkew.has(m._v.author) ? mid(authSkew.get(m._v.author)) : 0;
+                if (Math.abs(k) < 20) k = 0;
+                m.at = Math.round(m.ts - k);
+                delete m._v; delete m._i;
+            }));
+            conv.forEach(list => list.sort((x, y) => x.at - y.at || x.ts - y.ts));
             const reacts = new Map(), reads = new Map();
             conv.forEach((list, uid) => {
                 const keep = [];
@@ -6024,6 +6121,13 @@
                     }
                 }
                 if (keep.length) conv.set(uid, keep); else conv.delete(uid);
+            });
+            const pend = msgNet.pendReacts || (msgNet.pendReacts = new Map());
+            pend.forEach((q, key) => {
+                const e = reacts.get(key) || {}, got = e.me ? e.me.emoji : '';
+                if (got === q.emoji || Date.now() > q.until) { pend.delete(key); return; }
+                e.me = { ts: q.ts, emoji: q.emoji };
+                reacts.set(key, e);
             });
             msgNet.reacts = reacts; msgNet.reads = reads;
             msgNet.conv = conv;
@@ -6062,7 +6166,7 @@
         async function msgSend(uid, text, sup, img, svc) {
             const me = msgNet.me, key = await msgPair(uid);
             if (!me || !key) throw new Error('нет ключа');
-            const ts = Math.floor(Date.now() / 1000), iv = rnd(12);
+            const ts = Math.floor(srvNow() / 1000), iv = rnd(12);
             const imgs = !img ? [] : Array.isArray(img) ? img.slice(0, MSG_ALBUM_MAX) : [img];
             const one = x => cat(new Uint8Array([x.ext]), msgUuidBytes(x.id));
             const imgBytes = !imgs.length ? new Uint8Array(0)
@@ -6088,6 +6192,7 @@
             const mode = GM_getValue('msgMode', 'c');
             if (!(await write(mode)) && mode === 'c') { GM_setValue('msgMode', 'b'); await msgSync(); await write('b'); }
             await msgSync();
+            return ts;
         }
         const msgKeyOf = login => [...msgNet.keys.values()].find(k => k.login.toLowerCase() === String(login).toLowerCase()) || null;
         const msgIsSupport = () => msgMyId() === OWNER_ID;
@@ -6102,7 +6207,8 @@
         const seenKey = t => (t.sup ? 'sup:' : '') + t.uid;
         const readUpTo = (uid, sup, who) => { const r = msgNet.reads && msgNet.reads.get(uid); return r ? r[(who || 'me') + (sup ? '1' : '0')] || 0 : 0; };
         const seenAt = (seen, uid, sup) => Math.max(seen[(sup ? 'sup:' : '') + uid] || 0, readUpTo(uid, sup));
-        function msgMarkSeen(t) { const s = msgSeen(), list = msgThread(t); s[seenKey(t)] = list.length ? list[list.length - 1].ts : 0; GM_setValue(acctKey('msgSeen'), s); }
+        const lastInTs = list => list.reduce((a, m) => m.dir === 'in' && m.ts > a ? m.ts : a, 0);
+        function msgMarkSeen(t) { const s = msgSeen(), list = msgThread(t); s[seenKey(t)] = Math.max(s[seenKey(t)] || 0, lastInTs(list)); GM_setValue(acctKey('msgSeen'), s); }
         const msgTime = ts => { const d = new Date(ts * 1000), t = d.toTimeString().slice(0, 5); return d.toDateString() === new Date().toDateString() ? t : `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')} ${t}`; };
         function msgFillDialogs() {
             const me = msgNet.me;
@@ -6123,8 +6229,8 @@
                 if (!list.length) continue;
                 const last = list[list.length - 1];
                 d.last = (last.dir === 'out' ? 'Ты: ' : '') + msgPreview(last);
-                d.lastTs = last.ts;
-                d.time = msgTime(last.ts);
+                d.lastTs = last.at || last.ts;
+                d.time = msgTime(last.at || last.ts);
                 d.unread = list.filter(m => m.dir === 'in' && m.ts > seenAt(seen, t.uid, t.sup)).length;
             }
         }
@@ -6182,14 +6288,14 @@
             if (!msgNet.me) return;
             const incoming = [];
             for (const [uid, list] of msgNet.conv) for (const m of list) if (m.dir === 'in') incoming.push({ uid, ...m });
-            incoming.sort((a, b) => a.ts - b.ts);
-            const top = incoming.length ? incoming[incoming.length - 1].ts : 0;
+            incoming.sort((a, b) => (a.at || a.ts) - (b.at || b.ts));
+            const idOf = m => m.uid + '|' + m.ts + '|' + (m.sup ? 1 : 0), ids = new Set(incoming.map(idOf));
             if (msgBase !== null) {
-                const fresh = incoming.filter(m => m.ts > msgBase), last = fresh[fresh.length - 1];
+                const fresh = incoming.filter(m => !msgBase.has(idOf(m))), last = fresh[fresh.length - 1];
                 const open = messagesOverlay && messagesOverlay.classList.contains('vp-open'), cur = open && messagesOverlay.currentTarget && messagesOverlay.currentTarget();
                 if (last && !(cur && cur.uid === last.uid && cur.sup === last.sup)) msgToast(last);
             }
-            msgBase = Math.max(msgBase || 0, top);
+            msgBase = ids;
             msgBadge();
             if (messagesOverlay && messagesOverlay.classList.contains('vp-open') && messagesOverlay.refreshList) messagesOverlay.refreshList();
         }
@@ -6500,7 +6606,13 @@
         .vp-msgs-b.vp-in { align-self: flex-start; background: var(--block-bg, #1c1c1c); border-bottom-left-radius: 6px; }
         .vp-msgs-b.vp-out { align-self: flex-end; background: color-mix(in srgb, var(--vp-accent, #0080ff) 26%, var(--block-bg, #1c1c1c)); color: var(--text-primary, #fff);
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 45%, transparent); border-bottom-right-radius: 6px; }
-        .vp-msgs-b i { display: block; margin-top: 2px; font-style: normal; font-size: 11px; opacity: .6; text-align: right; }
+        .vp-msgs-b i { display: block; margin-top: 2px; font-style: normal; font-size: 11px; opacity: .6; text-align: right; white-space: nowrap; }
+        .vp-msgs-b i[data-tick]::after { content: ""; display: inline-block; width: 16px; height: 11px; margin-left: 3px; vertical-align: -1px; background: currentColor;
+            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6 5.6 9.1 12.5 2.2'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6 5.6 9.1 12.5 2.2'/%3E%3C/svg%3E") center / contain no-repeat; }
+        .vp-msgs-b i[data-tick="2"]::after {
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M.8 6 3.9 9.1 10.8 2.2M7.4 8.1l1 1 6.9-6.9'/%3E%3C/svg%3E");
+            mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M.8 6 3.9 9.1 10.8 2.2M7.4 8.1l1 1 6.9-6.9'/%3E%3C/svg%3E"); }
         .vp-msgs-b.vp-fail i { opacity: .85; }
         .vp-msgs-typing { display: flex; gap: 5px; padding: 14px 16px; }
         .vp-msgs-typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary, #8a8a8a); animation: vpMsgsDot 1s infinite; }
@@ -6643,6 +6755,11 @@
                 </div>`).join('') : '<div class="vp-msgs-empty">Ничего не нашлось</div>';
             }
             const now = () => new Date().toTimeString().slice(0, 5);
+            function setMeta(i, str) {
+                const m = String(str).match(/^(.*?)\s*(✓✓|✓)$/), txt = m ? m[1] : String(str);
+                if (i.textContent !== txt) i.textContent = txt;
+                if (m) { if (i.dataset.tick !== String(m[2].length)) i.dataset.tick = m[2].length; } else if (i.hasAttribute('data-tick')) i.removeAttribute('data-tick');
+            }
             function bubble(dir, text, meta, imgUrl) {
                 const urls = !imgUrl ? [] : Array.isArray(imgUrl) ? imgUrl : [imgUrl];
                 const b = document.createElement('div');
@@ -6676,7 +6793,7 @@
                     if (text) { b.childNodes[1].remove(); const cap = document.createElement('span'); cap.className = 'vp-msgs-cap'; cap.textContent = text; box.after(cap); }
                 }
                 const i = document.createElement('i');
-                i.textContent = meta || now();
+                setMeta(i, meta || now());
                 b.appendChild(i);
                 feed.appendChild(b);
                 feed.scrollTop = feed.scrollHeight;
@@ -6727,20 +6844,51 @@
                 const t = msgTarget(d);
                 if (!t.uid) { note(t.missing); return; }
                 const list = msgThread(t);
-                if (!list.length) note(d.support ? 'Опиши проблему или идею — ответ придёт сюда' : `Это начало переписки с ${d.name}`);
+                if (!list.length) note(d.support ? 'Опиши проблему или идею — ответ придёт сюда' : `Это начало переписки с ${d.name}`).classList.add('vp-msgs-first');
                 list.forEach(m => {
-                    const b = bubble(m.dir, m.text, msgTime(m.ts) + (m.dir === 'out' ? (readUpTo(t.uid, t.sup, 'them') >= m.ts ? ' ✓✓' : ' ✓') : ''), (m.imgs || (m.img ? [m.img] : [])).map(msgImgUrl));
+                    const b = bubble(m.dir, m.text, msgMetaText(t, m), (m.imgs || (m.img ? [m.img] : [])).map(msgImgUrl));
                     b._m = m; b.dataset.ts = m.ts; b.dataset.dir = m.dir;
                     paintReacts(b, t.uid);
                 });
                 d.shown = list.length; d.sig = chatSig(t.uid);
                 input.disabled = false; input.focus();
+                msgReadNow(d, t, list);
+            }
+            const msgMetaText = (t, m) => msgTime(m.at || m.ts) + (m.dir === 'out' ? (readUpTo(t.uid, t.sup, 'them') >= m.ts ? ' ✓✓' : ' ✓') : '');
+            function msgRefreshChat(d) {
+                const t = msgTarget(d);
+                if (!t.uid || !msgNet.me || input.disabled) return;
+                const list = msgThread(t), have = new Map();
+                feed.querySelectorAll(':scope > .vp-msgs-b[data-ts]').forEach(b => { const k = b.dataset.dir + '|' + b.dataset.ts; if (!have.has(k)) have.set(k, []); have.get(k).push(b); });
+                const nearEnd = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80, keep = feed.scrollTop;
+                let prev = null, added = 0;
+                for (const m of list) {
+                    let b = (have.get(m.dir + '|' + m.ts) || []).shift();
+                    if (b) setMeta(b.lastChild, msgMetaText(t, m));
+                    else {
+                        b = bubble(m.dir, m.text, msgMetaText(t, m), (m.imgs || (m.img ? [m.img] : [])).map(msgImgUrl));
+                        b.dataset.ts = m.ts; b.dataset.dir = m.dir; added++;
+                    }
+                    b._m = m;
+                    const sig = JSON.stringify(msgNet.reacts && msgNet.reacts.get(reactKey(t.uid, m.dir, m.ts)) || null);
+                    if (b._rs !== sig) { b._rs = sig; paintReacts(b, t.uid); }
+                    const want = prev ? prev.nextElementSibling : feed.querySelector(':scope > .vp-msgs-b');
+                    if (want !== b) { if (prev) prev.after(b); else feed.insertBefore(b, want); }
+                    prev = b;
+                }
+                if (added) feed.querySelectorAll(':scope > .vp-msgs-note.vp-msgs-first').forEach(n => n.remove());
+                feed.scrollTop = nearEnd ? feed.scrollHeight : keep;
+                d.shown = list.length; d.sig = chatSig(t.uid);
+                msgReadNow(d, t, list);
+            }
+            function msgReadNow(d, t, list) {
+                if (document.hidden) return;
                 msgMarkSeen(t); d.unread = 0; msgBadge();
-                const lastIn = [...list].reverse().find(m => m.dir === 'in');
-                if (lastIn && lastIn.ts > readUpTo(t.uid, t.sup)) {
+                const inTs = lastInTs(list);
+                if (inTs && inTs > readUpTo(t.uid, t.sup)) {
                     const r = msgNet.reads.get(t.uid) || { me: 0, them: 0 };
-                    r.me = Math.max(r.me, lastIn.ts); r[t.sup ? 'me1' : 'me0'] = lastIn.ts; msgNet.reads.set(t.uid, r);
-                    msgSendRead(t.uid, lastIn.ts, t.sup).catch(e => logErr('прочитано', e));
+                    r.me = Math.max(r.me, inTs); r[t.sup ? 'me1' : 'me0'] = inTs; msgNet.reads.set(t.uid, r);
+                    msgSendRead(t.uid, inTs, t.sup).catch(e => logErr('прочитано', e));
                 }
             }
             function msgKeyForm(d) {
@@ -6770,7 +6918,7 @@
                 if (!current) return renderList();
                 if (current.bot) return;
                 const tt = msgTarget(current), list = msgThread(tt);
-                if ((list.length !== current.shown || chatSig(tt.uid) !== current.sig) && !input.value && !menu) msgOpenPerson(current);
+                if (list.length !== current.shown || chatSig(tt.uid) !== current.sig) msgRefreshChat(current);
             }, 20000);
             root.refreshList = () => { if (!current) { msgFillDialogs(); renderList(); } };
             root.openDialog = (id, fromHistory) => {
@@ -6921,13 +7069,17 @@
                 if (!m || !t || !t.uid) return;
                 const key = reactKey(t.uid, m.dir, m.ts), e = msgNet.reacts.get(key) || {};
                 const next = e.me && e.me.emoji === emoji ? '' : emoji;
-                e.me = { ts: Math.floor(Date.now() / 1000), emoji: next };
+                e.me = { ts: Math.floor(srvNow() / 1000), emoji: next };
                 msgNet.reacts.set(key, e);
+                const pend = msgNet.pendReacts || (msgNet.pendReacts = new Map());
+                pend.set(key, { emoji: next, ts: e.me.ts, until: Date.now() + 60e3 });
                 const nearEnd = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
                 paintReacts(b, t.uid);
                 if (nearEnd) feed.scrollTop = feed.scrollHeight;
                 current.sig = chatSig(t.uid);
-                msgReact(t.uid, m, next).then(() => { if (current) current.sig = chatSig(t.uid); }).catch(err => logErr('реакция', err));
+                const d = current;
+                msgReact(t.uid, m, next).then(() => { if (current === d) msgRefreshChat(d); })
+                    .catch(err => { pend.delete(key); logErr('реакция', err); if (current === d) msgRefreshChat(d); note('Реакция не сохранилась — попробуй ещё раз'); });
             }
             let menu = null, pressT = 0;
             function closeMenu() {
@@ -7079,6 +7231,13 @@
                 renderPending();
             }
             pendEl.querySelector('.vp-msgs-pend-all').addEventListener('click', clearPending);
+            function msgSentOk(b, d, ts) {
+                setMeta(b.lastChild, now() + ' ✓');
+                if (ts && feed.querySelector(`:scope > .vp-msgs-b[data-dir="out"][data-ts="${ts}"]`)) b.remove();
+                else if (ts) { b.dataset.ts = ts; b.dataset.dir = 'out'; }
+                msgFillDialogs();
+                if (current === d) msgRefreshChat(d);
+            }
             function sendImages(files) {
                 if (!files.length || !current) return;
                 const t = msgNet.me && !current.bot ? msgTarget(current) : null;
@@ -7089,13 +7248,13 @@
                 (async () => {
                     const imgs = [];
                     for (const f of files) {
-                        if (files.length > 1) b.lastChild.textContent = now() + ` · загрузка ${imgs.length + 1} из ${files.length}…`;
+                        if (files.length > 1) setMeta(b.lastChild, now() + ` · загрузка ${imgs.length + 1} из ${files.length}…`);
                         imgs.push(await msgUploadImage(f));
                     }
-                    b.lastChild.textContent = now() + ' · отправка…';
-                    await msgSend(t.uid, caption, t.sup, imgs);
-                })().then(() => { b.lastChild.textContent = now() + ' ✓'; d.shown = (d.shown || 0) + 1; msgFillDialogs(); },
-                    e => { b.lastChild.textContent = now() + ' · не отправлено: ' + (e.message || e); b.classList.add('vp-fail'); logErr('картинка', e); });
+                    setMeta(b.lastChild, now() + ' · отправка…');
+                    return msgSend(t.uid, caption, t.sup, imgs);
+                })().then(ts => msgSentOk(b, d, ts),
+                    e => { setMeta(b.lastChild, now() + ' · не отправлено: ' + (e.message || e)); b.classList.add('vp-fail'); logErr('картинка', e); });
             }
             const fileIn = $('.vp-msgs-file');
             fileIn.multiple = true;
@@ -7118,8 +7277,8 @@
                 else if (current.support && !(msgNet.me && msgTarget(current).uid)) { bubble('out', text, now() + ' ✓'); supportReply(); }
                 else if (msgNet.me && msgTarget(current).uid) {
                     const b = bubble('out', text, now() + ' · отправка…'), d = current, t = msgTarget(d);
-                    msgSend(t.uid, text, t.sup).then(() => { b.lastChild.textContent = now() + ' ✓'; d.shown = (d.shown || 0) + 1; msgFillDialogs(); },
-                        e => { b.lastChild.textContent = now() + ' · не отправлено'; b.classList.add('vp-fail'); logErr('сообщения', e); });
+                    msgSend(t.uid, text, t.sup).then(ts => msgSentOk(b, d, ts),
+                        e => { setMeta(b.lastChild, now() + ' · не отправлено'); b.classList.add('vp-fail'); logErr('сообщения', e); });
                 }
                 else bubble('out', text, now() + ' · не отправлено').classList.add('vp-fail');
             });
@@ -7327,7 +7486,7 @@
         });
         let eventMaskN = 0;
         onDom(function eventIcon() {
-            document.querySelectorAll('a[href="/event"] img').forEach(img => {
+            document.querySelectorAll('a[href^="/event"] img').forEach(img => {
                 const own = [...img.classList].filter(c => !c.startsWith('vp-'));
                 const state = own.length > 1 || (/portal/.test(img.src) && !/inactive/.test(img.src)) ? 'live' : 'idle';
                 if (!img.classList.contains('vp-portal-img')) img.classList.add('vp-portal-img');
@@ -8032,7 +8191,9 @@
         .vp-bump-bg { position: absolute; left: 0; z-index: -1; pointer-events: none; overflow: visible;
             backdrop-filter: var(--vp-glass-filter, blur(16px)); -webkit-backdrop-filter: var(--vp-glass-filter, blur(16px)); }
         .vp-bump-bg .vp-bump-fill { fill: var(--glass-bg); }
-        a[href="/event"] img[src*="/portal/"], img.vp-portal-img { display: none !important; }
+        a[href^="/event"] img[src*="/portal/"], img.vp-portal-img { display: none !important; }
+        [data-vp-stack] { grid-template-columns: minmax(0, 1fr) !important; row-gap: 14px !important; }
+        [data-vp-stack] > * { grid-area: auto !important; grid-column: 1 / -1 !important; }
         @media (prefers-reduced-motion: reduce) { .vp-portal { animation: none !important; } }
         .vp-portal[data-state="live"] { animation: vpPortalPulse 2s ease-in-out infinite; }
         @keyframes vpPortalPulse {
@@ -8056,7 +8217,7 @@
             transition: opacity .25s ease, background-color .4s ease; }
 
         .vp-banner.vp-depth { background: transparent !important; }
-        .vp-banner.vp-depth > img[alt="Banner"] { will-change: transform; transform-origin: 50% 50%;
+        .vp-banner.vp-depth > img[alt="Banner"], .vp-banner.vp-depth > [aria-label="Стекло"] { will-change: transform; transform-origin: 50% 50%;
             -webkit-mask-image: linear-gradient(to bottom, #000 58%, transparent); mask-image: linear-gradient(to bottom, #000 58%, transparent); }
 
         @property --vp-n { syntax: '<integer>'; inherits: false; initial-value: 0; }
@@ -9793,10 +9954,12 @@
             if (r.bottom < -40 || r.top > innerHeight) return;
             const past = Math.max(0, -r.top);
             const y = Math.round(past * .35);
-            if (img._vpY === y && !calm) return;
-            img._vpY = y;
-            img.style.transform = calm ? '' : `translateY(${y}px) scale(1.15)`;
-            img.style.opacity = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
+            const glass = banner.querySelector(':scope > [aria-label="Стекло"]');
+            const tf = calm ? '' : `translateY(${y}px) scale(1.15)`, op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
+            for (const el of glass ? [img, glass] : [img]) {
+                if (el.style.transform !== tf) el.style.transform = tf;
+                if (el.style.opacity !== op) el.style.opacity = op;
+            }
         }
         addEventListener('scroll', () => { if (!bannerQueued) { bannerQueued = true; requestAnimationFrame(bannerDepth); } }, { capture: true, passive: true });
         onDom(function bannerDepthDom() { bannerDepth(); });
@@ -9873,6 +10036,19 @@
             });
         }
         onDom(profilePostsRow);
+        function profileStatsFit() {
+            const st = document.querySelector('.vp-posts-stat'), row = st && st.parentElement;
+            if (!row || !row.isConnected) return;
+            let g = row.parentElement;
+            for (let k = 0; g && k < 4 && getComputedStyle(g).display !== 'grid'; k++) g = g.parentElement;
+            if (!g || g.hasAttribute('data-vp-stack') || getComputedStyle(g).display !== 'grid') return;
+            if (getComputedStyle(g).gridTemplateColumns.trim().split(/\s+/).length < 2) return;
+            const col = [...g.children].find(c => c.contains(row));
+            if (!col || g.children.length < 2) return;
+            const edge = col.getBoundingClientRect().right + 1;
+            if ([...row.children].some(c => c.getBoundingClientRect().right > edge)) g.setAttribute('data-vp-stack', '');
+        }
+        onDom(profileStatsFit);
 
         let uiSoundEnabled = GM_getValue('uiSoundEnabled', false);
         let uiCtx = null;

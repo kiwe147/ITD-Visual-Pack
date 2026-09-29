@@ -23,7 +23,7 @@ const TALL = fs.readFileSync(path.join(__dirname, 'tall.png'));
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP4z8DwnwEIGP4zMDAwAAA2ygX7vK9Y8AAAAABJRU5ErkJggg==', 'base64');
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
-  const open = async (who, other) => {
+  const open = async (who, other, skew = 0) => {
     const ctx = await b.newContext({ viewport: { width: 1400, height: 900 } });
     const p = await ctx.newPage();
     p.errors = [];
@@ -39,8 +39,8 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
       const um = u.pathname.match(/^\/api\/users\/(\w+)$/);
       if (um && USERS[um[1]]) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { ...USERS[um[1]], online: um[1] === 'bob' } }) });
       if (u.pathname === `/api/posts/${POST}/comments`) {
-        if (req.method() === 'GET') return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { comments, hasMore: false } }) });
-        const c = { id: 'c' + (++n), author: USERS[who], content: JSON.parse(req.postData()).content };
+        if (req.method() === 'GET') return r.fulfill({ contentType: 'application/json', headers: { date: new Date().toUTCString() }, body: JSON.stringify({ data: { comments, hasMore: false } }) });
+        const c = { id: 'c' + (++n), author: USERS[who], content: JSON.parse(req.postData()).content, createdAt: new Date().toISOString() };
         comments.push(c); posts++;
         return r.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ data: c }) });
       }
@@ -51,13 +51,15 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
       }
       return r.fulfill({ status: 404, body: '' });
     });
-    await p.addInitScript(([m, v]) => {
+    await p.addInitScript(([m, v, skew]) => {
       const s = { introEnabled: false, introMobile: 'off', backgroundEnabled: false };
       window.GM_getValue = (k, d) => k in s ? s[k] : d; window.GM_setValue = (k, v) => { s[k] = v; };
       window.GM_xmlhttpRequest = o => setTimeout(() => o.onerror && o.onerror('x'), 0);
       window.GM_info = { script: { version: 't' }, scriptMetaStr: m }; window.unsafeWindow = window;
+      if (skew) { const n0 = Date.now.bind(Date); Date.now = () => n0() + skew; }
+      window.metaOf = i => i.textContent + ' ✓✓'.slice(0, 1 + (+i.dataset.tick || 0));
       localStorage.setItem('itd_verified_users', JSON.stringify(v));
-    }, [src.slice(0, src.indexOf('==/UserScript==')), VERIFIED]);
+    }, [src.slice(0, src.indexOf('==/UserScript==')), VERIFIED, skew]);
     await p.goto(ORIGIN + '/');
     await p.evaluate(() => document.querySelectorAll('.vp-msgs, .vp-nav-blob, .vp-fab, .vp-rail').forEach(e => e.remove()));
     await p.addScriptTag({ content: src });
@@ -76,7 +78,8 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   };
   const say = async (p, text) => {
     await p.fill('.vp-msgs-bar input', text); await p.click('.vp-msgs-send');
-    await p.waitForFunction(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return b && /✓|не отправлено/.test(b.lastChild.textContent); }, null, { timeout: 15000 });
+    await p.waitForFunction(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return b && /✓|не отправлено/.test(metaOf(b.lastChild)); }, null, { timeout: 15000 })
+      .catch(async e => { console.log('—    say завис: ' + await p.evaluate(() => [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].slice(-2).map(b => b.outerHTML.slice(0, 300)).join(' || ')) + ' | ошибки: ' + p.errors.join(' | ')); throw e; });
   };
   // открыть чат и дождаться, пока в нём n сообщений (переписка расшифровывается не мгновенно)
   const chatWith = async (p, id, n) => {
@@ -181,8 +184,8 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   const pend = await B2.p.evaluate(() => ({ shown: getComputedStyle(document.querySelector('.vp-msgs-pend')).display !== 'none', sendOn: !document.querySelector('.vp-msgs-send').disabled, bubbles: document.querySelectorAll('.vp-msgs-feed .vp-msgs-b').length }));
   check(pend.shown && pend.sendOn && uploads === 0, `после выбора — превью над полем, ещё не отправлено ${JSON.stringify(pend)}`);
   await B2.p.click('.vp-msgs-send');
-  await B2.p.waitForFunction(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return b && /✓|не отправлено/.test(b.lastChild.textContent); }, null, { timeout: 15000 }).catch(() => { });
-  const sentB = await B2.p.evaluate(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return { meta: b.lastChild.textContent, img: !!b.querySelector('img') }; });
+  await B2.p.waitForFunction(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return b && /✓|не отправлено/.test(metaOf(b.lastChild)); }, null, { timeout: 15000 }).catch(() => { });
+  const sentB = await B2.p.evaluate(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return { meta: metaOf(b.lastChild), img: !!b.querySelector('img') }; });
   check(uploads === 1 && sentB.img && /✓/.test(sentB.meta), `bob: картинка загружена и отправлена (${sentB.meta})`);
   const rawAll = comments.map(c => c.content).join('\n');
   check(!rawAll.includes(IMG_ID) && !/cdn|котик/.test(rawAll), 'на сервере нет ни ссылки на картинку, ни подписи — только шифр');
@@ -226,8 +229,8 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   const thumbs = await B2.p.$$eval('.vp-msgs-pend-t', t => t.length);
   check(thumbs === 3 && uploads === up0, `альбом: в превью 3 миниатюры, ещё не отправлено (${thumbs})`);
   await B2.p.click('.vp-msgs-send');
-  await B2.p.waitForFunction(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return b && /✓|не отправлено/.test(b.lastChild.textContent); }, null, { timeout: 20000 }).catch(() => { });
-  const aSent = await B2.p.evaluate(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return { meta: b.lastChild.textContent, cells: b.querySelectorAll('.vp-msgs-album .vp-msgs-imgw').length }; });
+  await B2.p.waitForFunction(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return b && /✓|не отправлено/.test(metaOf(b.lastChild)); }, null, { timeout: 20000 }).catch(() => { });
+  const aSent = await B2.p.evaluate(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return { meta: metaOf(b.lastChild), cells: b.querySelectorAll('.vp-msgs-album .vp-msgs-imgw').length }; });
   check(uploads - up0 === 3 && aSent.cells === 3 && /✓/.test(aSent.meta), `альбом отправлен одним сообщением: загрузок ${uploads - up0}, ${JSON.stringify(aSent)}`);
   await A.p.$eval('.vp-msgs-back', b => b.click()).catch(() => { }); await A.p.waitForTimeout(3000);
   const aPrev = await A.p.$eval('.vp-msgs-row[data-id="u:bob"] .vp-msgs-last', e => e.textContent).catch(() => '');
@@ -251,7 +254,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   await B2.p.setInputFiles('.vp-msgs-file', [1, 2, 3, 4, 5].map(i => ({ name: `b${i}.png`, mimeType: 'image/png', buffer: TALL })));
   await B2.p.waitForTimeout(300);
   await B2.p.fill('.vp-msgs-bar input', 'Хуй 5'); await B2.p.click('.vp-msgs-send');
-  await B2.p.waitForFunction(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return b && /✓|не отправлено/.test(b.lastChild.textContent); }, null, { timeout: 20000 }).catch(() => { });
+  await B2.p.waitForFunction(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return b && /✓|не отправлено/.test(metaOf(b.lastChild)); }, null, { timeout: 20000 }).catch(() => { });
   await A.p.$eval('.vp-msgs-back', b => b.click()).catch(() => { }); await A.p.waitForTimeout(3000);
   const a5prev = await A.p.$eval('.vp-msgs-row[data-id="u:bob"] .vp-msgs-last', e => e.textContent).catch(() => '');
   check(a5prev === '🖼 5 фото · Хуй 5', `альбом 5 с подписью в списке: «${a5prev}»`);
@@ -275,7 +278,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   check(mineR && mineR.t === '❤️' && mineR.mine, `❤️ под сообщением, моя ${JSON.stringify(mineR)}`);
   await A.p.waitForTimeout(3000);
   await chatWith(B2.p, 'u:NeuroSFW', 1); await B2.p.waitForTimeout(1500);
-  const atBob = await B2.p.evaluate(ts => { const b = document.querySelector(`.vp-msgs-feed .vp-msgs-b[data-ts="${ts}"]`); const r = b && b.querySelector('.vp-msgs-reacts button'); const outs = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b.vp-out')]; return { r: r && r.textContent, mine: r && r.classList.contains('vp-mine-r'), lastTick: outs.length && outs[outs.length - 1].lastChild.textContent, bubbles: document.querySelectorAll('.vp-msgs-feed .vp-msgs-b').length }; }, spot.ts);
+  const atBob = await B2.p.evaluate(ts => { const b = document.querySelector(`.vp-msgs-feed .vp-msgs-b[data-ts="${ts}"]`); const r = b && b.querySelector('.vp-msgs-reacts button'); const outs = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b.vp-out')]; return { r: r && r.textContent, mine: r && r.classList.contains('vp-mine-r'), lastTick: outs.length && metaOf(outs[outs.length - 1].lastChild), bubbles: document.querySelectorAll('.vp-msgs-feed .vp-msgs-b').length }; }, spot.ts);
   console.log('—    у bob: ' + JSON.stringify(atBob));
   check(atBob.r === '❤️' && !atBob.mine, 'bob видит ❤️ от NeuroSFW под своим сообщением');
   check(/✓✓$/.test(atBob.lastTick || ''), 'у bob отправленное — ✓✓ (NeuroSFW прочитал)');
@@ -283,6 +286,27 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   check(after === before, `реакции и «прочитано» не становятся пузырями (${before} → ${after})`);
   await A.p.click(`.vp-msgs-feed .vp-msgs-b[data-ts="${spot.ts}"] .vp-msgs-reacts button`); await A.p.waitForTimeout(400);
   check(!(await A.p.$(`.vp-msgs-feed .vp-msgs-b[data-ts="${spot.ts}"] .vp-msgs-reacts`)), 'нажатие по своей реакции — снята');
+  // 3.3.13: часы собеседника отстают на 5 минут — ответ всё равно ниже; чат обновляется на месте, не мигает; галочки — иконкой
+  await chatWith(A.p, 'u:bob', 1); await A.p.waitForTimeout(500);
+  await say(A.p, 'сверка часов');
+  const oldN = await A.p.evaluate(() => { const f = document.querySelector('.vp-msgs-feed'); window.__emptied = false;
+    new MutationObserver(() => { if (!f.querySelector('.vp-msgs-b')) window.__emptied = true; }).observe(f, { childList: true });
+    const bs = [...f.querySelectorAll('.vp-msgs-b')]; bs.forEach(b => { b.__old = 1; }); return bs.length; });
+  const B3 = await open('bob', 'NeuroSFW', -300000);
+  await key(B3.p, 'bob-password-1', false);
+  await say(B3.p, 'ответ с отстающими часами');
+  await A.p.waitForFunction(() => [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].some(b => b.firstChild && b.firstChild.textContent === 'ответ с отстающими часами'), null, { timeout: 30000 }).catch(() => { });
+  const live = await A.p.evaluate(() => { const bs = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')];
+    return { last2: bs.slice(-2).map(b => b.firstChild && b.firstChild.nodeType === 3 ? b.firstChild.textContent : ''), kept: bs.filter(b => b.__old).length, emptied: window.__emptied,
+      ticks: bs.filter(b => b.dataset.dir === 'out').map(b => b.lastChild.dataset.tick || '-').join(''), textTicks: bs.some(b => /✓/.test(b.lastChild.textContent)),
+      mask: getComputedStyle(bs.filter(b => b.dataset.dir === 'out').pop().lastChild, '::after').maskImage || getComputedStyle(bs.filter(b => b.dataset.dir === 'out').pop().lastChild, '::after').webkitMaskImage };
+  });
+  console.log('—    живой чат: ' + JSON.stringify({ ...live, mask: (live.mask || '').slice(0, 30) }));
+  check(live.last2.join('|') === 'сверка часов|ответ с отстающими часами', `часы bob на 5 мин отстают — его ответ всё равно ниже (${live.last2.join(' | ')})`);
+  check(live.kept === oldN && !live.emptied, `новое сообщение пришло в открытый чат на месте: старые пузыри не пересозданы (${live.kept} из ${oldN}), окно не пустело`);
+  check(/^[12]+$/.test(live.ticks) && !live.textTicks && /svg/.test(live.mask || ''), `галочки — иконкой (метки ${live.ticks}), в тексте символов ✓ нет`);
+  await A.p.screenshot({ path: path.join(__dirname, 'out', 'dm-ticks.png'), clip: await A.p.$eval('.vp-msgs-feed', f => { const r = f.getBoundingClientRect(); return { x: r.x, y: r.y + r.height - 260, width: r.width, height: 260 }; }) });
+  await B3.ctx.close();
   // прочитанное — по аккаунту (3.3.11): второе устройство NeuroSFW видит те же непрочитанные, что первое
   await A.p.$eval('.vp-msgs-back', b => b.click()).catch(() => { }); await A.p.waitForTimeout(2500);
   const unreadOf = pg => pg.$$eval('.vp-msgs-row', rs => Object.fromEntries(rs.filter(r => !r.dataset.id.startsWith('bot')).map(r => [r.dataset.id, +((r.querySelector('.vp-msgs-badge') || {}).textContent || 0)])));
