@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.10.3
+// @version      3.3.10.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2642,7 +2642,7 @@
         })();
         const LOOK_RE = /^ITDXL1 (.+)$/;
         function parseLook(t) {
-            const m = String(t || '').trim().match(LOOK_RE);
+            const m = openText(t).match(LOOK_RE);
             if (!m) return null;
             const o = {};
             for (const tok of m[1].split(/\s+/)) { const i = tok.indexOf('='); if (i > 0) o[tok.slice(0, i)] = tok.slice(i + 1); }
@@ -2695,11 +2695,12 @@
                 const text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '');
                 if (text === lookSent) return;
                 const all = await loadVerificationComments();
-                const mine = all.find(c => c.author && c.author.id === myId && LOOK_RE.test(String(c.content || '').trim()));
-                if (mine && String(mine.content).trim() === text) { lookSent = text; return; }
+                const mine = all.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
+                if (mine && openText(mine.content) === text && String(mine.content).startsWith('ITDXE ')) { lookSent = text; return; }
+                const content = sealText(text);
                 const res = mine
-                    ? await api(`/api/comments/${mine.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) })
-                    : await api(`/api/posts/${VERIFICATION_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) });
+                    ? await api(`/api/comments/${mine.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) })
+                    : await api(`/api/posts/${VERIFICATION_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) });
                 if (res.ok) lookSent = text;
             } catch (e) { logErr('стиль', e); } finally { lookBusy = false; }
         }
@@ -3303,17 +3304,18 @@
         }
         async function ownerMarkPush(prefix, token) {
             const fresh = await loadVerificationComments(true);
-            const mine = fresh.filter(c => c.author && c.author.id === OWNER_ID && String(c.content || '').startsWith(prefix + ' '));
+            const mine = fresh.filter(c => c.author && c.author.id === OWNER_ID && openText(c.content).startsWith(prefix + ' '));
             for (const c of mine) {
-                const txt = String(c.content || '').trim();
+                const txt = openText(c.content);
                 if (txt.split(/\s+/).includes(token)) return true;
-                if (txt.length + 1 + token.length <= 990) {
-                    const res = await api(`/api/comments/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: txt + ' ' + token }) });
+                const sealed = sealText(txt + ' ' + token);
+                if (sealed.length <= 990) {
+                    const res = await api(`/api/comments/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: sealed }) });
                     if (res.ok) return true;
                 }
             }
             const res = await api(`/api/posts/${VERIFICATION_POST_ID}/comments`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: prefix + ' ' + token })
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: sealText(prefix + ' ' + token) })
             });
             return res.ok;
         }
@@ -3786,7 +3788,8 @@
         }
 
         const CHANGELOG = [
-            ['3.3.10 – 3.3.10.3', '29 сентября 2026', [
+            ['3.3.10 – 3.3.10.4', '29 сентября 2026', [
+                'Всё, что ИТД X хранит в комментариях служебных постов (стили, галочки, паки стикеров), теперь зашифровано — случайный человек ничего не прочитает',
                 'Сообщения на телефоне: долгое нажатие больше не выделяет текст — сразу меню с реакциями',
                 'Сообщения: правая кнопка (на телефоне — долгое нажатие) по сообщению открывает меню — реакции, копировать текст, открыть картинку; реакции видны обоим; ✓ — отправлено, ✓✓ — прочитано',
                 'Клуб ИТД X: свечение ников больше не обрезается резко у краёв списка',
@@ -4026,13 +4029,27 @@
             && ((author.id && parsed.code === generateCode(author.id)) || (author.username && parsed.code === generateCode(author.username)));
 
         const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const OBF_KEY = new TextEncoder().encode('ITDX|2026|комменты от рандомов|NeuroSFW');
+        const obfBytes = (u8, salt) => { const o = new Uint8Array(u8.length); for (let i = 0; i < u8.length; i++) o[i] = u8[i] ^ OBF_KEY[(i + salt) % OBF_KEY.length] ^ ((salt * 31 + i * 7) & 255); return o; };
+        const sealB64 = u8 => { let t = ''; for (const x of u8) t += String.fromCharCode(x); return btoa(t).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+        const openB64 = t => Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - t.length % 4) % 4)), c => c.charCodeAt(0));
+        function sealText(t) {
+            const salt = (Math.random() * 256) | 0, body = obfBytes(new TextEncoder().encode(t), salt), out = new Uint8Array(body.length + 1);
+            out[0] = salt; out.set(body, 1);
+            return 'ITDXE ' + sealB64(out);
+        }
+        function openText(content) {
+            const t = String(content || '').trim();
+            if (!t.startsWith('ITDXE ')) return t;
+            try { const b = openB64(t.slice(6)); return new TextDecoder().decode(obfBytes(b.slice(1), b[0])); } catch (e) { return ''; }
+        }
 
         function parseOwnerList(comments, prefix) {
             const map = new Map();
             for (const c of comments) {
                 const a = c.author;
                 if (!a || a.id !== OWNER_ID) continue;
-                const text = String(c.content || '').trim();
+                const text = openText(c.content);
                 if (text !== prefix && !text.startsWith(prefix + ' ')) continue;
                 const rest = text.slice(prefix.length).trim();
                 if (!rest) continue;
@@ -4049,7 +4066,7 @@
         function parseRequests(comments) {
             const map = new Map();
             for (const c of comments) {
-                const a = c.author, m = String(c.content || '').trim().match(/^ITDX-R (\d+)$/);
+                const a = c.author, m = openText(c.content).match(/^ITDX-R (\d+)$/);
                 if (!a || !a.id || !m) continue;
                 const k = String(a.id).toLowerCase();
                 map.set(k, Math.max(map.get(k) || 0, +m[1]));
@@ -4178,8 +4195,8 @@
             try {
                 const all = await loadVerificationComments();
                 if (!verifyTimeline(myId, parseAllOwnerLists(all), Date.now()).needRequest) return;
-                const content = 'ITDX-R ' + Math.floor(Date.now() / 1000);
-                const mine = all.find(c => c.author && c.author.id === myId && /^ITDX-R \d+$/.test(String(c.content || '').trim()));
+                const content = sealText('ITDX-R ' + Math.floor(Date.now() / 1000));
+                const mine = all.find(c => c.author && c.author.id === myId && /^ITDX-R \d+$/.test(openText(c.content)));
                 const res = mine
                     ? await api(`/api/comments/${mine.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) })
                     : await api(`/api/posts/${VERIFICATION_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) });
@@ -4790,6 +4807,8 @@
                         else { put(255); str(st.id || ''); str(st.url || ''); }
                     }
                 }
+                out[0] = 2;
+                for (let i = 1; i < out.length; i++) out[i] ^= OBF_KEY[i % OBF_KEY.length];
                 let bin = '';
                 out.forEach(b => { bin += String.fromCharCode(b); });
                 return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -4797,6 +4816,7 @@
             function decodePacks(b64) {
                 const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
                 const b = Uint8Array.from(bin, c => c.charCodeAt(0));
+                if (b[0] === 2) { for (let i = 1; i < b.length; i++) b[i] ^= OBF_KEY[i % OBF_KEY.length]; b[0] = 1; }
                 let i = 0;
                 const byte = () => { if (i >= b.length) throw new Error('обрыв данных'); return b[i++]; };
                 const str = () => { const n = byte(), t = new TextDecoder().decode(b.slice(i, i + n)); i += n; return t; };

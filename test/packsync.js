@@ -6,6 +6,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+const { openText } = require('./seal');
 const snap = fs.readFileSync(process.argv[2], 'utf8');
 let src = fs.readFileSync(path.join(__dirname, '..', 'ITD-Visual-Pack.user.js'), 'utf8');
 const STICKER_POST = '11111111-2222-4333-8444-555555555555';
@@ -91,8 +92,8 @@ const same = (a, b) => JSON.stringify(a.map(p => [p.id, p.name, p.stickers.map(s
   const A = await device(b, 'A', PACKS);
   await A.p.waitForTimeout(9000);
   const parts = server[STICKER_POST].filter(c => /^ITDXS \d+\/\d+ /.test(c.content));
-  const code = server[VERIFY_POST].map(c => c.content).filter(x => !/^ITDXL1 /.test(x));
-  const looks = server[VERIFY_POST].filter(c => /^ITDXL1 /.test(c.content));
+  const code = server[VERIFY_POST].map(c => c.content).filter(x => !/^ITDXE /.test(x) && !/^ITDXL1 /.test(x));
+  const looks = server[VERIFY_POST].filter(c => /^ITDXL1 /.test(openText(c.content, src)));
   check(parts.length >= 2, `A выгрузил паки: кусков ${parts.length}, длины ${parts.map(c => c.content.length).join(',')}`);
   check(parts.every(c => c.content.length <= 2000), 'каждый кусок ≤ 2000 знаков');
   check(code.length === 1 && /^[A-Za-z0-9]{8}1\d{9,}$/.test(code[0]), `код галочки со временем паков: ${code.join(' | ')}`);

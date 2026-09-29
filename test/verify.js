@@ -1,6 +1,6 @@
 // Проверка системы верификации: как распределяются состояния approved/quarantine/none
 // в зависимости от комментариев владельца (ITDX-V, ITDX-SEEN, ITDX-C) под VERIFICATION_POST_ID
-// и запросов самих людей (ITDX-R, 3.3.7.2).
+// и запросов самих людей (ITDX-R, 3.3.7.2). С 3.3.10.4 всё пишется в шифре «ITDXE …» (test/seal.js), старое открытое читается.
 // Схема владельца: таймер 3 дня — с момента, как владелец открыл очередь (SEEN); не решил — перерыв 7 дней;
 // «Отклонить» — перерыв 7 дней; после перерыва мод человека сам шлёт ITDX-R — снова в очереди.
 // Запуск: node test/verify.js путь/к/снимку.html
@@ -8,6 +8,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+const { openText, sealText } = require('./seal');
 
 const snapPath = process.argv[2];
 if (!snapPath) { console.error('укажи снимок: node test/verify.js снимок.html'); process.exit(2); }
@@ -63,7 +64,7 @@ const comments = [
     { id: 'c8', content: genCode(GINA_ID) + '1', author: user(GINA_ID, 'Gina') },
     { id: 'c9', content: genCode(HANK_ID) + '1', author: user(HANK_ID, 'Hank') },
     { id: 'c10', content: genCode(IVAN_ID) + '1', author: user(IVAN_ID, 'Ivan') },
-    { id: 'm1', content: 'ITDX-V ' + ALICE_ID, author: { id: OWNER_ID, username: 'NeuroSFW' } },
+    { id: 'm1', content: sealText('ITDX-V ' + ALICE_ID, src), author: { id: OWNER_ID, username: 'NeuroSFW' } },
     {
         id: 'm2', author: { id: OWNER_ID, username: 'NeuroSFW' },
         content: 'ITDX-SEEN ' + [[BOB_ID, seenOld], [CARL_ID, seenFresh], [FRANK_ID, seenLong], [GINA_ID, seenLong],
@@ -86,11 +87,11 @@ const openAs = async (browser, me, sink) => {
         if (u.includes('/auth/refresh')) return r.fulfill({ contentType: 'application/json', body: '{"accessToken":"t"}' });
         if (u.endsWith('/api/users/me')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify(me) });
         if (m === 'PATCH' && /\/api\/comments\/[^/?#]+/.test(u)) {
-            sink.push({ m, u, body: r.request().postData() || '' });
+            sink.push({ m, u, raw: r.request().postData() || '', body: JSON.stringify({ content: openText(JSON.parse(r.request().postData() || '{}').content, src) }) });
             return r.fulfill({ contentType: 'application/json', body: '{}' });
         }
         if (m === 'POST' && u.includes('/api/posts/a0d6625a-b3ec-44c4-98da-48422af101d5/comments')) {
-            sink.push({ m, u, body: r.request().postData() || '' });
+            sink.push({ m, u, raw: r.request().postData() || '', body: JSON.stringify({ content: openText(JSON.parse(r.request().postData() || '{}').content, src) }) });
             return r.fulfill({ contentType: 'application/json', body: '{}' });
         }
         if (u.includes('/api/posts/a0d6625a-b3ec-44c4-98da-48422af101d5/comments')) {
@@ -180,6 +181,7 @@ const openAs = async (browser, me, sink) => {
     check(cReq && cReq.body.includes(EVE_ID), 'ITDX-C содержит ID Eve');
     const eveTsMatch = cReq && cReq.body.match(new RegExp(EVE_ID + ':(\\d+)'));
     check(!!eveTsMatch && +eveTsMatch[1] > Math.floor(Date.now() / 1000), 'ITDX-C содержит будущий timestamp (кулдаун)');
+    check(sentRequests.length && sentRequests.every(r => !/ITDX-(V|C|SEEN|R) /.test(r.raw) && /"ITDXE /.test(r.raw)), 'на сервер метки уходят только в шифре (ITDXE), открытого текста нет');
     check(!p.errors.length, 'ошибок на странице нет' + (p.errors.length ? ': ' + p.errors.join(' | ') : ''));
 
     const ivanReqs = [];

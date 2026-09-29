@@ -5,6 +5,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+const { openText, sealText } = require('./seal');
 const snap = fs.readFileSync(process.argv[2], 'utf8');
 const src = fs.readFileSync(path.join(__dirname, '..', 'ITD-Visual-Pack.user.js'), 'utf8');
 const ORIGIN = 'https://xn--d1ah4a.com', VPOST = 'a0d6625a-b3ec-44c4-98da-48422af101d5';
@@ -29,7 +30,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     if (u.pathname.includes('/auth/refresh')) return r.fulfill({ contentType: 'application/json', body: '{"accessToken":"t"}' });
     if (u.pathname === '/api/users/me') return r.fulfill({ contentType: 'application/json', body: '{"username":"NeuroSFW","id":"u1"}' });
     if (u.pathname === `/api/posts/${VPOST}/comments` && req.method() === 'GET') return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ comments, hasMore: false }) });
-    if (req.method() === 'POST' || req.method() === 'PATCH') { sent.push({ m: req.method(), body: JSON.parse(req.postData() || '{}').content || '' }); return r.fulfill({ contentType: 'application/json', body: '{}' }); }
+    if (req.method() === 'POST' || req.method() === 'PATCH') { { const raw = JSON.parse(req.postData() || '{}').content || ''; sent.push({ m: req.method(), raw, body: openText(raw, src) }); } return r.fulfill({ contentType: 'application/json', body: '{}' }); }
     if (u.pathname.endsWith('/comments')) return r.fulfill({ contentType: 'application/json', body: '{"data":{"comments":[],"hasMore":false}}' });
     return r.fulfill({ status: 404, body: '' });
   });
@@ -47,7 +48,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   console.log('—    автор поста из снимка: ' + who);
   comments = [
     { id: 'c1', content: code('12345678-1234-4234-8234-123456789abc'), author: { id: '12345678-1234-4234-8234-123456789abc', username: who, displayName: who } },
-    { id: 'l1', content: `ITDXL1 n=fire b=custom g=11 i=${IMG}`, author: { id: '12345678-1234-4234-8234-123456789abc', username: who } },
+    { id: 'l1', content: sealText(`ITDXL1 n=fire b=custom g=11 i=${IMG}`, src), author: { id: '12345678-1234-4234-8234-123456789abc', username: who } },
     { id: 'l2', content: 'ITDXL1 n=gold b=snow g=11', author: { id: 'x9', username: 'nomod' } },
     { id: 'v1', content: 'ITDX-V 12345678-1234-4234-8234-123456789abc', author: { id: '5e064703-104d-4794-bc28-9ed6f5847cca', username: 'NeuroSFW' } }
   ];
@@ -80,6 +81,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(club.his === 'fire' && club.hisAv === 'fire', `клуб ИТД X: у него ник и аватарка в его стиле ${JSON.stringify(club)}`);
   check(club.mine, 'клуб ИТД X: моя строка — в моём стиле');
   const pub = sent.filter(x => /^ITDXL1 /.test(x.body));
+  check(pub.length === 1 && /^ITDXE /.test(pub[0].raw), 'стиль уходит на сервер в шифре (ITDXE)');
   check(pub.length === 1 && pub[0].m === 'POST' && /^ITDXL1 n=white b=matrix g=11$/.test(pub[0].body), `свой стиль опубликован одной строкой: ${pub.map(x => x.m + ' ' + x.body).join(' | ')}`);
 
   await p.evaluate(u => { history.pushState({}, '', '/@' + u); document.body.appendChild(document.createElement('i')); }, who);
