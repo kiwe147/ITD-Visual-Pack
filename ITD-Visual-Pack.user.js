@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.13.4
+// @version      3.3.13.5
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3902,7 +3902,8 @@
         }
 
         const CHANGELOG = [
-            ['3.3.11 – 3.3.13.4', '29 сентября 2026', [
+            ['3.3.11 – 3.3.13.5', '29 сентября 2026', [
+                'Галочка ИТД X у ника — по центру строки и не переносится на отдельную строку',
                 'Кнопка «ИТД X» в профиле — в оттенке твоего акцентного цвета',
                 'Окно «Оформление поста» больше не мылит всю страницу',
                 'Ивент «Алиса AI»: иконка ИТД X на пункте «Ивент», «Сбор на шторы» больше не наезжает на статистику профиля, окно ивента не ломает баннер',
@@ -8283,6 +8284,8 @@
         html.vp-light .vp-itdx-btn { background: color-mix(in srgb, var(--vp-accent, #0080ff) 12%, #fff) !important; color: color-mix(in srgb, var(--vp-accent, #0080ff) 80%, #000) !important; }
         .vp-nick-tail-moved { display: none !important; }
         .vp-nick-large .vp-nick-text + .mod-badge-voronoi { margin-left: 5px !important; }
+        .vp-nick-large .mod-badge-voronoi, .vp-nick-large .mod-badge-verify { vertical-align: -0.08em !important; }
+        :has(> .mod-badge-verify), :has(> .mod-badge-voronoi) { flex-wrap: nowrap !important; }
         [data-vp-stack] { grid-template-columns: minmax(0, 1fr) !important; row-gap: 14px !important; }
         [data-vp-stack] > * { grid-area: auto !important; grid-column: 1 / -1 !important; }
         @media (prefers-reduced-motion: reduce) { .vp-portal { animation: none !important; } }
