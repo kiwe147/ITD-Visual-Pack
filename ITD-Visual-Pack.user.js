@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.9.1
+// @version      3.3.10
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1475,6 +1475,8 @@
         let nickGlowEnabled = GM_getValue('nickGlowEnabled', true);
         let avatarGlowEnabled = GM_getValue('avatarGlowEnabled', true);
         let antiCensorshipEnabled = GM_getValue('antiCensorshipEnabled', true);
+        let showLooks = GM_getValue('showLooks', true);
+        document.documentElement.classList.toggle('vp-looks', showLooks);
         let autoLikeUsers = (() => { try { return JSON.parse(GM_getValue('itd_auto_like_users', '{}')) || {}; } catch (e) { return {}; } })();
         let autoLikeEnabled = GM_getValue('autoLikeEnabled', true);
 
@@ -2132,8 +2134,25 @@
             };
             input.click();
         }
+        let bgGuest = null;
+        const effBg = () => bgGuest ? bgGuest.b : backgroundStyle;
+        function setBgGuest(look) {
+            const g = showLooks && look && look.b && look.b !== '-' && (look.b !== 'custom' || look.i)
+                ? { b: look.b, n: look.n, img: look.b === 'custom' ? lookImgUrl(look.i) : '' } : null;
+            const key = g ? g.b + '|' + g.n + '|' + g.img : '';
+            if (key === (bgGuest ? bgGuest.key : '')) return;
+            bgGuest = g && Object.assign(g, { key });
+            bgName = '';
+            if (bgGuest && bgGuest.b === 'custom') {
+                const im = document.createElement('img');
+                im.src = bgGuest.img; im.alt = '';
+                bgMedia.replaceChildren(im);
+                bgMedia._guest = true;
+            } else if (bgMedia._guest) { bgMedia._guest = false; bgMedia.replaceChildren(); }
+            updateBackgroundVisibility();
+        }
         function updateBackgroundVisibility() {
-            const custom = backgroundStyle === 'custom';
+            const custom = effBg() === 'custom';
             if (custom && backgroundEnabled && introOn) {
                 if (!updateBackgroundVisibility._wait) {
                     updateBackgroundVisibility._wait = true;
@@ -2172,8 +2191,9 @@
         const rand = (a, b) => a + Math.random() * (b - a);
         const hsla = (h, s, l, a) => `hsla(${Math.round(h)}, ${Math.round(s)}%, ${Math.round(l)}%, ${a})`;
         function theme() {
-            if (currentStyle === 'rainbow') return { h: globalHue, s: 100 };
-            const st = nickStyles[currentStyle];
+            const key = bgGuest ? bgGuest.n : currentStyle;
+            if (key === 'rainbow') return { h: globalHue, s: 100 };
+            const st = nickStyles[key] || nickStyles[currentStyle];
             return { h: st.matrixHue || 210, s: st.matrixSat ?? 100 };
         }
 
@@ -2525,10 +2545,11 @@
         };
 
         function drawBackground(dt = 1) {
-            if (backgroundStyle === 'custom') return;
-            const def = BACKGROUNDS[backgroundStyle] || BACKGROUNDS.matrix;
-            if (bgName !== backgroundStyle) {
-                bgName = backgroundStyle;
+            const cur = effBg();
+            if (cur === 'custom') return;
+            const def = BACKGROUNDS[cur] || BACKGROUNDS.matrix;
+            if (bgName !== cur) {
+                bgName = cur;
                 ctx.clearRect(0, 0, W, H);
                 bg = def.init();
                 canvas.style.opacity = def.opacity;
@@ -2587,6 +2608,100 @@
                 root.cssText = `--vp-accent: ${slow}; --vp-on-accent: ${onAccentFor(slow, dark)}; scrollbar-color: color-mix(in srgb, ${slow} 55%, transparent) transparent;`;
                 selection.cssText = `background: color-mix(in srgb, ${slow} 45%, transparent) !important;`;
             }
+        }
+        const lookStyleEl = document.createElement('style');
+        (function buildLookCss() {
+            const out = ['@keyframes vp-look-rb { 0%, 100% { color: hsl(0, 100%, 58%); } 17% { color: hsl(60, 100%, 50%); } 33% { color: hsl(120, 100%, 45%); }'
+                + ' 50% { color: hsl(180, 100%, 45%); } 67% { color: hsl(240, 100%, 66%); } 83% { color: hsl(300, 100%, 62%); } }'];
+            for (const [key, st] of Object.entries(nickStyles)) {
+                for (const dark of [true, false]) {
+                    const th = dark ? 'html.vp-looks:not(.vp-light) ' : 'html.vp-looks.vp-light ';
+                    let nick, glow;
+                    if (key === 'rainbow') {
+                        nick = 'animation: vp-look-rb 8s linear infinite !important; background: none !important; -webkit-text-fill-color: currentColor !important;';
+                        glow = 'drop-shadow(0 0 6px hsl(300, 100%, 60%)) drop-shadow(0 0 10px hsl(200, 100%, 60%))';
+                    } else {
+                        if (st.nickCss) nick = st.nickCss(dark);
+                        else {
+                            const g = dark ? st.gradientDark || st.gradientLight : key === 'white' ? 'linear-gradient(270deg, #1a1a1a, #4a4a4a, #262626)' : st.gradientLight;
+                            nick = `background: ${g} !important; -webkit-background-clip: text !important; background-clip: text !important; -webkit-text-fill-color: transparent !important;`;
+                        }
+                        glow = dark ? st.glow : key === 'white' ? 'drop-shadow(0 0 5px rgba(0, 0, 0, 0.25))'
+                            : `brightness(0.8) saturate(1.3) drop-shadow(0 0 5px color-mix(in srgb, ${accentOf(st)} 55%, transparent))`;
+                    }
+                    out.push(`${th}[data-vp-look="${key}"] { ${nick} }`);
+                    if (glow) out.push(`${th}[data-vp-look-glow="${key}"] { filter: ${glow} !important; }`);
+                }
+                const ah = st.avatarHue || 210, as = st.avatarSat ?? 100;
+                out.push(key === 'rainbow'
+                    ? `html.vp-looks [data-vp-look-av="${key}"] { filter: drop-shadow(0 0 5px hsl(300, 100%, 60%)) drop-shadow(0 0 10px hsl(190, 100%, 55%)) !important; }`
+                    : `html.vp-looks [data-vp-look-av="${key}"] { filter: drop-shadow(0 0 3px hsl(${ah}, ${as}%, 60%)) drop-shadow(0 0 6px hsl(${ah}, ${as}%, 60%)) !important; }`);
+            }
+            lookStyleEl.textContent = out.join('\n');
+            document.head.appendChild(lookStyleEl);
+        })();
+        const LOOK_RE = /^ITDXL1 (.+)$/;
+        function parseLook(t) {
+            const m = String(t || '').trim().match(LOOK_RE);
+            if (!m) return null;
+            const o = {};
+            for (const tok of m[1].split(/\s+/)) { const i = tok.indexOf('='); if (i > 0) o[tok.slice(0, i)] = tok.slice(i + 1); }
+            if (!nickStyles[o.n]) return null;
+            const look = { n: o.n, b: '-', g: /^[01]{2}$/.test(o.g || '') ? o.g : '11' };
+            if (o.b === 'custom' ? /^[0-4][0-9a-f]{32}$/.test(o.i || '') : BACKGROUNDS[o.b]) look.b = o.b;
+            if (look.b === 'custom') look.i = o.i;
+            return look;
+        }
+        function lookImgUrl(ref) {
+            const h = ref.slice(1);
+            return `https://cdn.xn--d1ah4a.com/images/${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}.${MSG_IMG_EXT[+ref[0]] || 'png'}`;
+        }
+        function videoFrame(blob) {
+            return new Promise((ok, no) => {
+                const v = document.createElement('video'), u = URL.createObjectURL(blob);
+                v.muted = true; v.preload = 'auto'; v.src = u;
+                v.onloadeddata = () => { v.currentTime = Math.min(1, (v.duration || 2) / 2); };
+                v.onseeked = () => {
+                    const c = document.createElement('canvas');
+                    c.width = v.videoWidth; c.height = v.videoHeight;
+                    c.getContext('2d').drawImage(v, 0, 0);
+                    URL.revokeObjectURL(u);
+                    c.toBlob(b => b ? ok(new File([b], 'bg.jpg', { type: 'image/jpeg' })) : no(new Error('кадр видео')), 'image/jpeg', 0.85);
+                };
+                v.onerror = () => { URL.revokeObjectURL(u); no(new Error('видео фона')); };
+            });
+        }
+        async function customBgCdn() {
+            const blob = await bgFile().catch(() => null);
+            if (!blob) return '';
+            const sig = blob.size + ':' + blob.type;
+            const saved = GM_getValue(acctKey('vp_bg_cdn'), null);
+            if (saved && saved.sig === sig && saved.ref) return saved.ref;
+            const file = /^video\//.test(blob.type) ? await videoFrame(blob) : new File([blob], 'bg', { type: blob.type });
+            const img = await msgUploadImage(file);
+            const ref = img.ext + img.id.replace(/-/g, '');
+            GM_setValue(acctKey('vp_bg_cdn'), { sig, ref });
+            return ref;
+        }
+        let lookBusy = false, lookSent = '';
+        async function publishLook() {
+            const myId = meData && meData.id;
+            if (!myId || lookBusy) return;
+            lookBusy = true;
+            try {
+                const b = backgroundEnabled ? backgroundStyle : '-';
+                let img = '';
+                if (b === 'custom') img = await customBgCdn().catch(e => { logErr('свой фон на сервер', e); return ''; });
+                const text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '');
+                if (text === lookSent) return;
+                const all = await loadVerificationComments(true);
+                const mine = all.find(c => c.author && c.author.id === myId && LOOK_RE.test(String(c.content || '').trim()));
+                if (mine && String(mine.content).trim() === text) { lookSent = text; return; }
+                const res = mine
+                    ? await api(`/api/comments/${mine.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) })
+                    : await api(`/api/posts/${VERIFICATION_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) });
+                if (res.ok) lookSent = text;
+            } catch (e) { logErr('стиль', e); } finally { lookBusy = false; }
         }
         let accentProbe = null;
         function onAccentFor(color, dark) {
@@ -2835,6 +2950,7 @@
             },
             { label: 'Стекло', get: () => glassEnabled, set: v => { glassEnabled = v; applyGlass(); }, key: 'glassEnabled' },
             { label: 'Звуки интерфейса', get: () => uiSoundEnabled, set: v => { uiSoundEnabled = v; if (v) uiSound('toggle'); }, key: 'uiSoundEnabled' },
+            { label: 'Стили других', get: () => showLooks, set: v => { showLooks = v; document.documentElement.classList.toggle('vp-looks', v); if (!v) setBgGuest(null); }, key: 'showLooks' },
             { label: 'Сцена ленты', get: () => sceneEnabled, set: v => { sceneEnabled = v; sceneAutoOff = false; document.documentElement.classList.toggle('vp-scene', v); sceneKick(); }, key: 'sceneEnabled' },
             { label: 'Свечение видео', get: () => ambientEnabled, set: v => { ambientEnabled = v; applyAmbient(); }, key: 'ambientEnabled' },
             { label: 'Боковая панель', get: () => railEnabled, set: v => { railEnabled = v; placeRail(); }, key: 'railEnabled' },
@@ -3670,9 +3786,13 @@
         }
 
         const CHANGELOG = [
+            ['3.3.10', '29 сентября 2026', [
+                'Стили других: ники и аватарки людей с ИТД X — в их стиле и свечении, а на их профиле — их фон (свой фон-картинку видно тоже, у видео — кадр). Выключается в настройках «Стили других»',
+                'Сапёр: щелчок колёсиком мыши по клетке оставляет рамку 3×3 — видно зону цифры; кнопка «❓ Как играть» — правила прямо в окне игры',
+                'Сообщения: над картинками больше не вылезает панель Яндекс Браузера; в просмотре — «Открыть оригинал»']],
             ['3.3.9 – 3.3.9.1', '29 сентября 2026', [
                 'Картинки в сообщениях: перед отправкой — превью с крестиком, можно дописать подпись; картинка показывается целиком, без обрезки; по нажатию — крупно прямо в окне сообщений («назад» и Esc закрывают)',
-                'Сапёр: при наведении подсвечивается квадрат 3х3 вокруг клетки — видно зону цифры. Вкладка лидеров теперь «Топ задротов»',
+                'Вкладка лидеров в играх теперь «Топ задротов»',
                 'Сцена ленты плавнее при прокрутке, а на слабых телефонах выключается сама, если не успевает (раньше лента дёргалась, особенно при прокрутке вверх)',
                 'Сообщения: можно отправлять картинки — скрепкой или вставкой из буфера (Ctrl+V), с подписью. Картинка сжимается перед отправкой, ссылка на неё шифруется вместе с сообщением',
                 'Сообщения: сверху — чаты, где было последнее сообщение или куда ты последний раз заходил, как в Телеграме']],
@@ -4013,7 +4133,13 @@
                 const comments = await loadVerificationComments(fresh);
                 const lists = parseAllOwnerLists(comments);
                 const now = Date.now();
-                const verifiedUsers = {};
+                const verifiedUsers = {}, looks = new Map();
+                for (const c of comments) {
+                    const a = c.author;
+                    if (!a || !a.id || looks.has(a.id)) continue;
+                    const l = parseLook(c.content);
+                    if (l) looks.set(a.id, l);
+                }
                 for (const c of comments) {
                     const name = c.author?.username;
                     const parsed = parseCode(c.content);
@@ -4024,7 +4150,8 @@
                         id: a.id || undefined,
                         displayName: a.displayName || a.display_name || undefined,
                         avatar: typeof ava === 'string' ? ava : undefined,
-                        state: a.id === OWNER_ID ? 'approved' : resolveVerifyState(a.id, lists, now)
+                        state: a.id === OWNER_ID ? 'approved' : resolveVerifyState(a.id, lists, now),
+                        look: looks.get(a.id) || undefined
                     };
                 }
                 if (JSON.stringify(verifiedUsers) !== localStorage.getItem(VERIFICATION_STORAGE_KEY)) {
@@ -4169,7 +4296,8 @@
 
                 createScrollTopButton();
 
-                checkAllComments().then(() => { markVerifiedUsers(); return verifyMyself(); }).then(verifyRequestAgain);
+                checkAllComments().then(() => { markVerifiedUsers(); return verifyMyself(); }).then(verifyRequestAgain).then(publishLook);
+                setInterval(publishLook, 60000);
                 setInterval(checkAllComments, 10 * 60 * 1000);
 
                 lbSyncFromServer();
@@ -4285,14 +4413,62 @@
                     });
                 }
 
+                let lookRaw = null, lookBy = new Map();
+                function markLooks() {
+                    const me = (myUsername || '').toLowerCase();
+                    const pm = location.pathname.match(/^\/@([\w.]+)(\/.*)?$/), pu = pm && !/\/post\//.test(pm[2] || '') ? pm[1].toLowerCase() : '';
+                    if (!showLooks) { setBgGuest(null); return; }
+                    const raw = localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}';
+                    if (raw !== lookRaw) {
+                        lookRaw = raw;
+                        lookBy = new Map();
+                        let parsed = {};
+                        try { parsed = JSON.parse(raw) || {}; } catch (e) { }
+                        for (const [name, info] of Object.entries(parsed)) if (info && info.look) lookBy.set(name.toLowerCase(), info.look);
+                    }
+                    setBgGuest(pu && pu !== me ? lookBy.get(pu) : null);
+                    if (!lookBy.size) return;
+                    const put = (el, attr, val) => {
+                        if (!el) return;
+                        if (val) { if (el.getAttribute(attr) !== val) el.setAttribute(attr, val); }
+                        else if (el.hasAttribute(attr)) el.removeAttribute(attr);
+                    };
+                    const apply = (nick, avatar, look) => {
+                        if (nick) {
+                            put(nick, 'data-vp-look', look.n);
+                            const box = nick.closest('.' + SELECTORS.nickContainer) || nick.parentElement;
+                            put(box, 'data-vp-look-glow', look.g[0] === '1' ? look.n : '');
+                            if (box && look.g[0] === '1') glowRoom(box);
+                        }
+                        if (avatar) put(avatar, 'data-vp-look-av', look.g[1] === '1' ? look.n : '');
+                    };
+                    document.querySelectorAll(PROFILE_LINK).forEach(link => {
+                        const u = userOf(link.getAttribute('href'));
+                        const look = u !== me && lookBy.get(u);
+                        if (!look) return;
+                        const av = link.querySelector('.' + SELECTORS.avatar);
+                        if (av) apply(null, av, look); else apply(nickLeaf(link), null, look);
+                    });
+                    const look = pu && pu !== me && lookBy.get(pu);
+                    if (look) {
+                        const large = document.querySelector('.' + SELECTORS.nickLarge);
+                        if (large) apply(nickLeaf(large), null, look);
+                        document.querySelectorAll('.' + SELECTORS.avatar).forEach(av => {
+                            if (!av.closest(PROFILE_LINK) && !av.closest('.' + SELECTORS.post) && nearLargeNick(av)) apply(null, av, look);
+                        });
+                    }
+                }
+
                 findAllMyAvatars();
                 findAllMyNicks();
 
                 markVerifiedUsers();
+                markLooks();
                 onDom(function myNickAndAvatar() {
                     findAllMyAvatars();
                     findAllMyNicks();
                     markVerifiedUsers();
+                    markLooks();
                 });
 
                 function replaceIcon() {
@@ -6285,15 +6461,18 @@
             background: var(--block-bg, rgba(28, 28, 28, .72)); }
         .vp-msgs-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
         .vp-msgs-b.vp-has-img { width: min-content; max-width: 78%; padding: 4px 4px 6px; }
+        .vp-msgs-imgw { position: relative; display: block; margin: 0 0 6px; cursor: zoom-in; }
+        .vp-msgs-imgw::after, .vp-msgs-lb-body::after { content: ''; position: absolute; inset: 0; }
         .vp-msgs-img { display: block; width: auto; height: auto; max-width: min(330px, 66vw); max-height: 420px; min-width: 120px; min-height: 60px;
-            margin: 0 0 6px; border-radius: 16px; cursor: zoom-in; background: rgba(127, 127, 127, .15); }
+            border-radius: 16px; background: rgba(127, 127, 127, .15); pointer-events: none; user-select: none; }
         .vp-msgs-lb { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; background: rgba(0, 0, 0, .92); border-radius: inherit;
             animation: vp-emoji-in .15s ease-out both; }
         .vp-msgs-lb-top { display: flex; align-items: center; gap: 8px; padding: 10px; flex-shrink: 0; }
         .vp-msgs-lb-top .vp-msgs-ib { color: #fff; background: rgba(255, 255, 255, .1); }
         .vp-msgs-lb-top span { color: rgba(255, 255, 255, .8); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .vp-msgs-lb-body { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 10px 14px; }
-        .vp-msgs-lb-body img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; }
+        .vp-msgs-lb-body { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 10px 14px; }
+        .vp-msgs-lb-body img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; pointer-events: none; user-select: none; }
+        .vp-msgs-lb-top a { margin-left: auto; flex-shrink: 0; padding: 7px 12px; border-radius: 9999px; background: rgba(255, 255, 255, .1); color: #fff; font-size: 13px; text-decoration: none; }
         .vp-msgs-pend { display: flex; align-items: center; gap: 10px; padding: 6px 8px; margin: 0 0 6px; border-radius: 16px; background: var(--block-bg, #1c1c1c); }
         .vp-msgs-pend[hidden] { display: none; }
         .vp-msgs-pend img { width: 52px; height: 52px; object-fit: cover; border-radius: 10px; flex-shrink: 0; }
@@ -6388,13 +6567,16 @@
                 b.className = 'vp-msgs-b vp-' + dir + (imgUrl ? ' vp-has-img' : '');
                 b.textContent = text;
                 if (imgUrl) {
+                    const wrap = document.createElement('span');
+                    wrap.className = 'vp-msgs-imgw';
                     const im = document.createElement('img');
                     im.className = 'vp-msgs-img';
-                    im.src = imgUrl; im.alt = ''; im.loading = 'lazy'; im.decoding = 'async';
+                    im.src = imgUrl; im.alt = ''; im.loading = 'lazy'; im.decoding = 'async'; im.draggable = false;
                     im.addEventListener('load', () => { if (feed.scrollHeight - feed.scrollTop - feed.clientHeight < 400) feed.scrollTop = feed.scrollHeight; }, { once: true });
-                    im.addEventListener('click', () => openImg(im.src, text));
-                    b.prepend(im);
-                    if (text) { b.childNodes[1].remove(); const cap = document.createElement('span'); cap.className = 'vp-msgs-cap'; cap.textContent = text; im.after(cap); }
+                    wrap.appendChild(im);
+                    wrap.addEventListener('click', () => openImg(im.src, text));
+                    b.prepend(wrap);
+                    if (text) { b.childNodes[1].remove(); const cap = document.createElement('span'); cap.className = 'vp-msgs-cap'; cap.textContent = text; wrap.after(cap); }
                 }
                 const i = document.createElement('i');
                 i.textContent = meta || now();
@@ -6603,7 +6785,9 @@
                 if (lb) closeImg(true);
                 lb = document.createElement('div');
                 lb.className = 'vp-msgs-lb';
-                lb.innerHTML = `<div class="vp-msgs-lb-top"><button type="button" class="vp-msgs-ib" title="Назад">${MSG_ICON.back}</button><span></span></div><div class="vp-msgs-lb-body"><img alt=""></div>`;
+                lb.innerHTML = `<div class="vp-msgs-lb-top"><button type="button" class="vp-msgs-ib" title="Назад">${MSG_ICON.back}</button><span></span><a target="_blank" rel="noopener">Открыть оригинал ↗</a></div><div class="vp-msgs-lb-body"><img alt="" draggable="false"></div>`;
+                const orig = lb.querySelector('a');
+                if (/^https:\/\/cdn\./.test(src)) orig.href = src; else orig.remove();
                 lb.querySelector('span').textContent = cap || '';
                 lb.querySelector('img').src = src;
                 lb.querySelector('.vp-msgs-ib').addEventListener('click', () => closeImg());
@@ -9910,9 +10094,8 @@
             background: rgba(255, 255, 255, .12); color: #fff; -webkit-tap-highlight-color: transparent; }
         .vp-mine:hover { background: rgba(255, 255, 255, .2); }
         .vp-mine.vp-open { background: rgba(255, 255, 255, .04); cursor: default; }
-        .vp-mine.vp-near { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--vp-accent, #0080ff) 55%, transparent);
-            background-color: color-mix(in srgb, var(--vp-accent, #0080ff) 12%, rgba(255, 255, 255, .08)); }
-        .vp-mine.vp-open.vp-near { background-color: color-mix(in srgb, var(--vp-accent, #0080ff) 10%, rgba(255, 255, 255, .04)); }
+        .vp-mine.vp-near { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 35%, transparent); }
+        .vp-mine.vp-open.vp-near { background-color: color-mix(in srgb, var(--vp-accent, #0080ff) 5%, rgba(255, 255, 255, .04)); }
         .vp-mine.vp-boom { background: #c0392b; }
         .vp-mine[data-n="1"] { color: #5dade2; } .vp-mine[data-n="2"] { color: #58d68d; } .vp-mine[data-n="3"] { color: #ec7063; }
         .vp-mine[data-n="4"] { color: #af7ac5; } .vp-mine[data-n="5"] { color: #f5b041; } .vp-mine[data-n="6"] { color: #48c9b0; }
@@ -9921,6 +10104,14 @@
         .vp-mines-bar button { border: 0; border-radius: 9999px; padding: 7px 14px; cursor: pointer; font: inherit; background: rgba(255, 255, 255, .1); color: inherit; }
         .vp-mines-bar button.vp-on { box-shadow: inset 0 0 0 1px var(--vp-accent, #fff); }
         .vp-mines-msg { text-align: center; margin-top: 10px; font-weight: 600; min-height: 20px; }
+        .vp-mines-wrap { position: relative; }
+        .vp-mines-help { position: absolute; inset: 0; z-index: 2; overflow-y: auto; padding: 16px 18px; border-radius: 14px; font-size: 14px; line-height: 1.45;
+            background: color-mix(in srgb, var(--block-bg, #1c1c1c) 96%, transparent); color: var(--text-primary, #fff); }
+        .vp-mines-help[hidden] { display: none; }
+        .vp-mines-help b { display: block; font-size: 16px; margin-bottom: 8px; }
+        .vp-mines-help ul { margin: 0; padding-left: 20px; list-style: disc; }
+        .vp-mines-help li { margin: 0 0 7px; }
+        .vp-mines-help .vp-n { font-weight: 700; color: #5dade2; }
         .vp-games-leads { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; width: 100%; }
         .vp-games-leads section { padding: 12px; border-radius: 20px; background: rgba(255, 255, 255, .04); min-width: 0; }
         .vp-games-lead-t { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
@@ -10060,8 +10251,16 @@
         function minesGame(setScore) {
             const W = 10, H = 10, M = 15;
             const el = document.createElement('div');
-            el.innerHTML = `<div class="vp-mines-bar"><button type="button" data-a="new">Новая игра</button><button type="button" data-a="flag">🚩 флажки</button></div>
-            <div class="vp-mines"></div><div class="vp-mines-msg"></div>`;
+            el.innerHTML = `<div class="vp-mines-bar"><button type="button" data-a="new">Новая игра</button><button type="button" data-a="flag">🚩 флажки</button><button type="button" data-a="help">❓ Как играть</button></div>
+            <div class="vp-mines-wrap"><div class="vp-mines"></div><div class="vp-mines-help" hidden><b>Как играть в сапёра</b><ul>
+            <li>На поле 10×10 спрятано 15 мин. Цель — открыть все клетки без мин.</li>
+            <li>Нажми на клетку, чтобы открыть её. Первый ход всегда безопасный.</li>
+            <li>Цифра — сколько мин в 8 клетках вокруг неё. Щёлкни по клетке колёсиком мыши — вокруг неё останется рамка 3×3, так видно зону цифры (ещё щелчок колёсиком — убрать). Например, <span class="vp-n">1</span> — ровно одна мина где-то рядом.</li>
+            <li>Пустая клетка — мин вокруг нет, соседи откроются сами.</li>
+            <li>Уверен, что тут мина, — поставь флажок: правая кнопка мыши, долгое нажатие на телефоне или режим «🚩 флажки».</li>
+            <li>Вокруг цифры уже столько флажков, сколько она показывает, — нажми на цифру, и откроются остальные соседи.</li>
+            <li>Открыл мину — проигрыш. Открыл всё без мин — победа, время уходит в «Топ задротов». Чем быстрее, тем выше.</li>
+            <li>Новая игра — кнопка сверху или клавиша R.</li></ul></div></div><div class="vp-mines-msg"></div>`;
             const grid = el.querySelector('.vp-mines'), msgEl = el.querySelector('.vp-mines-msg'), flagBtn = el.querySelector('[data-a="flag"]');
             grid.style.gridTemplateColumns = `repeat(${W}, auto)`;
             let cells, first, over, opened, flags, t0 = 0, timer = 0, flagMode = false;
@@ -10140,17 +10339,23 @@
             }
             let near = [];
             const unhot = () => { near.forEach(b => b.classList.remove('vp-near')); near = []; };
-            grid.addEventListener('pointerover', e => {
-                if (e.pointerType !== 'mouse') return;
+            let hotI = -1;
+            grid.addEventListener('mousedown', e => {
+                if (e.button !== 1) return;
+                e.preventDefault();
                 const b = e.target.closest('.vp-mine');
-                if (!b) return;
+                const i = b ? +b.dataset.i : -1;
                 unhot();
-                const i = +b.dataset.i;
+                if (i < 0 || i === hotI) { hotI = -1; return; }
+                hotI = i;
                 near = [i, ...nb(i)].map(j => cells[j].b);
                 near.forEach(x => x.classList.add('vp-near'));
             });
-            grid.addEventListener('pointerleave', unhot);
-            el.querySelector('[data-a="new"]').addEventListener('click', () => { unhot(); reset(); });
+            grid.addEventListener('auxclick', e => { if (e.button === 1) e.preventDefault(); });
+            el.querySelector('[data-a="new"]').addEventListener('click', () => { unhot(); hotI = -1; reset(); });
+            const helpEl = el.querySelector('.vp-mines-help'), helpBtn = el.querySelector('[data-a="help"]');
+            helpBtn.addEventListener('click', () => { helpEl.hidden = !helpEl.hidden; helpBtn.classList.toggle('vp-on', !helpEl.hidden); });
+            helpEl.addEventListener('click', () => { helpEl.hidden = true; helpBtn.classList.remove('vp-on'); });
             flagBtn.addEventListener('click', () => { flagMode = !flagMode; flagBtn.classList.toggle('vp-on', flagMode); });
             function resize() {
                 const body = gw.el && gw.el.querySelector('.vp-games-body');
