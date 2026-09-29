@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.10.3
+// @version      3.3.10.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2642,7 +2642,7 @@
         })();
         const LOOK_RE = /^ITDXL1 (.+)$/;
         function parseLook(t) {
-            const m = String(t || '').trim().match(LOOK_RE);
+            const m = openText(t).match(LOOK_RE);
             if (!m) return null;
             const o = {};
             for (const tok of m[1].split(/\s+/)) { const i = tok.indexOf('='); if (i > 0) o[tok.slice(0, i)] = tok.slice(i + 1); }
@@ -2695,11 +2695,12 @@
                 const text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '');
                 if (text === lookSent) return;
                 const all = await loadVerificationComments();
-                const mine = all.find(c => c.author && c.author.id === myId && LOOK_RE.test(String(c.content || '').trim()));
-                if (mine && String(mine.content).trim() === text) { lookSent = text; return; }
+                const mine = all.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
+                if (mine && openText(mine.content) === text && String(mine.content).startsWith('ITDXE ')) { lookSent = text; return; }
+                const content = sealText(text);
                 const res = mine
-                    ? await api(`/api/comments/${mine.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) })
-                    : await api(`/api/posts/${VERIFICATION_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) });
+                    ? await api(`/api/comments/${mine.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) })
+                    : await api(`/api/posts/${VERIFICATION_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) });
                 if (res.ok) lookSent = text;
             } catch (e) { logErr('стиль', e); } finally { lookBusy = false; }
         }
@@ -3303,17 +3304,18 @@
         }
         async function ownerMarkPush(prefix, token) {
             const fresh = await loadVerificationComments(true);
-            const mine = fresh.filter(c => c.author && c.author.id === OWNER_ID && String(c.content || '').startsWith(prefix + ' '));
+            const mine = fresh.filter(c => c.author && c.author.id === OWNER_ID && openText(c.content).startsWith(prefix + ' '));
             for (const c of mine) {
-                const txt = String(c.content || '').trim();
+                const txt = openText(c.content);
                 if (txt.split(/\s+/).includes(token)) return true;
-                if (txt.length + 1 + token.length <= 990) {
-                    const res = await api(`/api/comments/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: txt + ' ' + token }) });
+                const sealed = sealText(txt + ' ' + token);
+                if (sealed.length <= 990) {
+                    const res = await api(`/api/comments/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: sealed }) });
                     if (res.ok) return true;
                 }
             }
             const res = await api(`/api/posts/${VERIFICATION_POST_ID}/comments`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: prefix + ' ' + token })
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: sealText(prefix + ' ' + token) })
             });
             return res.ok;
         }
@@ -3786,7 +3788,9 @@
         }
 
         const CHANGELOG = [
-            ['3.3.10 – 3.3.10.3', '29 сентября 2026', [
+            ['3.3.10 – 3.3.10.4', '29 сентября 2026', [
+                'Всплывашки новых сообщений — такие же, как уведомления сайта (аватарка, имя, текст, оттенок), и показываются по одной вместе с ними, а не двумя стопками',
+                'Всё, что ИТД X хранит в комментариях служебных постов (стили, галочки, паки стикеров), теперь зашифровано — случайный человек ничего не прочитает',
                 'Сообщения на телефоне: долгое нажатие больше не выделяет текст — сразу меню с реакциями',
                 'Сообщения: правая кнопка (на телефоне — долгое нажатие) по сообщению открывает меню — реакции, копировать текст, открыть картинку; реакции видны обоим; ✓ — отправлено, ✓✓ — прочитано',
                 'Клуб ИТД X: свечение ников больше не обрезается резко у краёв списка',
@@ -4026,13 +4030,27 @@
             && ((author.id && parsed.code === generateCode(author.id)) || (author.username && parsed.code === generateCode(author.username)));
 
         const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const OBF_KEY = new TextEncoder().encode('ITDX|2026|комменты от рандомов|NeuroSFW');
+        const obfBytes = (u8, salt) => { const o = new Uint8Array(u8.length); for (let i = 0; i < u8.length; i++) o[i] = u8[i] ^ OBF_KEY[(i + salt) % OBF_KEY.length] ^ ((salt * 31 + i * 7) & 255); return o; };
+        const sealB64 = u8 => { let t = ''; for (const x of u8) t += String.fromCharCode(x); return btoa(t).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+        const openB64 = t => Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - t.length % 4) % 4)), c => c.charCodeAt(0));
+        function sealText(t) {
+            const salt = (Math.random() * 256) | 0, body = obfBytes(new TextEncoder().encode(t), salt), out = new Uint8Array(body.length + 1);
+            out[0] = salt; out.set(body, 1);
+            return 'ITDXE ' + sealB64(out);
+        }
+        function openText(content) {
+            const t = String(content || '').trim();
+            if (!t.startsWith('ITDXE ')) return t;
+            try { const b = openB64(t.slice(6)); return new TextDecoder().decode(obfBytes(b.slice(1), b[0])); } catch (e) { return ''; }
+        }
 
         function parseOwnerList(comments, prefix) {
             const map = new Map();
             for (const c of comments) {
                 const a = c.author;
                 if (!a || a.id !== OWNER_ID) continue;
-                const text = String(c.content || '').trim();
+                const text = openText(c.content);
                 if (text !== prefix && !text.startsWith(prefix + ' ')) continue;
                 const rest = text.slice(prefix.length).trim();
                 if (!rest) continue;
@@ -4049,7 +4067,7 @@
         function parseRequests(comments) {
             const map = new Map();
             for (const c of comments) {
-                const a = c.author, m = String(c.content || '').trim().match(/^ITDX-R (\d+)$/);
+                const a = c.author, m = openText(c.content).match(/^ITDX-R (\d+)$/);
                 if (!a || !a.id || !m) continue;
                 const k = String(a.id).toLowerCase();
                 map.set(k, Math.max(map.get(k) || 0, +m[1]));
@@ -4178,8 +4196,8 @@
             try {
                 const all = await loadVerificationComments();
                 if (!verifyTimeline(myId, parseAllOwnerLists(all), Date.now()).needRequest) return;
-                const content = 'ITDX-R ' + Math.floor(Date.now() / 1000);
-                const mine = all.find(c => c.author && c.author.id === myId && /^ITDX-R \d+$/.test(String(c.content || '').trim()));
+                const content = sealText('ITDX-R ' + Math.floor(Date.now() / 1000));
+                const mine = all.find(c => c.author && c.author.id === myId && /^ITDX-R \d+$/.test(openText(c.content)));
                 const res = mine
                     ? await api(`/api/comments/${mine.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) })
                     : await api(`/api/posts/${VERIFICATION_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) });
@@ -4790,6 +4808,8 @@
                         else { put(255); str(st.id || ''); str(st.url || ''); }
                     }
                 }
+                out[0] = 2;
+                for (let i = 1; i < out.length; i++) out[i] ^= OBF_KEY[i % OBF_KEY.length];
                 let bin = '';
                 out.forEach(b => { bin += String.fromCharCode(b); });
                 return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -4797,6 +4817,7 @@
             function decodePacks(b64) {
                 const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
                 const b = Uint8Array.from(bin, c => c.charCodeAt(0));
+                if (b[0] === 2) { for (let i = 1; i < b.length; i++) b[i] ^= OBF_KEY[i % OBF_KEY.length]; b[0] = 1; }
                 let i = 0;
                 const byte = () => { if (i >= b.length) throw new Error('обрыв данных'); return b[i++]; };
                 const str = () => { const n = byte(), t = new TextDecoder().decode(b.slice(i, i + n)); i += n; return t; };
@@ -6165,11 +6186,17 @@
             if (!k) return;
             const who = (msgPeople.get(k.login) || {}).name || k.login;
             if (msgToastEl) msgToastEl.remove();
+            const tb = toastBox();
+            if (tb) tb.querySelectorAll(':scope > div > *').forEach(closeToast);
             const el = document.createElement('div');
             el.className = 'vp-msg-toast';
-            el.innerHTML = '<b></b><span></span>';
-            el.children[0].textContent = (m.sup ? '🛟 ' + (msgIsSupport() ? who : 'Поддержка ИТД X') : '💬 ' + who);
-            el.children[1].textContent = msgPreview(m);
+            el.innerHTML = '<span class="vp-msg-toast-ava"></span><span class="vp-msg-toast-body"><b></b><span></span></span>';
+            const ava = m.sup && !msgIsSupport() ? '🛟' : ((msgPeople.get(k.login) || {}).ava || '👤');
+            const avaEl = el.firstChild;
+            if (/^https?:|^\//.test(ava)) { const im = document.createElement('img'); im.src = ava; im.alt = ''; avaEl.appendChild(im); }
+            else { avaEl.textContent = ava; tintCard(el, ava); }
+            el.querySelector('b').textContent = m.sup ? (msgIsSupport() ? '🛟 ' + who : 'Поддержка ИТД X') : who;
+            el.querySelector('.vp-msg-toast-body span').textContent = msgPreview(m);
             el.onclick = () => { el.remove(); msgOpenFrom(m); };
             document.body.appendChild(el);
             msgToastEl = el;
@@ -6201,11 +6228,15 @@
             line-height: 18px; text-align: center; color: #fff; background-color: var(--accent-like, #f91880); border-radius: 9px; pointer-events: none; }
         nav a[href="#"] .vp-nav-icon:has(> .vp-msg-badge) { position: relative; }
         .vp-msg-toast { position: fixed; top: 16px; left: 50vw; transform: translateX(-50%); z-index: 2147483000; width: min(420px, calc(100vw - 24px)); box-sizing: border-box;
-            display: flex; flex-direction: column; gap: 3px; padding: 12px 18px; border-radius: 24px; cursor: pointer; color: var(--text-primary, #fff);
+            display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 24px; cursor: pointer; color: var(--text-primary, #fff);
             background: var(--block-bg, #1c1c1c); border: 1px solid var(--border-color, rgba(255, 255, 255, .12)); box-shadow: 0 14px 36px rgba(0, 0, 0, .45);
             backdrop-filter: var(--vp-glass-filter, blur(18px)); -webkit-backdrop-filter: var(--vp-glass-filter, blur(18px)); animation: vpMsgToastIn .25s ease-out; }
+        .vp-msg-toast-ava { flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px;
+            overflow: hidden; background: rgba(127, 127, 127, .18); }
+        .vp-msg-toast-ava img { width: 100%; height: 100%; object-fit: cover; }
+        .vp-msg-toast-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
         .vp-msg-toast b { font-size: 14px; }
-        .vp-msg-toast span { font-size: 14px; color: var(--text-secondary, #aaa); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msg-toast-body span { font-size: 14px; color: var(--text-secondary, #aaa); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         @keyframes vpMsgToastIn { from { opacity: 0; transform: translate(-50%, -8px); } }
         @media (max-width: 1172px) { .vp-msg-toast { top: calc(env(safe-area-inset-top, 0px) + 10px); } }
         @media (prefers-reduced-motion: reduce) { .vp-msg-toast { animation: none; } }
@@ -9680,6 +9711,7 @@
             if (!list) return;
             const items = [...list.children].filter(it => !it._vpClosed);
             if (!items.length) return;
+            if (msgToastEl && items.some(it => !it._vpN)) { msgToastEl.remove(); msgToastEl = null; }
             for (const it of items) if (!it._vpN) {
                 it._vpN = ++toastSeq;
                 setTimeout(() => closeToast(it), TOAST_MS);
