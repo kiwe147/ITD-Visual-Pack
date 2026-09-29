@@ -20,7 +20,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const p = await b.newPage({ viewport: { width: 1500, height: 950 } });
   const errors = [], sent = [];
-  let who = null, comments = [];
+  let who = null, comments = [], hisOnline = true;
   p.on('pageerror', e => errors.push(e.message));
   await p.route('**/*', r => {
     const req = r.request(), u = new URL(req.url()), t = req.resourceType();
@@ -31,6 +31,8 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     if (u.pathname === '/api/users/me') return r.fulfill({ contentType: 'application/json', body: '{"username":"NeuroSFW","id":"u1"}' });
     if (u.pathname === `/api/posts/${VPOST}/comments` && req.method() === 'GET') return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ comments, hasMore: false }) });
     if (req.method() === 'POST' || req.method() === 'PATCH') { { const raw = JSON.parse(req.postData() || '{}').content || ''; sent.push({ m: req.method(), raw, body: openText(raw, src) }); } return r.fulfill({ contentType: 'application/json', body: '{}' }); }
+    const um = u.pathname.match(/^\/api\/users\/([^/]+)$/);
+    if (um && um[1] !== 'me') return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { username: decodeURIComponent(um[1]), online: hisOnline, lastSeen: hisOnline ? null : new Date(Date.now() - 20 * 60e3).toISOString() } }) });
     if (u.pathname.endsWith('/comments')) return r.fulfill({ contentType: 'application/json', body: '{"data":{"comments":[],"hasMore":false}}' });
     return r.fulfill({ status: 404, body: '' });
   });
@@ -80,6 +82,25 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   }, who);
   check(club.his === 'fire' && club.hisAv === 'fire', `клуб ИТД X: у него ник и аватарка в его стиле ${JSON.stringify(club)}`);
   check(club.mine, 'клуб ИТД X: моя строка — в моём стиле');
+  const onl = () => p.evaluate(u => {
+    const rows = [...document.querySelectorAll('.vp-club-row')], his = rows.find(r => r.dataset.login.toLowerCase() === u.toLowerCase());
+    return { order: rows.map(r => r.dataset.login), on: his && his.hasAttribute('data-online'), tip: his && his.title,
+      dot: his && getComputedStyle(his.querySelector('.vp-club-ava'), '::after').backgroundColor, head: document.querySelector('.vp-club-count').textContent };
+  }, who);
+  await p.waitForFunction(() => document.querySelector('.vp-club-row[data-online]:not([data-login="NeuroSFW"])'), null, { timeout: 15000 }).catch(() => { });
+  let o = await onl();
+  console.log('—    в сети: ' + JSON.stringify(o));
+  check(o.on && o.tip === 'в сети' && o.dot === 'rgb(34, 197, 94)' && o.order[0] === 'NeuroSFW' && o.head === '2 · 2', 'клуб: кто в сети — зелёная точка, подсказка «в сети», в заголовке «● 2 · 2»');
+  await p.screenshot({ path: path.join(__dirname, 'out', 'club-online.png'), clip: await p.$eval('[data-block="club"]', e => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; }) });
+  await p.setViewportSize({ width: 1920, height: 1000 }); await p.waitForTimeout(400);
+  await p.screenshot({ path: path.join(__dirname, 'out', 'club-online-1920.png'), clip: await p.$eval('[data-block="club"]', e => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; }) });
+  hisOnline = false;
+  await p.waitForTimeout(15500);
+  await p.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await p.waitForTimeout(1200);
+  o = await onl();
+  console.log('—    вышел: ' + JSON.stringify(o));
+  check(!o.on && /^был\(а\) в сети в \d\d:\d\d$/.test(o.tip || '') && o.head === '2', 'вышел — без точки, подсказка «был(а) в сети в чч:мм», в заголовке просто число');
   const pub = sent.filter(x => /^ITDXL1 /.test(x.body));
   check(pub.length === 1 && /^ITDXE /.test(pub[0].raw), 'стиль уходит на сервер в шифре (ITDXE)');
   check(pub.length === 1 && pub[0].m === 'POST' && /^ITDXL1 n=white b=matrix g=11$/.test(pub[0].body), `свой стиль опубликован одной строкой: ${pub.map(x => x.m + ' ' + x.body).join(' | ')}`);
