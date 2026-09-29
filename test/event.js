@@ -51,6 +51,9 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
       stats: stats.length, overlap: !!w && stats.some(s => hit(s, w)), stacked: !!document.querySelector('[data-vp-stack]'),
       tail: (() => { const sp = document.querySelector('.vp-nick-row .vp-nick-text'), bd = document.querySelector('.vp-nick-row .mod-badge-voronoi'), mv = document.querySelector('.vp-nick-tail-moved');
         return !!sp && sp.textContent.trim() === '#NeuroSFW | ИТД X' && !!mv && getComputedStyle(mv).display === 'none' && !!bd && sp.nextElementSibling === bd; })(),
+      mid: (() => { const bd = document.querySelector('.vp-nick-row .mod-badge-voronoi'), sp = document.querySelector('.vp-nick-row .vp-nick-text'); if (!bd || !sp) return null;
+        const r = document.createRange(); r.selectNodeContents(sp); const tr = [...r.getClientRects()].pop(), br = bd.getBoundingClientRect();
+        return Math.round((br.top + br.height / 2) - (tr.top + tr.height / 2)); })(),
       glass: glass ? getComputedStyle(glass).display : 'нет', same: (() => { const im = document.querySelector('.vp-banner > img[alt="Banner"]'); if (!glass || !im) return false;
         const a = glass.getBoundingClientRect(), c = im.getBoundingClientRect(); return Math.abs(a.left - c.left) < 2 && Math.abs(a.right - c.right) < 2 && Math.abs(a.top - c.top) < 2 && Math.abs(a.bottom - c.bottom) < 2 && getComputedStyle(glass).opacity === getComputedStyle(im).opacity; })(),
       fits: (() => { const bn = document.querySelector('.vp-banner'); if (!glass || !bn) return false; const a = bn.getBoundingClientRect(), c = glass.getBoundingClientRect(); return c.left >= a.left - 1 && c.right <= a.right + 1; })() };
@@ -59,6 +62,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(r.href === '/event/alice-ai' && r.imgHidden && r.icon, 'пункт «Ивент» (/event/alice-ai): иконка мода вместо картинки сайта');
   check(r.stats === 2 && !r.overlap && r.stacked, 'посты и лайки в статистике, виджет «Сбор на шторы» под ней, не наезжает');
   check(r.tail, 'ник «#NeuroSFW | ИТД X» одним куском (стиль идёт по всему нику), галочка мода после него');
+  check(r.mid !== null && Math.abs(r.mid) <= 3, `галочка у крупного ника по центру строки (смещение ${r.mid}px)`);
   check(r.fits, `пока идёт ивент, баннер не шире своей рамки — не вылезает на боковую панель (${r.fits})`);
   check(r.glass !== 'none' && r.glass !== 'нет' && r.same, `окно ивента на баннере видно и совпадает с картинкой баннера (${r.glass}, совпадает: ${r.same})`);
   const card = await p.$eval('.vp-banner', e => { const r = e.getBoundingClientRect(); return { x: Math.max(0, r.x - 20), y: Math.max(0, r.y - 20), width: r.width + 40, height: 760 }; });
