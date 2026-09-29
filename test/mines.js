@@ -1,4 +1,5 @@
-// Сапёр (3.3.9.1): наведение мышью на клетку подсвечивает её квадрат 3х3 (зона цифры), угол — 2х2; ушёл с поля — снято.
+// Сапёр (3.3.10): щелчок колёсиком мыши по клетке оставляет рамку её квадрата 3х3 (зона цифры), угол — 2х2;
+// щелчок колёсиком по другой клетке — рамка переезжает, по той же — убирается. Наведение — без рамки.
 // Вкладка лидеров называется «Топ задротов». Снимок → test/out/mines.png.
 // Запуск:  node test/mines.js снимок-ленты.html
 const { chromium } = require('playwright');
@@ -39,14 +40,17 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   const lead = await p.$eval('.vp-games-tab[data-g="lead"]', e => e.textContent.trim());
   check(lead === '🏆 Топ задротов', `вкладка лидеров: «${lead}»`);
   await p.hover('.vp-mine[data-i="44"]'); await p.waitForTimeout(150);
-  let near = await p.$$eval('.vp-mine.vp-near', bs => bs.map(x => +x.dataset.i).sort((a, b) => a - b));
-  check(near.join() === '33,34,35,43,44,45,53,54,55', `середина — 3х3: ${near.join(' ')}`);
-  await p.screenshot({ path: path.join(__dirname, 'out', 'mines.png'), clip: await p.$eval('.vp-games-win', e => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; }) });
-  await p.hover('.vp-mine[data-i="0"]'); await p.waitForTimeout(150);
-  near = await p.$$eval('.vp-mine.vp-near', bs => bs.map(x => +x.dataset.i).sort((a, b) => a - b));
-  check(near.join() === '0,1,10,11', `угол — 2х2: ${near.join(' ')}`);
+  check(!(await p.$('.vp-mine.vp-near')), 'просто наведение — без подсветки');
+  await p.mouse.down({ button: 'middle' }); await p.mouse.up({ button: 'middle' }); await p.waitForTimeout(150);
   await p.mouse.move(5, 5); await p.waitForTimeout(150);
-  check(!(await p.$('.vp-mine.vp-near')), 'ушёл с поля — подсветка снята');
+  let near = await p.$$eval('.vp-mine.vp-near', bs => bs.map(x => +x.dataset.i).sort((a, b) => a - b));
+  check(near.join() === '33,34,35,43,44,45,53,54,55', `щелчок колёсиком в середине — рамка 3х3 и остаётся, когда увёл мышь: ${near.join(' ')}`);
+  await p.screenshot({ path: path.join(__dirname, 'out', 'mines.png'), clip: await p.$eval('.vp-games-win', e => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; }) });
+  await p.hover('.vp-mine[data-i="0"]'); await p.mouse.down({ button: 'middle' }); await p.mouse.up({ button: 'middle' }); await p.waitForTimeout(150);
+  near = await p.$$eval('.vp-mine.vp-near', bs => bs.map(x => +x.dataset.i).sort((a, b) => a - b));
+  check(near.join() === '0,1,10,11', `щелчок колёсиком в углу — рамка переехала, 2х2: ${near.join(' ')}`);
+  await p.mouse.down({ button: 'middle' }); await p.mouse.up({ button: 'middle' }); await p.waitForTimeout(150);
+  check(!(await p.$('.vp-mine.vp-near')), 'ещё щелчок колёсиком по той же — рамка убрана');
   await p.click('.vp-mines-bar [data-a="help"]'); await p.waitForTimeout(200);
   const help = await p.$eval('.vp-mines-help', e => ({ shown: getComputedStyle(e).display !== 'none', text: e.textContent }));
   check(help.shown && /15 мин/.test(help.text) && /флажок/.test(help.text), '«❓ Как играть» — правила открылись');

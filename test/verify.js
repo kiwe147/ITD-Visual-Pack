@@ -166,16 +166,14 @@ const openAs = async (browser, me, sink) => {
     check(!seenFor(CARL_ID), 'Carl: таймер уже идёт — SEEN не повторяется');
 
     const beforeCount = sentRequests.length;
-    const rowCarl = await p.$$eval('.vp-verify-row', rows => rows.findIndex(r => r.textContent.includes('@Carl')));
-    await p.$$eval('.vp-verify-row', (rows, i) => rows[i].querySelector('.vp-verify-ok').click(), rowCarl);
+    await p.$$eval('.vp-verify-row', rows => rows.find(r => r.textContent.includes('@Carl')).querySelector('.vp-verify-ok').click());
     await p.waitForTimeout(800);
     const vReq = sentRequests.slice(beforeCount).find(r => /ITDX-V/.test(r.body));
     check(!!vReq, 'при «Подтвердить» отправлен ITDX-V');
     check(vReq && vReq.body.includes(CARL_ID), 'ITDX-V содержит ID Carl');
 
     const beforeCount2 = sentRequests.length;
-    const rowEve = await p.$$eval('.vp-verify-row', rows => rows.findIndex(r => r.textContent.includes('@Eve')));
-    await p.$$eval('.vp-verify-row', (rows, i) => rows[i].querySelector('.vp-verify-no').click(), rowEve);
+    await p.$$eval('.vp-verify-row', rows => rows.find(r => r.textContent.includes('@Eve')).querySelector('.vp-verify-no').click());
     await p.waitForTimeout(800);
     const cReq = sentRequests.slice(beforeCount2).find(r => /ITDX-C/.test(r.body));
     check(!!cReq, 'при «Отклонить» отправлен ITDX-C');
