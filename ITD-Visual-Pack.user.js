@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.11
+// @version      3.3.12
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3761,7 +3761,8 @@
         }
 
         const CHANGELOG = [
-            ['3.3.11', '29 сентября 2026', [
+            ['3.3.11 – 3.3.12', '29 сентября 2026', [
+                'Клуб ИТД X: видно, кто сейчас в сети — зелёная точка на аватарке, такие люди наверху списка; наведи на строку — «в сети» или когда был(а)',
                 'Статистика в боковой панели — общая для всех твоих устройств: на телефоне тот же прирост за день и месяц, что на компьютере',
                 'Сообщения: прочитанное на одном устройстве не висит непрочитанным на другом',
             ]],
@@ -9936,7 +9937,7 @@
         <section class="vp-rail-card" data-block="stats"><div class="vp-rail-title">${svgIcon('<path d="M4 19V10M10 19V5M16 19v-7M21 19H3"/>', 16)}<span>Статистика</span></div>
             <div class="vp-seg"><div class="vp-seg-ind"></div><button data-p="day">День</button><button data-p="month">Месяц</button></div>
             <div class="vp-stats"><div class="vp-menu-note">Загрузка...</div></div><div class="vp-stats-since"></div></section>
-        <section class="vp-rail-card" data-block="club"><div class="vp-rail-title">${svgIcon('<circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.5a3 3 0 0 1 0 5.5M18 14.5a5 5 0 0 1 2.5 4.5"/>', 16)}<span>Клуб ИТД X</span><b class="vp-club-count"></b></div>
+        <section class="vp-rail-card" data-block="club"><div class="vp-rail-title">${svgIcon('<circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.5a3 3 0 0 1 0 5.5M18 14.5a5 5 0 0 1 2.5 4.5"/>', 16)}<span>Клуб ИТД&nbsp;X</span><b class="vp-club-count"></b></div>
             <div class="vp-club"><div class="vp-menu-note">Загрузка...</div></div></section>
         <section class="vp-rail-card" data-block="games"><div class="vp-rail-title">${svgIcon('<rect x="2.5" y="7" width="19" height="11" rx="5.5"/><path d="M7.5 10.5v4M5.5 12.5h4"/><circle cx="15.5" cy="11.5" r=".8"/><circle cx="17.5" cy="13.5" r=".8"/>', 16)}<span>Игры</span></div>
             <div class="vp-games-list"></div></section>`;
@@ -9978,7 +9979,13 @@
         .vp-club-row:hover { background: var(--bg-hover, rgba(255, 255, 255, .08)); }
         .vp-club-ava { width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
             font-size: 17px; background: var(--bg-hover, rgba(255, 255, 255, .08)); overflow: hidden; }
-        .vp-club-ava img { width: 100%; height: 100%; object-fit: cover; }
+        .vp-club-ava img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+        .vp-club-row[data-online] .vp-club-ava { overflow: visible; position: relative; }
+        .vp-club-row[data-online] .vp-club-ava::after { content: ""; position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px; border-radius: 50%;
+            background: #22c55e; box-shadow: 0 0 0 2px var(--block-bg, #1c1c1c); }
+        html.vp-light .vp-club-row[data-online] .vp-club-ava::after { box-shadow: 0 0 0 2px #fff; }
+        .vp-club-count { white-space: nowrap; flex-shrink: 0; }
+        .vp-club-count .vp-club-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #22c55e; margin-right: 6px; vertical-align: 1px; }
         .vp-club-names { min-width: 0; display: flex; flex-direction: column; }
         .vp-club-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .vp-club-login { font-size: 11px; color: var(--text-secondary, #8a8a8a); }
@@ -10354,9 +10361,65 @@
                 railClub.appendChild(row);
             });
             paintClub();
+            paintOnline();
         }
-        setTimeout(renderClub, 2500);
-        setInterval(renderClub, 60 * 1000);
+        const clubOnline = new Map();
+        const clubSeenText = t => {
+            const d = new Date(t);
+            if (!t || isNaN(d)) return '';
+            const h = d.toTimeString().slice(0, 5);
+            return 'был(а) в сети ' + (d.toDateString() === new Date().toDateString() ? 'в ' + h : `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')} в ${h}`);
+        };
+        function paintOnline() {
+            const rows = [...railClub.querySelectorAll('.vp-club-row')];
+            if (!rows.length) return;
+            let on = 0;
+            rows.forEach(row => {
+                const n = row.dataset.login, st = n === myUsername ? { on: true } : clubOnline.get(n);
+                const live = !!(st && st.on), tip = st ? (live ? 'в сети' : clubSeenText(st.seen)) : '';
+                if (live) on++;
+                if (live !== row.hasAttribute('data-online')) row.toggleAttribute('data-online', live);
+                if (row.title !== tip) row.title = tip;
+            });
+            const me = r => r.dataset.login === myUsername, live = r => r.hasAttribute('data-online');
+            const order = rows.slice().sort((a, b) => me(b) - me(a) || live(b) - live(a) || a.dataset.login.localeCompare(b.dataset.login));
+            if (order.some((r, i) => r !== rows[i])) order.forEach(r => railClub.appendChild(r));
+            const cnt = rail.querySelector('.vp-club-count'), total = rows.length;
+            const others = on - (rows.some(me) ? 1 : 0);
+            const html = others > 0 ? `<span class="vp-club-dot"></span>${on} · ${total}` : String(total), tip = others > 0 ? `В сети: ${on} из ${total}` : '';
+            if (cnt.innerHTML !== html) cnt.innerHTML = html;
+            if (cnt.title !== tip) cnt.title = tip;
+        }
+        let clubPolling = false, clubPolledAt = 0;
+        async function clubPollOnline(fresh) {
+            if (clubPolling || document.hidden || !railClub.isConnected || !railClub.getClientRects().length) return;
+            clubPolling = true; clubPolledAt = Date.now();
+            try {
+                const box = railClub.getBoundingClientRect(), now = Date.now();
+                const seen = r => { const q = r.getBoundingClientRect(); return q.bottom > box.top && q.top < box.bottom; };
+                const names = [...railClub.querySelectorAll('.vp-club-row')].filter(r => r.dataset.login !== myUsername)
+                    .map(r => ({ n: r.dataset.login, v: seen(r) })).filter(x => now - ((clubOnline.get(x.n) || {}).at || 0) > (x.v ? (+fresh || 55e3) : 290e3))
+                    .sort((a, b) => b.v - a.v).map(x => x.n);
+                for (let i = 0; i < names.length; i += 4) {
+                    if (i) { paintOnline(); await new Promise(r => setTimeout(r, 2000)); if (document.hidden) break; }
+                    await Promise.all(names.slice(i, i + 4).map(async n => {
+                        const r = await api('/api/users/' + encodeURIComponent(n)).catch(() => null);
+                        if (!r || !r.ok) return;
+                        const j = await r.json().catch(() => null), d = j && (j.data || j.user || j);
+                        if (d && typeof d === 'object') clubOnline.set(n, { on: !!d.online, seen: d.lastSeen || null, at: Date.now() });
+                    }));
+                }
+                paintOnline();
+            } finally { clubPolling = false; }
+        }
+        const clubTick = () => Promise.resolve(renderClub()).then(() => clubPollOnline()).catch(e => logErr('клуб: в сети', e));
+        setTimeout(() => Promise.resolve(renderClub()).catch(e => logErr('клуб', e)), 2500);
+        setTimeout(() => clubPollOnline(), 10000);
+        setInterval(clubTick, 60 * 1000);
+        let clubScrollT = 0;
+        railClub.addEventListener('scroll', () => { clearTimeout(clubScrollT); clubScrollT = setTimeout(() => clubPollOnline(), 400); }, { passive: true });
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) clubPollOnline(15e3); });
+        new IntersectionObserver(es => { if (es.some(e => e.isIntersecting) && Date.now() - clubPolledAt > 30e3) clubPollOnline(); }).observe(railClub);
 
         const gamesList = rail.querySelector('.vp-games-list');
         const bestText = g => {

@@ -53,10 +53,16 @@ comments.push({ id: 'v', content: 'ITDX-V ' + MEMBERS.map((u, i) => uid(i)).join
   await p.waitForTimeout(6000);
   const club = await p.$$eval('.vp-club-row', rows => rows.length);
   const names = await p.$$eval('.vp-club-name', els => els.slice(0, 3).map(e => e.textContent));
+  const at6 = JSON.parse(JSON.stringify(hits));
+  await p.waitForTimeout(6500);
+  const prof = Object.keys(hits).filter(k => k.startsWith('профиль участника')).length;
+  const dots = await p.$$eval('.vp-club-row[data-online]', r => r.length);
   await b.close();
-  console.log('запросы (вместе с двумя сайта):', JSON.stringify(hits));
+  const onlineOk = prof > 0 && prof <= 16 && dots > 0;
+  console.log((onlineOk ? 'ок: ' : 'ОШИБКА: ') + `«в сети» (3.3.12): опрос размазан: за первые 6,5 с спрошено ${prof} из ${club - 1} (по 4 раз в 2 с), точек ${dots}`);
+  console.log('запросы (вместе с двумя сайта):', JSON.stringify(at6));
   console.log(`клуб: ${club} строк, ${names.join(' | ')}`);
-  const ok = hits.refresh === 1 && hits.me === 1 && Object.keys(hits).filter(k => k.startsWith('служебный пост')).every(k => hits[k] === 1) && !Object.keys(hits).some(k => k.startsWith('профиль участника')) && (hits['свой профиль (статистика)'] || 0) <= 1 && (hits['свой профиль (статистика)'] || 0) <= 1 && club === MEMBERS.length;
+  const ok = onlineOk && at6.refresh === 1 && at6.me === 1 && Object.keys(at6).filter(k => k.startsWith('служебный пост')).every(k => at6[k] === 1) && !Object.keys(at6).some(k => k.startsWith('профиль участника')) && (at6['свой профиль (статистика)'] || 0) <= 1 && (at6['свой профиль (статистика)'] || 0) <= 1 && club === MEMBERS.length;
   console.log(ok ? 'ок: мод не повторяет запросы сайта, клуб — без запросов профилей' : 'ОШИБКА: лишние запросы');
   process.exit(ok ? 0 : 1);
 })();
