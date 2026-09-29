@@ -1,6 +1,8 @@
 // Лайки: за всё время — сумма лайков всех своих постов (стена страницами по 50, курсором); в строке
 // своего профиля — справа от числа постов; в «Статистике» — строка «лайков» с разницей за день/месяц.
 // Второй заход в пределах 3 часов — без запросов стены (число из памяти).
+// Старый снимок истории — без лайков (их добавили в статистику позже): разница лайков — от первого снимка,
+// где лайки есть, а не «0» (баг до 3.3.7.3).
 // Запуск:  node test/likes.js снимок-своего-профиля.html
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -37,7 +39,7 @@ const wall = cursor => ({ data: { posts: Array.from({ length: cursor ? 10 : 50 }
     try { s = JSON.parse(sessionStorage.getItem('gm') || '{}'); } catch (e) { }
     s = Object.assign({ introEnabled: false, introMobile: 'off', backgroundEnabled: false,
       // вчера было 200 лайков — разница за день +20
-      vp_stats_hist: JSON.stringify([{ at: Date.now() - 26 * 3600e3, followers: 230, following: 125, posts: 570, likes: 200 }]) }, s);
+      vp_stats_hist: JSON.stringify([{ at: Date.now() - 30 * 3600e3, followers: 230, following: 125, posts: 570 }, { at: Date.now() - 20 * 3600e3, followers: 230, following: 125, posts: 570, likes: 200 }]) }, s);
     window.GM_getValue = (k, d) => k in s ? s[k] : d;
     window.GM_setValue = (k, v) => { s[k] = v; sessionStorage.setItem('gm', JSON.stringify(s)); };
     window.GM_xmlhttpRequest = o => setTimeout(() => o.onerror && o.onerror('x'), 0);

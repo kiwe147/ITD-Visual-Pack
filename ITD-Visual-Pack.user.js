@@ -2741,7 +2741,8 @@
             custom: { name: 'Своя картинка', icon: svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>') }
         };
         function renderAutoLikeUsers(list, footer, usersData) {
-            const users = Object.keys(usersData).sort((a, b) => a === 'NeuroSFW' ? -1 : b === 'NeuroSFW' ? 1 : a.localeCompare(b));
+            const own = n => (usersData[n] && usersData[n].id) === OWNER_ID;
+            const users = Object.keys(usersData).sort((a, b) => own(a) ? -1 : own(b) ? 1 : a.localeCompare(b));
             const count = () => { footer.textContent = `Активно: ${Object.keys(autoLikeUsers).length}`; };
             count();
             if (!users.length) {
@@ -3230,7 +3231,7 @@
         }
 
         function adminFab() {
-            if (document.querySelector('.vp-fab') || !myUsername || !ADMINS.includes(myUsername.toLowerCase())) return;
+            if (document.querySelector('.vp-fab') || !myUsername || !(meData && meData.id ? meData.id === OWNER_ID : ADMINS.includes(myUsername.toLowerCase()))) return;
             const fab = document.createElement('div');
             fab.className = 'vp-fab';
             fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка">${fabFace()}</button>
@@ -3632,6 +3633,7 @@
 
         const CHANGELOG = [
             ['3.3.7 – 3.3.7.3', '29 сентября 2026', [
+                'Статистика: у лайков снова виден прирост за день и месяц (раньше стоял 0)',
                 'Галочка: если не подтвердили, через неделю мод сам отправит запрос снова — достаточно просто зайти на сайт',
                 'Сообщения без подтверждённой галочки: пароль больше не спрашивается заново при каждом входе, чат с поддержкой работает сразу, переписка с людьми — после подтверждения',
                 'Телефон: рядом с «ИТД X» в профиле — кнопка «Меню»: статистика, клуб ИТД X и игры в полноэкранном окне (раньше на телефоне панели не было совсем)',
@@ -5604,7 +5606,6 @@
         })();
 
         const MSG_POST_ID = 'a53b53e0-9950-4f62-83f4-91e5985ef6c5', MSG_MAX = 990, MSG_TEXT_MAX = 500;
-        const SUPPORT_LOGIN = 'NeuroSFW';
         const msgNet = { keys: new Map(), vols: [], me: null, pairs: new Map(), conv: new Map(), syncing: null };
         const te = new TextEncoder(), td = new TextDecoder();
         const cat = (...a) => { const o = new Uint8Array(a.reduce((n, x) => n + x.length, 0)); let i = 0; for (const x of a) { o.set(x, i); i += x.length; } return o; };
@@ -5780,10 +5781,10 @@
             await msgSync();
         }
         const msgKeyOf = login => [...msgNet.keys.values()].find(k => k.login.toLowerCase() === String(login).toLowerCase()) || null;
-        const msgIsSupport = () => !!myUsername && myUsername.toLowerCase() === SUPPORT_LOGIN.toLowerCase();
+        const msgIsSupport = () => msgMyId() === OWNER_ID;
         function msgTarget(d) {
             if (d.supUid) return { uid: d.supUid, sup: true };
-            if (d.support) { const k = msgKeyOf(SUPPORT_LOGIN); return { uid: k && k.id, sup: true, missing: 'Поддержка ещё не подключила сообщения — напиши в тг @NeuroSFW' }; }
+            if (d.support) { const k = msgNet.keys.get(OWNER_ID); return { uid: k && k.id, sup: true, missing: 'Поддержка ещё не подключила сообщения — напиши в тг @NeuroSFW' }; }
             const k = msgKeyOf(d.login);
             return { uid: k && k.id, sup: false, missing: `У ${d.name} ещё нет ключа сообщений — появится, когда откроет «Сообщения» в ИТД X 3.3.3` };
         }
@@ -5797,7 +5798,7 @@
             if (me) for (const [uid, list] of msgNet.conv) {
                 const k = msgNet.keys.get(uid);
                 if (!k) continue;
-                if (list.some(m => !m.sup) && !msgPeople.has(k.login) && k.login.toLowerCase() !== SUPPORT_LOGIN.toLowerCase())
+                if (list.some(m => !m.sup) && !msgPeople.has(k.login) && uid !== OWNER_ID)
                     msgPeople.set(k.login, { id: 'u:' + k.login, login: k.login, ava: '👤', name: k.login, last: '', time: '', unread: 0, msgs: [] });
                 if (msgIsSupport() && list.some(m => m.sup) && !MSG_DIALOGS.some(d => d.supUid === uid))
                     MSG_DIALOGS.push({ id: 'sup:' + uid, supUid: uid, ava: '🛟', name: '🛟 ' + k.login, login: '', last: '', time: '', unread: 0, msgs: [] });
@@ -9402,9 +9403,17 @@
             const rows = [['followers', 'подписчиков'], ['following', 'подписок'], ['posts', 'постов'], ['likes', 'лайков']].filter(([k]) => typeof statsNow[k] === 'number');
             if (!rows.length) { railStats.innerHTML = '<div class="vp-menu-note">Сайт не отдал числа</div>'; return; }
             railStats.innerHTML = '';
+            const baseFor = k => {
+                if (typeof base[k] === 'number') return base;
+                const hk = hist.filter(h => typeof h[k] === 'number');
+                return [...hk].reverse().find(h => Date.now() - h.at >= span) || hk[0] || null;
+            };
             rows.forEach(([k, label]) => {
-                const diff = typeof base[k] === 'number' ? statsNow[k] - base[k] : 0;
+                const b = baseFor(k);
+                const diff = b ? statsNow[k] - b[k] : 0;
                 const row = document.createElement('div');
+                if (b && b !== base && b.at) row.title = 'изменение с ' + new Date(b.at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
+                    + ', ' + new Date(b.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
                 row.className = 'vp-stat';
                 row.innerHTML = '<span class="vp-stat-val"></span><span class="vp-stat-label"></span><span class="vp-stat-diff"></span>';
                 row.children[0].textContent = fmtNum(statsNow[k]);
