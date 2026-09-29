@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.7.2
+// @version      3.3.7.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3136,6 +3136,7 @@
 .vp-verify-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,.06); }
 .vp-verify-ava { font-size: 20px; width: 28px; text-align: center; }
 .vp-verify-name { flex: 1; font-size: 14px; }
+.vp-verify-left { font-size: 12px; opacity: .6; white-space: nowrap; }
 .vp-verify-ok, .vp-verify-no { padding: 6px 12px; border-radius: 8px; border: 0; cursor: pointer; font-size: 13px; }
 .vp-verify-ok { background: #2e7d32; color: #fff; }
 .vp-verify-no { background: #444; color: #ddd; }
@@ -3172,9 +3173,12 @@
             for (const p of pending) {
                 const row = document.createElement('div');
                 row.className = 'vp-verify-row';
-                row.innerHTML = '<span class="vp-verify-ava"></span><span class="vp-verify-name"></span><button type="button" class="vp-verify-ok">Подтвердить</button><button type="button" class="vp-verify-no">Отклонить</button>';
+                row.innerHTML = '<span class="vp-verify-ava"></span><span class="vp-verify-name"></span><span class="vp-verify-left"></span><button type="button" class="vp-verify-ok">Подтвердить</button><button type="button" class="vp-verify-no">Отклонить</button>';
                 row.querySelector('.vp-verify-ava').textContent = p.avatar || '👤';
                 row.querySelector('.vp-verify-name').textContent = '@' + p.name;
+                const h = Math.max(1, Math.ceil((p.left || 0) / 3600000));
+                row.querySelector('.vp-verify-left').textContent = h > 24 ? `${Math.ceil(h / 24)} д` : `${h} ч`;
+                row.querySelector('.vp-verify-left').title = 'Сколько осталось до авто-отказа на 7 дней';
                 row.querySelector('.vp-verify-ok').onclick = async () => {
                     row.classList.add('vp-busy');
                     const ok = await ownerMarkPush('ITDX-V', p.id);
@@ -3197,14 +3201,15 @@
             await checkAllComments(true);
             const comments = await loadVerificationComments(true);
             const lists = parseAllOwnerLists(comments);
-            const nowSec = Math.floor(Date.now() / 1000);
+            const now = Date.now(), nowSec = Math.floor(now / 1000);
             const all = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}') || {};
             const pending = [];
             for (const [name, info] of Object.entries(all)) {
                 if (!info || info.state !== 'quarantine' || !info.id) continue;
                 if (String(info.id) === OWNER_ID) continue;
-                pending.push({ name, id: info.id, displayName: info.displayName || name, avatar: info.avatar || '👤' });
-                if (!lists.seen.has(String(info.id).toLowerCase())) {
+                const t = verifyTimeline(info.id, lists, now);
+                pending.push({ name, id: info.id, displayName: info.displayName || name, avatar: info.avatar || '👤', left: t.seenCur ? t.until - now : QUARANTINE_MS });
+                if (!t.seenCur) {
                     try { await ownerMarkPush('ITDX-SEEN', info.id + ':' + nowSec); } catch (e) { }
                 }
             }
@@ -3626,7 +3631,8 @@
         }
 
         const CHANGELOG = [
-            ['3.3.7 – 3.3.7.2', '29 сентября 2026', [
+            ['3.3.7 – 3.3.7.3', '29 сентября 2026', [
+                'Галочка: если не подтвердили, через неделю мод сам отправит запрос снова — достаточно просто зайти на сайт',
                 'Сообщения без подтверждённой галочки: пароль больше не спрашивается заново при каждом входе, чат с поддержкой работает сразу, переписка с людьми — после подтверждения',
                 'Телефон: рядом с «ИТД X» в профиле — кнопка «Меню»: статистика, клуб ИТД X и игры в полноэкранном окне (раньше на телефоне панели не было совсем)',
                 '«Назад» на телефоне и Esc закрывают меню; открытое окно помечается в истории — листается как галерея и личка',
@@ -3849,8 +3855,20 @@
                 for (const tok of rest.split(/\s+/)) {
                     const m = tok.match(/^([0-9a-f-]{36})(?::(\d+))?$/i);
                     if (!m || !UUID_RE.test(m[1])) continue;
-                    map.set(m[1].toLowerCase(), m[2] ? +m[2] : 0);
+                    const k = m[1].toLowerCase(), v = m[2] ? +m[2] : 0;
+                    map.set(k, Math.max(map.get(k) || 0, v));
                 }
+            }
+            return map;
+        }
+
+        function parseRequests(comments) {
+            const map = new Map();
+            for (const c of comments) {
+                const a = c.author, m = String(c.content || '').trim().match(/^ITDX-R (\d+)$/);
+                if (!a || !a.id || !m) continue;
+                const k = String(a.id).toLowerCase();
+                map.set(k, Math.max(map.get(k) || 0, +m[1]));
             }
             return map;
         }
@@ -3860,18 +3878,32 @@
                 approved: parseOwnerList(comments, 'ITDX-V'),
                 seen: parseOwnerList(comments, 'ITDX-SEEN'),
                 cooldown: parseOwnerList(comments, 'ITDX-C'),
+                request: parseRequests(comments),
             };
         }
 
-        function resolveVerifyState(id, lists, now) {
-            if (!id) return 'quarantine';
+        function verifyTimeline(id, lists, now) {
+            const out = (state, extra) => Object.assign({ state, seenCur: 0, needRequest: false, until: 0 }, extra);
+            if (!id) return out('quarantine');
             const key = String(id).toLowerCase();
-            if (lists.approved.has(key)) return 'approved';
-            const cd = lists.cooldown.get(key);
-            if (cd && cd * 1000 > now) return 'none';
-            const seenAt = lists.seen.get(key);
-            if (seenAt && now - seenAt * 1000 > QUARANTINE_MS) return 'none';
-            return 'quarantine';
+            if (lists.approved.has(key)) return out('approved');
+            const cd = (lists.cooldown.get(key) || 0) * 1000;
+            const seen = (lists.seen.get(key) || 0) * 1000;
+            const req = ((lists.request && lists.request.get(key)) || 0) * 1000;
+            const sCur = seen && (!cd || seen > cd - COOLDOWN_MS) ? seen : 0;
+            if (cd > now) return out('none', { until: cd });
+            let cdEnd = cd;
+            if (sCur) {
+                if (now < sCur + QUARANTINE_MS) return out('quarantine', { seenCur: sCur, until: sCur + QUARANTINE_MS });
+                if (now < sCur + QUARANTINE_MS + COOLDOWN_MS) return out('none', { until: sCur + QUARANTINE_MS + COOLDOWN_MS });
+                cdEnd = Math.max(cdEnd, sCur + QUARANTINE_MS + COOLDOWN_MS);
+            }
+            if (cdEnd && req < cdEnd) return out('none', { needRequest: true });
+            return out('quarantine');
+        }
+
+        function resolveVerifyState(id, lists, now) {
+            return verifyTimeline(id, lists, now).state;
         }
 
         function verifiedNames() {
@@ -3947,6 +3979,21 @@
             } finally {
                 isVerifying = false;
             }
+        }
+
+        async function verifyRequestAgain() {
+            const myId = meData && meData.id;
+            if (!myId || myId === OWNER_ID) return;
+            try {
+                const all = await loadVerificationComments();
+                if (!verifyTimeline(myId, parseAllOwnerLists(all), Date.now()).needRequest) return;
+                const content = 'ITDX-R ' + Math.floor(Date.now() / 1000);
+                const mine = all.find(c => c.author && c.author.id === myId && /^ITDX-R \d+$/.test(String(c.content || '').trim()));
+                const res = mine
+                    ? await api(`/api/comments/${mine.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) })
+                    : await api(`/api/posts/${VERIFICATION_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) });
+                if (res.ok) await checkAllComments(true);
+            } catch (e) { logErr('запрос галочки', e); }
         }
 
         async function verifyMyself() {
@@ -4062,7 +4109,7 @@
 
                 createScrollTopButton();
 
-                checkAllComments().then(() => { markVerifiedUsers(); return verifyMyself(); });
+                checkAllComments().then(() => { markVerifiedUsers(); return verifyMyself(); }).then(verifyRequestAgain);
                 setInterval(checkAllComments, 10 * 60 * 1000);
 
                 lbSyncFromServer();
