@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.7.1
+// @version      3.3.7.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1431,6 +1431,19 @@
         }
         function isApprovedAuthor(author) {
             return !!(author && isApprovedId(author.id));
+        }
+        function loadApprovedIds() {
+            let all = {};
+            try { all = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}') || {}; } catch (e) { }
+            const s = new Set();
+            for (const info of Object.values(all)) if (info && info.state === 'approved' && info.id) s.add(String(info.id).toLowerCase());
+            approvedIds = s;
+            return s;
+        }
+        async function ensureApproved() {
+            for (let i = 0; i < 40 && isVerifying; i++) await new Promise(r => setTimeout(r, 250));
+            if (!localStorage.getItem(VERIFICATION_STORAGE_KEY)) await checkAllComments();
+            loadApprovedIds();
         }
 
         let globalHue = 0;
@@ -3613,7 +3626,8 @@
         }
 
         const CHANGELOG = [
-            ['3.3.7 – 3.3.7.1', '29 сентября 2026', [
+            ['3.3.7 – 3.3.7.2', '29 сентября 2026', [
+                'Сообщения без подтверждённой галочки: пароль больше не спрашивается заново при каждом входе, чат с поддержкой работает сразу, переписка с людьми — после подтверждения',
                 'Телефон: рядом с «ИТД X» в профиле — кнопка «Меню»: статистика, клуб ИТД X и игры в полноэкранном окне (раньше на телефоне панели не было совсем)',
                 '«Назад» на телефоне и Esc закрывают меню; открытое окно помечается в истории — листается как галерея и личка',
                 'Рекорды игр подтягиваются с сервера: зашёл с другого устройства — старые рекорды на месте']],
@@ -5621,10 +5635,12 @@
             if (msgNet.syncing) return msgNet.again || (msgNet.again = msgNet.syncing.catch(() => { }).then(() => { msgNet.again = null; return msgSync(); }));
             msgNet.syncing = (async () => {
                 const keys = new Map(), vols = [];
+                await ensureApproved();
+                const meId = msgMyId(), iAmOwner = meId === OWNER_ID;
                 for (const c of await allComments(MSG_POST_ID, 30)) {
                     const a = c.author, t = String(c.content || '');
                     if (!a || !a.id) continue;
-                    if (!isApprovedAuthor(a)) continue;
+                    if (a.id !== meId && !iAmOwner && !isApprovedAuthor(a)) continue;
                     let m;
                     if ((m = t.match(/^ITDXK1 ([\w-]+) ([\w-]+)$/))) {
                         if (!keys.has(a.id)) keys.set(a.id, { id: a.id, login: a.username || '', cid: c.id, pubText: m[1], pub: b64u.dec(m[1]), sealed: m[2] });
@@ -6117,6 +6133,11 @@
                 const wait = note('🔒 Загрузка переписки…');
                 try { await msgSync(); } catch (e) { if (my === renderN) wait.textContent = 'Не загрузилось — открой чат ещё раз'; logErr('сообщения', e); return; }
                 if (current !== d || my !== renderN) return;
+                if (d.login && !d.support && !isApprovedId(msgMyId())) {
+                    feed.textContent = '';
+                    note('🔒 Переписка с людьми откроется, когда разработчик подтвердит твою галочку ИТД X. Поддержка работает уже сейчас.');
+                    return;
+                }
                 if (!msgNet.me) return msgKeyForm(d);
                 feed.textContent = '';
                 note('🔒 Сквозное шифрование: переписку можете прочитать только вы двое');
@@ -9823,14 +9844,14 @@
                 return new TextDecoder().decode(o);
             } catch (e) { return null; }
         }
-        const parseLB = t => {
+        const parseLB = (t, legacy) => {
             const s = String(t || '').trim();
             let body = s;
             if (s.startsWith('ITDXG2 ')) {
                 const d = lbDecode(s.slice(7));
                 if (!d) return null;
                 body = d;
-            }
+            } else if (!legacy) return null;
             const m = body.match(/^ITDXG((?:\s+[smt]\d+)*)$/);
             if (!m) return null;
             const o = {};
@@ -9859,8 +9880,9 @@
             if (!myUsername) return;
             try {
                 const all = await lbComments();
-                const mine = all.find(c => lbIsMe(c.author) && parseLB(c.content));
-                if (mine) lbMergeIntoLocal(parseLB(mine.content));
+                const mine = all.find(c => lbIsMe(c.author) && parseLB(c.content, true));
+                if (mine) lbMergeIntoLocal(parseLB(mine.content, true));
+                if (mine && !String(mine.content).trim().startsWith('ITDXG2 ')) gamesRecord();
                 renderGamesMenu();
             } catch (e) { }
         }
@@ -9878,14 +9900,14 @@
             lbBusy = true;
             try {
                 const all = await lbComments(true);
-                const mine = all.find(c => lbIsMe(c.author) && parseLB(c.content));
-                const was = mine ? parseLB(mine.content) : {}, loc = lbLocal(), now = {};
+                const mine = all.find(c => lbIsMe(c.author) && parseLB(c.content, true));
+                const was = mine ? parseLB(mine.content, true) : {}, loc = lbLocal(), now = {};
                 for (const k of ['s', 'm', 't']) {
                     now[k] = lbBetter(k, was[k], loc[k]);
                     if (now[k] && now[k] !== loc[k]) GM_setValue(LB_LOCAL_KEYS[k], now[k]);
                 }
                 const text = lbText(now);
-                if (!text || (mine && text === lbText(was))) return;
+                if (!text || (mine && String(mine.content).trim() === text)) return;
                 const res = mine
                     ? await api(`/api/comments/${mine.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) })
                     : await api(`/api/posts/${GAMES_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) });
@@ -9907,10 +9929,11 @@
             let all;
             try { all = await lbComments(); } catch (e) { box.lastElementChild.textContent = 'Не загрузилось'; return; }
             if (!box.isConnected) return;
+            loadApprovedIds();
             const best = new Map();
             for (const c of all) {
-                const o = parseLB(c.content), a = c.author;
-                if (!o || !o[k] || !a) continue;
+                const a = c.author, o = a && parseLB(c.content, lbIsMe(a));
+                if (!o || !o[k]) continue;
                 if (!lbIsMe(a) && !isApprovedAuthor(a)) continue;
                 const key = a.id || a.username, cur = best.get(key);
                 if (!cur || lbBetter(k, cur.v, o[k]) !== cur.v) best.set(key, { v: o[k], name: a.displayName || a.username || '?', me: lbIsMe(a) });
