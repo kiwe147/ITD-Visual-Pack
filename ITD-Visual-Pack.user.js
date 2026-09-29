@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.8
+// @version      3.3.8.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -83,11 +83,12 @@
         const st = Object.assign({}, history.state);
         const had = OVERLAY_KEYS.some(k => st[k]);
         OVERLAY_KEYS.forEach(k => delete st[k]);
+        delete st.vpChat;
         st[key] = 1;
         history[had ? 'replaceState' : 'pushState'](st, '', location.href);
     }
     const overlayAt = key => !!(history.state && history.state[key]);
-    const STACK_KEYS = ['vpGames', 'vpNews'];
+    const STACK_KEYS = ['vpGames', 'vpNews', 'vpChat'];
     function stackEnter(key) { history.pushState(Object.assign({}, history.state, { [key]: 1 }), '', location.href); }
     function stackLeave(key) { if (overlayAt(key)) history.back(); }
     if ([...OVERLAY_KEYS, ...STACK_KEYS].some(overlayAt)) {
@@ -3669,7 +3670,8 @@
         }
 
         const CHANGELOG = [
-            ['3.3.8', '29 сентября 2026', [
+            ['3.3.8 – 3.3.8.1', '29 сентября 2026', [
+                'Сообщения: «назад» из переписки возвращает к списку диалогов, а не закрывает сообщения целиком',
                 'Статистика: у лайков снова виден прирост за день и месяц (раньше стоял 0); «День» больше не показывает прирост за недели — если давно не заходил, видно, с какого числа считается',
                 '«Назад» (и кнопка «назад» на телефоне) закрывает окна «Игры» и «Что нового», а не уводит со страницы',
                 'Сообщения: свои сообщения подкрашены цветом стиля и читаются на любом стиле и теме; под полем ввода — сколько символов из 500',
@@ -6327,7 +6329,12 @@
                 feed.scrollTop = feed.scrollHeight;
                 return b;
             }
-            function openChat(d) {
+            let chatBackPending = false;
+            function openChat(d, fromHistory) {
+                if (fromHistory !== true && !chatBackPending && root.classList.contains('vp-open')) {
+                    const st = Object.assign({}, history.state, { vpChat: d.id });
+                    history[overlayAt('vpChat') ? 'replaceState' : 'pushState'](st, '', location.href);
+                }
                 current = d;
                 d.unread = 0;
                 $('.vp-msgs-chead .vp-msgs-ava').innerHTML = avaHtml(d.ava);
@@ -6400,13 +6407,14 @@
                 const list = msgThread(msgTarget(current));
                 if (list.length !== current.shown && !input.value) msgOpenPerson(current);
             }, 20000);
-            root.openDialog = id => {
+            root.openDialog = (id, fromHistory) => {
                 msgFillDialogs();
                 const d = MSG_DIALOGS.find(x => x.id === id) || (id.startsWith('u:') && msgPeople.get(id.slice(2)));
-                if (d) openChat(d);
+                if (d) openChat(d, fromHistory);
             };
             root.currentTarget = () => current && !current.bot ? msgTarget(current) : null;
-            function closeChat() {
+            function closeChat(fromHistory) {
+                if (fromHistory !== true && current && overlayAt('vpChat')) { chatBackPending = true; history.back(); }
                 clearTimeout(botTimer);
                 if (current && msgNet.me) msgSync().then(() => { msgFillDialogs(); msgBadge(); if (!current) renderList(); }).catch(() => { });
                 current = null;
@@ -6565,11 +6573,24 @@
                 placeSidebar(); placeRail();
                 if (!galOpen) galHideFeed(false);
                 markActiveNav(); moveNavBlob();
-                if (!fromHistory && overlayAt('vpMsgs')) history.back();
+                if (!fromHistory) {
+                    if (overlayAt('vpChat')) history.go(-2);
+                    else if (overlayAt('vpMsgs')) history.back();
+                }
             }
             addEventListener('popstate', () => {
                 const open = root.classList.contains('vp-open');
-                if (overlayAt('vpMsgs')) { if (!open) root.open(true); }
+                if (chatBackPending) {
+                    chatBackPending = false;
+                    if (current && overlayAt('vpMsgs') && !overlayAt('vpChat')) history.pushState(Object.assign({}, history.state, { vpChat: current.id }), '', location.href);
+                    return;
+                }
+                if (overlayAt('vpMsgs')) {
+                    if (!open) root.open(true);
+                    const cid = history.state && history.state.vpChat;
+                    if (!cid && current) closeChat(true);
+                    else if (cid && (!current || current.id !== cid)) root.openDialog(cid, true);
+                }
                 else if (open) close(true);
             });
             document.addEventListener('click', e => {
