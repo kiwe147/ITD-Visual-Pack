@@ -13,8 +13,8 @@ const snap = fs.readFileSync(process.argv[2], 'utf8');
 const src = fs.readFileSync(path.join(__dirname, '..', 'ITD-Visual-Pack.user.js'), 'utf8').replace('const msgNet = {', 'const msgNet = window.__msgNet = {').replace('setInterval(msgBackground, 60000)', 'setInterval(msgBackground, 2500)');
 const ORIGIN = 'https://xn--d1ah4a.com', POST = 'a53b53e0-9950-4f62-83f4-91e5985ef6c5';
 const OWNER = '5e064703-104d-4794-bc28-9ed6f5847cca';
-const USERS = { NeuroSFW: { id: OWNER, username: 'NeuroSFW', displayName: 'Нейро' }, bob: { id: 'u2', username: 'bob', displayName: 'Боб' }, carl: { id: 'u3', username: 'carl', displayName: 'Карл' } };
-const VERIFIED = { NeuroSFW: { code: 'x', hasMod: true, id: OWNER, state: 'approved' }, bob: { code: 'x', hasMod: true, id: 'u2', state: 'approved' }, carl: { code: 'x', hasMod: true, id: 'u3', state: 'quarantine' } };
+const USERS = { NeuroSFW: { id: OWNER, username: 'NeuroSFW', displayName: 'Нейро' }, bob: { id: 'u2', username: 'bob', displayName: 'Боб' }, carl: { id: 'u3', username: 'carl', displayName: 'Карл' }, dan: { id: 'u4', username: 'dan', displayName: 'Дэн' } };
+const VERIFIED = { NeuroSFW: { code: 'x', hasMod: true, id: OWNER, state: 'approved' }, bob: { code: 'x', hasMod: true, id: 'u2', state: 'approved' }, carl: { code: 'x', hasMod: true, id: 'u3', state: 'quarantine' }, dan: { code: 'x', hasMod: true, id: 'u4', state: 'approved' } };
 const fails = [];
 const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + what); if (!ok) fails.push(what); };
 let comments = [], n = 0, posts = 0, patches = 0, uploads = 0;
@@ -321,6 +321,17 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   await B2.p.evaluate(() => document.querySelectorAll('.vp-call').forEach(c => c.remove()));
   await B2.p.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); await B2.p.waitForTimeout(3000);
   check(!(await B2.p.$('.vp-call')), 'тот же звонок второй раз не срабатывает');
+  // 3.3.13.3: звонок тому, у кого сообщения не подключены (dan без ключа) — через служебную строку в шифре
+  check(picks.includes('@dan'), `в списке «Позвонить» — все из ИТД X, даже без ключа сообщений (${picks.join(', ')})`);
+  await A.p.evaluate(() => { const r = [...document.querySelectorAll('.vp-call-pick')].find(x => x.firstChild.textContent === '@dan'); r && r.click(); });
+  await A.p.waitForTimeout(3000);
+  const D = await open('dan', 'NeuroSFW');
+  await D.p.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await D.p.waitForSelector('.vp-call', { timeout: 15000 }).catch(() => { });
+  const danRang = await D.p.evaluate(() => { const c = document.querySelector('.vp-call'); return c && c.querySelector('.vp-call-name').textContent; });
+  const plainLeak = comments.some(c => /ITDXC1/.test(c.content));
+  check(danRang === 'Илья Новки' && !plainLeak, `у dan (без ключа) звонит «Илья Новки», строка звонков на сервере в шифре (${danRang}, открытым текстом: ${plainLeak})`);
+  await D.ctx.close();
   await A.p.evaluate(() => document.querySelectorAll('.vp-admin-panel').forEach(p => p.remove()));
   // прочитанное — по аккаунту (3.3.11): второе устройство NeuroSFW видит те же непрочитанные, что первое
   await A.p.$eval('.vp-msgs-back', b => b.click()).catch(() => { }); await A.p.waitForTimeout(2500);
