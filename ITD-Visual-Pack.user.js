@@ -2583,9 +2583,24 @@
             if (rootKey !== paintRootKey) {
                 paintRootKey = rootKey;
                 const slow = rainbow ? `hsl(${Math.round(h / 30) * 30}, 100%, ${dark ? 62 : 45}%)` : accent;
-                root.cssText = `--vp-accent: ${slow}; --vp-on-accent: ${dark ? '#0b0b0f' : '#fff'}; scrollbar-color: color-mix(in srgb, ${slow} 55%, transparent) transparent;`;
+                root.cssText = `--vp-accent: ${slow}; --vp-on-accent: ${onAccentFor(slow, dark)}; scrollbar-color: color-mix(in srgb, ${slow} 55%, transparent) transparent;`;
                 selection.cssText = `background: color-mix(in srgb, ${slow} 45%, transparent) !important;`;
             }
+        }
+        let accentProbe = null;
+        function onAccentFor(color, dark) {
+            try {
+                if (!accentProbe) { accentProbe = document.createElement('i'); accentProbe.style.display = 'none'; }
+                if (!accentProbe.isConnected) (document.body || document.documentElement).appendChild(accentProbe);
+                accentProbe.style.color = '';
+                accentProbe.style.color = color;
+                const c = getComputedStyle(accentProbe).color, n = (c.match(/[\d.]+/g) || []).map(Number);
+                if (n.length < 3) return dark ? '#0b0b0f' : '#fff';
+                const k = /^color\(/.test(c) ? 1 : 1 / 255;
+                const lin = v => { v *= k; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+                const L = 0.2126 * lin(n[0]) + 0.7152 * lin(n[1]) + 0.0722 * lin(n[2]);
+                return (L + 0.05) / 0.05 >= 1.05 / (L + 0.05) ? '#0b0b0f' : '#fff';
+            } catch (e) { return dark ? '#0b0b0f' : '#fff'; }
         }
         function accentOf(style) {
             if (style.color && style.color.startsWith('#')) return style.color;
@@ -6093,7 +6108,8 @@
         .vp-msgs-b { max-width: 78%; padding: 9px 13px 7px; border-radius: 20px; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere;
             animation: vpMsgsPop .2s ease-out; }
         .vp-msgs-b.vp-in { align-self: flex-start; background: var(--block-bg, #1c1c1c); border-bottom-left-radius: 6px; }
-        .vp-msgs-b.vp-out { align-self: flex-end; background: var(--vp-accent, #0080ff); color: var(--vp-on-accent, #fff); border-bottom-right-radius: 6px; }
+        .vp-msgs-b.vp-out { align-self: flex-end; background: color-mix(in srgb, var(--vp-accent, #0080ff) 26%, var(--block-bg, #1c1c1c)); color: var(--text-primary, #fff);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 45%, transparent); border-bottom-right-radius: 6px; }
         .vp-msgs-b i { display: block; margin-top: 2px; font-style: normal; font-size: 11px; opacity: .6; text-align: right; }
         .vp-msgs-b.vp-fail i { opacity: .85; }
         .vp-msgs-typing { display: flex; gap: 5px; padding: 14px 16px; }
