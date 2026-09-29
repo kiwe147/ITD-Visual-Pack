@@ -1435,6 +1435,18 @@
         function isApprovedAuthor(author) {
             return !!(author && isApprovedId(author.id));
         }
+        function acctKey(base) {
+            const id = (meData && meData.id) || (siteAuth.me && siteAuth.me.id) || '';
+            if (!id) return base;
+            const k = base + '@' + id;
+            if (GM_getValue(k, undefined) === undefined) {
+                const owner = GM_getValue('vp_acct_owner', null);
+                if (!owner) GM_setValue('vp_acct_owner', id);
+                const legacy = GM_getValue(base, undefined);
+                if ((!owner || owner === id) && legacy !== undefined) GM_setValue(k, legacy);
+            }
+            return k;
+        }
         function loadApprovedIds() {
             let all = {};
             try { all = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}') || {}; } catch (e) { }
@@ -1480,14 +1492,21 @@
         const DAY = 24 * 60 * 60 * 1000;
 
         function saveAutoLikeUsers() {
-            GM_setValue('itd_auto_like_users', JSON.stringify(autoLikeUsers));
+            GM_setValue(acctKey('itd_auto_like_users'), JSON.stringify(autoLikeUsers));
         }
 
         const autoLikeIds = JSON.parse(GM_getValue('itd_auto_like_ids', '{}') || '{}');
         const autoLikeGone = new Set();
+        function reloadAutoLike() {
+            try { autoLikeUsers = JSON.parse(GM_getValue(acctKey('itd_auto_like_users'), '{}')) || {}; } catch (e) { autoLikeUsers = {}; }
+            let ids = {};
+            try { ids = JSON.parse(GM_getValue(acctKey('itd_auto_like_ids'), '{}') || '{}') || {}; } catch (e) { }
+            Object.keys(autoLikeIds).forEach(k => delete autoLikeIds[k]);
+            Object.assign(autoLikeIds, ids);
+        }
         function rememberAutoLikeId(username) {
             const id = (verifiedInfo(username) || {}).id;
-            if (id && autoLikeIds[username] !== id) { autoLikeIds[username] = id; GM_setValue('itd_auto_like_ids', JSON.stringify(autoLikeIds)); }
+            if (id && autoLikeIds[username] !== id) { autoLikeIds[username] = id; GM_setValue(acctKey('itd_auto_like_ids'), JSON.stringify(autoLikeIds)); }
         }
         function renamedAutoLike(username) {
             const id = autoLikeIds[username];
@@ -1501,7 +1520,7 @@
             autoLikeIds[now] = id;
             delete autoLikeIds[username];
             saveAutoLikeUsers();
-            GM_setValue('itd_auto_like_ids', JSON.stringify(autoLikeIds));
+            GM_setValue(acctKey('itd_auto_like_ids'), JSON.stringify(autoLikeIds));
             return now;
         }
         async function likePostsForUser(username) {
@@ -3637,7 +3656,8 @@
         const CHANGELOG = [
             ['3.3.8', '29 сентября 2026', [
                 'Статистика: у лайков снова виден прирост за день и месяц (раньше стоял 0)',
-                '«Назад» (и кнопка «назад» на телефоне) закрывает окна «Игры» и «Что нового», а не уводит со страницы']],
+                '«Назад» (и кнопка «назад» на телефоне) закрывает окна «Игры» и «Что нового», а не уводит со страницы',
+                'Несколько аккаунтов на одном устройстве: рекорды игр, статистика, прочитанное в сообщениях и автолайки у каждого аккаунта свои']],
             ['3.3.7 – 3.3.7.3', '29 сентября 2026', [
                 'Галочка: если не подтвердили, через неделю мод сам отправит запрос снова — достаточно просто зайти на сайт',
                 'Сообщения без подтверждённой галочки: пароль больше не спрашивается заново при каждом входе, чат с поддержкой работает сразу, переписка с людьми — после подтверждения',
@@ -4116,6 +4136,7 @@
                 if (!me || !me.username) return;
                 meData = me;
                 myUsername = me.username;
+                reloadAutoLike();
                 myDisplayName = me.displayName || me.username;
                 tagAll();
                 try { placeRail(); } catch (e) { }
@@ -5800,9 +5821,9 @@
             return { uid: k && k.id, sup: false, missing: `У ${d.name} ещё нет ключа сообщений — появится, когда откроет «Сообщения» в ИТД X 3.3.3` };
         }
         const msgThread = t => t.uid ? (msgNet.conv.get(t.uid) || []).filter(m => m.sup === t.sup) : [];
-        const msgSeen = () => GM_getValue('msgSeen', {});
+        const msgSeen = () => GM_getValue(acctKey('msgSeen'), {});
         const seenKey = t => (t.sup ? 'sup:' : '') + t.uid;
-        function msgMarkSeen(t) { const s = msgSeen(), list = msgThread(t); s[seenKey(t)] = list.length ? list[list.length - 1].ts : 0; GM_setValue('msgSeen', s); }
+        function msgMarkSeen(t) { const s = msgSeen(), list = msgThread(t); s[seenKey(t)] = list.length ? list[list.length - 1].ts : 0; GM_setValue(acctKey('msgSeen'), s); }
         const msgTime = ts => { const d = new Date(ts * 1000), t = d.toTimeString().slice(0, 5); return d.toDateString() === new Date().toDateString() ? t : `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')} ${t}`; };
         function msgFillDialogs() {
             const me = msgNet.me;
@@ -5965,7 +5986,7 @@
         };
         let supportTicket = 0;
         let MSG_DIALOGS = [MSG_BOT, MSG_SUPPORT];
-        const msgPins = () => GM_getValue('msgPins', []);
+        const msgPins = () => GM_getValue(acctKey('msgPins'), []);
         function sortDialogs(list) {
             const pins = msgPins();
             return [...list.filter(d => pins.includes(d.id)).sort((a, b) => pins.indexOf(a.id) - pins.indexOf(b.id)), ...list.filter(d => !pins.includes(d.id))];
@@ -6296,7 +6317,7 @@
                     e.stopPropagation();
                     const pins = msgPins().filter(p => p !== id);
                     if (!pinned) pins.push(id);
-                    GM_setValue('msgPins', pins);
+                    GM_setValue(acctKey('msgPins'), pins);
                     hideCtx();
                     renderList();
                 };
@@ -9362,7 +9383,7 @@
         const fmtNum = n => n >= 10000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1).replace('.0', '') + 'к' : String(n);
         let statsPeriod = GM_getValue('vp_stats_tab', 'day'), statsNow = null;
         const DAY_MS = 864e5;
-        function statsHistory() { try { return JSON.parse(GM_getValue('vp_stats_hist', '[]')); } catch (e) { return []; } }
+        function statsHistory() { try { return JSON.parse(GM_getValue(acctKey('vp_stats_hist'), '[]')); } catch (e) { return []; } }
         let likesPending = null;
         function myLikesTotal() {
             const c = GM_getValue('vp_likes_total', null);
@@ -9397,7 +9418,7 @@
             if (typeof likes === 'number') now.likes = likes;
             const hist = statsHistory().filter(h => Date.now() - h.at < 40 * DAY_MS);
             if (!hist.length || Date.now() - hist[hist.length - 1].at > 6 * 3600e3) hist.push({ at: Date.now(), ...now });
-            GM_setValue('vp_stats_hist', JSON.stringify(hist));
+            GM_setValue(acctKey('vp_stats_hist'), JSON.stringify(hist));
             statsNow = now;
             renderStats();
         }
@@ -9482,7 +9503,7 @@
 
         const gamesList = rail.querySelector('.vp-games-list');
         const bestText = g => {
-            const v = GM_getValue(g.best, 0);
+            const v = GM_getValue(acctKey(g.best), 0);
             if (!v) return 'не играл';
             return g.id === 'mines' ? `лучшее ${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}` : `рекорд ${v}`;
         };
@@ -9582,7 +9603,7 @@
             el.append(cv, hint);
             const g = cv.getContext('2d'), CELLS = 16, STEP = 115;
             let snake, prev, dir, queue, food, on = false, dead = false, score = 0, last = 0, raf = 0, msg = 'Змейка\nнажми или стрелку', cell = 0;
-            let best = GM_getValue('vp_snake_best', 0);
+            let best = GM_getValue(acctKey('vp_snake_best'), 0);
             const show = () => setScore(`${score} · рекорд ${best}`);
             const rnd = () => ({ x: Math.random() * CELLS | 0, y: Math.random() * CELLS | 0, ch: MATRIX_CHARS[Math.random() * MATRIX_CHARS.length | 0] });
             function reset() {
@@ -9626,7 +9647,7 @@
                 const head = { x: (snake[0].x + dir.x + CELLS) % CELLS, y: (snake[0].y + dir.y + CELLS) % CELLS };
                 if (snake.slice(0, -1).some(p => p.x === head.x && p.y === head.y)) {
                     on = false;
-                    if (score > best) { best = score; GM_setValue('vp_snake_best', best); renderGamesMenu(); gamesRecord(); }
+                    if (score > best) { best = score; GM_setValue(acctKey('vp_snake_best'), best); renderGamesMenu(); gamesRecord(); }
                     msg = `Съел себя · ${score}\nнажми — ещё раз`;
                     show(); draw(); dead = true;
                     return;
@@ -9697,7 +9718,7 @@
             const nb = i => { const x = i % W, y = i / W | 0, out = []; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nx = x + dx, ny = y + dy; if ((dx || dy) && nx >= 0 && ny >= 0 && nx < W && ny < H) out.push(ny * W + nx); } return out; };
             const secs = () => t0 ? Math.floor((performance.now() - t0) / 1000) : 0;
             const fmt = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-            const show = () => { const b = GM_getValue('vp_mines_best', 0); setScore(`💣 ${M - flags} · ${fmt(secs())}` + (b ? ` · лучшее ${fmt(b)}` : '')); };
+            const show = () => { const b = GM_getValue(acctKey('vp_mines_best'), 0); setScore(`💣 ${M - flags} · ${fmt(secs())}` + (b ? ` · лучшее ${fmt(b)}` : '')); };
             function reset() {
                 cells = Array.from({ length: W * H }, () => ({ mine: false, n: 0, open: false, flag: false }));
                 first = true; over = false; opened = 0; flags = 0; t0 = 0; clearInterval(timer); msgEl.textContent = '';
@@ -9735,8 +9756,8 @@
                 if (boom != null) cells[boom].b.classList.add('vp-boom');
                 const s = secs();
                 if (win) {
-                    const b = GM_getValue('vp_mines_best', 0);
-                    if (!b || s < b) { GM_setValue('vp_mines_best', s); renderGamesMenu(); gamesRecord(); }
+                    const b = GM_getValue(acctKey('vp_mines_best'), 0);
+                    if (!b || s < b) { GM_setValue(acctKey('vp_mines_best'), s); renderGamesMenu(); gamesRecord(); }
                     msgEl.textContent = `Разминировано за ${fmt(s)}!`;
                 } else msgEl.textContent = 'Бум! Нажми «Новая игра»';
                 show();
@@ -9800,7 +9821,7 @@
             row.append(cv, side); el.append(row, pad, hint);
             const nx = side.querySelector('canvas'), g = cv.getContext('2d'), ng = nx.getContext('2d');
             let board, cur, next, score, lines, level, on = false, over = false, last = 0, raf = 0, cell = 0, msg = 'Тетрис\nнажми или стрелку';
-            let best = GM_getValue('vp_tetris_best', 0);
+            let best = GM_getValue(acctKey('vp_tetris_best'), 0);
             const bag = []; const take = () => { if (!bag.length) bag.push(...Object.keys(SHAPES).sort(() => Math.random() - .5)); return bag.pop(); };
             const piece = t => ({ t, m: SHAPES[t].map(r => [...r]), x: 0, y: 0 });
             const speed = () => Math.max(90, 800 - (level - 1) * 70);
@@ -9819,7 +9840,7 @@
             function reset() { board = Array.from({ length: ROWS }, () => Array(COLS).fill(null)); score = 0; lines = 0; level = 1; over = false; next = null; spawn(); show(); }
             function gameOver() {
                 on = false; over = true;
-                if (score > best) { best = score; GM_setValue('vp_tetris_best', best); renderGamesMenu(); gamesRecord(); }
+                if (score > best) { best = score; GM_setValue(acctKey('vp_tetris_best'), best); renderGamesMenu(); gamesRecord(); }
                 msg = `Конец · ${score}\nнажми — ещё раз`; show(); draw();
             }
             function lock() {
@@ -9931,16 +9952,16 @@
             return 'ITDXG2 ' + lbEncode('ITDXG' + parts.join(''));
         };
         const lbBetter = (k, a, b) => !a ? b : !b ? a : k === 'm' ? Math.min(a, b) : Math.max(a, b);
-        const lbLocal = () => ({ s: +GM_getValue('vp_snake_best', 0) || 0, m: +GM_getValue('vp_mines_best', 0) || 0, t: +GM_getValue('vp_tetris_best', 0) || 0 });
+        const lbLocal = () => ({ s: +GM_getValue(acctKey('vp_snake_best'), 0) || 0, m: +GM_getValue(acctKey('vp_mines_best'), 0) || 0, t: +GM_getValue(acctKey('vp_tetris_best'), 0) || 0 });
         const LB_LOCAL_KEYS = { s: 'vp_snake_best', m: 'vp_mines_best', t: 'vp_tetris_best' };
         function lbMergeIntoLocal(remote) {
             if (!remote) return;
             for (const k of ['s', 'm', 't']) {
                 const rv = +remote[k] || 0;
                 if (!rv) continue;
-                const lv = +GM_getValue(LB_LOCAL_KEYS[k], 0) || 0;
+                const lv = +GM_getValue(acctKey(LB_LOCAL_KEYS[k]), 0) || 0;
                 const best = lbBetter(k, rv, lv);
-                if (best && best !== lv) GM_setValue(LB_LOCAL_KEYS[k], best);
+                if (best && best !== lv) GM_setValue(acctKey(LB_LOCAL_KEYS[k]), best);
             }
         }
         async function lbSyncFromServer() {
@@ -9971,7 +9992,7 @@
                 const was = mine ? parseLB(mine.content, true) : {}, loc = lbLocal(), now = {};
                 for (const k of ['s', 'm', 't']) {
                     now[k] = lbBetter(k, was[k], loc[k]);
-                    if (now[k] && now[k] !== loc[k]) GM_setValue(LB_LOCAL_KEYS[k], now[k]);
+                    if (now[k] && now[k] !== loc[k]) GM_setValue(acctKey(LB_LOCAL_KEYS[k]), now[k]);
                 }
                 const text = lbText(now);
                 if (!text || (mine && String(mine.content).trim() === text)) return;
