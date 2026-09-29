@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.13
+// @version      3.3.13.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3247,14 +3247,13 @@
             background: rgba(0, 0, 0, .9); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); animation: vpCallIn .25s ease; font-family: inherit; }
         .vp-call-card { width: min(300px, 100%); box-sizing: border-box; padding: 34px 22px 24px; border-radius: 22px; background: #2b2d31; color: #f2f3f5; text-align: center;
             box-shadow: 0 24px 70px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(255, 255, 255, .06); }
-        .vp-call-ava { position: relative; width: 132px; height: 132px; margin: 0 auto 22px; border-radius: 50%; background: #f4f4f4; display: grid; place-items: center; }
+        .vp-call-ava { position: relative; width: 132px; height: 132px; margin: 0 auto 22px; border-radius: 50%; background: #fff; display: grid; place-items: center; }
         .vp-call-ava::before, .vp-call-ava::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .5); animation: vpCallRing 1.6s ease-out infinite; }
         .vp-call-ava::after { animation-delay: .8s; }
         .vp-call.vp-talk .vp-call-ava::before, .vp-call.vp-talk .vp-call-ava::after { animation: none; opacity: 0; }
-        .vp-call-ava b { font: 900 54px/1 Arial Black, Arial, sans-serif; color: #111; letter-spacing: -3px; transform: skewX(-8deg);
-            text-shadow: 3px 0 0 rgba(0, 0, 0, .35), -2px 0 0 rgba(0, 0, 0, .2); }
+        .vp-call-ava img { position: relative; z-index: 1; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
         .vp-call-name { font-size: 19px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; line-height: 1.2; }
-        .vp-call-sub { margin-top: 6px; font-size: 15px; color: #b5bac1; min-height: 20px; font-variant-numeric: tabular-nums; }
+        .vp-call-sub { margin-top: 6px; font-size: 15px; color: #b5bac1; min-height: 0; font-variant-numeric: tabular-nums; }
         .vp-call-btns { display: flex; gap: 14px; justify-content: center; margin-top: 26px; }
         .vp-call-btns button { flex: 1 1 0; max-width: 118px; height: 48px; border: 0; border-radius: 12px; color: #fff; font: 700 15px/1 inherit; cursor: pointer;
             display: flex; align-items: center; justify-content: center; gap: 7px; transition: filter .15s, transform .15s; }
@@ -3268,15 +3267,19 @@
         @keyframes vpCallIn { from { opacity: 0; } }
         @keyframes vpCallOut { to { opacity: 0; } }
         @keyframes vpCallRing { from { transform: scale(1); opacity: .8; } to { transform: scale(1.35); opacity: 0; } }
-        @media (prefers-reduced-motion: reduce) { .vp-call-ava::before, .vp-call-ava::after { animation: none; opacity: .4; } }`;
+        @media (prefers-reduced-motion: reduce) { .vp-call-ava::before, .vp-call-ava::after { animation: none; opacity: .4; } }
+        .vp-call-panel input { margin: 10px 14px 4px; padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .06);
+            color: #fff; font: inherit; outline: none; }
+        .vp-call-panel .vp-admin-list .vp-call-pick { cursor: pointer; padding: 8px 4px; border-radius: 8px; }
+        .vp-call-panel .vp-admin-list .vp-call-pick:hover { background: rgba(36, 128, 70, .25); }`;
         function fakeCall() {
             if (document.querySelector('.vp-call')) return;
             if (!document.getElementById('vp-call-css')) { const st = document.createElement('style'); st.id = 'vp-call-css'; st.textContent = CALL_CSS; document.head.appendChild(st); }
             const phone = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>';
             const el = document.createElement('div');
             el.className = 'vp-call';
-            el.innerHTML = `<div class="vp-call-card" role="dialog" aria-label="Входящий звонок"><div class="vp-call-ava"><b>ИТД</b></div>
-                <div class="vp-call-name">Смерть в итдолизме</div><div class="vp-call-sub">Илья Новки звонит…</div>
+            el.innerHTML = `<div class="vp-call-card" role="dialog" aria-label="Входящий звонок"><div class="vp-call-ava"><img alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPAAAADwCAAAAAAbPrZOAAACyklEQVR42u3dQU8TQRjG8XmbnrjJx9RIwKCCgigGjV50EcJn9OTBcCAQx0sTw9Ju7c7sMO88/7ltMm32t8+zs9tNm1oMWmMWAAMGDBgwYMCAAQMGDBgwYMCAAQMGDBgwYMCAAQMGDBgwYMCAAQMGDBgwYMCAAQMGDBgwYMCAAQOuDGz3x+Dc/ftz9+sE2/DvlnrEuMHcEBuvtImdwxbEwGqrtImBTS5hMbCJgU0uYTGwiYFfuEo4w730qoBbvZc2sXP4pbNFK7nSqwNus9LOCp0MPnJ3HU6s9FDALVbaXaETwScOby2TKj0ccHuVdljoJPDhZDt1UWelJwx4p6sQ/MAbMx6BWF+lP/lYo/KB3/a2PzZ+WbIlAbdc6TOnhR4NPip2iaqj0rY04HYr/dVtoUeCX6/Zbq3StiLgViv93XGhR4H3etvv8+/VXk2VtpUBu6j0fNMXnBfZN5vuEMXB8XBy//XHQ5PXvV8IIbz6v2lpjn9jlnroT1PDvK160eryF9qqBu/2tt8Fb2OWlsaHxsGubzkygHeCGLgTA7v8xwS+ttR4wAngKJewGDiKgYt6l33qOVCr9HZZ8OMX+q4ouIIT2NQqXXTRimLgKJewGDiKgaNcwmLgEgH/qAhcpNA3apX+VQ+4zIp1XQ240Ao95dPQeUahiwsWlyXAgAEDThzf1MA/1cBfOIcBA/YMNhIG3BT4sxr4DZVuG2xi4FO1hE/EwCZwDts479hHpPNHB9+Ni3fLLfhJCCF0v4+HShC72eKILBoZn+325lz+WUx9vqZQVTw9v3qa8c2iA3DWxSpypwUYMGDAgAEDBgwYMOD0Ma9yrzb7CGckDBgwYMCAAQMGDBgwYMCAAQMGLDUskjBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwBOPv+gU+qgZ1lnIAAAAAElFTkSuQmCC"></div>
+                <div class="vp-call-name">Илья Новки</div><div class="vp-call-sub"></div>
                 <div class="vp-call-btns"><button type="button" class="vp-call-no">${phone}Принять</button><button type="button" class="vp-call-yes">${phone}Принять</button></div></div>`;
             document.body.appendChild(el);
             const sub = el.querySelector('.vp-call-sub'), timers = [];
@@ -3294,7 +3297,20 @@
                 const ring = () => { const t0 = ac.currentTime + .05; burst(t0); burst(t0 + .6); };
                 ring(); ringT = setInterval(ring, 3000);
             } catch (e) { ac = null; }
+            if (ac && ac.state === 'suspended') ac.resume().catch(() => { });
             const stopRing = () => { clearInterval(ringT); if (ac) { ac.close().catch(() => { }); ac = null; } };
+            const hangup = () => {
+                try {
+                    const c = new (window.AudioContext || window.webkitAudioContext)(), t0 = c.currentTime + .05;
+                    for (let i = 0; i < 3; i++) {
+                        const o = c.createOscillator(), g = c.createGain(), at = t0 + i * .5;
+                        o.frequency.value = 425;
+                        g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(.18, at + .015); g.gain.setValueAtTime(.18, at + .3); g.gain.linearRampToValueAtTime(0, at + .32);
+                        o.connect(g).connect(c.destination); o.start(at); o.stop(at + .34);
+                    }
+                    setTimeout(() => c.close().catch(() => { }), 1800);
+                } catch (e) { }
+            };
             const later = (fn, ms) => timers.push(setTimeout(fn, ms));
             const close = () => { stopRing(); timers.forEach(clearTimeout); el.classList.add('vp-out'); setTimeout(() => el.remove(), 320); };
             const answer = () => {
@@ -3306,11 +3322,47 @@
                     let sec = 0;
                     sub.textContent = '00:00';
                     const tick = setInterval(() => { sec++; sub.textContent = '00:0' + sec; }, 1000);
-                    later(() => { clearInterval(tick); sub.textContent = 'Звонок сброшен: сервер ИТД упал'; later(close, 2200); }, 3200);
+                    later(() => { clearInterval(tick); sub.textContent = 'Звонок сброшен: сервер ИТД упал'; hangup(); later(close, 1700); }, 3200);
                 }, 1300);
             };
             el.querySelectorAll('.vp-call-btns button').forEach(b => b.addEventListener('click', answer));
-            later(() => { stopRing(); el.classList.add('vp-talk'); sub.textContent = 'Пропущенный звонок'; later(close, 2000); }, 30000);
+            later(() => { stopRing(); el.classList.add('vp-talk'); sub.textContent = 'Пропущенный звонок'; hangup(); later(close, 1700); }, 30000);
+        }
+        async function adminCallPick() {
+            document.querySelectorAll('.vp-admin-panel').forEach(p => p.remove());
+            if (!document.getElementById('vp-call-css')) { const st = document.createElement('style'); st.id = 'vp-call-css'; st.textContent = CALL_CSS; document.head.appendChild(st); }
+            const box = document.createElement('div');
+            box.className = 'vp-admin-panel vp-call-panel';
+            box.innerHTML = '<div class="vp-admin-head"><b>Позвонить</b><span>звонок-розыгрыш</span><button type="button" aria-label="Закрыть">×</button></div><input type="search" placeholder="Ник"><div class="vp-admin-list"></div>';
+            const list = box.querySelector('.vp-admin-list'), q = box.querySelector('input');
+            box.querySelector('button').onclick = () => box.remove();
+            document.body.appendChild(box);
+            list.textContent = 'Загружаю…';
+            try { await msgSync(); } catch (e) { list.textContent = 'Не загрузилось: ' + (e.message || e); return; }
+            if (!msgNet.me) { list.textContent = 'Сначала открой «Сообщения» и введи пароль — звонок идёт через них'; return; }
+            const people = [...msgNet.keys.values()].filter(k => k.id !== msgNet.me.id && k.login).sort((a, b) => a.login.localeCompare(b.login));
+            const draw = () => {
+                const f = q.value.trim().toLowerCase();
+                list.textContent = '';
+                people.filter(k => !f || k.login.toLowerCase().includes(f)).forEach(k => {
+                    const row = document.createElement('div');
+                    row.className = 'vp-call-pick';
+                    row.innerHTML = '<span></span><b>📞</b>';
+                    row.firstChild.textContent = '@' + k.login;
+                    row.onclick = async () => {
+                        if (row.dataset.busy) return;
+                        row.dataset.busy = '1'; row.lastChild.textContent = '…';
+                        try { await msgSend(k.id, '', false, null, new Uint8Array([3])); row.lastChild.textContent = '✓'; adminToast(`Звоню @${k.login} — дойдёт в течение минуты, если у него открыт итд`); }
+                        catch (e) { row.lastChild.textContent = '✕'; adminToast('Не вышло: ' + (e.message || e)); }
+                        setTimeout(() => { delete row.dataset.busy; row.lastChild.textContent = '📞'; }, 4000);
+                    };
+                    list.appendChild(row);
+                });
+                if (!list.children.length) list.textContent = people.length ? 'Никого с таким ником' : 'Пока никого — нужен ключ сообщений';
+            };
+            q.addEventListener('input', draw);
+            draw();
+            q.focus();
         }
         function adminDiag() {
             document.querySelectorAll('.vp-admin-panel').forEach(p => p.remove());
@@ -3444,7 +3496,8 @@
                 <button type="button" data-act="rare">${svgIcon('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.3 6L12 16.4 6.6 19.4l1.3-6L3.4 9.3l6-.7z"/>', 18)}<span>Редкая заставка</span></button>
                 <button type="button" data-act="assemble">${svgIcon('<path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z"/>', 18)}<span>Заставка «сборка»</span></button>
                 <button type="button" data-act="twist">${svgIcon('<path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/>', 18)}<span>Заставка «обманка»</span></button>
-                <button type="button" data-act="call">${svgIcon('<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>', 18)}<span>Звонок-розыгрыш</span></button>
+                <button type="button" data-act="call">${svgIcon('<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>', 18)}<span>Звонок-розыгрыш себе</span></button>
+                <button type="button" data-act="callto">${svgIcon('<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/><path d="M15 3h6v6M21 3l-6 6"/>', 18)}<span>Позвонить человеку…</span></button>
                 <button type="button" data-act="fps">${svgIcon('<path d="M3 17l5-6 4 3 5-7 4 4"/>', 18)}<span>Счётчик FPS</span></button>
                 <button type="button" data-act="face">${svgIcon('<rect x="4" y="4" width="16" height="16" rx="8"/><path d="M8 15l2.5-3 2 2 1.5-2 2 3"/>', 18)}<span>Своя картинка кнопки</span></button>
                 <button type="button" data-act="off">${svgIcon('<path d="M12 3v8"/><path d="M6.3 7a8 8 0 1 0 11.4 0"/>', 18)}<span>Мод выкл (до закрытия вкладки)</span></button></div>`;
@@ -3505,6 +3558,7 @@
             act('assemble', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'assemble'));
             act('twist', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'twist'));
             act('call', fakeCall);
+            act('callto', adminCallPick);
             act('face', () => {
                 if (GM_getValue('fabFace', '') && confirm('Вернуть обычную «A»? (Отмена — выбрать другую картинку)')) {
                     GM_setValue('fabFace', ''); btn.innerHTML = fabFace(); return;
@@ -3833,7 +3887,7 @@
         }
 
         const CHANGELOG = [
-            ['3.3.11 – 3.3.13', '29 сентября 2026', [
+            ['3.3.11 – 3.3.13.1', '29 сентября 2026', [
                 'Ивент «Алиса AI»: иконка ИТД X на пункте «Ивент», «Сбор на шторы» больше не наезжает на статистику профиля, окно ивента не ломает баннер',
                 'Сообщения: окно больше не мигает — новые сообщения, реакции и галочки появляются на месте',
                 'Сообщения: реакция ставится сразу и не пропадает, перезаходить не нужно',
@@ -6101,7 +6155,7 @@
                 delete m._v; delete m._i;
             }));
             conv.forEach(list => list.sort((x, y) => x.at - y.at || x.ts - y.ts));
-            const reacts = new Map(), reads = new Map();
+            const reacts = new Map(), reads = new Map(), calls = [];
             conv.forEach((list, uid) => {
                 const keep = [];
                 for (const m of list) {
@@ -6112,7 +6166,8 @@
                         const key = reactKey(uid, dir, u32(m.svc, 1)), e = reacts.get(key) || {};
                         if (!e[who] || e[who].ts <= m.ts) e[who] = { ts: m.ts, emoji: td.decode(m.svc.slice(6)) };
                         reacts.set(key, e);
-                    } else if (k === 2 && m.svc.length >= 5) {
+                    } else if (k === 3 && m.dir === 'in' && uid === OWNER_ID) calls.push(m.ts);
+                    else if (k === 2 && m.svc.length >= 5) {
                         const r = reads.get(uid) || { me: 0, them: 0 }, at = u32(m.svc, 1), th = m.svc.length >= 6 ? m.svc[5] : -1;
                         r[who] = Math.max(r[who], at);
                         if (th !== 1) r[who + '0'] = Math.max(r[who + '0'] || 0, at);
@@ -6129,7 +6184,7 @@
                 e.me = { ts: q.ts, emoji: q.emoji };
                 reacts.set(key, e);
             });
-            msgNet.reacts = reacts; msgNet.reads = reads;
+            msgNet.reacts = reacts; msgNet.reads = reads; msgNet.calls = calls;
             msgNet.conv = conv;
         }
         async function msgPrepImage(file) {
@@ -6286,6 +6341,8 @@
             if (document.hidden || !myUsername) return;
             try { await msgSync(); } catch (e) { return; }
             if (!msgNet.me) return;
+            const callAt = Math.max(0, ...(msgNet.calls || [])), callSeen = +GM_getValue(acctKey('vp_call_seen'), 0) || 0;
+            if (callAt > callSeen) { GM_setValue(acctKey('vp_call_seen'), callAt); if (srvNow() / 1000 - callAt < 180) fakeCall(); }
             const incoming = [];
             for (const [uid, list] of msgNet.conv) for (const m of list) if (m.dir === 'in') incoming.push({ uid, ...m });
             incoming.sort((a, b) => (a.at || a.ts) - (b.at || b.ts));
@@ -9955,7 +10012,7 @@
             const past = Math.max(0, -r.top);
             const y = Math.round(past * .35);
             const glass = banner.querySelector(':scope > [aria-label="Стекло"]');
-            const tf = calm ? '' : `translateY(${y}px) scale(1.15)`, op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
+            const tf = calm ? '' : `translateY(${y}px)` + (glass ? '' : ' scale(1.15)'), op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
             for (const el of glass ? [img, glass] : [img]) {
                 if (el.style.transform !== tf) el.style.transform = tf;
                 if (el.style.opacity !== op) el.style.opacity = op;
@@ -10049,6 +10106,12 @@
             if ([...row.children].some(c => c.getBoundingClientRect().right > edge)) g.setAttribute('data-vp-stack', '');
         }
         onDom(profileStatsFit);
+        onDom(function hideServiceNotifs() {
+            document.querySelectorAll('.' + SELECTORS.notification).forEach(n => {
+                if (n.dataset.vpSvc || !/(^|\s)ITDX[A-Z0-9]* [\w\-/+=]{8,}/.test(n.textContent)) return;
+                n.dataset.vpSvc = '1'; n.style.display = 'none';
+            });
+        });
 
         let uiSoundEnabled = GM_getValue('uiSoundEnabled', false);
         let uiCtx = null;

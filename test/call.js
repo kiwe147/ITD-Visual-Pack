@@ -1,4 +1,4 @@
-// Звонок-розыгрыш (3.3.13, только админка): затемнённый экран, карточка «Смерть в итдолизме», звонит Илья Новки, обе кнопки — «Принять».
+// Звонок-розыгрыш (3.3.13, только админка): затемнённый экран, звонит «Илья Новки», логотип ИТД, обе кнопки — «Принять».
 // Запуск:  node test/call.js снимок-ленты.html
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -48,7 +48,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
         cover: !!hit && el.contains(hit), osc: window.__osc };
     });
     console.log(`—    ${name}: ` + JSON.stringify(st));
-    check(st && st.name === 'Смерть в итдолизме' && st.sub === 'Илья Новки звонит…' && st.btns.join('|') === 'Принять|Принять' && st.green, `${name}: карточка звонка, обе кнопки «Принять» и обе зелёные`);
+    check(st && st.name === 'Илья Новки' && st.sub === '' && st.btns.join('|') === 'Принять|Принять' && st.green, `${name}: карточка звонка, обе кнопки «Принять» и обе зелёные`);
     check(st && st.inWin && st.cover, `${name}: карточка целиком на экране, экран закрыт затемнением`);
     check(st && st.osc >= 4, `${name}: звонок звучит (генераторов звука: ${st && st.osc})`);
     await p.screenshot({ path: path.join(__dirname, 'out', `call-${name}.png`) });
