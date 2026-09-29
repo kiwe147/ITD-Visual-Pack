@@ -245,6 +245,20 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   const n1 = await A.p.$eval('.vp-msgs-lb-n', e => e.textContent);
   check(n2 === '2 / 3' && n3 === '3 / 3' && n1 === '1 / 3', `просмотр листается: ${n2}, ${n3}, по кругу ${n1}`);
   await A.p.keyboard.press('Escape'); await A.p.waitForTimeout(300);
+  // альбом из 5 с подписью — как на скрине владельца 29.09
+  await chatWith(B2.p, 'u:NeuroSFW', 1);
+  const up5 = uploads;
+  await B2.p.setInputFiles('.vp-msgs-file', [1, 2, 3, 4, 5].map(i => ({ name: `b${i}.png`, mimeType: 'image/png', buffer: TALL })));
+  await B2.p.waitForTimeout(300);
+  await B2.p.fill('.vp-msgs-bar input', 'Хуй 5'); await B2.p.click('.vp-msgs-send');
+  await B2.p.waitForFunction(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return b && /✓|не отправлено/.test(b.lastChild.textContent); }, null, { timeout: 20000 }).catch(() => { });
+  await A.p.$eval('.vp-msgs-back', b => b.click()).catch(() => { }); await A.p.waitForTimeout(3000);
+  const a5prev = await A.p.$eval('.vp-msgs-row[data-id="u:bob"] .vp-msgs-last', e => e.textContent).catch(() => '');
+  check(a5prev === '🖼 5 фото · Хуй 5', `альбом 5 с подписью в списке: «${a5prev}»`);
+  await chatWith(A.p, 'u:bob', 1); await A.p.waitForTimeout(800);
+  const a5 = await A.p.evaluate(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); const c = b.querySelector('.vp-msgs-cap'); return { cap: c ? c.textContent : '', junk: /�/.test(b.textContent), n: new Set([...b.querySelectorAll('.vp-msgs-album img')].map(i => i.src)).size }; });
+  check(uploads - up5 === 5 && a5.n === 5 && a5.cap === 'Хуй 5' && !a5.junk, `получатель видит 5 картинок и подпись без мусора ${JSON.stringify(a5)}`);
+  await A.p.screenshot({ path: path.join(__dirname, 'out', 'dm-album5.png') });
   // меню по правой кнопке, реакция, «прочитано»
   await chatWith(A.p, 'u:bob', 1); await A.p.waitForTimeout(600);
   const before = await A.p.$$eval('.vp-msgs-feed .vp-msgs-b', bs => bs.length);

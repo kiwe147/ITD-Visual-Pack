@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.10.4
+// @version      3.3.10.5
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -490,11 +490,9 @@
         const light = introIsLight();
         const css = document.createElement('style');
         css.textContent = `
-            /* цвета: тёмная тема — чёрный фон и белые буквы, светлая — светлый фон и тёмные буквы */
             .vpi-overlay { position: fixed; inset: 0; z-index: 2147483647; overflow: hidden; cursor: pointer;
                 --vpi-bg: #000; --vpi-ink: #fff; --vpi-hole: #000; --vpi-hint: rgba(255, 255, 255, .38); }
             .vpi-overlay.vpi-light { --vpi-bg: #f5f5f5; --vpi-ink: #141414; --vpi-hole: #f5f5f5; --vpi-hint: rgba(0, 0, 0, .42); }
-            /* две одинаковые половины: каждая — весь кадр, обрезанный по своей стороне; в конце разъезжаются */
             .vpi-half { position: absolute; inset: 0; background: var(--vpi-bg); overflow: hidden; will-change: transform; }
             .vpi-half-0 { clip-path: inset(0 50% 0 0); }
             .vpi-half-1 { clip-path: inset(0 0 0 50%); }
@@ -511,10 +509,8 @@
             .vpi-seam { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; opacity: 0; pointer-events: none;
                 background: linear-gradient(transparent, #fff 30%, #fff 70%, transparent); box-shadow: 0 0 18px 2px #7c4dff; }
             .vpi-hole { stroke: var(--vpi-hole); }
-            /* редкая: шлейф буквы — её «призраки», и неоновая волна от X */
             .vpi-ghost { position: absolute; }
             .vpi-xpulse { opacity: 0; }
-            /* «сборка»: осколки букв рисуются на холсте поверх половин */
             .vpi-shards { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
         `;
         const el = (cls, parent, text) => {
@@ -1803,7 +1799,6 @@
         .vp-like-list { overflow-y: auto; overflow-x: hidden; flex: 1; padding: 4px 0; display: flex; flex-direction: column; gap: 2px; max-height: 350px; }
         .vp-like-footer { padding: 8px 12px; text-align: center; font-size: 12px; color: var(--text-secondary); border-top: 1px solid var(--border-color); flex-shrink: 0; }
         .nick-style-option.vp-like-row { justify-content: space-between !important; }
-        /* строки списка автолайков при наведении не сдвигаем — иначе вылезают за край и появлялась полоса прокрутки снизу */
         .nick-style-option.vp-like-row:hover { transform: none !important; }
         .vp-like-user { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
         .vp-like-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; background: rgba(0, 0, 0, 0.2); flex-shrink: 0; }
@@ -1848,8 +1843,6 @@
             font-weight: 600 !important;
         }
         .vp-opt-check { margin-left: auto; display: flex; color: var(--vp-accent, #0080ff); }
-        /* светлая тема сайта: светлые фоны (звёзды, снег, матрица) выворачиваем по яркости —
-           белое станет тёмным, оттенки останутся свои */
         html.vp-light .vp-bg-canvas { filter: invert(1) hue-rotate(180deg); }
         html.vp-light .settings-dropdown { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important; }
         .nick-style-option:not(:last-child) {
@@ -1923,9 +1916,7 @@
         .toggle-switch.active::after {
             left: 20px !important;
         }
-        /* вкладки ленты рядом с логотипом: в одну строку, «Лента кланов» не переносится (иначе капсула толстеет) */
         .vp-feed-bar .vp-tabs button { white-space: nowrap !important; }
-        /* админ-островок */
         .vp-fab { position: fixed; z-index: 2147483000; width: 48px; height: 48px; touch-action: none; }
         .vp-fab.vp-snap { transition: left .28s cubic-bezier(.3, .8, .3, 1), top .28s cubic-bezier(.3, .8, .3, 1); }
         .vp-fab-btn { width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .16); padding: 0; cursor: pointer;
@@ -1961,22 +1952,15 @@
         .vp-admin-list div { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255, 255, 255, .05); }
         .vp-admin-list .vp-miss { color: #ff8a8a; }
         .vp-fab-a { font: 800 21px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: -.02em; }
-        /* профиль на телефоне: без палочки между «подписчиков» и «подписок» */
         @media (max-width: 1172px) { [data-vp-posts] > hr { display: none !important; } }
-        /* репост в подкрашенной карточке — полупрозрачный, цвет карточки просвечивает */
         .vp-emoji-tint .vp-soft-bg, .itd-blur-active .vp-soft-bg { background-color: rgba(0, 0, 0, .22) !important; }
         html.vp-light .vp-emoji-tint .vp-soft-bg, html.vp-light .itd-blur-active .vp-soft-bg { background-color: rgba(255, 255, 255, .35) !important; }
-        /* длинный ник в шапке поста не налезает на время: обрезается многоточием (значки — после, не режутся) */
-        /* то же в списках «Подписчики»/«Подписки» и везде, где ник в строке (кроме крупного ника профиля) */
         .vp-nick-row > a { min-width: 0; overflow: hidden; }
         .vp-nick-row .vp-nick:not(.vp-nick-large *) { min-width: 0; max-width: 100%; }
         .vp-nick-row .vp-nick-text:not(.vp-nick-large *) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
         article .vp-nick-row time { flex-shrink: 0; }
-        /* свёрнутый длинный пост: низ текста тает сам, без полосы цвета обычной карточки */
         .vp-clamp::after { display: none !important; }
         .vp-clamp { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); }
-        /* кнопки на баннере — «шторка»: плашка свисает с верхнего края по центру (снизу закрывает аватарка);
-           на компьютере выезжает при наведении на баннер, на телефоне видна всегда */
         .vp-banner-buttons { inset: 0 auto auto 50% !important; width: auto !important; height: auto !important;
             transform: translateX(-50%); display: flex !important; gap: 2px !important; padding: 4px 12px 7px !important;
             border-radius: 0 0 22px 22px; background: rgba(12, 12, 16, .6); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
@@ -1988,11 +1972,8 @@
             .vp-banner-buttons:not(.vp-banner-editing) { opacity: 0; transform: translate(-50%, -100%); }
             .vp-banner:hover .vp-banner-buttons, .vp-banner-buttons:focus-within { opacity: 1; transform: translateX(-50%); }
         }
-        /* заставка на телефоне: три варианта */
         .toggle-switch.vp-tri { width: 58px !important; }
         .toggle-switch.vp-tri[data-s="1"]::after { left: 20px !important; }
-        /* синяя часть — отдельная капсула под ручкой: доходит до ручки и прячет конец за ней,
-           поэтому в «Вкл» справа тёмное без резкого среза; между положениями плавно растёт */
         .toggle-switch.vp-tri { background: rgba(0, 0, 0, 0.5) !important; }
         .toggle-switch.vp-tri::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 22px; border-radius: 11px;
             background: var(--accent-primary, #0080FF); opacity: 0; transition: width .2s ease, opacity .2s ease; }
@@ -2002,21 +1983,16 @@
             background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230080ff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 9.5v5h3.5L12 18.5V5.5L7.5 9.5z'/%3E%3Cpath d='M16 9a4 4 0 0 1 0 6'/%3E%3C/svg%3E") center / 12px no-repeat !important; }
         .vp-tri-text { display: flex; flex-direction: column; gap: 1px; }
         .vp-tri-text small { font-size: 11.5px; color: var(--text-secondary, rgba(255, 255, 255, .5)); }
-        /* кнопка «ИТД X» вместо «ИТД НУКСТА» */
         .vp-nuksta-hidden { display: none !important; }
         .vp-sec-title { font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--text-secondary, rgba(255, 255, 255, .55));
             margin: 12px 12px 6px; }
         .vp-like-inline { max-height: none !important; }
-        /* настройки по вкладкам */
         .vp-settings-tabs { width: 320px !important; max-width: calc(100vw - 16px) !important; box-sizing: border-box !important;
             max-height: calc(100dvh - 16px); display: flex !important; flex-direction: column; overflow: hidden !important; }
-        /* вкладки стоят на месте, прокручивается только содержимое */
         .vp-settings-tabs .vp-stabs { flex: 0 0 auto; }
         .vp-tab-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
             touch-action: pan-y; -webkit-overflow-scrolling: touch; margin: 0 -12px -12px; padding: 0 12px 12px; }
         .vp-tab-body::-webkit-scrollbar { display: none; }
-        /* стили ника и фона — сеткой в два столбца */
-        /* заполняется по столбцам: сверху вниз, потом следующий — соседние цвета стоят друг под другом */
         .vp-pick-grid { display: grid; grid-template-columns: 1fr 1fr; grid-auto-flow: column; gap: 2px 4px; }
         .vp-pick-grid .nick-style-option { padding: 8px 8px !important; gap: 8px !important; font-size: 13px !important; min-width: 0; margin: 0 !important; }
         .vp-pick-grid .nick-style-option:hover { transform: none !important; }
@@ -3584,15 +3560,12 @@
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
-        /* обычный режим: кнопки правки спрятаны; в режиме правки — наоборот */
         .vp-banner-buttons:not(.vp-banner-editing) :is(.custom-change-btn, .custom-cancel-btn, .custom-apply-btn),
         .vp-banner-buttons.vp-banner-editing > :not(.custom-change-btn, .custom-cancel-btn, .custom-apply-btn) { display: none !important; }
         .vp-banner.vp-banner-editing { position: relative; overflow: hidden; z-index: 0; }
-        /* ряд кнопок сайта бывает во весь баннер — в режиме правки он не должен ловить перетаскивание */
         .vp-banner-buttons.vp-banner-editing { pointer-events: none; }
         .vp-banner-buttons.vp-banner-editing > button { pointer-events: auto; }
         .vp-banner.vp-banner-editing > img:not(.vp-banner-drag) { position: relative; z-index: -3; }
-        /* вес выше правил сайта для картинок баннера (там высота во весь баннер) — как раньше style.* */
         .vp-banner > img.vp-banner-drag {
             position: absolute; left: 0; top: 0; width: 100%; height: auto; z-index: -1;
             cursor: grab; user-select: none; -webkit-user-drag: none; touch-action: none;
@@ -3788,7 +3761,9 @@
         }
 
         const CHANGELOG = [
-            ['3.3.10 – 3.3.10.4', '29 сентября 2026', [
+            ['3.3.10 – 3.3.10.5', '29 сентября 2026', [
+                'Галерея на компьютере: кнопка громкости справа от вкладок — ползунок, колёсико мыши, щелчок выключает и возвращает звук видео при наведении',
+                'Сообщения: если собеседник пришлёт то, чего твоя версия ещё не умеет показать, вместо непонятных символов будет просьба обновить мод',
                 'Всплывашки новых сообщений — такие же, как уведомления сайта (аватарка, имя, текст, оттенок), и показываются по одной вместе с ними, а не двумя стопками',
                 'Всё, что ИТД X хранит в комментариях служебных постов (стили, галочки, паки стикеров), теперь зашифровано — случайный человек ничего не прочитает',
                 'Сообщения на телефоне: долгое нажатие больше не выделяет текст — сразу меню с реакциями',
@@ -4245,7 +4220,7 @@
             pointer-events: auto !important; color: var(--text-primary) !important;
             box-shadow: var(--shadow-elevated) !important;
             transition: opacity 0.2s ease, visibility 0.2s ease !important;
-            margin: 0 !important; padding: 0 !important;       /* z-index — от сайта (было так: style.zIndex сбрасывался) */
+            margin: 0 !important; padding: 0 !important;
             opacity: 0 !important; visibility: hidden !important;
         }
         .itd-scroll-top-btn.vp-shown { opacity: 1 !important; visibility: visible !important; }
@@ -5070,10 +5045,7 @@
             .sticker-shake-7{animation-name:stickerShake7}
             .sticker-shake-8{animation-name:stickerShake8}
             .sticker-editing:active{cursor:grabbing}
-            /* перетаскивание (как иконки на рабочем столе телефона): стикер поднят и едет за пальцем,
-               на его месте — «дырка», соседи плавно разъезжаются */
             .sticker-editing { touch-action: none; }
-            /* вес выше .vp-sticker-item (там position: relative, и «призрак» уезжал вниз страницы) */
             .vp-sticker-item.vp-sticker-ghost { position: fixed; z-index: 10001; pointer-events: none; margin: 0; border-radius: 10px; overflow: hidden;
                 box-shadow: 0 12px 30px rgba(0, 0, 0, .45), 0 0 0 2px var(--accent-primary, #0080FF); }
             .vp-sticker-ghost .vp-sticker-del { display: none; }
@@ -5081,14 +5053,11 @@
             .sticker-panel.vp-drag .sticker-editing { animation-play-state: paused; }
             .vp-sticker-item.vp-hole { opacity: .25; animation: none; box-shadow: inset 0 0 0 2px var(--accent-primary, #0080FF); }
 
-            /* кнопка у поля комментария */
             .sticker-btn { background: transparent; border: none; cursor: pointer; padding: 8px; border-radius: 9999px;
                 display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary);
                 margin-right: 5px; width: 36px; height: 36px; }
             .sticker-btn:hover { background-color: var(--bg-hover, rgba(255,255,255,0.08)); }
 
-            /* прикреплённый стикер — как вложение сайта (картинка через скрепку): блок над строкой ввода,
-               слева вровень с полем (отступ ставит attachSticker), квадрат 80 со скруглением 8 и крестиком */
             #temp_sticker_preview { padding: 0 0 8px; }
             .vp-sticker-attach { display: flex; gap: 8px; flex-wrap: wrap; }
             .vp-sticker-thumb { width: 80px; height: 80px; position: relative; border-radius: 8px; overflow: hidden; }
@@ -5096,11 +5065,8 @@
             .vp-sticker-remove { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; background: rgba(0,0,0,0.6);
                 border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; }
             .vp-sticker-hide { display: none !important; }
-            /* наша «Отправить» — классы кнопки сайта, а та по умолчанию стоит за краем капсулы и выезжает,
-               только когда у сайта есть вложение или текст: ставим её на место, как сайт при вложении */
             .vp-sticker-sendbtn { margin: 6px !important; transform: translate(0) !important; }
 
-            /* панель */
             .sticker-panel { position: fixed; display: none; flex-direction: column; background: var(--block-bg,#1e1e2e);
                 border-radius: 20px; border: 1px solid var(--border-color,rgba(255,255,255,0.1)); z-index: 10000;
                 width: ${PANEL_WIDTH}px; height: 440px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); overflow: hidden; }
@@ -5142,7 +5108,6 @@
             .delete-pack-btn { background: #ff4444; }
             .vp-sp-done { background: var(--accent-primary,#0080FF); }
             .pack-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 3px; padding: 0 10px 16px; position: relative; }
-            /* режим правки: виден только свой пак, у него — «удалить пак» и «готово» */
             .vp-sp-body.vp-editing > :not(.vp-cur) { display: none; }
             .vp-sp-body.vp-editing > .pack-header.vp-cur :is(.delete-pack-btn, .vp-sp-done) { display: flex; }
             .vp-sticker-item { aspect-ratio: 1; font-size: 34px; background: transparent; border: none; border-radius: 10px;
@@ -5161,7 +5126,6 @@
             .add-item-btn:hover { border-color: var(--accent-primary,#0080FF); color: var(--accent-primary,#0080FF); }
             .add-item-btn.vp-busy { pointer-events: none; }
 
-            /* обрезка стикера */
             .vp-crop-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8);
                 display: flex; align-items: center; justify-content: center; z-index: 20000; }
             .vp-crop-editor { background: var(--block-bg,#1e1e2e); border-radius: 16px; padding: 20px; display: flex;
@@ -5945,6 +5909,7 @@
                 const pt = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: rec.slice(0, 12) }, key, rec.slice(12)));
                 const out = { ts: ((pt[0] << 24) >>> 0) + (pt[1] << 16) + (pt[2] << 8) + pt[3], sup: !!(pt[4] & 1) };
                 if (pt[4] & 8) { out.svc = pt.slice(5); out.text = ''; return out; }
+                if (pt[4] & ~7 || (pt[4] & 4 && !(pt[4] & 2))) { out.text = 'Сообщение из новой версии ИТД X — обнови мод, чтобы его увидеть'; return out; }
                 if (pt[4] & 2 && pt.length >= 22) {
                     const imgs = [{ ext: pt[5], id: msgBytesUuid(pt.slice(6, 22)) }];
                     let o = 22;
@@ -6463,18 +6428,12 @@
         .vp-msgs.vp-open { display: flex; animation: vpMsgsIn .22s cubic-bezier(.2, .8, .2, 1); }
         html.vp-msgs-open .vp-msgs-navwrap { z-index: 10 !important; }
         html.vp-msgs-open .itd-scroll-top-btn { opacity: 0 !important; visibility: hidden !important; }
-        /* поле комментария страницы поста закреплено поверх всего (z-index 100) и лежало на окне лички */
         html.vp-msgs-open .vp-comments-sheet { visibility: hidden !important; }
-        /* сайт всё ещё считает текущим свой пункт (ленту, профиль): пока открыта личка, у него вид обычного
-           пункта, у «Сообщений» — вид текущего. Вид снимаем с самих пунктов (msgsNavLook): у сайта он разный —
-           на компьютере неактивные полупрозрачные, на телефоне серые; раньше всё красилось серым и тускнело */
         html.vp-msgs-open .vp-nav-link.vp-site-cur { color: var(--vp-off-c) !important; opacity: var(--vp-off-o) !important; background-color: var(--vp-off-b) !important; }
         html.vp-msgs-open .vp-nav-link[href="#"] { color: var(--vp-on-c) !important; opacity: var(--vp-on-o) !important; background-color: var(--vp-on-b) !important; }
-        /* компьютер: окно — карточка, как блоки сайта, а не кусок страницы того же цвета */
         .vp-msgs.vp-card { border-radius: 36px; border: 1px solid var(--border-color, rgba(255, 255, 255, .15));
             box-shadow: 0 16px 48px rgba(0, 0, 0, .45); }
         html.vp-light .vp-msgs.vp-card { box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
-        /* под карточкой — вся колонка цветом страницы: в отступах сверху и снизу не видно ленты */
         .vp-msgs-under { position: fixed; top: 0; bottom: 0; z-index: 4; display: none; background: var(--bg-primary, #000); pointer-events: none; }
         html.vp-msgs-open .vp-msgs-under.vp-on { display: block; }
         .vp-msgs-view { display: flex; flex-direction: column; min-height: 0; flex: 1; }
@@ -6608,8 +6567,6 @@
         @keyframes vpMsgsPop { from { opacity: 0; transform: translateY(6px) scale(.98); } }
         @keyframes vpMsgsDot { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
         @media (prefers-reduced-motion: reduce) { .vp-msgs, .vp-msgs * { animation: none !important; } }
-        /* пока открыто, видео под ним прячем: Яндекс.Браузер видит палец/курсор над видео сквозь окно
-           и выкладывает свою панель («Субтитры», картинка в картинке) поверх */
         html.vp-msgs-open video { visibility: hidden !important; }`;
             document.head.appendChild(style);
 
@@ -7398,10 +7355,8 @@
             border: none !important;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2) !important;
             animation: postAppear 0.3s ease-out forwards !important;
-            --vp-edge-a: rgba(255, 255, 255, .08); --vp-edge-b: rgba(255, 255, 255, .08);   /* без наведения — как было: ровная 1px */
+            --vp-edge-a: rgba(255, 255, 255, .08); --vp-edge-b: rgba(255, 255, 255, .08);
         }
-        /* Обводка — линия в 1 px слоем поверх края (маска оставляет только кромку), а не border: так ей можно
-           дать градиент при наведении (сверху светлее, книзу тает — как у стекла ИТД), и ничего не сдвигается */
         article.vp-post::before {
             content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; z-index: 1;
             background: linear-gradient(to bottom, var(--vp-edge-a), var(--vp-edge-b));
@@ -7410,9 +7365,6 @@
             transition: opacity .25s ease;
         }
 
-        /* наведение — только где есть мышь (на телефоне :hover «залипает» после касания): та же обводка, того же
-           цвета, что у поста уже есть, только ярче сверху (книзу — как обычно), та же толщина; цвет стиля не берём.
-           Включается переключателем «Подсветка постов» (класс vp-post-hl на <html>, ставит paint) */
         @media (hover: hover) {
             html.vp-post-hl article.vp-post:hover { --vp-edge-a: rgba(255, 255, 255, .24); box-shadow: 0 12px 32px rgba(0, 0, 0, .32) !important; }
         }
@@ -7434,7 +7386,6 @@
             border-radius: 40px !important;
             padding: 6px 10px !important;
         }
-        /* наведение — только там, где есть мышь: на телефоне касание «залипало» подсветкой кнопки */
         @media (hover: hover) {
         .vp-post-action:hover {
             background: rgba(0, 128, 255, 0.15) !important;
@@ -7444,10 +7395,8 @@
             transform: scale(1.05) !important;
         }
         }
-        /* телефон: подсветку наведения сайта у лайка/коммента/репоста тоже снимаем, отклик — только при нажатии */
         @media (hover: none) {
             .vp-post-action:hover { background: transparent !important; transform: none !important; }
-            /* цвет при касании — тот же, что при наведении на компьютере, пока палец на кнопке */
             .vp-post-action[aria-label="Нравится"]:active, .vp-post-action[aria-label="Нравится"].vp-pressed { background: rgba(249, 24, 128, 0.2) !important; color: #f91880 !important; }
             .vp-post-action[aria-label="Комментировать"]:active, .vp-post-action[aria-label="Комментировать"].vp-pressed { background: rgba(0, 186, 124, 0.2) !important; color: #00ba7c !important; }
             .vp-post-action[aria-label="Репост"]:active, .vp-post-action[aria-label="Репост"].vp-pressed { background: rgba(0, 128, 255, 0.2) !important; color: #0080FF !important; }
@@ -7469,7 +7418,6 @@
             filter: none !important;
             transform: none !important;
         }
-        /* значки: свой (voronoi) и «пользуется модом» (verify); размер — --vp-badge у значка */
         .mod-badge-voronoi, .mod-badge-verify {
             display: inline-flex !important; align-items: center !important; flex-shrink: 0 !important;
             vertical-align: middle !important; width: var(--vp-badge) !important; height: var(--vp-badge) !important;
@@ -7506,8 +7454,6 @@
             color: #0080FF !important;
         }
         }
-        /* прозрачность до появления задаёт сама анимация (both), а не opacity: 0 у пункта: иначе при
-           «меньше движения» (анимация выключена ниже) пункты оставались невидимыми — пустые уведомления */
         .vp-notif {
             animation: notificationAppear 0.3s ease-out both !important;
         }
@@ -7714,7 +7660,6 @@
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: inherit; overflow: hidden;
             z-index: -1; pointer-events: none; background: var(--block-bg, #1c1c1c);
         }
-        /* свечение — ровно на месте картинки и её размера (место ставит placeBlur) */
         .vp-blur-img {
             position: absolute; left: 0; top: 0; width: 0; height: 0;
             background: center / cover no-repeat;
@@ -7724,7 +7669,6 @@
         .itd-blur-active .vp-repost {
             background: rgba(0, 0, 0, 0.3) !important;
         }
-        /* светлая тема: вуаль светлая — тёмная делала карточку серой на светлой странице */
         html.vp-light .vp-blur-dim { background: rgba(255, 255, 255, 0.55); }
         html.vp-light .itd-blur-active .vp-repost { background: rgba(255, 255, 255, 0.35) !important; }
         .vp-post .blur-bg-layer, .vp-post .blur-overlay,
@@ -7917,29 +7861,25 @@
 
         const designStyle = document.createElement('style');
         designStyle.textContent = `
-        /* Оттенок карточки по эмодзи (уведомления, посты без картинки): мягкий градиент от левого
-           края поверх родного фона и тонкая рамка того же цвета; при наведении — чуть ярче */
         @property --vp-tint { syntax: '<number>'; inherits: false; initial-value: 0.3; }
         .vp-emoji-tint {
             background-image: linear-gradient(105deg,
                 rgba(var(--vp-emoji), var(--vp-tint)) 0%,
                 rgba(var(--vp-emoji), calc(var(--vp-tint) * 0.4)) 45%,
                 rgba(var(--vp-emoji), calc(var(--vp-tint) * 0.1)) 100%) !important;
-            --vp-edge-a: rgba(var(--vp-emoji), .22); --vp-edge-b: rgba(var(--vp-emoji), .22);   /* как было */
+            --vp-edge-a: rgba(var(--vp-emoji), .22); --vp-edge-b: rgba(var(--vp-emoji), .22);
             transition: --vp-tint 0.25s ease !important;
         }
-        .vp-emoji-tint:not(article) { border: 1px solid rgba(var(--vp-emoji), 0.22) !important; }   /* уведомления — не article, у них своя рамка */
+        .vp-emoji-tint:not(article) { border: 1px solid rgba(var(--vp-emoji), 0.22) !important; }
         @media (hover: hover) {
             .vp-emoji-tint:hover { --vp-tint: 0.42; }
             .vp-emoji-tint:not(article):hover { border-color: rgba(var(--vp-emoji), 0.4) !important; }
             html.vp-post-hl article.vp-emoji-tint:hover { --vp-edge-a: rgba(var(--vp-emoji), .55); --vp-edge-b: rgba(var(--vp-emoji), .22); }
         }
-        /* Телефон: уведомления — скруглённые карточки с зазором, как посты, а не полосы во всю ширину */
         @media (max-width: 1172px) {
             .vp-notif { border-radius: 24px !important; margin: 6px 10px !important; }
         }
 
-        /* Версия мода под логотипом: чип и кнопка обновления вместо надписи в 8px */
         .vp-version-row { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; }
         .vp-version-col { flex-direction: column; gap: 3px; margin: 0; }
         .vp-version-chip {
@@ -7949,21 +7889,18 @@
             cursor: pointer; position: relative; transition: color .15s ease, background-color .15s ease;
         }
         .vp-version-chip:hover { color: var(--text-primary, #fff); background: var(--block-bg-secondary, rgba(255, 255, 255, 0.14)); }
-        /* новая версия, «Что нового» ещё не открывали — точка на плашке */
         .vp-version-chip.vp-news::after { content: ""; position: absolute; top: -3px; right: -3px; width: 7px; height: 7px;
             border-radius: 50%; background: #2a8cff; box-shadow: 0 0 0 2px var(--bg-primary, #000); }
         .vp-logo-top { display: flex; align-items: flex-start; gap: 10px; }
         .vp-logo-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
         .vp-logo-col > a { height: 36px; }
-        /* «Обновить» — справа от плашки, не участвует в центровке: плашка остаётся ровно под иконкой */
         .vp-logo-col .vp-version-row { position: relative; }
         .vp-logo-col .itd-update-sidebar-btn { position: absolute; left: calc(100% + 6px); top: 50%; translate: 0 -50%; }
         .vp-logo-top > :not(.vp-logo-col) { height: 36px; display: inline-flex; align-items: center; }
 
-        /* «Что нового в ИТД X» — как окно «Что нового» сайта */
         .vp-news-back { position: fixed; inset: 0; z-index: 10050; background: rgba(0, 0, 0, .5); display: flex;
             align-items: center; justify-content: center; padding: 16px; animation: vpNewsFade .18s ease;
-            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }             /* страница за окном — размыта сразу */
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
         html.vp-light .vp-news-back { background: rgba(0, 0, 0, .25); }
         .vp-news-box { width: min(780px, 100%); max-height: min(82vh, 900px); display: flex; flex-direction: column; overflow: hidden;
             background: var(--modal-bg, var(--block-bg, #1c1c1c)); color: var(--text-primary, #fff); border-radius: 28px;
@@ -8002,14 +7939,12 @@
             50% { box-shadow: 0 0 0 1px rgba(255,255,255,.14) inset, 0 4px 22px rgba(60,120,255,.6); }
         }
 
-        /* Клавиатура: видимый фокус */
         .vp-nav-link:focus-visible, .vp-post-action:focus-visible, .vp-pill-btn:focus-visible,
         .nick-style-option:focus-visible, .settings-option:focus-visible {
             outline: 2px solid var(--vp-accent, #0080ff) !important; outline-offset: 2px !important;
         }
         .vp-nav-link .vp-nav-icon { transition: color 0.2s ease, filter 0.2s ease; }
 
-        /* Кто просил меньше движения — без появлений и пульса */
         @media (prefers-reduced-motion: reduce) {
             .vp-post, .vp-sidebar, .vp-sidebar-right, .vp-notif, .itd-update-sidebar-btn { animation: none !important; }
             .vp-emoji-tint { transition: none !important; }
@@ -8048,8 +7983,6 @@
 
         const fx = document.createElement('style');
         fx.textContent = `
-        /* Стекло: блоки сайта полупрозрачные и размывают то, что под ними, — живой фон виден
-           сквозь интерфейс. Прозрачность — через переменные сайта, размытие — правилами ниже. */
         html.vp-glass { --vp-glass-filter: blur(18px) saturate(1.5); }
         html.vp-glass[data-theme="dark"] {
             --block-bg: rgba(28, 28, 28, .52); --block-bg-secondary: rgba(42, 42, 44, .55); --block-hover-bg: rgba(44, 44, 47, .6);
@@ -8059,11 +7992,9 @@
             --block-bg: rgba(255, 255, 255, .6); --block-bg-secondary: rgba(240, 240, 240, .6); --block-hover-bg: rgba(245, 245, 245, .65);
             --modal-bg: rgba(255, 255, 255, .82); --glass-bg: rgba(255, 255, 255, .55);
         }
-        /* слабый компьютер: без размытия (его пришлось бы пересчитывать каждый кадр фона), зато плотнее */
         html.vp-glass.vp-glass-lite { --vp-glass-filter: none; }
         html.vp-glass.vp-glass-lite[data-theme="dark"] { --block-bg: rgba(28, 28, 28, .82); --block-bg-secondary: rgba(42, 42, 44, .85); }
         html.vp-glass.vp-glass-lite.vp-light { --block-bg: rgba(255, 255, 255, .85); }
-        /* шторка комментариев на телефоне: стекло плотнее — сквозь неё просвечивала лента и мешала читать */
         html.vp-glass[data-theme="dark"] :is(.vp-comments-sheet, .vp-float) {
             --block-bg: rgba(24, 24, 24, .9); --block-bg-secondary: rgba(38, 38, 40, .9); --block-hover-bg: rgba(44, 44, 47, .92);
             --modal-bg: rgba(17, 17, 17, .94); --glass-bg: rgba(30, 30, 30, .9);
@@ -8077,29 +8008,22 @@
             backdrop-filter: var(--vp-glass-filter) !important; -webkit-backdrop-filter: var(--vp-glass-filter) !important;
         }
 
-        /* «Жидкая» подложка активного пункта меню: перетекает к новому пункту */
         .vp-nav-has-blob { position: relative; }
         .vp-nav-has-blob > .vp-nav-link { position: relative; z-index: 1; transition: background-color .2s ease, opacity .2s ease !important; }
         .vp-nav-has-blob > .vp-nav-link .vp-nav-icon { transition: none; }
         .vp-nav-has-blob > .vp-nav-link.vp-active { background: transparent !important; }
-        /* своя подложка сайта (нижняя панель телефона) — прячем: вместо неё наша, той же формы */
         .vp-nav-has-blob > div:not(.vp-nav-blob) { opacity: 0 !important; }
-        /* между постами у сайта полоса (нижняя граница обёртки в ленте) — у карточек свои края, она лишняя */
         .vp-post-slot { border-bottom: none !important; }
-        /* «+» (Создать пост) — бугорок по центру нижней панели (newPostBump) */
         .vp-new-post { position: absolute !important; width: ${BUMP}px !important; height: ${BUMP}px !important; z-index: 2; margin: 0 !important;
             background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; }
         .vp-new-post::before { display: none !important; }
-        /* цвет — как у неактивных пунктов панели (у сайта «+» был белым); нажали — белый, как выбранный пункт */
         .vp-new-post { color: var(--text-secondary) !important; transition: color .2s; }
         .vp-new-post:active { color: var(--text-primary) !important; }
-        /* фон, размытие и обводка панели — у фигуры «панель + бугорок», у самой панели — выключены */
         nav.vp-has-bump { background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; }
         nav.vp-has-bump::before { display: none !important; }
         .vp-bump-bg { position: absolute; left: 0; z-index: -1; pointer-events: none; overflow: visible;
             backdrop-filter: var(--vp-glass-filter, blur(16px)); -webkit-backdrop-filter: var(--vp-glass-filter, blur(16px)); }
         .vp-bump-bg .vp-bump-fill { fill: var(--glass-bg); }
-        /* Ивент: вместо картинки-портала сайта — свой значок (eventIcon) */
         a[href="/event"] img[src*="/portal/"], img.vp-portal-img { display: none !important; }
         @media (prefers-reduced-motion: reduce) { .vp-portal { animation: none !important; } }
         .vp-portal[data-state="live"] { animation: vpPortalPulse 2s ease-in-out infinite; }
@@ -8107,7 +8031,6 @@
             0%, 100% { filter: drop-shadow(0 0 4px rgba(144, 162, 255, .2)); }
             50% { filter: drop-shadow(0 0 16px rgb(144, 162, 255)); }
         }
-        /* нижняя панель: подложка — три части, двигаются transform'ом (см. blobFlow) */
         .vp-nav-blob > i { display: none; }
         .vp-nav-blob.vp-blob-row { width: 0 !important; height: 0 !important; background: none !important; box-shadow: none !important; }
         .vp-nav-blob.vp-blob-row > i { display: block; position: absolute; left: 0; top: 0; box-sizing: border-box; transform-origin: 0 50%; will-change: transform;
@@ -8124,20 +8047,16 @@
                 0 8px 24px -10px color-mix(in srgb, var(--vp-accent, #0080ff) 70%, transparent);
             transition: opacity .25s ease, background-color .4s ease; }
 
-        /* Баннер с глубиной: низ растворяется в фон, при прокрутке картинка отстаёт */
         .vp-banner.vp-depth { background: transparent !important; }
-        /* маска — только на картинку: кнопки баннера (палитра, загрузка, удаление) остаются яркими */
         .vp-banner.vp-depth > img[alt="Banner"] { will-change: transform; transform-origin: 50% 50%;
             -webkit-mask-image: linear-gradient(to bottom, #000 58%, transparent); mask-image: linear-gradient(to bottom, #000 58%, transparent); }
 
-        /* Счётчики профиля «накручиваются»: число рисует ::after, свой текст сайта не трогаем */
         @property --vp-n { syntax: '<integer>'; inherits: false; initial-value: 0; }
         .vp-count { position: relative; color: transparent !important; }
         .vp-count::after { content: counter(vpn); counter-reset: vpn var(--vp-n); position: absolute; left: 0; top: 0;
             color: var(--vp-count-color); animation: vpCount .9s cubic-bezier(.2, .8, .2, 1) forwards; }
         @keyframes vpCount { from { --vp-n: 0; } to { --vp-n: var(--vp-to); } }
 
-        /* Стили ника «Перелив» и «Глитч» */
         @keyframes vpShimmer { 0% { background-position: 100% 0; } 55%, 100% { background-position: 0% 0; } }
         @keyframes vpGlitch {
             0%, 100% { text-shadow: 1.5px 0 rgba(255, 0, 200, .75), -1.5px 0 rgba(0, 255, 240, .75); clip-path: none; transform: none; }
@@ -8148,8 +8067,6 @@
             88% { text-shadow: -2px 0 rgba(255, 0, 200, .85), 2px 0 rgba(0, 255, 240, .85); transform: translateX(-1px); }
             89% { text-shadow: 1.5px 0 rgba(255, 0, 200, .75), -1.5px 0 rgba(0, 255, 240, .75); transform: none; }
         }
-        /* 20. Сцена ленты: положение поста на экране (считает sceneFrame) → прозрачность и масштаб.
-           Переменные не наследуются: их смена пересчитывает стиль только самого поста, а не всего внутри */
         @property --vp-so { syntax: '<number>'; inherits: false; initial-value: 1; }
         @property --vp-ss { syntax: '<number>'; inherits: false; initial-value: 1; }
         @property --vp-sy { syntax: '<length>'; inherits: false; initial-value: 0px; }
@@ -8159,17 +8076,13 @@
             transition: background-color .25s ease, border-color .25s ease, box-shadow .25s ease, color .25s ease !important;
         }
 
-        /* 22. Свечение видео */
         .vp-ambient-host { isolation: isolate; }
         .vp-ambient { position: absolute; z-index: -1; pointer-events: none; border-radius: 40px; opacity: 0;
             filter: blur(26px) saturate(1.7); transition: opacity .8s ease; }
         .vp-ambient.vp-on { opacity: .8; }
 
-        /* 26. Бегунок вкладок: свой переход вместо сайтового */
         .vp-tab-ind { transition: background-color .2s ease !important; }
 
-        /* 27. Карточка профиля */
-        /* карточка лежит поверх текста поста — фон почти сплошной (стекло тут мешало читать) */
         .vp-hc { --vp-hc-bg: rgba(22, 22, 24, .94); position: fixed; z-index: 10005; width: 300px; border-radius: 22px; overflow: hidden; cursor: pointer;
             background: var(--vp-hc-bg); color: var(--text-primary, #fff);
             border: 1px solid color-mix(in srgb, var(--text-primary, #fff) 10%, transparent);
@@ -8764,8 +8677,6 @@
         const gal = { acts: new Map(), el: null, tab: 'popular', cursor: null, loading: false, done: false, cols: [], heights: [], seen: new Set(), hist: false };
         const galStyle = document.createElement('style');
         galStyle.textContent = `
-        /* как лента: таблетка вкладок отдельно сверху (ПК — 36 от верха, высота 45), под ней через 16 —
-           карточка с картинками (скругление 36, стекло, как у постов); телефон — таблетка в полосе высотой 63 */
         .vp-gal { position: fixed; z-index: 30; display: flex; flex-direction: column; box-sizing: border-box; color: var(--text-primary, #fff); }
         .vp-gal-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; margin-top: 16px;
             border-radius: 36px; background: var(--block-bg, rgba(28, 28, 28, .72));
@@ -8774,22 +8685,36 @@
         html.vp-light .vp-gal.vp-card .vp-gal-card { box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
         .vp-gal-top { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
         .vp-gal-top > .vp-gal-tabs { flex: 1 1 auto; min-width: 0; }
-        .vp-gal.vp-card .vp-gal-logo { display: none !important; }       /* ПК: логотип и так слева, в меню */
+        .vp-gal-vol { position: relative; flex: 0 0 auto; }
+        .vp-gal-vol-b { width: 45px; height: 45px; border: 0; border-radius: 9999px; padding: 0; margin: 0; display: grid; place-items: center; cursor: pointer;
+            color: var(--text-primary, #fff); background: var(--glass-bg, rgba(35, 35, 35, .5)); transition: background-color .15s; }
+        .vp-gal-vol-b:hover { background: rgba(255, 255, 255, .12); }
+        html.vp-light .vp-gal-vol-b { background: rgba(0, 0, 0, .06); color: var(--text-primary, #141414); }
+        html.vp-light .vp-gal-vol-b:hover { background: rgba(0, 0, 0, .1); }
+        .vp-gal-vol-b svg { width: 21px; height: 21px; }
+        .vp-gal-vol-p { position: absolute; top: calc(100% + 8px); right: 0; z-index: 6; display: flex; align-items: center; gap: 10px; padding: 11px 16px;
+            border-radius: 9999px; background: var(--block-bg, rgba(28, 28, 28, .92)); border: 1px solid var(--border-color, rgba(255, 255, 255, .15));
+            backdrop-filter: var(--vp-glass-filter, blur(14px)); -webkit-backdrop-filter: var(--vp-glass-filter, blur(14px)); box-shadow: 0 12px 32px rgba(0, 0, 0, .35);
+            opacity: 0; visibility: hidden; transform: translateY(-4px); transition: opacity .15s, transform .15s, visibility 0s .15s; }
+        html.vp-light .vp-gal-vol-p { background: #fff; box-shadow: 0 12px 32px rgba(0, 0, 0, .14); }
+        .vp-gal-vol-p::before { content: ''; position: absolute; left: 0; right: 0; top: -10px; height: 10px; }
+        .vp-gal-vol:hover .vp-gal-vol-p, .vp-gal-vol:focus-within .vp-gal-vol-p { opacity: 1; visibility: visible; transform: none; transition: opacity .15s, transform .15s; }
+        .vp-gal-vol-p input { width: 150px; height: 4px; margin: 0; cursor: pointer; appearance: none; -webkit-appearance: none; border-radius: 9999px;
+            background: linear-gradient(to right, var(--vp-accent, #fff) var(--vp-vol, 100%), rgba(128, 128, 128, .35) var(--vp-vol, 100%)); }
+        .vp-gal-vol-p input::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--vp-accent, #fff); box-shadow: 0 1px 4px rgba(0, 0, 0, .4); }
+        .vp-gal-vol-p input::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--vp-accent, #fff); box-shadow: 0 1px 4px rgba(0, 0, 0, .4); }
+        .vp-gal-vol-p span { min-width: 36px; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text-secondary, rgba(255, 255, 255, .7)); }
+        .vp-gal.vp-card .vp-gal-logo { display: none !important; }
         .vp-gal-logo { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
         .vp-gal:not(.vp-card) .vp-gal-top { margin: 9px 12px 0 6px; }
         .vp-gal:not(.vp-card) .vp-gal-card { margin-top: 9px; border-radius: 36px 36px 0 0; }
-        /* пока открыта галерея — лента под ней спрятана (иначе просвечивала сквозь стекло и в скруглённых углах) */
         html.vp-gal-open .vp-gal-hidden, html.vp-msgs-open .vp-gal-hidden { visibility: hidden !important; }
-        /* страница-рамка (магазин): прозрачная — сквозь неё фон мода; под окнами мода — спрятана */
         iframe.vp-page-frame { background: transparent !important; color-scheme: normal; }
         html.vp-gal-open iframe.vp-page-frame, html.vp-msgs-open iframe.vp-page-frame { visibility: hidden !important; }
         .vp-gal-body { padding: 12px 12px var(--vp-gal-pb, 24px) !important; }
         html.vp-gal-open .vp-gal-navwrap { z-index: 40 !important; }
         html.vp-gal-open .vp-nav-link.vp-site-cur { color: var(--vp-off-c) !important; opacity: var(--vp-off-o) !important; background-color: var(--vp-off-b) !important; }
         html.vp-gal-open .vp-gal-nav { color: var(--vp-on-c) !important; opacity: var(--vp-on-o) !important; background-color: var(--vp-on-b) !important; }
-        /* вкладки — 1 в 1 как у ленты («Для вас / Кланы / Подписки»; значения сняты с вкладок сайта):
-           таблетка с отступом 4, кнопки поровну, под выбранной — бегунок с обводкой цвета ника.
-           Бегунок — в долях ширины (треть и сдвиг на свою ширину): совпадает с кнопкой при любой ширине окна */
         .vp-gal-tabs { position: relative; display: flex; flex: 0 0 auto; box-sizing: border-box; height: 45px; padding: 4px; margin: 0; border-radius: 9999px;
             background: var(--glass-bg, rgba(35, 35, 35, .5)); }
         html.vp-light .vp-gal-tabs { background: rgba(0, 0, 0, .06); }
@@ -8803,7 +8728,7 @@
         html.vp-light .vp-gal-tab { color: rgba(0, 0, 0, .5); }
         .vp-gal-tab.vp-on { color: var(--text-primary, #f5f5f5); }
         html.vp-gal-open .itd-scroll-top-btn, html.vp-msgs-open .itd-scroll-top-btn { display: none !important; }
-        html.vp-gal-open .vp-sidebar-right > :last-child { visibility: hidden !important; }   /* «Статус серверов», «© ООО ИТД» */
+        html.vp-gal-open .vp-sidebar-right > :last-child { visibility: hidden !important; }
         .vp-gal-body { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 24px; }
         .vp-gal-grid { display: flex; gap: 8px; align-items: flex-start; max-width: 1400px; margin: 0 auto; }
         .vp-gal-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -8812,7 +8737,6 @@
             scrollbar-width: none; overscroll-behavior-x: contain; }
         .vp-gal-strip::-webkit-scrollbar { display: none; }
         .vp-gal-slide { position: relative; flex: 0 0 100%; height: 100%; scroll-snap-align: start; }
-        /* заготовка: грузится — мерцает, в середине крутится кольцо; не загрузилась — битая картинка и «нажми» */
         .vp-gal-slide.vp-wait, .vp-gal-slide.vp-fail, .vp-media-wait, .vp-media-fail { background: rgba(128,128,128,.14); }
         .vp-gal-slide.vp-wait > img, .vp-gal-slide.vp-fail > img, .vp-media-wait > img, .vp-media-fail > img { opacity: 0; }
         .vp-media-rel { position: relative; }
@@ -8838,7 +8762,6 @@
             -webkit-backdrop-filter: blur(10px) saturate(1.4); box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset; }
         .vp-gal-dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.45); }
         .vp-gal-dots i.vp-on { background: #fff; }
-        /* стрелки, счётчик и метка — та же тёмная стеклянная подложка, что у кнопок лайк/коммент/репост */
         .vp-gal-arrow { position: absolute; top: 50%; width: 44px; height: 44px; margin-top: -22px; border: 0; border-radius: 50%; padding: 0;
             display: inline-flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent;
             color: #fff; opacity: 0; transition: opacity .15s, transform .12s ease;
@@ -8850,12 +8773,8 @@
         @media (hover: hover) and (pointer: fine) { .vp-gal-tile:hover .vp-gal-arrow { opacity: 1; } }
         .vp-gal-tile .vp-gal-arrow.vp-edge { opacity: 0; cursor: default; }
         @media not ((hover: hover) and (pointer: fine)) { .vp-gal-arrow { opacity: 1; } }
-        /* картинка не ловит наведение — браузер не вешает на неё свою панель (Яндекс: Алиса, лупа…); нажатие — у плитки.
-           Правая кнопка — картинка на миг снова ловит мышь (vp-ctx): обычное меню «Сохранить / Копировать картинку» */
         .vp-gal-slide > img { pointer-events: none; -webkit-user-drag: none; user-select: none; }
         .vp-gal-tile.vp-ctx .vp-gal-slide > img { pointer-events: auto; }
-        /* кнопки поверх, как на постах: лайк, коммент, репост — белые на тёмной стеклянной подложке (отделяет от
-           картинки любой яркости); ПК — при наведении, телефон — всегда */
         .vp-gal-acts { position: absolute; left: 8px; bottom: 8px; display: flex; gap: 2px; padding: 2px; border-radius: 999px;
             background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4);
             box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset; transition: opacity .15s; }
@@ -8885,14 +8804,13 @@
         .vp-gal-act.vp-busy { opacity: .5; pointer-events: none; }
         @media (hover: hover) and (pointer: fine) {
             .vp-gal-acts { opacity: 0; }
-            .vp-gal-tile:hover .vp-gal-acts, .vp-gal-acts:has(:focus-visible) { opacity: 1; }   /* фокус с клавиатуры, не после нажатия мышью */
+            .vp-gal-tile:hover .vp-gal-acts, .vp-gal-acts:has(:focus-visible) { opacity: 1; }
         }
         .vp-gal-badge { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
             color: #fff; pointer-events: none; background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4);
             box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset; }
         .vp-gal-more { text-align: center; padding: 18px; color: var(--text-secondary, #8a8a8a); font-size: 14px; }
         .vp-gal-btn svg { pointer-events: none; }
-        /* ПК: поиск — в боковом меню, в полосе ленты его нет — там и «Галерея»; телефон — кнопка в полосе ленты */
         @media (min-width: 1173px) { .vp-gal-btn { display: none !important; } }
         @media (max-width: 1172px) { .vp-gal-nav { display: none !important; } }
     `;
@@ -8902,6 +8820,31 @@
             if (!w) return innerWidth >= 1100 ? 4 : innerWidth >= 700 ? 3 : 2;
             return Math.max(2, Math.min(4, Math.floor((w + 8) / 218)));
         };
+        function galVol() { const v = +GM_getValue('galVol', 1); return isFinite(v) ? Math.max(0, Math.min(1, v)) : 1; }
+        function galVolIcon(v) {
+            const waves = v <= 0 ? '<path d="M16 9l5 6M21 9l-5 6"/>' : v < .5 ? '<path d="M15.5 9.5a3.5 3.5 0 0 1 0 5"/>' : '<path d="M15.5 9.5a3.5 3.5 0 0 1 0 5"/><path d="M18.5 6.5a7.5 7.5 0 0 1 0 11"/>';
+            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/>${waves}</svg>`;
+        }
+        function galVolUi(top) {
+            if (!matchMedia('(hover: hover) and (pointer: fine)').matches || top.querySelector('.vp-gal-vol')) return;
+            const w = document.createElement('div');
+            w.className = 'vp-gal-vol';
+            w.innerHTML = '<button type="button" class="vp-gal-vol-b" aria-label="Громкость видео" title="Громкость видео: звук — при наведении на видео"></button><div class="vp-gal-vol-p"><input type="range" min="0" max="100" step="1" aria-label="Громкость видео"><span></span></div>';
+            const b = w.querySelector('button'), r = w.querySelector('input'), lab = w.querySelector('span');
+            const paint = () => { const v = galVol(); r.value = Math.round(v * 100); lab.textContent = r.value + '%'; r.style.setProperty('--vp-vol', r.value + '%'); b.innerHTML = galVolIcon(v); };
+            const set = v => {
+                v = Math.round(Math.max(0, Math.min(1, v)) * 100) / 100;
+                GM_setValue('galVol', v);
+                if (v > 0) GM_setValue('galVolLast', v);
+                paint();
+                document.querySelectorAll('.vp-gal video').forEach(x => { x.volume = v; if (!v && x._vpHoverSound) { x.muted = true; x._vpHoverSound = false; } });
+            };
+            r.addEventListener('input', () => set(r.value / 100));
+            b.addEventListener('click', () => set(galVol() > 0 ? 0 : +GM_getValue('galVolLast', 1) || 1));
+            w.addEventListener('wheel', e => { e.preventDefault(); set(galVol() - Math.sign(e.deltaY) * .05); }, { passive: false });
+            paint();
+            top.appendChild(w);
+        }
         const galVideoIO = new IntersectionObserver(es => es.forEach(e => {
             const v = e.target;
             if (e.isIntersecting && e.intersectionRatio > .5) v.play().catch(() => { }); else v.pause();
@@ -9393,6 +9336,7 @@
                 return;
             }
             el.querySelectorAll('.vp-gal-tab').forEach(b => b.onclick = () => { if (b.dataset.tab !== gal.tab || !gal.seen.size) galSwitch(b.dataset.tab); });
+            galVolUi(top);
             body.addEventListener('scroll', () => { if (galNeedMore()) galLoad(); }, { passive: true });
             for (const t of ['wheel', 'touchmove']) el.addEventListener(t, e => e.stopPropagation(), { passive: true });
             galSwitch(gal.tab);
@@ -9675,11 +9619,10 @@
         let toastSeq = 0;
         const styleToasts = document.createElement('style');
         styleToasts.textContent = `
-        .vp-toasts { top: 16px !important; bottom: auto !important; left: 50vw !important; right: auto !important;   /* 50vw: отсчёт у слоя сайта — не весь экран */
+        .vp-toasts { top: 16px !important; bottom: auto !important; left: 50vw !important; right: auto !important;
             transform: translateX(-50%) !important; align-items: center !important;
             width: min(420px, calc(100vw - 24px)) !important; max-width: none !important; }
-        .vp-toasts > button { display: none !important; }                 /* «Скрыть все» — при одной не нужна */
-        /* карточка — как пункт во вкладке «Уведомления» (оттенок по эмодзи-аватарке — tintCard) */
+        .vp-toasts > button { display: none !important; }
         .vp-toasts > div > * { width: 100%; box-sizing: border-box; border-radius: 24px !important; background-color: var(--block-bg, #1c1c1c) !important;
             border: 1px solid var(--border-color, rgba(255, 255, 255, .12)); box-shadow: 0 14px 36px rgba(0, 0, 0, .45);
             backdrop-filter: var(--vp-glass-filter, blur(18px)); -webkit-backdrop-filter: var(--vp-glass-filter, blur(18px)); }
@@ -9740,6 +9683,7 @@
             };
             const unmute = v => {
                 if (!v || !v.muted) return;
+                if (v.closest('.vp-gal')) { const g = galVol(); if (!g) return; v.volume = g; }
                 const wasPlaying = !v.paused;
                 v._vpHoverSound = true;
                 v.muted = false;
@@ -9997,14 +9941,12 @@
         .vp-rail { position: fixed; top: 24px; z-index: 50; display: none; flex-direction: column; gap: 12px;
             max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
         .vp-rail.vp-on { display: flex; animation: vpRailIn .4s ease-out; }
-        /* как блоки самого ИТД (поле «Что нового?», баннер): скругление 36px, без обводки */
         .vp-rail-card { border-radius: 36px; padding: 20px 22px; color: var(--text-primary, #fff); background: var(--block-bg, #1c1c1c);
             backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none); }
         .vp-rail-title { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 16px; font-weight: 600;
             color: var(--text-primary, #fff); }
         .vp-rail-title svg { color: var(--text-secondary, #8a8a8a); flex-shrink: 0; }
         .vp-rail-title b { margin-left: auto; color: var(--text-secondary, #8a8a8a); font-size: 14px; font-weight: 500; }
-        /* переключатель «День / Месяц» — как вкладки ИТД: стеклянная пилюля с бегунком */
         .vp-seg { position: relative; display: flex; margin-bottom: 10px; padding: 3px; border-radius: 9999px; background: var(--glass-bg, rgba(35, 35, 35, .8)); }
         .vp-seg button { position: relative; z-index: 1; flex: 1; padding: 6px 0; border: 0; background: none; cursor: pointer; font: inherit;
             font-size: 13px; font-weight: 500; color: var(--text-secondary, #8a8a8a); transition: color .2s ease; }
@@ -10020,7 +9962,6 @@
         .vp-stat-diff { font-size: 13px; font-weight: 600; color: var(--text-secondary, #8a8a8a); }
         .vp-stat-diff.vp-up { color: #3ddc84; }
         .vp-stat-diff.vp-down { color: #ff5a6a; }
-        /* отрицательный отступ строк давал горизонтальную прокрутку — строки теперь в своих границах */
         .vp-club { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; overflow-x: hidden; padding: 10px 2px;
             scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--text-secondary, #888) 45%, transparent) transparent;
             -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
