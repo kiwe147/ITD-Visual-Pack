@@ -141,6 +141,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   await say(A.p, 'Ты тут?');
   await B2.p.waitForTimeout(6000);
   const toast = await B2.p.$eval('.vp-msg-toast', e => e.textContent).catch(() => null);
+  await B2.p.screenshot({ path: path.join(__dirname, 'out', 'dm-toast.png'), clip: { x: 0, y: 0, width: 1400, height: 160 } }).catch(() => { });
   const badge = await B2.p.$eval('nav a[href="#"] .vp-msg-badge', e => e.textContent).catch(() => null);
   console.log(`—    у bob: всплывашка «${toast}», число «${badge}»`);
   check(toast && /Ты тут\?/.test(toast) && badge === '1', 'новое сообщение при закрытом окне — всплывашка и число 1 на «Сообщениях»');

@@ -3789,6 +3789,7 @@
 
         const CHANGELOG = [
             ['3.3.10 – 3.3.10.4', '29 сентября 2026', [
+                'Всплывашки новых сообщений — такие же, как уведомления сайта (аватарка, имя, текст, оттенок), и показываются по одной вместе с ними, а не двумя стопками',
                 'Всё, что ИТД X хранит в комментариях служебных постов (стили, галочки, паки стикеров), теперь зашифровано — случайный человек ничего не прочитает',
                 'Сообщения на телефоне: долгое нажатие больше не выделяет текст — сразу меню с реакциями',
                 'Сообщения: правая кнопка (на телефоне — долгое нажатие) по сообщению открывает меню — реакции, копировать текст, открыть картинку; реакции видны обоим; ✓ — отправлено, ✓✓ — прочитано',
@@ -6185,11 +6186,17 @@
             if (!k) return;
             const who = (msgPeople.get(k.login) || {}).name || k.login;
             if (msgToastEl) msgToastEl.remove();
+            const tb = toastBox();
+            if (tb) tb.querySelectorAll(':scope > div > *').forEach(closeToast);
             const el = document.createElement('div');
             el.className = 'vp-msg-toast';
-            el.innerHTML = '<b></b><span></span>';
-            el.children[0].textContent = (m.sup ? '🛟 ' + (msgIsSupport() ? who : 'Поддержка ИТД X') : '💬 ' + who);
-            el.children[1].textContent = msgPreview(m);
+            el.innerHTML = '<span class="vp-msg-toast-ava"></span><span class="vp-msg-toast-body"><b></b><span></span></span>';
+            const ava = m.sup && !msgIsSupport() ? '🛟' : ((msgPeople.get(k.login) || {}).ava || '👤');
+            const avaEl = el.firstChild;
+            if (/^https?:|^\//.test(ava)) { const im = document.createElement('img'); im.src = ava; im.alt = ''; avaEl.appendChild(im); }
+            else { avaEl.textContent = ava; tintCard(el, ava); }
+            el.querySelector('b').textContent = m.sup ? (msgIsSupport() ? '🛟 ' + who : 'Поддержка ИТД X') : who;
+            el.querySelector('.vp-msg-toast-body span').textContent = msgPreview(m);
             el.onclick = () => { el.remove(); msgOpenFrom(m); };
             document.body.appendChild(el);
             msgToastEl = el;
@@ -6221,11 +6228,15 @@
             line-height: 18px; text-align: center; color: #fff; background-color: var(--accent-like, #f91880); border-radius: 9px; pointer-events: none; }
         nav a[href="#"] .vp-nav-icon:has(> .vp-msg-badge) { position: relative; }
         .vp-msg-toast { position: fixed; top: 16px; left: 50vw; transform: translateX(-50%); z-index: 2147483000; width: min(420px, calc(100vw - 24px)); box-sizing: border-box;
-            display: flex; flex-direction: column; gap: 3px; padding: 12px 18px; border-radius: 24px; cursor: pointer; color: var(--text-primary, #fff);
+            display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 24px; cursor: pointer; color: var(--text-primary, #fff);
             background: var(--block-bg, #1c1c1c); border: 1px solid var(--border-color, rgba(255, 255, 255, .12)); box-shadow: 0 14px 36px rgba(0, 0, 0, .45);
             backdrop-filter: var(--vp-glass-filter, blur(18px)); -webkit-backdrop-filter: var(--vp-glass-filter, blur(18px)); animation: vpMsgToastIn .25s ease-out; }
+        .vp-msg-toast-ava { flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px;
+            overflow: hidden; background: rgba(127, 127, 127, .18); }
+        .vp-msg-toast-ava img { width: 100%; height: 100%; object-fit: cover; }
+        .vp-msg-toast-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
         .vp-msg-toast b { font-size: 14px; }
-        .vp-msg-toast span { font-size: 14px; color: var(--text-secondary, #aaa); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msg-toast-body span { font-size: 14px; color: var(--text-secondary, #aaa); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         @keyframes vpMsgToastIn { from { opacity: 0; transform: translate(-50%, -8px); } }
         @media (max-width: 1172px) { .vp-msg-toast { top: calc(env(safe-area-inset-top, 0px) + 10px); } }
         @media (prefers-reduced-motion: reduce) { .vp-msg-toast { animation: none; } }
@@ -9700,6 +9711,7 @@
             if (!list) return;
             const items = [...list.children].filter(it => !it._vpClosed);
             if (!items.length) return;
+            if (msgToastEl && items.some(it => !it._vpN)) { msgToastEl.remove(); msgToastEl = null; }
             for (const it of items) if (!it._vpN) {
                 it._vpN = ++toastSeq;
                 setTimeout(() => closeToast(it), TOAST_MS);
