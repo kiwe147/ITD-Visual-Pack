@@ -4,6 +4,7 @@
 // Новое устройство: ключ на устройстве забыт — пароль открывает ту же переписку; неверный — «Неверный пароль».
 // С 3.3.5 личка — только подтверждённые (itd_verified_users, state approved); NeuroSFW здесь — с id владельца.
 // 3.3.7.2: неподтверждённый (carl) — чат с людьми закрыт, поддержка работает, свой ключ не пересоздаётся.
+// 3.3.9: картинка — на сервер ИТД (files/upload), в зашифрованной записи только 17 байт ссылки + подпись; порядок диалогов.
 // Запуск:  node test/dm.js снимок-ленты.html
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -16,7 +17,9 @@ const USERS = { NeuroSFW: { id: OWNER, username: 'NeuroSFW', displayName: 'Не�
 const VERIFIED = { NeuroSFW: { code: 'x', hasMod: true, id: OWNER, state: 'approved' }, bob: { code: 'x', hasMod: true, id: 'u2', state: 'approved' }, carl: { code: 'x', hasMod: true, id: 'u3', state: 'quarantine' } };
 const fails = [];
 const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + what); if (!ok) fails.push(what); };
-let comments = [], n = 0, posts = 0, patches = 0;
+let comments = [], n = 0, posts = 0, patches = 0, uploads = 0;
+const IMG_ID = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP4z8DwnwEIGP4zMDAwAAA2ygX7vK9Y8AAAAABJRU5ErkJggg==', 'base64');
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const open = async (who, other) => {
@@ -27,6 +30,8 @@ let comments = [], n = 0, posts = 0, patches = 0;
     await p.route('**/*', async r => {
       const req = r.request(), u = new URL(req.url()), t = req.resourceType();
       if (u.origin === ORIGIN && t === 'document') return r.fulfill({ contentType: 'text/html; charset=utf-8', body: snap });
+      if (u.hostname.startsWith('cdn.')) return r.fulfill({ contentType: 'image/png', body: PNG });
+      if (u.pathname === '/api/files/upload') { uploads++; return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ id: 'f1', url: `https://cdn.xn--d1ah4a.com/images/${IMG_ID}.webp` }) }); }
       if (['image', 'stylesheet', 'font'].includes(t)) return r.continue();
       if (u.pathname.includes('/auth/refresh')) return r.fulfill({ contentType: 'application/json', body: '{"accessToken":"t"}' });
       if (u.pathname === '/api/users/me') return r.fulfill({ contentType: 'application/json', body: JSON.stringify(USERS[who]) });
@@ -166,6 +171,29 @@ let comments = [], n = 0, posts = 0, patches = 0;
   await A.p.$eval('.vp-msgs-back', b => b.click()).catch(() => { }); await A.p.waitForTimeout(3000);
   await chatWith(A.p, 'sup:u3', 1);
   check((await bubbles(A.p)).join('|') === '←Хочу галочку', 'владелец читает обращение неподтверждённого carl');
+  // картинка: bob → NeuroSFW, с подписью
+  await chatWith(B2.p, 'u:NeuroSFW', 1);
+  await B2.p.fill('.vp-msgs-bar input', 'котик');
+  await B2.p.setInputFiles('.vp-msgs-file', { name: 'cat.png', mimeType: 'image/png', buffer: PNG });
+  await B2.p.waitForFunction(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return b && /✓|не отправлено/.test(b.lastChild.textContent); }, null, { timeout: 15000 }).catch(() => { });
+  const sentB = await B2.p.evaluate(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return { meta: b.lastChild.textContent, img: !!b.querySelector('img') }; });
+  check(uploads === 1 && sentB.img && /✓/.test(sentB.meta), `bob: картинка загружена и отправлена (${sentB.meta})`);
+  const rawAll = comments.map(c => c.content).join('\n');
+  check(!rawAll.includes(IMG_ID) && !/cdn|котик/.test(rawAll), 'на сервере нет ни ссылки на картинку, ни подписи — только шифр');
+  await A.p.$eval('.vp-msgs-back', b => b.click()).catch(() => { }); await A.p.waitForTimeout(3000);
+  const preview = await A.p.$eval('.vp-msgs-row[data-id="u:bob"] .vp-msgs-last', e => e.textContent).catch(() => '');
+  check(preview === '🖼 котик', `в списке у NeuroSFW: «${preview}»`);
+  await chatWith(A.p, 'u:bob', 1);
+  await A.p.waitForTimeout(800);
+  const gotImg = await A.p.evaluate(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); const im = b && b.querySelector('img'); return { src: im && im.src, text: b && b.firstChild && b.childNodes[1] && b.childNodes[1].textContent, loaded: !!(im && im.complete && im.naturalWidth) }; });
+  check(gotImg.src === `https://cdn.xn--d1ah4a.com/images/${IMG_ID}.webp` && gotImg.text === 'котик' && gotImg.loaded, `NeuroSFW видит картинку с сервера ИТД и подпись ${JSON.stringify(gotImg)}`);
+  await A.p.$eval('.vp-msgs-back', b => b.click()); await A.p.waitForTimeout(500);
+  const order = await A.p.$$eval('.vp-msgs-row', rs => rs.map(r => r.dataset.id));
+  console.log('—    порядок у NeuroSFW: ' + order.join(', '));
+  check(order[0] === 'u:bob', 'последний открытый чат (и последнее сообщение) — наверху');
+  await chatWith(A.p, 'bot', 1); await A.p.$eval('.vp-msgs-back', b => b.click()); await A.p.waitForTimeout(500);
+  const order2 = await A.p.$$eval('.vp-msgs-row', rs => rs.map(r => r.dataset.id));
+  check(order2[0] === 'bot', `зашёл к боту — бот поднялся наверх (${order2.slice(0, 3).join(', ')})`);
   for (const x of [A.p, B2.p, C2.p]) check(!x.errors.length, 'ошибок нет' + (x.errors.length ? ': ' + x.errors.join(' | ') : ''));
   await b.close();
   console.log(fails.length ? `\nНе прошло: ${fails.length}` : '\nВсё прошло');
