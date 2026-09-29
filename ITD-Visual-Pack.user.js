@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.10.2
+// @version      3.3.10.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2694,7 +2694,7 @@
                 if (b === 'custom') img = await customBgCdn().catch(e => { logErr('свой фон на сервер', e); return ''; });
                 const text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '');
                 if (text === lookSent) return;
-                const all = await loadVerificationComments(true);
+                const all = await loadVerificationComments();
                 const mine = all.find(c => c.author && c.author.id === myId && LOOK_RE.test(String(c.content || '').trim()));
                 if (mine && String(mine.content).trim() === text) { lookSent = text; return; }
                 const res = mine
@@ -3786,7 +3786,8 @@
         }
 
         const CHANGELOG = [
-            ['3.3.10 – 3.3.10.2', '29 сентября 2026', [
+            ['3.3.10 – 3.3.10.3', '29 сентября 2026', [
+                'Сообщения на телефоне: долгое нажатие больше не выделяет текст — сразу меню с реакциями',
                 'Сообщения: правая кнопка (на телефоне — долгое нажатие) по сообщению открывает меню — реакции, копировать текст, открыть картинку; реакции видны обоим; ✓ — отправлено, ✓✓ — прочитано',
                 'Клуб ИТД X: свечение ников больше не обрезается резко у краёв списка',
                 'Сообщения: альбомы — до 10 картинок в одном сообщении, сеткой как в Телеграме; в просмотре листаются стрелками, клавишами ← → и свайпом; список диалогов обновляется сразу, как пришло новое',
@@ -6539,6 +6540,7 @@
         .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-half { grid-column: span 3; aspect-ratio: 3 / 2; }
         .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-wide3 { grid-column: span 6; }
         .vp-msgs-album .vp-msgs-img { width: 100%; height: 100%; max-width: none; max-height: none; min-width: 0; min-height: 0; object-fit: cover; border-radius: 0; }
+        @media (hover: none) { .vp-msgs-feed .vp-msgs-b { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
         .vp-msgs-reacts { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 0; }
         .vp-msgs-reacts button { border: 0; border-radius: 9999px; padding: 2px 9px; font-size: 13px; line-height: 20px; cursor: pointer; color: inherit;
             background: rgba(127, 127, 127, .22); }

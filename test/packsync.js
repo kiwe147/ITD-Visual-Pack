@@ -91,10 +91,12 @@ const same = (a, b) => JSON.stringify(a.map(p => [p.id, p.name, p.stickers.map(s
   const A = await device(b, 'A', PACKS);
   await A.p.waitForTimeout(9000);
   const parts = server[STICKER_POST].filter(c => /^ITDXS \d+\/\d+ /.test(c.content));
-  const code = server[VERIFY_POST].map(c => c.content);
+  const code = server[VERIFY_POST].map(c => c.content).filter(x => !/^ITDXL1 /.test(x));
+  const looks = server[VERIFY_POST].filter(c => /^ITDXL1 /.test(c.content));
   check(parts.length >= 2, `A выгрузил паки: кусков ${parts.length}, длины ${parts.map(c => c.content.length).join(',')}`);
   check(parts.every(c => c.content.length <= 2000), 'каждый кусок ≤ 2000 знаков');
   check(code.length === 1 && /^[A-Za-z0-9]{8}1\d{9,}$/.test(code[0]), `код галочки со временем паков: ${code.join(' | ')}`);
+  check(looks.length <= 1, `строка стиля (3.3.10) — не больше одной: ${looks.length}`);
   // B: пусто — получает
   const B = await device(b, 'B', null);
   await B.p.waitForTimeout(9000);
@@ -125,7 +127,7 @@ const same = (a, b) => JSON.stringify(a.map(p => [p.id, p.name, p.stickers.map(s
   check(!bad.length, 'ни ответов, ни удалений' + (bad.length ? ': ' + bad.join(', ') : ''));
   const posts = log.filter(l => l.startsWith('POST'));
   console.log('—    запросы: ' + [...new Set(log)].map(l => `${l} ×${log.filter(x => x === l).length}`).join(' | '));
-  check(posts.length === 1 + parts.length, `новых комментариев: ${posts.length} (галочка + куски паков), дальше только правка`);
+  check(posts.length === 2 + parts.length, `новых комментариев: ${posts.length} (галочка + строка стиля + куски паков), дальше только правка`);
   const errs = [...A.errors, ...B.errors];
   check(!errs.length, 'ошибок нет' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await b.close();
