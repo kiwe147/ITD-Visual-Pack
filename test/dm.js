@@ -283,6 +283,17 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   check(after === before, `реакции и «прочитано» не становятся пузырями (${before} → ${after})`);
   await A.p.click(`.vp-msgs-feed .vp-msgs-b[data-ts="${spot.ts}"] .vp-msgs-reacts button`); await A.p.waitForTimeout(400);
   check(!(await A.p.$(`.vp-msgs-feed .vp-msgs-b[data-ts="${spot.ts}"] .vp-msgs-reacts`)), 'нажатие по своей реакции — снята');
+  // прочитанное — по аккаунту (3.3.11): второе устройство NeuroSFW видит те же непрочитанные, что первое
+  await A.p.$eval('.vp-msgs-back', b => b.click()).catch(() => { }); await A.p.waitForTimeout(2500);
+  const unreadOf = pg => pg.$$eval('.vp-msgs-row', rs => Object.fromEntries(rs.filter(r => !r.dataset.id.startsWith('bot')).map(r => [r.dataset.id, +((r.querySelector('.vp-msgs-badge') || {}).textContent || 0)])));
+  const u1 = await unreadOf(A.p);
+  const A2 = await open('NeuroSFW', 'bob');
+  await key(A2.p, 'лунный кот 42', false);
+  await A2.p.$eval('.vp-msgs-back', b => b.click()).catch(() => { }); await A2.p.waitForTimeout(2500);
+  const u2 = await unreadOf(A2.p);
+  console.log('—    непрочитанные: ' + JSON.stringify(u1) + ' / второе устройство ' + JSON.stringify(u2));
+  check(Object.keys(u1).length > 2 && JSON.stringify(u1) === JSON.stringify(u2) && Object.keys(u2).some(k => k.startsWith('sup:')) && Object.values(u2).every(n => n === 0), 'второе устройство: непрочитанные как на первом (и «Поддержка», которую там не открывали)');
+  A2.p.errors.length && check(false, 'A2 ошибки: ' + A2.p.errors.join(' | '));
   for (const x of [A.p, B2.p, C2.p]) check(!x.errors.length, 'ошибок нет' + (x.errors.length ? ': ' + x.errors.join(' | ') : ''));
   await b.close();
   console.log(fails.length ? `\nНе прошло: ${fails.length}` : '\nВсё прошло');

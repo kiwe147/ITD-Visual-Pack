@@ -128,7 +128,9 @@ const same = (a, b) => JSON.stringify(a.map(p => [p.id, p.name, p.stickers.map(s
   check(!bad.length, 'ни ответов, ни удалений' + (bad.length ? ': ' + bad.join(', ') : ''));
   const posts = log.filter(l => l.startsWith('POST'));
   console.log('—    запросы: ' + [...new Set(log)].map(l => `${l} ×${log.filter(x => x === l).length}`).join(' | '));
-  check(posts.length === 2 + parts.length, `новых комментариев: ${posts.length} (галочка + строка стиля + куски паков), дальше только правка`);
+  const statsLine = server[STICKER_POST].filter(c => /^ITDXT1 /.test(openText(c.content, src)));
+  check(statsLine.length === 1 && statsLine[0].content.startsWith('ITDXE '), `строка статистики (3.3.11) — одна и в шифре (${statsLine.length})`);
+  check(posts.length === 3 + parts.length, `новых комментариев: ${posts.length} (галочка + строка стиля + куски паков + статистика), дальше только правка`);
   const errs = [...A.errors, ...B.errors];
   check(!errs.length, 'ошибок нет' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await b.close();

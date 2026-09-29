@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.10.5
+// @version      3.3.11
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3761,6 +3761,10 @@
         }
 
         const CHANGELOG = [
+            ['3.3.11', '29 сентября 2026', [
+                'Статистика в боковой панели — общая для всех твоих устройств: на телефоне тот же прирост за день и месяц, что на компьютере',
+                'Сообщения: прочитанное на одном устройстве не висит непрочитанным на другом',
+            ]],
             ['3.3.10 – 3.3.10.5', '29 сентября 2026', [
                 'Галерея на компьютере: кнопка громкости справа от вкладок — ползунок, колёсико мыши, щелчок выключает и возвращает звук видео при наведении',
                 'Сообщения: если собеседник пришлёт то, чего твоя версия ещё не умеет показать, вместо непонятных символов будет просьба обновить мод',
@@ -6011,8 +6015,10 @@
                         if (!e[who] || e[who].ts <= m.ts) e[who] = { ts: m.ts, emoji: td.decode(m.svc.slice(6)) };
                         reacts.set(key, e);
                     } else if (k === 2 && m.svc.length >= 5) {
-                        const r = reads.get(uid) || { me: 0, them: 0 };
-                        r[who] = Math.max(r[who], u32(m.svc, 1));
+                        const r = reads.get(uid) || { me: 0, them: 0 }, at = u32(m.svc, 1), th = m.svc.length >= 6 ? m.svc[5] : -1;
+                        r[who] = Math.max(r[who], at);
+                        if (th !== 1) r[who + '0'] = Math.max(r[who + '0'] || 0, at);
+                        if (th !== 0) r[who + '1'] = Math.max(r[who + '1'] || 0, at);
                         reads.set(uid, r);
                     }
                 }
@@ -6051,7 +6057,7 @@
         function msgReact(uid, m, emoji) {
             return msgSend(uid, '', false, null, cat(new Uint8Array([1]), be32(m.ts), new Uint8Array([m.dir === 'out' ? 1 : 0]), te.encode(emoji || '')));
         }
-        function msgSendRead(uid, upTo) { return msgSend(uid, '', false, null, cat(new Uint8Array([2]), be32(upTo))); }
+        function msgSendRead(uid, upTo, sup) { return msgSend(uid, '', false, null, cat(new Uint8Array([2]), be32(upTo), new Uint8Array([sup ? 1 : 0]))); }
         async function msgSend(uid, text, sup, img, svc) {
             const me = msgNet.me, key = await msgPair(uid);
             if (!me || !key) throw new Error('нет ключа');
@@ -6093,6 +6099,8 @@
         const msgThread = t => t.uid ? (msgNet.conv.get(t.uid) || []).filter(m => m.sup === t.sup) : [];
         const msgSeen = () => GM_getValue(acctKey('msgSeen'), {});
         const seenKey = t => (t.sup ? 'sup:' : '') + t.uid;
+        const readUpTo = (uid, sup, who) => { const r = msgNet.reads && msgNet.reads.get(uid); return r ? r[(who || 'me') + (sup ? '1' : '0')] || 0 : 0; };
+        const seenAt = (seen, uid, sup) => Math.max(seen[(sup ? 'sup:' : '') + uid] || 0, readUpTo(uid, sup));
         function msgMarkSeen(t) { const s = msgSeen(), list = msgThread(t); s[seenKey(t)] = list.length ? list[list.length - 1].ts : 0; GM_setValue(acctKey('msgSeen'), s); }
         const msgTime = ts => { const d = new Date(ts * 1000), t = d.toTimeString().slice(0, 5); return d.toDateString() === new Date().toDateString() ? t : `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')} ${t}`; };
         function msgFillDialogs() {
@@ -6116,13 +6124,13 @@
                 d.last = (last.dir === 'out' ? 'Ты: ' : '') + msgPreview(last);
                 d.lastTs = last.ts;
                 d.time = msgTime(last.ts);
-                d.unread = list.filter(m => m.dir === 'in' && m.ts > (seen[seenKey(t)] || 0)).length;
+                d.unread = list.filter(m => m.dir === 'in' && m.ts > seenAt(seen, t.uid, t.sup)).length;
             }
         }
         function msgUnread() {
             const seen = msgSeen();
             let n = 0;
-            for (const [uid, list] of msgNet.conv) for (const m of list) if (m.dir === 'in' && m.ts > (seen[(m.sup ? 'sup:' : '') + uid] || 0)) n++;
+            for (const [uid, list] of msgNet.conv) for (const m of list) if (m.dir === 'in' && m.ts > seenAt(seen, uid, m.sup)) n++;
             return n;
         }
         function msgBadge() {
@@ -6719,9 +6727,8 @@
                 if (!t.uid) { note(t.missing); return; }
                 const list = msgThread(t);
                 if (!list.length) note(d.support ? 'Опиши проблему или идею — ответ придёт сюда' : `Это начало переписки с ${d.name}`);
-                const rd = (msgNet.reads && msgNet.reads.get(t.uid)) || { me: 0, them: 0 };
                 list.forEach(m => {
-                    const b = bubble(m.dir, m.text, msgTime(m.ts) + (m.dir === 'out' ? (rd.them >= m.ts ? ' ✓✓' : ' ✓') : ''), (m.imgs || (m.img ? [m.img] : [])).map(msgImgUrl));
+                    const b = bubble(m.dir, m.text, msgTime(m.ts) + (m.dir === 'out' ? (readUpTo(t.uid, t.sup, 'them') >= m.ts ? ' ✓✓' : ' ✓') : ''), (m.imgs || (m.img ? [m.img] : [])).map(msgImgUrl));
                     b._m = m; b.dataset.ts = m.ts; b.dataset.dir = m.dir;
                     paintReacts(b, t.uid);
                 });
@@ -6729,10 +6736,10 @@
                 input.disabled = false; input.focus();
                 msgMarkSeen(t); d.unread = 0; msgBadge();
                 const lastIn = [...list].reverse().find(m => m.dir === 'in');
-                if (lastIn && lastIn.ts > rd.me) {
+                if (lastIn && lastIn.ts > readUpTo(t.uid, t.sup)) {
                     const r = msgNet.reads.get(t.uid) || { me: 0, them: 0 };
-                    r.me = lastIn.ts; msgNet.reads.set(t.uid, r);
-                    msgSendRead(t.uid, lastIn.ts).catch(e => logErr('прочитано', e));
+                    r.me = Math.max(r.me, lastIn.ts); r[t.sup ? 'me1' : 'me0'] = lastIn.ts; msgNet.reads.set(t.uid, r);
+                    msgSendRead(t.uid, lastIn.ts, t.sup).catch(e => logErr('прочитано', e));
                 }
             }
             function msgKeyForm(d) {
@@ -6886,7 +6893,7 @@
                 let sg = '';
                 if (msgNet.reacts) msgNet.reacts.forEach((v, k) => { if (k.startsWith(uid + '|')) sg += k + (v.me ? v.me.emoji : '') + '/' + (v.them ? v.them.emoji : '') + ';'; });
                 const r = msgNet.reads && msgNet.reads.get(uid);
-                return sg + '|' + (r ? r.them : 0);
+                return sg + '|' + (r ? (r.them0 || 0) + '/' + (r.them1 || 0) : 0);
             };
             function paintReacts(b, uid) {
                 const old = b.querySelector('.vp-msgs-reacts');
@@ -10153,6 +10160,71 @@
         let statsPeriod = GM_getValue('vp_stats_tab', 'day'), statsNow = null;
         const DAY_MS = 864e5;
         function statsHistory() { try { return JSON.parse(GM_getValue(acctKey('vp_stats_hist'), '[]')); } catch (e) { return []; } }
+        const STATS_TAG = 'ITDXT1 ', STATS_F = ['followers', 'following', 'posts', 'likes'];
+        function statsPack(hist) {
+            const a = [], put = n => { n = Math.max(0, Math.round(n)); while (n > 127) { a.push((n & 127) | 128); n = Math.floor(n / 128); } a.push(n); };
+            let hr0 = 0;
+            const prev = {};
+            for (const h of hist) {
+                const hr = Math.round(h.at / 36e5);
+                put(hr - hr0); hr0 = hr;
+                let mask = 0;
+                STATS_F.forEach((f, i) => { if (typeof h[f] === 'number') mask |= 1 << i; });
+                a.push(mask);
+                STATS_F.forEach((f, i) => { if (!(mask & 1 << i)) return; const d = h[f] - (prev[f] || 0); put(d >= 0 ? d * 2 : -d * 2 - 1); prev[f] = h[f]; });
+            }
+            return sealB64(new Uint8Array(a));
+        }
+        function statsUnpack(t) {
+            const b = openB64(t), out = [], prev = {};
+            let o = 0, hr = 0;
+            const get = () => { let n = 0, k = 1; while (o < b.length) { const x = b[o++]; n += (x & 127) * k; if (x < 128) return n; k *= 128; } throw new Error('обрыв'); };
+            while (o < b.length) {
+                hr += get();
+                const mask = b[o++], h = { at: hr * 36e5 };
+                STATS_F.forEach((f, i) => { if (!(mask & 1 << i)) return; const z = get(); prev[f] = (prev[f] || 0) + (z % 2 ? -(z + 1) / 2 : z / 2); h[f] = prev[f]; });
+                out.push(h);
+            }
+            return out;
+        }
+        function statsMerge(a, b) {
+            const out = [];
+            [...a, ...b].filter(h => h && h.at && Date.now() - h.at < 40 * DAY_MS).sort((x, y) => x.at - y.at).forEach(h => {
+                const l = out[out.length - 1];
+                if (l && h.at - l.at < 36e5) STATS_F.forEach(f => { if (typeof l[f] !== 'number' && typeof h[f] === 'number') l[f] = h[f]; });
+                else out.push({ ...h });
+            });
+            return out;
+        }
+        function statsForUpload(hist) {
+            const days = new Set(), last = hist[hist.length - 1];
+            return hist.filter(h => {
+                const d = new Date(h.at).toDateString(), first = !days.has(d);
+                days.add(d);
+                return first || h === last || Date.now() - h.at < 3 * DAY_MS;
+            });
+        }
+        async function statsSync(hist) {
+            const me = (meData && meData.id) || (siteAuth.me && siteAuth.me.id);
+            if (!me || Date.now() - (+GM_getValue(acctKey('vp_stats_sync_at'), 0) || 0) < 30 * 60e3) return hist;
+            GM_setValue(acctKey('vp_stats_sync_at'), Date.now());
+            const mine = (await allComments(STICKER_POST_ID)).filter(c => c.author && c.author.id === me && openText(c.content).startsWith(STATS_TAG));
+            const cur = mine[0];
+            let remote = [];
+            if (cur) try { remote = statsUnpack(openText(cur.content).slice(STATS_TAG.length)); } catch (e) { remote = []; }
+            const merged = statsMerge(hist, remote);
+            const up = statsForUpload(merged);
+            let text = STATS_TAG + statsPack(up);
+            while (sealText(text).length > 990 && up.length > 2) { up.splice(1, 1); text = STATS_TAG + statsPack(up); }
+            if (!cur || openText(cur.content) !== text) {
+                const content = sealText(text);
+                const res = cur
+                    ? await api(`/api/comments/${cur.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) })
+                    : await api(`/api/posts/${STICKER_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) });
+                if (!res.ok) throw new Error('статистика: запись ' + res.status);
+            }
+            return merged;
+        }
         let likesPending = null;
         function myLikesTotal() {
             const c = GM_getValue('vp_likes_total', null);
@@ -10190,6 +10262,7 @@
             GM_setValue(acctKey('vp_stats_hist'), JSON.stringify(hist));
             statsNow = now;
             renderStats();
+            statsSync(hist).then(m => { if (m !== hist) { GM_setValue(acctKey('vp_stats_hist'), JSON.stringify(m)); renderStats(); } }).catch(e => logErr('статистика: синхронизация', e));
         }
         function renderStats() {
             seg.classList.toggle('vp-month', statsPeriod === 'month');

@@ -11,6 +11,8 @@ const ORIGIN = 'https://xn--d1ah4a.com';
 const fails = [];
 const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + what); if (!ok) fails.push(what); };
 const H = 3600e3, D = 24 * H;
+const STICKER_POST = '92f2913c-18be-499a-bc03-97aed0947b34', server = [];
+const { openText } = require('./seal');
 
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
@@ -25,6 +27,17 @@ const H = 3600e3, D = 24 * H;
       if (u.pathname.includes('/auth/refresh')) return r.fulfill({ contentType: 'application/json', body: '{"accessToken":"t"}' });
       if (u.pathname === '/api/users/me') return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ username: 'NeuroSFW', id: 'u1', followersCount: 236, followingCount: 125, postsCount: 573 }) });
       if (u.pathname === '/api/posts/user/NeuroSFW') return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { posts: [{ id: 'w1', likesCount: 220, author: { username: 'NeuroSFW' } }], pagination: { nextCursor: null } } }) });
+      if (u.pathname === `/api/posts/${STICKER_POST}/comments`) {
+        if (req.method() === 'GET') return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { comments: server, hasMore: false } }) });
+        const c = { id: 's' + (server.length + 1), author: { id: 'u1', username: 'NeuroSFW' }, content: JSON.parse(req.postData()).content };
+        server.push(c);
+        return r.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ data: c }) });
+      }
+      if (req.method() === 'PATCH' && u.pathname.startsWith('/api/comments/s')) {
+        const c = server.find(x => x.id === u.pathname.split('/').pop());
+        c.content = JSON.parse(req.postData()).content;
+        return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: c }) });
+      }
       return r.fulfill({ status: 404, body: '' });
     });
     await p.addInitScript(([m, h]) => {
@@ -58,6 +71,16 @@ const H = 3600e3, D = 24 * H;
   check(!r.day.since, 'день: снимок почти ровно сутки — без подписи «с …»');
   check(r.month.rows.some(t => /подписчиков\s*\+36$/.test(t)), 'месяц — от ближайшего к 30 дням (35 дней): подписчиков +36');
   check(/^с \d\d\.\d\d/.test(r.month.since), `месяц: 35 дней вместо 30 — подпись «${r.month.since}»`);
+
+  console.log('— синхронизация (3.3.11): тот же аккаунт на телефоне без своей истории');
+  const up = server.map(c => c.content);
+  check(up.length === 1 && up[0].startsWith('ITDXE ') && /^ITDXT1 /.test(openText(up[0], src)), `компьютер выложил историю одной строкой, в шифре (${up.length}, ${up[0] && up[0].length} зн.)`);
+  r = await run([]);
+  console.log('—    день:  ' + r.day.rows.join(' | ') + ' · ' + r.day.since);
+  console.log('—    месяц: ' + r.month.rows.join(' | ') + ' · ' + r.month.since);
+  check(r.day.rows.some(t => /подписчиков\s*\+3$/.test(t)) && r.month.rows.some(t => /подписчиков\s*\+36$/.test(t)), 'телефон: день +3 и месяц +36 — как на компьютере');
+  check(server.length === 1, `запись осталась одна (${server.length})`);
+  server.length = 0;
 
   console.log('— как у GekataNite: один старый снимок 20 дней назад');
   r = await run([{ ago: 20 * D, followers: 220, following: 122, posts: 540, likes: 150 }]);
