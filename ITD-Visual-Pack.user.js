@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.9
+// @version      3.3.9.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2835,7 +2835,7 @@
             },
             { label: 'Стекло', get: () => glassEnabled, set: v => { glassEnabled = v; applyGlass(); }, key: 'glassEnabled' },
             { label: 'Звуки интерфейса', get: () => uiSoundEnabled, set: v => { uiSoundEnabled = v; if (v) uiSound('toggle'); }, key: 'uiSoundEnabled' },
-            { label: 'Сцена ленты', get: () => sceneEnabled, set: v => { sceneEnabled = v; document.documentElement.classList.toggle('vp-scene', v); sceneKick(); }, key: 'sceneEnabled' },
+            { label: 'Сцена ленты', get: () => sceneEnabled, set: v => { sceneEnabled = v; sceneAutoOff = false; document.documentElement.classList.toggle('vp-scene', v); sceneKick(); }, key: 'sceneEnabled' },
             { label: 'Свечение видео', get: () => ambientEnabled, set: v => { ambientEnabled = v; applyAmbient(); }, key: 'ambientEnabled' },
             { label: 'Боковая панель', get: () => railEnabled, set: v => { railEnabled = v; placeRail(); }, key: 'railEnabled' },
             { label: 'Версия для ПК на планшете', get: () => GM_getValue('tabletDesktop', true), set: () => tabletViewport(), key: 'tabletDesktop' }
@@ -3670,7 +3670,8 @@
         }
 
         const CHANGELOG = [
-            ['3.3.9', '29 сентября 2026', [
+            ['3.3.9 – 3.3.9.1', '29 сентября 2026', [
+                'Сцена ленты плавнее при прокрутке, а на слабых телефонах выключается сама, если не успевает (раньше лента дёргалась, особенно при прокрутке вверх)',
                 'Сообщения: можно отправлять картинки — скрепкой или вставкой из буфера (Ctrl+V), с подписью. Картинка сжимается перед отправкой, ссылка на неё шифруется вместе с сообщением',
                 'Сообщения: сверху — чаты, где было последнее сообщение или куда ты последний раз заходил, как в Телеграме']],
             ['3.3.8 – 3.3.8.1', '29 сентября 2026', [
@@ -7609,8 +7610,9 @@
         @property --vp-ss { syntax: '<number>'; inherits: false; initial-value: 1; }
         @property --vp-sy { syntax: '<length>'; inherits: false; initial-value: 0px; }
         html.vp-scene article.vp-post {
-            animation: none !important; transform-origin: 50% 0;
+            animation: none !important; transform-origin: 50% 0; backface-visibility: hidden;
             opacity: var(--vp-so, 1); transform: translateY(var(--vp-sy, 0px)) scale(var(--vp-ss, 1));
+            transition: background-color .25s ease, border-color .25s ease, box-shadow .25s ease, color .25s ease !important;
         }
 
         /* 22. Свечение видео */
@@ -7990,14 +7992,39 @@
         document.documentElement.classList.toggle('vp-scene', sceneEnabled);
         const sceneSeen = new Set();
         const sceneIO = new IntersectionObserver(es => es.forEach(e => {
-            if (e.isIntersecting) { sceneSeen.add(e.target); sceneKick(); }
-            else { sceneSeen.delete(e.target); e.target._vpSceneKey = null;['--vp-so', '--vp-sy', '--vp-ss'].forEach(v => e.target.style.removeProperty(v)); }
+            if (e.isIntersecting) { sceneLive(e.target); sceneKick(); }
+            else sceneDrop(e.target);
         }), { rootMargin: '150px 0px' });
+        function sceneLive(a) {
+            if (sceneSeen.has(a)) return;
+            sceneSeen.add(a);
+            if (sceneEnabled && !sceneAutoOff) a.style.willChange = 'transform, opacity';
+        }
+        function sceneDrop(a) {
+            sceneSeen.delete(a);
+            a._vpSceneKey = null;
+            ['--vp-so', '--vp-sy', '--vp-ss', 'will-change'].forEach(v => a.style.removeProperty(v));
+        }
         const ease = t => t * t * (3 - 2 * t);
-        let sceneQueued = false;
-        function sceneFrame() {
+        let sceneQueued = false, sceneAutoOff = false, sceneLast = 0, sceneGaps = [];
+        function sceneTurnOff() {
+            sceneAutoOff = true;
+            document.documentElement.classList.remove('vp-scene');
+            [...sceneSeen].forEach(a => { a._vpSceneKey = null;['--vp-so', '--vp-sy', '--vp-ss', 'will-change'].forEach(v => a.style.removeProperty(v)); });
+            console.info('[ITD VP] сцена ленты выключена до перезагрузки: устройство не успевает рисовать её при прокрутке');
+        }
+        function sceneFrame(t) {
             sceneQueued = false;
-            if (!sceneEnabled) return;
+            if (!sceneEnabled || sceneAutoOff) return;
+            if (sceneLast && t - sceneLast < 100) {
+                sceneGaps.push(t - sceneLast);
+                if (sceneGaps.length >= 40) {
+                    const med = sceneGaps.sort((x, y) => x - y)[20];
+                    sceneGaps = [];
+                    if (med > 28) { sceneLast = 0; return sceneTurnOff(); }
+                }
+            }
+            sceneLast = t;
             const H = innerHeight;
             const rects = [...sceneSeen].map(a => [a, a.getBoundingClientRect()]);
             for (const [a, r] of rects) {
@@ -8017,7 +8044,12 @@
         addEventListener('resize', sceneKick);
         onDom(function sceneWatch() {
             document.querySelectorAll('article.' + SELECTORS.post).forEach(a => {
-                if (!a._vpScene) { a._vpScene = true; sceneIO.observe(a); }
+                if (!a._vpScene) {
+                    a._vpScene = true;
+                    sceneIO.observe(a);
+                    const r = a.getBoundingClientRect();
+                    if (r.bottom > -150 && r.top < innerHeight + 150) sceneLive(a);
+                }
                 const slot = a.parentElement;
                 if (slot && !slot.classList.contains('vp-post-slot')) slot.classList.add('vp-post-slot');
             });
