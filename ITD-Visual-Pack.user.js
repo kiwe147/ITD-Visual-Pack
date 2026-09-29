@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.8
+// @version      3.3.8.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -83,11 +83,12 @@
         const st = Object.assign({}, history.state);
         const had = OVERLAY_KEYS.some(k => st[k]);
         OVERLAY_KEYS.forEach(k => delete st[k]);
+        delete st.vpChat;
         st[key] = 1;
         history[had ? 'replaceState' : 'pushState'](st, '', location.href);
     }
     const overlayAt = key => !!(history.state && history.state[key]);
-    const STACK_KEYS = ['vpGames', 'vpNews'];
+    const STACK_KEYS = ['vpGames', 'vpNews', 'vpChat'];
     function stackEnter(key) { history.pushState(Object.assign({}, history.state, { [key]: 1 }), '', location.href); }
     function stackLeave(key) { if (overlayAt(key)) history.back(); }
     if ([...OVERLAY_KEYS, ...STACK_KEYS].some(overlayAt)) {
@@ -3669,8 +3670,10 @@
         }
 
         const CHANGELOG = [
-            ['3.3.8', '29 сентября 2026', [
-                'Статистика: у лайков снова виден прирост за день и месяц (раньше стоял 0)',
+            ['3.3.8 – 3.3.8.1', '29 сентября 2026', [
+                'Сообщения: «назад» из переписки возвращает к списку диалогов, а не закрывает сообщения целиком',
+                'Бот «Сервер ИТД» сменил репертуар: теперь шутит про сервера, лайки, ленту и прочие баги ИТД',
+                'Статистика: у лайков снова виден прирост за день и месяц (раньше стоял 0); «День» больше не показывает прирост за недели — если давно не заходил, видно, с какого числа считается',
                 '«Назад» (и кнопка «назад» на телефоне) закрывает окна «Игры» и «Что нового», а не уводит со страницы',
                 'Сообщения: свои сообщения подкрашены цветом стиля и читаются на любом стиле и теме; под полем ввода — сколько символов из 500',
                 'Сообщения: кнопка эмодзи заработала — окно с категориями и «Недавними»',
@@ -5959,47 +5962,49 @@
         let messagesOverlay = null;
 
         const MESSAGE_JOKES = [
-            ['📨', 'Твоё сообщение отправлено. Куда — лучше не спрашивай'],
-            ['🐌', 'Доставляем почтой России. Ориентировочно — к следующему обновлению сайта'],
-            ['🧠', 'Я прочитал твоё сообщение. Потом забыл. Прототип, что с меня взять'],
-            ['🔌', 'Сервер на месте. Сообщений нет. Ищем, кто выдернул провод'],
-            ['🕳️', 'Сообщение улетело в /dev/null. Там тихо и уютно, ему понравится'],
-            ['🧾', 'Статус доставки: «доставлено в мечтах»'],
-            ['🤖', 'Я бы ответил по-человечески, но меня писали в три ночи'],
-            ['📶', 'Одна палочка связи. Подними телефон повыше. Ещё выше. Почти'],
-            ['🪄', 'Отправка сообщений — это магия. Магию пока не завезли'],
-            ['🧊', 'Собеседник заморожен до релиза лички. Разморозим — передадим'],
-            ['🐢', 'Загрузка чата: ██░░░░░░░░ 20%. Можешь пока погладить кота'],
-            ['🗑️', 'Сохранил твоё сообщение в самое надёжное место — в оперативку. До перезагрузки'],
-            ['👻', 'Кто-то печатает... а, это ты'],
-            ['🎰', 'Шанс, что сообщение дойдёт: 0%. Но крутить можно сколько угодно'],
-            ['📜', 'Пользовательское соглашение, пункт 404: личка не найдена'],
-            ['🥷', 'Твоё сообщение настолько секретное, что его не видит даже сервер'],
-            ['🐦', 'Голубь с твоим сообщением взял больничный'],
-            ['⌛', 'Ответ поступит в течение 3–5 рабочих обновлений'],
-            ['🎧', 'Я тебя внимательно не слышу. Но киваю'],
-            ['🍝', 'Код лички сейчас как макароны: вкусно, но не работает'],
-            ['🧪', 'Ты участвуешь в эксперименте. Контрольная группа — тоже ты'],
-            ['🛸', 'Сообщение похитили инопланетяне. Обещали вернуть с пометкой «переслано»'],
-            ['📦', 'Посылка с перепиской застряла на таможне ИТД'],
-            ['🔁', 'Ты пишешь — я шучу. Идеальный диалог, повторим?'],
-            ['💤', 'Бэкенд спит. Не буди — он злой спросонья'],
-            ['🧯', 'Пробовали запустить личку. Потушили. Пробуем снова'],
-            ['🎮', 'Личка: уровень 1. До разблокировки отправки — 9 999 опыта'],
-            ['🕵️', 'Модерация проверила твоё сообщение и ушла на обед'],
-            ['🍿', 'Поболтал бы, но у меня тут прототип на плите'],
-            ['🧩', 'Не хватает одного кусочка пазла. Сервера'],
+            ['🔥', 'Сообщение получил. Сервер тоже получил — и перегрелся'],
+            ['🐹', 'Сервер работает на хомяке в колесе. Хомяк ушёл на обед'],
+            ['⏳', 'Лента грузится. Не трогай — спугнёшь'],
+            ['🧱', '502 Bad Gateway — это не ошибка, это стиль жизни'],
+            ['🔄', 'Переподключаюсь… Переподключаюсь… О, опять ты'],
+            ['❤️', 'Лайк засчитан. Наверное. Обнови страницу — узнаем вместе'],
+            ['🔔', 'Уведомление о твоём сообщении придёт завтра. Или вчера. Как повезёт'],
+            ['🖼️', 'Картинка не загрузилась? Она стесняется. Дай ей минутку'],
+            ['🛠️', 'Ведутся технические работы. Какие — сами не знаем, но ведутся'],
+            ['🎲', 'Шанс, что пост опубликуется с первого раза: сегодня 50 на 50'],
+            ['🧯', 'Если сайт упал — это не баг, это он прилёг отдохнуть'],
+            ['📉', 'Онлайн растёт, сервер — нет. Держимся'],
+            ['🐛', 'Это не баг, это фича. Вот этот — точно фича. Наверное'],
+            ['🌀', 'Крутилка крутится — значит, я жив. Логика железная'],
+            ['🥔', 'Сервер у нас надёжный: картофельный, отечественный'],
+            ['🔌', 'Кто-то снова задел провод. Ставим табличку «не трогать»'],
+            ['🧊', 'Подморозил ленту, чтобы ты отдохнул от прокрутки. Забота'],
+            ['📦', 'Твоё сообщение в очереди. Перед ним ещё 4000 лайков'],
+            ['🤐', 'Отправлено в обработку. Обработка отправлена в отпуск'],
+            ['🕳️', 'Комментарий исчез? Он в лучшем мире, там где старые посты'],
+            ['📶', 'Сайт открылся с первого раза? Сделай скрин — никто не поверит'],
+            ['⚙️', 'Обновили сайт. Что сломали — узнаем от пользователей'],
+            ['🧪', 'Ты тестируешь ИТД в прямом эфире. Спасибо за вклад в науку'],
+            ['🐌', 'Сервер думает. Не торопи, он в первый раз'],
+            ['🔢', 'Счётчик подписчиков немного устал считать. Он не врёт, он округляет'],
+            ['🕰️', 'Прочитано «только что» — по серверному времени это час назад'],
+            ['👻', 'Пост висит, но его нет. Или есть, но не висит. Квантовая лента'],
+            ['🎰', 'Обнови страницу — вдруг выпадет рабочая версия'],
+            ['🧹', 'Кеш почистили. Вместе с частью ленты. Бывает'],
+            ['🫡', 'Все системы в норме. Кроме тех, что не в норме'],
+            ['🚧', 'Ошибка загрузки. Попробуйте позже. Позже тоже попробуйте'],
+            ['🛸', 'Запрос улетел и не вернулся. Ждём сигнала из космоса'],
         ];
-        const BOT_HELLO = [['👋', 'Привет! Я всё запомню. Ровно до обновления страницы'], ['🫡', 'Здравия желаю! Сообщения — пока нет, а бот — вот он']];
-        const BOT_ASK = [['🤔', 'Отличный вопрос. Отвечу, как только личка заработает'], ['🔮', 'Шар предсказаний говорит: «спроси, когда выйдет релиз»']];
+        const BOT_HELLO = [['👋', 'Привет! Я Сервер ИТД. Сегодня почти работаю'], ['🫡', 'На связи! Пока связь есть — пиши быстрее']];
+        const BOT_ASK = [['🤔', 'Хороший вопрос. Отвечу после перезагрузки. Своей'], ['🔮', 'Шар предсказаний говорит: «ошибка 500, спроси позже»']];
 
         const MSG_BOT = {
-            id: 'bot', ava: '🤖', name: 'Сервер ИТД', login: '', last: 'Напиши что-нибудь — отвечу. Честно', time: 'сейчас', unread: 1, online: true, bot: true,
-            msgs: [['in', 'Привет! Я — Сервер ИТД. Личка пока в разработке 🛠️'], ['in', 'Сообщения никуда не уходят, зато я отвечаю. Проверь 😏']]
+            id: 'bot', ava: '🤖', name: 'Сервер ИТД', login: '', last: 'Напиши что-нибудь — отвечу, если не упаду', time: 'сейчас', unread: 1, online: true, bot: true,
+            msgs: [['in', 'Привет! Я — Сервер ИТД 🤖 Иногда работаю, иногда отдыхаю'], ['in', 'Напиши что угодно — расскажу, как у меня дела. Спойлер: грузятся 😏']]
         };
         const MSG_SUPPORT = {
             id: 'support', ava: '🛟', name: 'Поддержка ИТД X', login: '', last: 'Нашёл баг или есть идея — пиши сюда', time: '', unread: 0, online: true, support: true,
-            msgs: [['in', 'Привет! Это поддержка ИТД X 👋'], ['in', 'Нашёл баг или есть идея — опиши здесь. Личка пока прототип, так что быстрее всего — в тг @NeuroSFW']]
+            msgs: [['in', 'Привет! Это поддержка ИТД X 👋'], ['in', 'Нашёл баг или есть идея — опиши здесь, ответ придёт в этот чат']]
         };
         let supportTicket = 0;
         let MSG_DIALOGS = [MSG_BOT, MSG_SUPPORT];
@@ -6327,7 +6332,12 @@
                 feed.scrollTop = feed.scrollHeight;
                 return b;
             }
-            function openChat(d) {
+            let chatBackPending = false;
+            function openChat(d, fromHistory) {
+                if (fromHistory !== true && !chatBackPending && root.classList.contains('vp-open')) {
+                    const st = Object.assign({}, history.state, { vpChat: d.id });
+                    history[overlayAt('vpChat') ? 'replaceState' : 'pushState'](st, '', location.href);
+                }
                 current = d;
                 d.unread = 0;
                 $('.vp-msgs-chead .vp-msgs-ava').innerHTML = avaHtml(d.ava);
@@ -6340,7 +6350,7 @@
                 $('.vp-msgs-who small').textContent = d.bot ? 'бот · всегда в сети' : d.support ? 'поддержка · на связи' : d.supUid ? 'обращение в поддержку'
                     : '@' + d.login + ' · ' + (d.online ? 'в сети' : d.lastSeen && seenAgo(d.lastSeen) ? 'был(а) в сети ' + seenAgo(d.lastSeen) : 'с ИТД X');
                 if (d.login || d.support || d.supUid) { home.hidden = true; chat.hidden = false; input.value = ''; send.disabled = true; msgCount(); msgOpenPerson(d); return; }
-                feed.innerHTML = '<div class="vp-msgs-note">🧪 Прототип: сообщения пока никуда не отправляются и не сохраняются</div>'
+                feed.innerHTML = '<div class="vp-msgs-note">🤖 Бот-шутник: сообщения ему никуда не уходят и не сохраняются</div>'
                     + (d.msgs.length ? '<div class="vp-msgs-note">Сегодня</div>' : `<div class="vp-msgs-note">Это начало переписки с ${esc(d.name)}</div>`);
                 d.msgs.forEach(([dir, text]) => bubble(dir, text, dir === 'out' ? now() + ' ✓✓' : now()));
                 home.hidden = true; chat.hidden = false;
@@ -6400,13 +6410,14 @@
                 const list = msgThread(msgTarget(current));
                 if (list.length !== current.shown && !input.value) msgOpenPerson(current);
             }, 20000);
-            root.openDialog = id => {
+            root.openDialog = (id, fromHistory) => {
                 msgFillDialogs();
                 const d = MSG_DIALOGS.find(x => x.id === id) || (id.startsWith('u:') && msgPeople.get(id.slice(2)));
-                if (d) openChat(d);
+                if (d) openChat(d, fromHistory);
             };
             root.currentTarget = () => current && !current.bot ? msgTarget(current) : null;
-            function closeChat() {
+            function closeChat(fromHistory) {
+                if (fromHistory !== true && current && overlayAt('vpChat')) { chatBackPending = true; history.back(); }
                 clearTimeout(botTimer);
                 if (current && msgNet.me) msgSync().then(() => { msgFillDialogs(); msgBadge(); if (!current) renderList(); }).catch(() => { });
                 current = null;
@@ -6565,11 +6576,24 @@
                 placeSidebar(); placeRail();
                 if (!galOpen) galHideFeed(false);
                 markActiveNav(); moveNavBlob();
-                if (!fromHistory && overlayAt('vpMsgs')) history.back();
+                if (!fromHistory) {
+                    if (overlayAt('vpChat')) history.go(-2);
+                    else if (overlayAt('vpMsgs')) history.back();
+                }
             }
             addEventListener('popstate', () => {
                 const open = root.classList.contains('vp-open');
-                if (overlayAt('vpMsgs')) { if (!open) root.open(true); }
+                if (chatBackPending) {
+                    chatBackPending = false;
+                    if (current && overlayAt('vpMsgs') && !overlayAt('vpChat')) history.pushState(Object.assign({}, history.state, { vpChat: current.id }), '', location.href);
+                    return;
+                }
+                if (overlayAt('vpMsgs')) {
+                    if (!open) root.open(true);
+                    const cid = history.state && history.state.vpChat;
+                    if (!cid && current) closeChat(true);
+                    else if (cid && (!current || current.id !== cid)) root.openDialog(cid, true);
+                }
                 else if (open) close(true);
             });
             document.addEventListener('click', e => {
@@ -9577,18 +9601,20 @@
             if (!statsNow) return;
             const span = statsPeriod === 'month' ? 30 * DAY_MS : DAY_MS;
             const hist = statsHistory();
-            const base = [...hist].reverse().find(h => Date.now() - h.at >= span) || hist[0] || statsNow;
-            const short = Date.now() - base.at < span * 0.9;
-            railSince.textContent = short && base.at ? 'с ' + new Date(base.at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
+            const now = Date.now();
+            const pickBase = list => {
+                const old = list.filter(h => now - h.at >= 3600e3);
+                if (!old.length) return list[0] || null;
+                return old.reduce((b, h) => Math.abs(now - h.at - span) < Math.abs(now - b.at - span) ? h : b);
+            };
+            const base = pickBase(hist) || statsNow;
+            const off = base.at && Math.abs(now - base.at - span) > span * 0.1;
+            railSince.textContent = off ? 'с ' + new Date(base.at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
                 + ', ' + new Date(base.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
             const rows = [['followers', 'подписчиков'], ['following', 'подписок'], ['posts', 'постов'], ['likes', 'лайков']].filter(([k]) => typeof statsNow[k] === 'number');
             if (!rows.length) { railStats.innerHTML = '<div class="vp-menu-note">Сайт не отдал числа</div>'; return; }
             railStats.innerHTML = '';
-            const baseFor = k => {
-                if (typeof base[k] === 'number') return base;
-                const hk = hist.filter(h => typeof h[k] === 'number');
-                return [...hk].reverse().find(h => Date.now() - h.at >= span) || hk[0] || null;
-            };
+            const baseFor = k => typeof base[k] === 'number' ? base : pickBase(hist.filter(h => typeof h[k] === 'number'));
             rows.forEach(([k, label]) => {
                 const b = baseFor(k);
                 const diff = b ? statsNow[k] - b[k] : 0;

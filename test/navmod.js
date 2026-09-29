@@ -1,5 +1,6 @@
-// «Назад» закрывает окна мода «Игры» и «Что нового» (3.3.7.3), страница остаётся та же; крестик — тоже
+// «Назад» закрывает окна мода «Игры» и «Что нового» (3.3.8), страница остаётся та же; крестик — тоже
 // убирает запись из истории (второе «назад» уводит на прошлую страницу, а не открывает окно).
+// «Сообщения» (3.3.8): профиль → Сообщения → чат → «назад» — список диалогов → «назад» — профиль.
 // Запуск:  node test/navmod.js снимок-ленты.html
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -38,7 +39,10 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     await p.waitForTimeout(2500);
     return p;
   };
-  const st = p => p.evaluate(() => ({ path: location.pathname, games: !!document.querySelector('.vp-games'), news: !!document.querySelector('.vp-news-back') }));
+  const st = p => p.evaluate(() => ({ path: location.pathname, games: !!document.querySelector('.vp-games'), news: !!document.querySelector('.vp-news-back'),
+    msgs: !!document.querySelector('.vp-msgs.vp-open'), chat: !!document.querySelector('.vp-msgs.vp-open .vp-msgs-chat:not([hidden])') }));
+  const back = async p => { await p.goBack({ waitUntil: 'commit' }).catch(() => { }); await p.waitForTimeout(500); return st(p); };
+  const fwd = async p => { await p.goForward({ waitUntil: 'commit' }).catch(() => { }); await p.waitForTimeout(500); return st(p); };
   const openNews = p => p.evaluate(() => { const c = document.querySelector('.vp-version-chip'); if (c) c.click(); return !!c; });
 
   let p = await fresh();
@@ -78,6 +82,38 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     check(s.path === '/@NeuroSFW' && !s.news, `после Esc «назад» — сразу прошлая страница ${JSON.stringify(s)}`);
   }
   check(!p.errors.length, 'ошибок нет' + (p.errors.length ? ': ' + p.errors.join(' | ') : ''));
+  await p.close();
+
+  console.log('— Сообщения: профиль → Сообщения → чат');
+  p = await fresh();
+  await p.evaluate(() => history.pushState({}, '', '/@NeuroSFW'));
+  await p.$eval('nav a[href="#"]', a => a.click()); await p.waitForTimeout(600);
+  await p.evaluate(() => document.querySelector('.vp-msgs-row').click()); await p.waitForTimeout(500);
+  s = await st(p);
+  check(s.msgs && s.chat, `открыт чат ${JSON.stringify(s)}`);
+  s = await back(p);
+  check(s.msgs && !s.chat && s.path === '/@NeuroSFW', `«назад» из чата — список диалогов ${JSON.stringify(s)}`);
+  s = await fwd(p);
+  check(s.msgs && s.chat, `«вперёд» — снова тот же чат ${JSON.stringify(s)}`);
+  s = await back(p);
+  s = await back(p);
+  check(!s.msgs && s.path === '/@NeuroSFW', `ещё «назад» — профиль, сообщения закрыты ${JSON.stringify(s)}`);
+  s = await back(p);
+  check(s.path === '/' && !s.msgs, `ещё «назад» — страница до профиля ${JSON.stringify(s)}`);
+  check(!p.errors.length, 'ошибок нет' + (p.errors.length ? ': ' + p.errors.join(' | ') : ''));
+  await p.close();
+
+  console.log('— Сообщения: чат → Esc → «назад»');
+  p = await fresh();
+  await p.$eval('nav a[href="#"]', a => a.click()); await p.waitForTimeout(600);
+  await p.evaluate(() => document.querySelector('.vp-msgs-row').click()); await p.waitForTimeout(500);
+  await p.keyboard.press('Escape'); await p.waitForTimeout(500);
+  s = await st(p);
+  check(s.msgs && !s.chat, `Esc — список диалогов ${JSON.stringify(s)}`);
+  s = await back(p);
+  check(!s.msgs && s.path === '/', `«назад» — сообщения закрыты, без лишнего нажатия ${JSON.stringify(s)}`);
+  s = await back(p);
+  check(s.path === '/@NeuroSFW', 'ещё «назад» — прошлая страница');
   await p.close();
 
   await b.close();
