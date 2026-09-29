@@ -3,6 +3,9 @@ name: Update userscript in release
 on:
   release:
     types: [published, edited]
+  push:
+    branches: [main]
+    paths: [ITD-Visual-Pack.user.js]
 
 permissions:
   contents: write
@@ -20,7 +23,8 @@ jobs:
       - name: Upload script to release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name || 'ITD-X' }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
+          gh release upload "$TAG" \
             "ITD-Visual-Pack.user.js" \
             --clobber
