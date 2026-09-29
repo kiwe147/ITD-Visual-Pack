@@ -1,5 +1,6 @@
 // Сколько запросов к API делает мод сверх сайта: сайт сам берёт токен и «кто я» — мод должен
-// подхватить их, служебный пост прочитать один раз, клуб собрать без запроса профиля на каждого.
+// подхватить их, каждый служебный пост (галочки, игры) прочитать один раз — и стиль (ITDXL1) публикуется без
+// повторного чтения галочек, клуб собрать без запроса профиля на каждого.
 // Запуск:  node test/requests.js снимок.html [файл скрипта]
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -13,7 +14,11 @@ const salt = src.match(/SECRET_SALT\s*=\s*['"]([^'"]+)['"]/)[1];
 const hash = s => { let h = 0; for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h = h & h; } return Math.abs(h).toString(36); };
 const code = u => hash(u + salt).substring(0, 8).padEnd(8, '0') + '1';
 const MEMBERS = ['NeuroSFW', ...Array.from({ length: 30 }, (_, i) => 'member' + i)];
-const comments = MEMBERS.map((u, i) => ({ id: 'c' + i, content: code(u), author: { id: 'u' + i, username: u, displayName: u + ' ник', avatar: '🦊' } }));
+// с 3.3.4 в клубе только подтверждённые: владелец подтверждает всех меткой ITDX-V (id — uuid, владелец — OWNER_ID)
+const OWNER = '5e064703-104d-4794-bc28-9ed6f5847cca';
+const uid = i => i ? `00000000-0000-4000-8000-${String(i).padStart(12, '0')}` : OWNER;
+const comments = MEMBERS.map((u, i) => ({ id: 'c' + i, content: code(u), author: { id: uid(i), username: u, displayName: u + ' ник', avatar: '🦊' } }));
+comments.push({ id: 'v', content: 'ITDX-V ' + MEMBERS.map((u, i) => uid(i)).join(' '), author: { id: OWNER, username: 'NeuroSFW' } });
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const p = await b.newPage({ viewport: { width: 1280, height: 860 } });
@@ -25,8 +30,8 @@ const comments = MEMBERS.map((u, i) => ({ id: 'c' + i, content: code(u), author:
     if (u === URL0) return r.fulfill({ contentType: 'text/html; charset=utf-8', body: snap });
     if (['image', 'stylesheet', 'font'].includes(t)) return r.continue();
     if (u.includes('/auth/refresh')) { count('refresh'); return r.fulfill({ contentType: 'application/json', body: '{"accessToken":"t"}' }); }
-    if (/\/api\/users\/me$/.test(u)) { count('me'); return r.fulfill({ contentType: 'application/json', body: '{"username":"NeuroSFW","displayName":"#NeuroSFW"}' }); }
-    if (/\/comments\?limit=100/.test(u)) { count('служебный пост'); return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { comments } }) }); }
+    if (/\/api\/users\/me$/.test(u)) { count('me'); return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ username: 'NeuroSFW', displayName: '#NeuroSFW', id: OWNER }) }); }
+    if (/\/comments\?limit=100/.test(u)) { const id = (u.match(/posts\/([0-9a-f-]{36})/) || [])[1] || '?'; count('служебный пост ' + ({ 'a0d6625a-b3ec-44c4-98da-48422af101d5': 'галочки', 'd5f8b7c0-b97d-40cd-bdd4-3c07b3ea0611': 'игры', 'a53b53e0-9950-4f62-83f4-91e5985ef6c5': 'личка' }[id] || id)); return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { comments } }) }); }
     if (/\/api\/users\/[\w.]+$/.test(u)) { count(/\/NeuroSFW$/.test(u) ? 'свой профиль (статистика)' : 'профиль участника: ' + u.split('/').pop()); return r.fulfill({ contentType: 'application/json', body: '{"username":"x"}' }); }
     if (u.includes('/api/')) count('прочее API: ' + new URL(u).pathname);
     return r.fulfill({ status: 404, body: '' });
@@ -51,7 +56,7 @@ const comments = MEMBERS.map((u, i) => ({ id: 'c' + i, content: code(u), author:
   await b.close();
   console.log('запросы (вместе с двумя сайта):', JSON.stringify(hits));
   console.log(`клуб: ${club} строк, ${names.join(' | ')}`);
-  const ok = hits.refresh === 1 && hits.me === 1 && hits['служебный пост'] === 1 && !Object.keys(hits).some(k => k.startsWith('профиль участника')) && (hits['свой профиль (статистика)'] || 0) <= 1 && (hits['свой профиль (статистика)'] || 0) <= 1 && club === MEMBERS.length;
+  const ok = hits.refresh === 1 && hits.me === 1 && Object.keys(hits).filter(k => k.startsWith('служебный пост')).every(k => hits[k] === 1) && !Object.keys(hits).some(k => k.startsWith('профиль участника')) && (hits['свой профиль (статистика)'] || 0) <= 1 && (hits['свой профиль (статистика)'] || 0) <= 1 && club === MEMBERS.length;
   console.log(ok ? 'ок: мод не повторяет запросы сайта, клуб — без запросов профилей' : 'ОШИБКА: лишние запросы');
   process.exit(ok ? 0 : 1);
 })();
