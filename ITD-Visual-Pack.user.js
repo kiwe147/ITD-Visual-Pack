@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.13.1
+// @version      3.3.13.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -7902,7 +7902,7 @@
     `;
         document.head.appendChild(styleBlurPosts);
 
-        onDom(function postBlur() { if (postBlurEnabled) addBlurBackground(); });
+        onDom(function postBlur() { document.querySelectorAll(".itd-blur-active").forEach(dropBlur); });
 
         function gifFile(file) {
             if (!(file instanceof File) || !file.type.startsWith('image/') || file.type === 'image/gif') return file;
