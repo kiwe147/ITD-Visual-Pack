@@ -73,6 +73,33 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   await p.waitForTimeout(300);
   st = await p.$eval('.vp-gal-tile video', v => ({ muted: v.muted }));
   check(st.muted, 'галерея: увёл — снова без звука');
+
+  // громкость галереи (3.3.10.5): кнопка справа от вкладок, ползунок при наведении
+  const vb = await p.$eval('.vp-gal-vol-b', e => { const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width }; }).catch(() => null);
+  check(vb && vb.w === 45, `галерея: кнопка громкости есть (${JSON.stringify(vb)})`);
+  await p.mouse.move(vb.x, vb.y, { steps: 3 }); await p.waitForTimeout(300);
+  const pop = await p.$eval('.vp-gal-vol-p', e => { const r = e.getBoundingClientRect(), hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { vis: getComputedStyle(e).visibility, op: +getComputedStyle(e).opacity, inWin: r.left >= 0 && r.right <= innerWidth, top: !!hit && e.contains(hit), label: e.querySelector('span').textContent }; });
+  check(pop.vis === 'visible' && pop.op === 1 && pop.inWin && pop.top && pop.label === '100%', `наведение — ползунок виден, поверх всего, 100% (${JSON.stringify(pop)})`);
+  await p.screenshot({ path: path.join(__dirname, 'out', 'galvol.png'), clip: { x: Math.max(0, vb.x - 260), y: Math.max(0, vb.y - 40), width: 320, height: 130 } });
+  await p.$eval('.vp-gal-vol-p input', r => { r.value = 30; r.dispatchEvent(new Event('input', { bubbles: true })); });
+  const saved = await p.evaluate(() => GM_getValue('galVol'));
+  check(saved === 0.3, `ползунок на 30% — сохранилось ${saved}`);
+  await p.mouse.move(t.x, t.y, { steps: 4 }); await p.waitForTimeout(300);
+  st = await p.$eval('.vp-gal-tile video', v => ({ muted: v.muted, vol: v.volume }));
+  check(!st.muted && Math.abs(st.vol - .3) < .01, `навёл на видео — звук на 30% (${JSON.stringify(st)})`);
+  await p.mouse.move(vb.x, vb.y, { steps: 3 }); await p.waitForTimeout(200);
+  await p.mouse.click(vb.x, vb.y); await p.waitForTimeout(200);
+  const off = await p.evaluate(() => ({ v: GM_getValue('galVol'), label: document.querySelector('.vp-gal-vol-p span').textContent, cross: document.querySelectorAll('.vp-gal-vol-b svg path').length }));
+  await p.mouse.move(t.x, t.y, { steps: 4 }); await p.waitForTimeout(300);
+  st = await p.$eval('.vp-gal-tile video', v => ({ muted: v.muted }));
+  check(off.v === 0 && off.label === '0%' && st.muted, `щелчок по кнопке — без звука, наведение звук не включает (${JSON.stringify(off)}, ${JSON.stringify(st)})`);
+  await p.mouse.move(vb.x, vb.y, { steps: 3 }); await p.waitForTimeout(200);
+  await p.mouse.click(vb.x, vb.y); await p.waitForTimeout(200);
+  check(await p.evaluate(() => GM_getValue('galVol')) === 0.3, 'второй щелчок — вернулось прежние 30%');
+  await p.mouse.wheel(0, -100); await p.waitForTimeout(200);
+  check(await p.evaluate(() => GM_getValue('galVol')) === 0.35, 'колёсико вверх над кнопкой — громче на 5%');
+  const scrolled = await p.$eval('.vp-gal-body', b => b.scrollTop);
+  check(scrolled === 0, `колёсико над кнопкой не листает галерею (${scrolled})`);
   check(!errors.length, 'ошибок нет' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await b.close();
   console.log(fails.length ? `\nНе прошло: ${fails.length}` : '\nВсё прошло');
