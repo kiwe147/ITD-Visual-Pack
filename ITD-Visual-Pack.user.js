@@ -3787,6 +3787,8 @@
 
         const CHANGELOG = [
             ['3.3.10 – 3.3.10.2', '29 сентября 2026', [
+                'Сообщения: правая кнопка (на телефоне — долгое нажатие) по сообщению открывает меню — реакции, копировать текст, открыть картинку; реакции видны обоим; ✓ — отправлено, ✓✓ — прочитано',
+                'Клуб ИТД X: свечение ников больше не обрезается резко у краёв списка',
                 'Сообщения: альбомы — до 10 картинок в одном сообщении, сеткой как в Телеграме; в просмотре листаются стрелками, клавишами ← → и свайпом; список диалогов обновляется сразу, как пришло новое',
                 'Клуб ИТД X в боковой панели: ники и аватарки — в стиле каждого, твоя строка — в твоём',
                 'Стили других: ники и аватарки людей с ИТД X — в их стиле и свечении, а на их профиле — их фон (свой фон-картинку видно тоже, у видео — кадр). Выключается в настройках «Стили других»',
@@ -5920,6 +5922,7 @@
             try {
                 const pt = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: rec.slice(0, 12) }, key, rec.slice(12)));
                 const out = { ts: ((pt[0] << 24) >>> 0) + (pt[1] << 16) + (pt[2] << 8) + pt[3], sup: !!(pt[4] & 1) };
+                if (pt[4] & 8) { out.svc = pt.slice(5); out.text = ''; return out; }
                 if (pt[4] & 2 && pt.length >= 22) {
                     const imgs = [{ ext: pt[5], id: msgBytesUuid(pt.slice(6, 22)) }];
                     let o = 22;
@@ -6009,6 +6012,26 @@
                 }
             }
             conv.forEach(list => list.sort((x, y) => x.ts - y.ts));
+            const reacts = new Map(), reads = new Map();
+            conv.forEach((list, uid) => {
+                const keep = [];
+                for (const m of list) {
+                    if (!m.svc) { keep.push(m); continue; }
+                    const who = m.dir === 'out' ? 'me' : 'them', k = m.svc[0];
+                    if (k === 1 && m.svc.length >= 6) {
+                        const mine = !!m.svc[5], dir = m.dir === 'out' ? (mine ? 'out' : 'in') : (mine ? 'in' : 'out');
+                        const key = reactKey(uid, dir, u32(m.svc, 1)), e = reacts.get(key) || {};
+                        if (!e[who] || e[who].ts <= m.ts) e[who] = { ts: m.ts, emoji: td.decode(m.svc.slice(6)) };
+                        reacts.set(key, e);
+                    } else if (k === 2 && m.svc.length >= 5) {
+                        const r = reads.get(uid) || { me: 0, them: 0 };
+                        r[who] = Math.max(r[who], u32(m.svc, 1));
+                        reads.set(uid, r);
+                    }
+                }
+                if (keep.length) conv.set(uid, keep); else conv.delete(uid);
+            });
+            msgNet.reacts = reacts; msgNet.reads = reads;
             msgNet.conv = conv;
         }
         async function msgPrepImage(file) {
@@ -6034,7 +6057,15 @@
             if (!m || ext < 0) throw new Error('сервер вернул незнакомую ссылку');
             return { ext, id: m[1].toLowerCase() };
         }
-        async function msgSend(uid, text, sup, img) {
+        const be32 = n => new Uint8Array([n >>> 24, (n >> 16) & 255, (n >> 8) & 255, n & 255]);
+        const u32 = (b, o) => ((b[o] << 24) >>> 0) + (b[o + 1] << 16) + (b[o + 2] << 8) + b[o + 3];
+        const reactKey = (uid, dir, ts) => uid + '|' + dir + '|' + ts;
+        const MSG_REACTS = ['❤️', '👍', '😂', '😮', '😢', '🔥', '👎'];
+        function msgReact(uid, m, emoji) {
+            return msgSend(uid, '', false, null, cat(new Uint8Array([1]), be32(m.ts), new Uint8Array([m.dir === 'out' ? 1 : 0]), te.encode(emoji || '')));
+        }
+        function msgSendRead(uid, upTo) { return msgSend(uid, '', false, null, cat(new Uint8Array([2]), be32(upTo))); }
+        async function msgSend(uid, text, sup, img, svc) {
             const me = msgNet.me, key = await msgPair(uid);
             if (!me || !key) throw new Error('нет ключа');
             const ts = Math.floor(Date.now() / 1000), iv = rnd(12);
@@ -6042,8 +6073,9 @@
             const one = x => cat(new Uint8Array([x.ext]), msgUuidBytes(x.id));
             const imgBytes = !imgs.length ? new Uint8Array(0)
                 : imgs.length === 1 ? one(imgs[0]) : cat(one(imgs[0]), new Uint8Array([imgs.length - 1]), ...imgs.slice(1).map(one));
-            const pt = cat(new Uint8Array([ts >>> 24, (ts >> 16) & 255, (ts >> 8) & 255, ts & 255, (sup ? 1 : 0) | (imgs.length ? 2 : 0) | (imgs.length > 1 ? 4 : 0)]),
-                imgBytes, te.encode(text.slice(0, MSG_TEXT_MAX)));
+            const pt = svc ? cat(be32(ts), new Uint8Array([1 | 8]), svc)
+                : cat(new Uint8Array([ts >>> 24, (ts >> 16) & 255, (ts >> 8) & 255, ts & 255, (sup ? 1 : 0) | (imgs.length ? 2 : 0) | (imgs.length > 1 ? 4 : 0)]),
+                    imgBytes, te.encode(text.slice(0, MSG_TEXT_MAX)));
             const rec = cat(iv, new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, pt)));
             await msgSync();
             const write = async mode => {
@@ -6507,6 +6539,17 @@
         .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-half { grid-column: span 3; aspect-ratio: 3 / 2; }
         .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-wide3 { grid-column: span 6; }
         .vp-msgs-album .vp-msgs-img { width: 100%; height: 100%; max-width: none; max-height: none; min-width: 0; min-height: 0; object-fit: cover; border-radius: 0; }
+        .vp-msgs-reacts { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 0; }
+        .vp-msgs-reacts button { border: 0; border-radius: 9999px; padding: 2px 9px; font-size: 13px; line-height: 20px; cursor: pointer; color: inherit;
+            background: rgba(127, 127, 127, .22); }
+        .vp-msgs-reacts button.vp-mine-r { background: color-mix(in srgb, var(--vp-accent, #0080ff) 24%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 70%, transparent); }
+        .vp-msgs-menu { position: fixed; z-index: 2147483600; min-width: 210px; padding: 6px; border-radius: 16px; background: var(--block-bg, #1c1c1c);
+            color: var(--text-primary, #fff); box-shadow: 0 12px 40px rgba(0, 0, 0, .45), 0 0 0 1px var(--border-color, rgba(255, 255, 255, .08)); animation: vp-emoji-in .12s ease-out both; }
+        .vp-msgs-menu-r { display: flex; gap: 2px; padding: 2px 2px 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, .08)); }
+        .vp-msgs-menu-r button { width: 36px; height: 36px; border: 0; padding: 0; border-radius: 50%; background: transparent; font-size: 21px; cursor: pointer; transition: transform .1s; }
+        .vp-msgs-menu-r button:hover { transform: scale(1.2); background: rgba(127, 127, 127, .15); }
+        .vp-msgs-menu-i { display: block; width: 100%; text-align: left; border: 0; background: transparent; color: inherit; font: inherit; font-size: 14px; padding: 9px 12px; border-radius: 10px; cursor: pointer; }
+        .vp-msgs-menu-i:hover { background: rgba(127, 127, 127, .15); }
         .vp-msgs-lb-n { color: rgba(255, 255, 255, .8); font-size: 13px; font-weight: 600; margin-left: auto; flex-shrink: 0; }
         .vp-msgs-lb-n:empty { display: none; }
         .vp-msgs-lb-n:not(:empty) + a { margin-left: 8px; }
@@ -6686,10 +6729,21 @@
                 if (!t.uid) { note(t.missing); return; }
                 const list = msgThread(t);
                 if (!list.length) note(d.support ? 'Опиши проблему или идею — ответ придёт сюда' : `Это начало переписки с ${d.name}`);
-                list.forEach(m => bubble(m.dir, m.text, msgTime(m.ts) + (m.dir === 'out' ? ' ✓' : ''), (m.imgs || (m.img ? [m.img] : [])).map(msgImgUrl)));
-                d.shown = list.length;
+                const rd = (msgNet.reads && msgNet.reads.get(t.uid)) || { me: 0, them: 0 };
+                list.forEach(m => {
+                    const b = bubble(m.dir, m.text, msgTime(m.ts) + (m.dir === 'out' ? (rd.them >= m.ts ? ' ✓✓' : ' ✓') : ''), (m.imgs || (m.img ? [m.img] : [])).map(msgImgUrl));
+                    b._m = m; b.dataset.ts = m.ts; b.dataset.dir = m.dir;
+                    paintReacts(b, t.uid);
+                });
+                d.shown = list.length; d.sig = chatSig(t.uid);
                 input.disabled = false; input.focus();
                 msgMarkSeen(t); d.unread = 0; msgBadge();
+                const lastIn = [...list].reverse().find(m => m.dir === 'in');
+                if (lastIn && lastIn.ts > rd.me) {
+                    const r = msgNet.reads.get(t.uid) || { me: 0, them: 0 };
+                    r.me = lastIn.ts; msgNet.reads.set(t.uid, r);
+                    msgSendRead(t.uid, lastIn.ts).catch(e => logErr('прочитано', e));
+                }
             }
             function msgKeyForm(d) {
                 const has = !!msgNet.keys.get(msgMyId());
@@ -6717,8 +6771,8 @@
                 msgFillDialogs();
                 if (!current) return renderList();
                 if (current.bot) return;
-                const list = msgThread(msgTarget(current));
-                if (list.length !== current.shown && !input.value) msgOpenPerson(current);
+                const tt = msgTarget(current), list = msgThread(tt);
+                if ((list.length !== current.shown || chatSig(tt.uid) !== current.sig) && !input.value && !menu) msgOpenPerson(current);
             }, 20000);
             root.refreshList = () => { if (!current) { msgFillDialogs(); renderList(); } };
             root.openDialog = (id, fromHistory) => {
@@ -6730,6 +6784,7 @@
             function closeChat(fromHistory) {
                 clearPending();
                 closeImg(true);
+                closeMenu();
                 if (fromHistory !== true && current && overlayAt('vpChat')) { chatBackPending = true; history.back(); }
                 clearTimeout(botTimer);
                 if (current && msgNet.me) msgSync().then(() => { msgFillDialogs(); msgBadge(); if (!current) renderList(); }).catch(() => { });
@@ -6837,6 +6892,102 @@
                 input.dispatchEvent(new Event('input', { bubbles: true }));
             });
             let lb = null;
+            const chatSig = uid => {
+                let sg = '';
+                if (msgNet.reacts) msgNet.reacts.forEach((v, k) => { if (k.startsWith(uid + '|')) sg += k + (v.me ? v.me.emoji : '') + '/' + (v.them ? v.them.emoji : '') + ';'; });
+                const r = msgNet.reads && msgNet.reads.get(uid);
+                return sg + '|' + (r ? r.them : 0);
+            };
+            function paintReacts(b, uid) {
+                const old = b.querySelector('.vp-msgs-reacts');
+                if (old) old.remove();
+                const m = b._m, e = m && msgNet.reacts && msgNet.reacts.get(reactKey(uid, m.dir, m.ts));
+                if (!e) return;
+                const counts = new Map();
+                for (const who of ['them', 'me']) if (e[who] && e[who].emoji) counts.set(e[who].emoji, (counts.get(e[who].emoji) || 0) + 1);
+                if (!counts.size) return;
+                const box = document.createElement('div');
+                box.className = 'vp-msgs-reacts';
+                counts.forEach((n, em) => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.textContent = em + (n > 1 ? ' ' + n : '');
+                    if (e.me && e.me.emoji === em) btn.classList.add('vp-mine-r');
+                    btn.addEventListener('click', ev => { ev.stopPropagation(); toggleReact(b, em); });
+                    box.appendChild(btn);
+                });
+                b.insertBefore(box, b.lastChild);
+            }
+            function toggleReact(b, emoji) {
+                const m = b._m, t = current && msgTarget(current);
+                if (!m || !t || !t.uid) return;
+                const key = reactKey(t.uid, m.dir, m.ts), e = msgNet.reacts.get(key) || {};
+                const next = e.me && e.me.emoji === emoji ? '' : emoji;
+                e.me = { ts: Math.floor(Date.now() / 1000), emoji: next };
+                msgNet.reacts.set(key, e);
+                const nearEnd = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
+                paintReacts(b, t.uid);
+                if (nearEnd) feed.scrollTop = feed.scrollHeight;
+                current.sig = chatSig(t.uid);
+                msgReact(t.uid, m, next).then(() => { if (current) current.sig = chatSig(t.uid); }).catch(err => logErr('реакция', err));
+            }
+            let menu = null, pressT = 0;
+            function closeMenu() {
+                if (!menu) return;
+                menu.remove(); menu = null;
+                document.removeEventListener('pointerdown', menuOutside, true);
+            }
+            const menuOutside = e => { if (menu && !menu.contains(e.target)) closeMenu(); };
+            function openMenu(b, x, y) {
+                closeMenu();
+                const m = b._m, real = m && current && !current.bot && msgNet.me && msgTarget(current).uid;
+                const text = m ? m.text : (b.querySelector('.vp-msgs-cap') || b.firstChild || {}).textContent || '';
+                const imgs = [...b.querySelectorAll('.vp-msgs-img')].map(i => i.src);
+                menu = document.createElement('div');
+                menu.className = 'vp-msgs-menu';
+                if (real) {
+                    const row = document.createElement('div');
+                    row.className = 'vp-msgs-menu-r';
+                    MSG_REACTS.forEach(em => {
+                        const btn = document.createElement('button');
+                        btn.type = 'button'; btn.textContent = em;
+                        btn.addEventListener('click', () => { closeMenu(); toggleReact(b, em); });
+                        row.appendChild(btn);
+                    });
+                    menu.appendChild(row);
+                }
+                const item = (label, fn) => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button'; btn.className = 'vp-msgs-menu-i'; btn.textContent = label;
+                    btn.addEventListener('click', () => { closeMenu(); fn(); });
+                    menu.appendChild(btn);
+                };
+                if (text) item('📋 Копировать текст', () => { navigator.clipboard && navigator.clipboard.writeText(text).catch(() => { }); });
+                if (imgs.length) item(imgs.length > 1 ? '🖼 Открыть альбом' : '🖼 Открыть картинку', () => openImg(imgs, 0, text));
+                if (!menu.childNodes.length) { menu = null; return; }
+                document.body.appendChild(menu);
+                const w = menu.offsetWidth, h = menu.offsetHeight;
+                menu.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px';
+                menu.style.top = Math.max(8, Math.min(y, innerHeight - h - 8)) + 'px';
+                setTimeout(() => document.addEventListener('pointerdown', menuOutside, true), 0);
+            }
+            const bubbleAt = y => [...feed.querySelectorAll('.vp-msgs-b:not(.vp-msgs-typing)')].find(x => { const r = x.getBoundingClientRect(); return y >= r.top - 3 && y <= r.bottom + 3; });
+            feed.addEventListener('contextmenu', e => {
+                const b = bubbleAt(e.clientY);
+                if (!b) return;
+                e.preventDefault();
+                openMenu(b, e.clientX, e.clientY);
+            });
+            feed.addEventListener('pointerdown', e => {
+                if (e.pointerType === 'mouse') return;
+                const b = bubbleAt(e.clientY), x = e.clientX, y = e.clientY;
+                if (!b) return;
+                clearTimeout(pressT);
+                pressT = setTimeout(() => { pressT = 0; openMenu(b, x, y); }, 480);
+            });
+            ['pointerup', 'pointercancel'].forEach(t => feed.addEventListener(t, () => clearTimeout(pressT)));
+            feed.addEventListener('pointermove', e => { if (pressT && e.pointerType !== 'mouse') clearTimeout(pressT); });
+            feed.addEventListener('scroll', () => closeMenu(), { passive: true });
             let lbKey = null;
             function openImg(list, idx, cap) {
                 if (typeof list === 'string') list = [list];
@@ -6998,7 +7149,7 @@
                 if (!row) Object.assign(under.style, { left: root.style.left, width: root.style.width });
             }
             let openPath = '';
-            function onKey(e) { if (e.key === 'Escape' && root.classList.contains('vp-open')) { e.stopPropagation(); lb ? closeImg() : current ? closeChat() : close(); } }
+            function onKey(e) { if (e.key === 'Escape' && root.classList.contains('vp-open')) { e.stopPropagation(); lb ? closeImg() : menu ? closeMenu() : current ? closeChat() : close(); } }
             function close(fromHistory) {
                 if (!root.classList.contains('vp-open')) return;
                 clearTimeout(botTimer);
@@ -9836,8 +9987,10 @@
         .vp-stat-diff.vp-up { color: #3ddc84; }
         .vp-stat-diff.vp-down { color: #ff5a6a; }
         /* отрицательный отступ строк давал горизонтальную прокрутку — строки теперь в своих границах */
-        .vp-club { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; overflow-x: hidden;
-            scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--text-secondary, #888) 45%, transparent) transparent; }
+        .vp-club { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; overflow-x: hidden; padding: 10px 2px;
+            scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--text-secondary, #888) 45%, transparent) transparent;
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%); }
         .vp-club-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 18px; cursor: pointer; min-width: 0;
             transition: background-color .15s ease; }
         .vp-club-row:hover { background: var(--bg-hover, rgba(255, 255, 255, .08)); }
