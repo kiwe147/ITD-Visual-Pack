@@ -3672,6 +3672,7 @@
         const CHANGELOG = [
             ['3.3.9 – 3.3.9.1', '29 сентября 2026', [
                 'Картинки в сообщениях: перед отправкой — превью с крестиком, можно дописать подпись; картинка показывается целиком, без обрезки; по нажатию — крупно прямо в окне сообщений («назад» и Esc закрывают)',
+                'Сапёр: при наведении подсвечивается квадрат 3х3 вокруг клетки — видно зону цифры. Вкладка лидеров теперь «Топ задротов»',
                 'Сцена ленты плавнее при прокрутке, а на слабых телефонах выключается сама, если не успевает (раньше лента дёргалась, особенно при прокрутке вверх)',
                 'Сообщения: можно отправлять картинки — скрепкой или вставкой из буфера (Ctrl+V), с подписью. Картинка сжимается перед отправкой, ссылка на неё шифруется вместе с сообщением',
                 'Сообщения: сверху — чаты, где было последнее сообщение или куда ты последний раз заходил, как в Телеграме']],
@@ -9909,6 +9910,9 @@
             background: rgba(255, 255, 255, .12); color: #fff; -webkit-tap-highlight-color: transparent; }
         .vp-mine:hover { background: rgba(255, 255, 255, .2); }
         .vp-mine.vp-open { background: rgba(255, 255, 255, .04); cursor: default; }
+        .vp-mine.vp-near { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--vp-accent, #0080ff) 55%, transparent);
+            background-color: color-mix(in srgb, var(--vp-accent, #0080ff) 12%, rgba(255, 255, 255, .08)); }
+        .vp-mine.vp-open.vp-near { background-color: color-mix(in srgb, var(--vp-accent, #0080ff) 10%, rgba(255, 255, 255, .04)); }
         .vp-mine.vp-boom { background: #c0392b; }
         .vp-mine[data-n="1"] { color: #5dade2; } .vp-mine[data-n="2"] { color: #58d68d; } .vp-mine[data-n="3"] { color: #ec7063; }
         .vp-mine[data-n="4"] { color: #af7ac5; } .vp-mine[data-n="5"] { color: #f5b041; } .vp-mine[data-n="6"] { color: #48c9b0; }
@@ -10071,7 +10075,7 @@
                 grid.textContent = '';
                 cells.forEach((c, i) => {
                     const b = document.createElement('button');
-                    b.type = 'button'; b.className = 'vp-mine';
+                    b.type = 'button'; b.className = 'vp-mine'; b.dataset.i = i;
                     c.b = b;
                     let lp = 0, longed = false;
                     b.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') { longed = false; lp = setTimeout(() => { longed = true; flag(i); }, 400); } });
@@ -10134,7 +10138,19 @@
                 c.flag = !c.flag; flags += c.flag ? 1 : -1;
                 paint(c); show();
             }
-            el.querySelector('[data-a="new"]').addEventListener('click', reset);
+            let near = [];
+            const unhot = () => { near.forEach(b => b.classList.remove('vp-near')); near = []; };
+            grid.addEventListener('pointerover', e => {
+                if (e.pointerType !== 'mouse') return;
+                const b = e.target.closest('.vp-mine');
+                if (!b) return;
+                unhot();
+                const i = +b.dataset.i;
+                near = [i, ...nb(i)].map(j => cells[j].b);
+                near.forEach(x => x.classList.add('vp-near'));
+            });
+            grid.addEventListener('pointerleave', unhot);
+            el.querySelector('[data-a="new"]').addEventListener('click', () => { unhot(); reset(); });
             flagBtn.addEventListener('click', () => { flagMode = !flagMode; flagBtn.classList.toggle('vp-on', flagMode); });
             function resize() {
                 const body = gw.el && gw.el.querySelector('.vp-games-body');
@@ -10412,7 +10428,7 @@
             if (gw.el) return showGame(id);
             const el = document.createElement('div');
             el.className = 'vp-games';
-            el.innerHTML = `<div class="vp-games-win" role="dialog" aria-label="Игры"><div class="vp-games-head"><div class="vp-games-tabs">${GAMES.map(g => `<button type="button" class="vp-games-tab" data-g="${g.id}">${g.name}</button>`).join('')}<button type="button" class="vp-games-tab" data-g="lead">🏆 Лидеры</button></div>
+            el.innerHTML = `<div class="vp-games-win" role="dialog" aria-label="Игры"><div class="vp-games-head"><div class="vp-games-tabs">${GAMES.map(g => `<button type="button" class="vp-games-tab" data-g="${g.id}">${g.name}</button>`).join('')}<button type="button" class="vp-games-tab" data-g="lead">🏆 Топ задротов</button></div>
             <span class="vp-games-score"></span><button type="button" class="vp-games-x" aria-label="Закрыть">${svgIcon('<path d="M6 6l12 12M18 6 6 18"/>', 18)}</button></div><div class="vp-games-body"></div></div>`;
             el.addEventListener('click', e => { if (e.target === el) closeGames(); });
             const still = e => {
