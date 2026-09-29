@@ -3673,6 +3673,7 @@
                 'Статистика: у лайков снова виден прирост за день и месяц (раньше стоял 0)',
                 '«Назад» (и кнопка «назад» на телефоне) закрывает окна «Игры» и «Что нового», а не уводит со страницы',
                 'Сообщения: свои сообщения подкрашены цветом стиля и читаются на любом стиле и теме; под полем ввода — сколько символов из 500',
+                'Сообщения: кнопка эмодзи заработала — окно с категориями и «Недавними»',
                 'Несколько аккаунтов на одном устройстве: рекорды игр, статистика, прочитанное в сообщениях и автолайки у каждого аккаунта свои']],
             ['3.3.7 – 3.3.7.3', '29 сентября 2026', [
                 'Галочка: если не подтвердили, через неделю мод сам отправит запрос снова — достаточно просто зайти на сайт',
@@ -6033,6 +6034,120 @@
             pin: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M15 3l6 6-3 1-4 4 .5 4.5-1.5 1.5-4-4-5 5-1-1 5-5-4-4L5.5 9.5 10 10l4-4Z"/></svg>'
         };
 
+        const EMOJI_SETS = [
+            ['😀', 'Смайлы', '😀 😃 😄 😁 😆 😅 🤣 😂 🙂 🙃 🫠 😉 😊 😇 🥰 😍 🤩 😘 😗 😚 😙 🥲 😋 😛 😜 🤪 😝 🤑 🤗 🤭 🫢 🫣 🤫 🤔 🫡 🤐 🤨 😐 😑 😶 🫥 😏 😒 🙄 😬 🤥 😌 😔 😪 🤤 😴 😷 🤒 🤕 🤢 🤮 🤧 🥵 🥶 🥴 😵 🤯 🤠 🥳 🥸 😎 🤓 🧐 😕 🫤 😟 🙁 😮 😯 😲 😳 🥺 🥹 😦 😧 😨 😰 😥 😢 😭 😱 😖 😣 😞 😓 😩 😫 🥱 😤 😡 😠 🤬 😈 👿 💀 ☠️ 💩 🤡 👹 👺 👻 👽 👾 🤖 😺 😸 😹 😻 😼 😽 🙀 😿 😾'],
+            ['👍', 'Жесты и люди', '👋 🤚 🖐️ ✋ 🖖 🫱 🫲 👌 🤌 🤏 ✌️ 🤞 🫰 🤟 🤘 🤙 👈 👉 👆 🖕 👇 ☝️ 🫵 👍 👎 ✊ 👊 🤛 🤜 👏 🙌 🫶 👐 🤲 🤝 🙏 ✍️ 💅 🤳 💪 🦾 🦵 🦶 👂 👃 🧠 🫀 👀 👁️ 👅 👄 🫦 👶 🧒 👦 👧 🧑 👱 👨 🧔 👩 🧓 👴 👵 🙍 🙎 🙅 🙆 💁 🙋 🧏 🙇 🤦 🤷 👮 🕵️ 💂 🥷 👷 🤴 👸 👳 🤵 👰 🤰 👼 🎅 🦸 🦹 🧙 🧚 🧛 🧜 🧝 🧞 🧟 💆 💇 🚶 🧍 🧎 🏃 💃 🕺 👯 🧖 🧗 🤺 🏇 ⛷️ 🏂 🏄 🚣 🏊 🚴 🤸 🤼 🤽 🤾 🤹 🧘 🛀 🛌 👭 👫 👬 💏 💑 👪'],
+            ['🐱', 'Животные и природа', '🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🙈 🙉 🙊 🐒 🐔 🐧 🐦 🐤 🦆 🦅 🦉 🦇 🐺 🐗 🐴 🦄 🐝 🪱 🐛 🦋 🐌 🐞 🐜 🪰 🕷️ 🦂 🐢 🐍 🦎 🦖 🦕 🐙 🦑 🦐 🦞 🦀 🐡 🐠 🐟 🐬 🐳 🐋 🦈 🐊 🐅 🐆 🦓 🦍 🦧 🐘 🦛 🦏 🐪 🐫 🦒 🦘 🐃 🐂 🐄 🐎 🐖 🐏 🐑 🦙 🐐 🦌 🐕 🐩 🐈 🐓 🦃 🦚 🦜 🦢 🦩 🕊️ 🐇 🦝 🦨 🦡 🦫 🦦 🦥 🐁 🐀 🐿️ 🦔 🐾 🐉 🐲 🌵 🎄 🌲 🌳 🌴 🌱 🌿 ☘️ 🍀 🍃 🍂 🍁 🍄 🌾 💐 🌷 🌹 🥀 🌺 🌸 🌼 🌻 🌞 🌝 🌚 🌙 🌎 🪐 ⭐ 🌟 ✨ ⚡ ☄️ 💥 🔥 🌪️ 🌈 ☀️ 🌤️ ⛅ ☁️ 🌧️ ⛈️ 🌩️ ❄️ ☃️ ⛄ 💨 💧 💦 🌊'],
+            ['🍔', 'Еда и напитки', '🍏 🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🫐 🍈 🍒 🍑 🥭 🍍 🥥 🥝 🍅 🍆 🥑 🥦 🥬 🥒 🌶️ 🫑 🌽 🥕 🧄 🧅 🥔 🍠 🥐 🥯 🍞 🥖 🥨 🧀 🥚 🍳 🧈 🥞 🧇 🥓 🥩 🍗 🍖 🌭 🍔 🍟 🍕 🫓 🥪 🥙 🧆 🌮 🌯 🫔 🥗 🥘 🫕 🥫 🍝 🍜 🍲 🍛 🍣 🍱 🥟 🦪 🍤 🍙 🍚 🍘 🍥 🥠 🥮 🍢 🍡 🍧 🍨 🍦 🥧 🧁 🍰 🎂 🍮 🍭 🍬 🍫 🍿 🍩 🍪 🌰 🥜 🍯 🥛 🍼 ☕ 🍵 🧃 🥤 🧋 🍶 🍺 🍻 🥂 🍷 🥃 🍸 🍹 🧉 🍾 🧊 🥄 🍴 🍽️'],
+            ['⚽', 'Занятия', '⚽ 🏀 🏈 ⚾ 🥎 🎾 🏐 🏉 🥏 🎱 🪀 🏓 🏸 🏒 🏑 🥍 🏏 🪃 🥅 ⛳ 🪁 🏹 🎣 🤿 🥊 🥋 🎽 🛹 🛼 🛷 ⛸️ 🥌 🎿 🏋️ 🏆 🥇 🥈 🥉 🏅 🎖️ 🎗️ 🎫 🎟️ 🎪 🎭 🩰 🎨 🎬 🎤 🎧 🎼 🎹 🥁 🪘 🎷 🎺 🪗 🎸 🪕 🎻 🎲 ♟️ 🎯 🎳 🎮 🕹️ 🎰 🧩'],
+            ['🚗', 'Поездки и места', '🚗 🚕 🚙 🚌 🚎 🏎️ 🚓 🚑 🚒 🚐 🛻 🚚 🚛 🚜 🛴 🚲 🛵 🏍️ 🛺 🚨 🚔 🚍 🚘 🚖 🚡 🚠 🚟 🚃 🚋 🚞 🚝 🚄 🚅 🚈 🚂 🚆 🚇 🚊 🚉 ✈️ 🛫 🛬 🛩️ 💺 🛰️ 🚀 🛸 🚁 🛶 ⛵ 🚤 🛥️ 🛳️ ⛴️ 🚢 ⚓ ⛽ 🚧 🚦 🚥 🗺️ 🗿 🗽 🗼 🏰 🏯 🏟️ 🎡 🎢 🎠 ⛲ ⛱️ 🏖️ 🏝️ 🏜️ 🌋 ⛰️ 🏔️ 🗻 🏕️ ⛺ 🏠 🏡 🏘️ 🏚️ 🏗️ 🏭 🏢 🏬 🏣 🏤 🏥 🏦 🏨 🏪 🏫 🏩 💒 🏛️ ⛪ 🕌 🕍 🛕 🕋 ⛩️ 🌅 🌄 🌠 🎇 🎆 🌇 🌆 🏙️ 🌃 🌌 🌉 🌁'],
+            ['💡', 'Предметы', '⌚ 📱 📲 💻 ⌨️ 🖥️ 🖨️ 🖱️ 💽 💾 💿 📀 📼 📷 📸 📹 🎥 📽️ 🎞️ 📞 ☎️ 📟 📠 📺 📻 🎙️ ⏱️ ⏰ 🕰️ ⌛ ⏳ 📡 🔋 🔌 💡 🔦 🕯️ 🧯 💸 💵 💴 💶 💷 🪙 💰 💳 💎 ⚖️ 🧰 🔧 🔨 ⚒️ 🛠️ ⛏️ 🔩 ⚙️ 🧱 ⛓️ 🧲 🔫 💣 🧨 🪓 🔪 🗡️ ⚔️ 🛡️ 🚬 ⚰️ 🔮 📿 🧿 💈 ⚗️ 🔭 🔬 🕳️ 🩹 🩺 💊 💉 🩸 🧬 🦠 🧫 🧪 🌡️ 🧹 🧺 🧻 🚽 🚿 🛁 🧼 🪥 🪒 🧽 🧴 🛎️ 🔑 🗝️ 🚪 🪑 🛋️ 🛏️ 🧸 🪆 🖼️ 🪞 🪟 🛍️ 🛒 🎁 🎈 🎏 🎀 🪄 🪅 🎊 🎉 🎎 🏮 🎐 🧧 ✉️ 📩 📨 📧 💌 📥 📤 📦 🏷️ 📪 📬 📭 📮 📯 📜 📃 📄 📑 🧾 📊 📈 📉 🗒️ 🗓️ 📆 📅 🗑️ 📇 🗃️ 🗳️ 🗄️ 📋 📁 📂 🗂️ 🗞️ 📰 📓 📔 📒 📕 📗 📘 📙 📚 📖 🔖 🧷 🔗 📎 🖇️ 📐 📏 🧮 📌 📍 ✂️ 🖊️ 🖋️ ✒️ 🖌️ 🖍️ 📝 ✏️ 🔍 🔎 🔏 🔐 🔒 🔓'],
+            ['❤️', 'Символы', '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❤️‍🔥 ❤️‍🩹 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 ☮️ ✝️ ☪️ 🕉️ ☸️ ✡️ 🔯 ☯️ ☦️ ♈ ♉ ♊ ♋ ♌ ♍ ♎ ♏ ♐ ♑ ♒ ♓ ⚛️ ☢️ ☣️ 📴 📳 ✴️ 🆚 💮 🅰️ 🅱️ 🆎 🆑 🅾️ 🆘 ❌ ⭕ 🛑 ⛔ 📛 🚫 💯 💢 ♨️ 🔞 📵 🚭 ❗ ❕ ❓ ❔ ‼️ ⁉️ 🔅 🔆 ⚠️ 🚸 🔱 ⚜️ 🔰 ♻️ ✅ 💹 ❇️ ✳️ ❎ 🌐 💠 🌀 💤 🚾 ♿ 🅿️ 🚹 🚺 🚼 ⚧️ 🚻 🎦 📶 🔣 ℹ️ 🔤 🆖 🆗 🆙 🆒 🆕 🆓 🔟 🔢 ▶️ ⏸️ ⏹️ ⏺️ ⏭️ ⏮️ ⏩ ⏪ ◀️ 🔼 🔽 ➡️ ⬅️ ⬆️ ⬇️ ↗️ ↘️ ↙️ ↖️ ↕️ ↔️ ↪️ ↩️ ⤴️ ⤵️ 🔀 🔁 🔂 🔄 🔃 🎵 🎶 ➕ ➖ ➗ ✖️ ♾️ 💲 💱 ™️ ©️ ®️ 〰️ ➰ ➿ 🔚 🔙 🔛 🔝 🔜 ✔️ ☑️ 🔘 🔴 🟠 🟡 🟢 🔵 🟣 ⚫ ⚪ 🟤 🔺 🔻 🔸 🔹 🔶 🔷 🔳 🔲 ▪️ ▫️ ◾ ◽ ◼️ ◻️ 🟥 🟧 🟨 🟩 🟦 🟪 ⬛ ⬜ 🟫 🔈 🔇 🔉 🔊 🔔 🔕 📣 📢 💬 💭 🗯️ ♠️ ♣️ ♥️ ♦️ 🃏 🎴 🀄'],
+            ['🏳️', 'Флаги', '🏳️ 🏴 🏁 🚩 🏳️‍🌈 🏳️‍⚧️ 🏴‍☠️ 🇷🇺 🇺🇦 🇧🇾 🇰🇿 🇺🇸 🇬🇧 🇩🇪 🇫🇷 🇮🇹 🇪🇸 🇵🇱 🇹🇷 🇯🇵 🇰🇷 🇨🇳 🇮🇳 🇧🇷 🇨🇦 🇦🇺 🇦🇲 🇬🇪 🇦🇿 🇺🇿 🇰🇬 🇹🇯 🇲🇩 🇱🇻 🇱🇹 🇪🇪 🇫🇮 🇸🇪 🇳🇴 🇩🇰 🇳🇱 🇧🇪 🇨🇭 🇦🇹 🇨🇿 🇸🇰 🇭🇺 🇷🇴 🇧🇬 🇷🇸 🇬🇷 🇮🇱 🇦🇪 🇪🇬 🇲🇽 🇦🇷 🇹🇭 🇻🇳 🇮🇩']
+        ];
+        const EMOJI_RECENT_MAX = 24;
+        const emojiRecent = () => { const r = GM_getValue(acctKey('vp_emoji_recent'), []); return Array.isArray(r) ? r : []; };
+        function emojiRemember(e) { GM_setValue(acctKey('vp_emoji_recent'), [e, ...emojiRecent().filter(x => x !== e)].slice(0, EMOJI_RECENT_MAX)); }
+        const vpEmojiCss = document.createElement('style');
+        vpEmojiCss.textContent = `
+        .vp-emoji { position: fixed; z-index: 2147483600; width: 280px; height: 380px; display: flex; flex-direction: column; border-radius: 18px; overflow: hidden;
+            background: var(--block-bg, #1c1c1c); color: var(--text-primary, #fff); box-shadow: 0 12px 40px rgba(0, 0, 0, .45), 0 0 0 1px var(--border-color, rgba(255, 255, 255, .08));
+            animation: vp-emoji-in .15s ease-out both; }
+        .vp-emoji.vp-closing { animation: vp-emoji-out .15s ease-in both; }
+        @keyframes vp-emoji-in { from { opacity: 0; transform: scale(.94); } }
+        @keyframes vp-emoji-out { to { opacity: 0; transform: scale(.94); } }
+        .vp-emoji-tabs { display: flex; gap: 2px; padding: 6px 6px 4px; border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, .08)); flex-shrink: 0; }
+        .vp-emoji-tabs button { flex: 1; min-width: 0; height: 30px; border: 0; padding: 0; border-radius: 8px; background: transparent; font-size: 17px; line-height: 1; cursor: pointer;
+            filter: grayscale(1); opacity: .6; transition: opacity .15s, filter .15s, background-color .15s; }
+        .vp-emoji-tabs button:hover, .vp-emoji-tabs button.vp-on { filter: none; opacity: 1; background: var(--block-hover-bg, rgba(255, 255, 255, .06)); }
+        .vp-emoji-body { flex: 1; overflow-y: auto; padding: 0 6px 8px; overscroll-behavior: contain; scrollbar-width: thin; }
+        .vp-emoji-sec b { display: block; position: sticky; top: 0; padding: 8px 4px 4px; font-size: 12px; font-weight: 600; color: var(--text-secondary, #8a8a8a);
+            background-color: var(--block-bg, #1c1c1c); z-index: 1; }
+        .vp-emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); }
+        .vp-emoji-grid button { aspect-ratio: 1; border: 0; padding: 0; border-radius: 8px; background: transparent; font-size: 22px; line-height: 1; cursor: pointer;
+            font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; transition: transform .1s, background-color .1s; }
+        .vp-emoji-grid button:hover { background: var(--block-hover-bg, rgba(255, 255, 255, .08)); transform: scale(1.15); }
+        .vp-emoji-empty { padding: 6px 4px; font-size: 12px; color: var(--text-secondary, #8a8a8a); }`;
+        document.head.appendChild(vpEmojiCss);
+        function attachEmojiPicker(btn, onPick) {
+            let el = null, openT = 0, closeT = 0;
+            const hover = matchMedia('(hover: hover) and (pointer: fine)').matches;
+            const place = () => {
+                const r = btn.getBoundingClientRect(), W = 280, H = 380, gap = 8;
+                const top = innerHeight - r.bottom >= H + gap ? r.bottom + gap : Math.max(gap, r.top - H - gap);
+                const left = innerWidth - r.left >= W || innerWidth - r.left > r.right ? Math.min(r.left, innerWidth - W - gap) : Math.max(gap, r.right - W);
+                el.style.top = top + 'px';
+                el.style.left = Math.max(gap, left) + 'px';
+                el.style.transformOrigin = `${top < r.top ? 'bottom' : 'top'} ${left <= r.left ? 'left' : 'right'}`;
+            };
+            const outside = e => { if (el && !el.contains(e.target) && !btn.contains(e.target)) close(); };
+            const onKey = e => { if (e.key === 'Escape' && el) { e.stopPropagation(); close(); } };
+            function close() {
+                clearTimeout(openT); clearTimeout(closeT);
+                if (!el) return;
+                const old = el;
+                el = null;
+                old.classList.add('vp-closing');
+                setTimeout(() => old.remove(), 150);
+                document.removeEventListener('pointerdown', outside, true);
+                removeEventListener('keydown', onKey, true);
+                removeEventListener('resize', close);
+            }
+            function later() { clearTimeout(closeT); closeT = setTimeout(close, 250); }
+            function build() {
+                el = document.createElement('div');
+                el.className = 'vp-emoji';
+                const recent = emojiRecent();
+                const secs = [['🕘', 'Недавние', recent], ...EMOJI_SETS.map(([i, n, e]) => [i, n, e.split(' ')])];
+                el.innerHTML = `<div class="vp-emoji-tabs">${secs.map(([i, n], k) => `<button type="button" title="${n}" data-k="${k}">${i}</button>`).join('')}</div><div class="vp-emoji-body"></div>`;
+                const body = el.querySelector('.vp-emoji-body');
+                secs.forEach(([, n, list], k) => {
+                    const sec = document.createElement('section');
+                    sec.className = 'vp-emoji-sec';
+                    sec.dataset.k = k;
+                    sec.innerHTML = '<b></b><div class="vp-emoji-grid"></div>';
+                    sec.firstChild.textContent = n;
+                    if (!list.length) sec.lastChild.outerHTML = '<div class="vp-emoji-empty">Здесь появятся эмодзи, которые ты выбирал</div>';
+                    else sec.lastChild.innerHTML = list.map(e => `<button type="button">${e}</button>`).join('');
+                    body.appendChild(sec);
+                });
+                const tabs = [...el.querySelectorAll('.vp-emoji-tabs button')];
+                const mark = () => {
+                    const y = body.scrollTop + 4;
+                    let cur = 0;
+                    body.querySelectorAll('.vp-emoji-sec').forEach(sc => { if (sc.offsetTop <= y) cur = +sc.dataset.k; });
+                    tabs.forEach(t => t.classList.toggle('vp-on', +t.dataset.k === cur));
+                };
+                body.addEventListener('scroll', mark, { passive: true });
+                el.querySelector('.vp-emoji-tabs').addEventListener('click', e => {
+                    const t = e.target.closest('button');
+                    if (!t) return;
+                    const sc = body.querySelector(`.vp-emoji-sec[data-k="${t.dataset.k}"]`);
+                    if (sc) body.scrollTo({ top: sc.offsetTop, behavior: 'smooth' });
+                });
+                body.addEventListener('click', e => {
+                    const b = e.target.closest('.vp-emoji-grid button');
+                    if (!b) return;
+                    const em = b.textContent;
+                    if (onPick(em) !== false) emojiRemember(em);
+                });
+                el.addEventListener('mousedown', e => e.preventDefault());
+                if (hover) { el.addEventListener('mouseenter', () => clearTimeout(closeT)); el.addEventListener('mouseleave', later); }
+                document.body.appendChild(el);
+                place();
+                if (!recent.length) body.scrollTop = body.querySelector('.vp-emoji-sec[data-k="1"]').offsetTop;
+                mark();
+                document.addEventListener('pointerdown', outside, true);
+                addEventListener('keydown', onKey, true);
+                addEventListener('resize', close);
+            }
+            btn.addEventListener('click', e => { e.preventDefault(); if (el) close(); else build(); });
+            if (hover) {
+                btn.addEventListener('mouseenter', () => { clearTimeout(closeT); if (!el) { clearTimeout(openT); openT = setTimeout(() => { if (!el) build(); }, 100); } });
+                btn.addEventListener('mouseleave', () => { clearTimeout(openT); if (el) later(); });
+            }
+            return { close };
+        }
         function buildMessagesOverlay() {
             const style = document.createElement('style');
             style.textContent = `
@@ -6163,7 +6278,7 @@
                 <div class="vp-msgs-feed" aria-live="polite"></div>
                 <form class="vp-msgs-bar"><div class="vp-msgs-field"><button type="button" class="vp-msgs-ghost" title="Вложение (пока не работает)">${MSG_ICON.clip}</button>
                     <input type="text" placeholder="Сообщение" enterkeyhint="send" autocomplete="off"><span class="vp-msgs-count" hidden></span>
-                    <button type="button" class="vp-msgs-ghost" title="Эмодзи (пока не работает)">${MSG_ICON.smile}</button></div>
+                    <button type="button" class="vp-msgs-ghost vp-msgs-emoji" title="Эмодзи">${MSG_ICON.smile}</button></div>
                     <button type="submit" class="vp-msgs-send" title="Отправить" disabled>${MSG_ICON.send}</button></form>
             </section>`;
             document.body.appendChild(root);
@@ -6389,6 +6504,14 @@
             search.addEventListener('input', renderList);
             $('.vp-msgs-back').onclick = closeChat;
             input.addEventListener('input', () => { send.disabled = !input.value.trim(); msgCount(); });
+            attachEmojiPicker($('.vp-msgs-emoji'), em => {
+                if (input.disabled) return false;
+                const max = input.maxLength > 0 ? input.maxLength : MSG_TEXT_MAX;
+                if (input.value.length + em.length > max) return false;
+                const a = input.selectionStart ?? input.value.length, z = input.selectionEnd ?? a;
+                input.setRangeText(em, a, z, 'end');
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            });
             $('.vp-msgs-bar').addEventListener('submit', e => {
                 e.preventDefault();
                 const text = input.value.trim();
