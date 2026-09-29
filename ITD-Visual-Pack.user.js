@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.10
+// @version      3.3.10.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3786,7 +3786,8 @@
         }
 
         const CHANGELOG = [
-            ['3.3.10', '29 сентября 2026', [
+            ['3.3.10 – 3.3.10.1', '29 сентября 2026', [
+                'Клуб ИТД X в боковой панели: ники и аватарки — в стиле каждого, твоя строка — в твоём',
                 'Стили других: ники и аватарки людей с ИТД X — в их стиле и свечении, а на их профиле — их фон (свой фон-картинку видно тоже, у видео — кадр). Выключается в настройках «Стили других»',
                 'Сапёр: щелчок колёсиком мыши по клетке оставляет рамку 3×3 — видно зону цифры; кнопка «❓ Как играть» — правила прямо в окне игры',
                 'Сообщения: над картинками больше не вылезает панель Яндекс Браузера; в просмотре — «Открыть оригинал»']],
@@ -10003,11 +10004,22 @@
             history.pushState({}, '', '/@' + login);
             dispatchEvent(new PopStateEvent('popstate'));
         }
+        function paintClub() {
+            railClub.querySelectorAll('.vp-club-row').forEach(row => {
+                const n = row.dataset.login, name = row.querySelector('.vp-club-name'), av = row.querySelector('.vp-club-ava');
+                if (n === myUsername) { name.classList.add('vp-my-nick', 'vp-my-nick-box'); av.classList.add('my-avatar-glow'); return; }
+                const look = (verifiedInfo(n) || {}).look;
+                const put = (el, attr, val) => { if (val) { if (el.getAttribute(attr) !== val) el.setAttribute(attr, val); } else el.removeAttribute(attr); };
+                put(name, 'data-vp-look', look && look.n);
+                put(name, 'data-vp-look-glow', look && look.g[0] === '1' && look.n);
+                put(av, 'data-vp-look-av', look && look.g[1] === '1' && look.n);
+            });
+        }
         async function renderClub() {
             const names = verifiedNames();
             if (myUsername && !names.some(n => n.toLowerCase() === myUsername.toLowerCase())) names.push(myUsername);
             const key = names.sort().join();
-            if (key === clubShown) return;
+            if (key === clubShown) { paintClub(); return; }
             clubShown = key;
             rail.querySelector('.vp-club-count').textContent = names.length || '';
             if (!names.length) { railClub.innerHTML = '<div class="vp-menu-note">Пока никого</div>'; return; }
@@ -10019,6 +10031,7 @@
             people.sort((a, b) => (a.n === myUsername ? -1 : b.n === myUsername ? 1 : a.n.localeCompare(b.n))).forEach(({ n, d }) => {
                 const row = document.createElement('div');
                 row.className = 'vp-club-row';
+                row.dataset.login = n;
                 row.innerHTML = '<div class="vp-club-ava"></div><div class="vp-club-names"><span class="vp-club-name"></span><span class="vp-club-login"></span></div>';
                 const ava = pick(d && d.avatar && (d.avatar.url || d.avatar), d && d.avatarUrl, '👤');
                 const av = row.firstChild;
@@ -10028,6 +10041,7 @@
                 row.onclick = () => openProfile(n);
                 railClub.appendChild(row);
             });
+            paintClub();
         }
         setTimeout(renderClub, 2500);
         setInterval(renderClub, 60 * 1000);

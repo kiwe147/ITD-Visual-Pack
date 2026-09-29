@@ -46,9 +46,10 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   });
   console.log('—    автор поста из снимка: ' + who);
   comments = [
-    { id: 'c1', content: code('x1'), author: { id: 'x1', username: who, displayName: who } },
-    { id: 'l1', content: `ITDXL1 n=fire b=custom g=11 i=${IMG}`, author: { id: 'x1', username: who } },
-    { id: 'l2', content: 'ITDXL1 n=gold b=snow g=11', author: { id: 'x9', username: 'nomod' } }
+    { id: 'c1', content: code('12345678-1234-4234-8234-123456789abc'), author: { id: '12345678-1234-4234-8234-123456789abc', username: who, displayName: who } },
+    { id: 'l1', content: `ITDXL1 n=fire b=custom g=11 i=${IMG}`, author: { id: '12345678-1234-4234-8234-123456789abc', username: who } },
+    { id: 'l2', content: 'ITDXL1 n=gold b=snow g=11', author: { id: 'x9', username: 'nomod' } },
+    { id: 'v1', content: 'ITDX-V 12345678-1234-4234-8234-123456789abc', author: { id: '5e064703-104d-4794-bc28-9ed6f5847cca', username: 'NeuroSFW' } }
   ];
   await p.evaluate(() => document.querySelectorAll('.vp-rail, .vp-fab, .vp-gal-btn, .vp-nav-blob').forEach(e => e.remove()));
   await p.addScriptTag({ content: src });
@@ -69,6 +70,15 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(mark.glow && mark.av && /drop-shadow/.test(mark.avFilter || ''), 'свечение ника и аватарки — его');
   check(!mark.nomod, 'строка стиля без кода мода — не показывается');
 
+  await p.waitForFunction(u => [...document.querySelectorAll('.vp-club-row')].some(r => r.dataset.login.toLowerCase() === u.toLowerCase()), who, { timeout: 8000 }).catch(() => { });
+  const club = await p.evaluate(u => {
+    const rows = [...document.querySelectorAll('.vp-club-row')];
+    const his = rows.find(r => r.dataset.login.toLowerCase() === u.toLowerCase()), mine = rows.find(r => r.dataset.login === 'NeuroSFW');
+    return { his: his && his.querySelector('.vp-club-name').getAttribute('data-vp-look'), hisAv: his && his.querySelector('.vp-club-ava').getAttribute('data-vp-look-av'),
+      mine: !!mine && mine.querySelector('.vp-club-name').classList.contains('vp-my-nick') && mine.querySelector('.vp-club-ava').classList.contains('my-avatar-glow') };
+  }, who);
+  check(club.his === 'fire' && club.hisAv === 'fire', `клуб ИТД X: у него ник и аватарка в его стиле ${JSON.stringify(club)}`);
+  check(club.mine, 'клуб ИТД X: моя строка — в моём стиле');
   const pub = sent.filter(x => /^ITDXL1 /.test(x.body));
   check(pub.length === 1 && pub[0].m === 'POST' && /^ITDXL1 n=white b=matrix g=11$/.test(pub[0].body), `свой стиль опубликован одной строкой: ${pub.map(x => x.m + ' ' + x.body).join(' | ')}`);
 
