@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.13.3
+// @version      3.3.13.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3902,8 +3902,8 @@
         }
 
         const CHANGELOG = [
-            ['3.3.11 – 3.3.13.3', '29 сентября 2026', [
-                'Кнопка «ИТД X» в профиле — твоим акцентным цветом',
+            ['3.3.11 – 3.3.13.4', '29 сентября 2026', [
+                'Кнопка «ИТД X» в профиле — в оттенке твоего акцентного цвета',
                 'Окно «Оформление поста» больше не мылит всю страницу',
                 'Ивент «Алиса AI»: иконка ИТД X на пункте «Ивент», «Сбор на шторы» больше не наезжает на статистику профиля, окно ивента не ломает баннер',
                 'Сообщения: окно больше не мигает — новые сообщения, реакции и галочки появляются на месте',
@@ -8276,9 +8276,13 @@
             backdrop-filter: var(--vp-glass-filter, blur(16px)); -webkit-backdrop-filter: var(--vp-glass-filter, blur(16px)); }
         .vp-bump-bg .vp-bump-fill { fill: var(--glass-bg); }
         a[href^="/event"] img[src*="/portal/"], img.vp-portal-img { display: none !important; }
-        .vp-itdx-btn { background: var(--vp-accent, #0080ff) !important; color: var(--vp-on-accent, #fff) !important; border-color: transparent !important;
-            box-shadow: 0 8px 22px -10px var(--vp-accent, #0080ff); transition: filter .15s ease; }
-        .vp-itdx-btn:hover { filter: brightness(1.1); }
+        .vp-itdx-btn { background: color-mix(in srgb, var(--vp-accent, #0080ff) 16%, var(--block-bg, #1c1c1c)) !important;
+            color: color-mix(in srgb, var(--vp-accent, #0080ff) 75%, #fff) !important; border-color: transparent !important;
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #0080ff) 40%, transparent) !important; transition: background-color .15s ease; }
+        .vp-itdx-btn:hover { background: color-mix(in srgb, var(--vp-accent, #0080ff) 24%, var(--block-bg, #1c1c1c)) !important; }
+        html.vp-light .vp-itdx-btn { background: color-mix(in srgb, var(--vp-accent, #0080ff) 12%, #fff) !important; color: color-mix(in srgb, var(--vp-accent, #0080ff) 80%, #000) !important; }
+        .vp-nick-tail-moved { display: none !important; }
+        .vp-nick-large .vp-nick-text + .mod-badge-voronoi { margin-left: 5px !important; }
         [data-vp-stack] { grid-template-columns: minmax(0, 1fr) !important; row-gap: 14px !important; }
         [data-vp-stack] > * { grid-area: auto !important; grid-column: 1 / -1 !important; }
         @media (prefers-reduced-motion: reduce) { .vp-portal { animation: none !important; } }
@@ -10137,7 +10141,7 @@
         }
         onDom(profileStatsFit);
         onDom(function nickTails() {
-            document.querySelectorAll('.vp-nick-text:not(.vp-nick-tail)').forEach(sp => {
+            document.querySelectorAll('.vp-nick-text').forEach(sp => {
                 const hash = [...sp.classList].find(c => !/^(vp-|my-|mod-)/.test(c));
                 if (!hash) return;
                 let tail = null;
@@ -10146,11 +10150,13 @@
                     tail = n.matches('span.' + hash) ? n : n.querySelector('span.' + hash);
                     if (!tail) break;
                 }
-                if (!tail || !tail.textContent.trim()) return;
-                const want = [...sp.classList].filter(c => /^(vp-|my-)/.test(c)).concat('vp-nick-tail');
-                if (want.some(c => !tail.classList.contains(c))) tail.classList.add(...want);
-                const badge = sp.nextElementSibling;
-                if (badge && badge.matches('.mod-badge-voronoi, .mod-badge-verify') && tail.nextElementSibling !== badge) tail.after(badge);
+                if (!tail || tail === sp) return;
+                const txt = tail.textContent;
+                if (!txt.trim()) return;
+                let node = sp._vpTail;
+                if (!node || node.parentNode !== sp) { node = document.createTextNode(''); sp.appendChild(node); sp._vpTail = node; }
+                if (node.nodeValue !== txt) node.nodeValue = txt;
+                if (!tail.classList.contains('vp-nick-tail-moved')) tail.classList.add('vp-nick-tail-moved');
             });
         });
         onDom(function hideServiceNotifs() {
