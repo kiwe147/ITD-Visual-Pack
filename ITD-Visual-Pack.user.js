@@ -10106,6 +10106,12 @@
             if ([...row.children].some(c => c.getBoundingClientRect().right > edge)) g.setAttribute('data-vp-stack', '');
         }
         onDom(profileStatsFit);
+        onDom(function hideServiceNotifs() {
+            document.querySelectorAll('.' + SELECTORS.notification).forEach(n => {
+                if (n.dataset.vpSvc || !/(^|\s)ITDX[A-Z0-9]* [\w\-/+=]{8,}/.test(n.textContent)) return;
+                n.dataset.vpSvc = '1'; n.style.display = 'none';
+            });
+        });
 
         let uiSoundEnabled = GM_getValue('uiSoundEnabled', false);
         let uiCtx = null;
