@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.9.1
+// @version      3.3.10
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3670,6 +3670,8 @@
         }
 
         const CHANGELOG = [
+            ['3.3.10', '29 сентября 2026', [
+                'Сапёр: кнопка «❓ Как играть» — короткие правила прямо в окне игры']],
             ['3.3.9 – 3.3.9.1', '29 сентября 2026', [
                 'Картинки в сообщениях: перед отправкой — превью с крестиком, можно дописать подпись; картинка показывается целиком, без обрезки; по нажатию — крупно прямо в окне сообщений («назад» и Esc закрывают)',
                 'Сапёр: при наведении подсвечивается квадрат 3х3 вокруг клетки — видно зону цифры. Вкладка лидеров теперь «Топ задротов»',
@@ -9921,6 +9923,14 @@
         .vp-mines-bar button { border: 0; border-radius: 9999px; padding: 7px 14px; cursor: pointer; font: inherit; background: rgba(255, 255, 255, .1); color: inherit; }
         .vp-mines-bar button.vp-on { box-shadow: inset 0 0 0 1px var(--vp-accent, #fff); }
         .vp-mines-msg { text-align: center; margin-top: 10px; font-weight: 600; min-height: 20px; }
+        .vp-mines-wrap { position: relative; }
+        .vp-mines-help { position: absolute; inset: 0; z-index: 2; overflow-y: auto; padding: 16px 18px; border-radius: 14px; font-size: 14px; line-height: 1.45;
+            background: color-mix(in srgb, var(--block-bg, #1c1c1c) 96%, transparent); color: var(--text-primary, #fff); }
+        .vp-mines-help[hidden] { display: none; }
+        .vp-mines-help b { display: block; font-size: 16px; margin-bottom: 8px; }
+        .vp-mines-help ul { margin: 0; padding-left: 20px; list-style: disc; }
+        .vp-mines-help li { margin: 0 0 7px; }
+        .vp-mines-help .vp-n { font-weight: 700; color: #5dade2; }
         .vp-games-leads { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; width: 100%; }
         .vp-games-leads section { padding: 12px; border-radius: 20px; background: rgba(255, 255, 255, .04); min-width: 0; }
         .vp-games-lead-t { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
@@ -10060,8 +10070,16 @@
         function minesGame(setScore) {
             const W = 10, H = 10, M = 15;
             const el = document.createElement('div');
-            el.innerHTML = `<div class="vp-mines-bar"><button type="button" data-a="new">Новая игра</button><button type="button" data-a="flag">🚩 флажки</button></div>
-            <div class="vp-mines"></div><div class="vp-mines-msg"></div>`;
+            el.innerHTML = `<div class="vp-mines-bar"><button type="button" data-a="new">Новая игра</button><button type="button" data-a="flag">🚩 флажки</button><button type="button" data-a="help">❓ Как играть</button></div>
+            <div class="vp-mines-wrap"><div class="vp-mines"></div><div class="vp-mines-help" hidden><b>Как играть в сапёра</b><ul>
+            <li>На поле 10×10 спрятано 15 мин. Цель — открыть все клетки без мин.</li>
+            <li>Нажми на клетку, чтобы открыть её. Первый ход всегда безопасный.</li>
+            <li>Цифра — сколько мин в 8 клетках вокруг неё. Наведи мышь — квадрат 3×3 подсветится, так видно зону цифры. Например, <span class="vp-n">1</span> — ровно одна мина где-то рядом.</li>
+            <li>Пустая клетка — мин вокруг нет, соседи откроются сами.</li>
+            <li>Уверен, что тут мина, — поставь флажок: правая кнопка мыши, долгое нажатие на телефоне или режим «🚩 флажки».</li>
+            <li>Вокруг цифры уже столько флажков, сколько она показывает, — нажми на цифру, и откроются остальные соседи.</li>
+            <li>Открыл мину — проигрыш. Открыл всё без мин — победа, время уходит в «Топ задротов». Чем быстрее, тем выше.</li>
+            <li>Новая игра — кнопка сверху или клавиша R.</li></ul></div></div><div class="vp-mines-msg"></div>`;
             const grid = el.querySelector('.vp-mines'), msgEl = el.querySelector('.vp-mines-msg'), flagBtn = el.querySelector('[data-a="flag"]');
             grid.style.gridTemplateColumns = `repeat(${W}, auto)`;
             let cells, first, over, opened, flags, t0 = 0, timer = 0, flagMode = false;
@@ -10151,6 +10169,9 @@
             });
             grid.addEventListener('pointerleave', unhot);
             el.querySelector('[data-a="new"]').addEventListener('click', () => { unhot(); reset(); });
+            const helpEl = el.querySelector('.vp-mines-help'), helpBtn = el.querySelector('[data-a="help"]');
+            helpBtn.addEventListener('click', () => { helpEl.hidden = !helpEl.hidden; helpBtn.classList.toggle('vp-on', !helpEl.hidden); });
+            helpEl.addEventListener('click', () => { helpEl.hidden = true; helpBtn.classList.remove('vp-on'); });
             flagBtn.addEventListener('click', () => { flagMode = !flagMode; flagBtn.classList.toggle('vp-on', flagMode); });
             function resize() {
                 const body = gw.el && gw.el.querySelector('.vp-games-body');

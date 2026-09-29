@@ -47,6 +47,12 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(near.join() === '0,1,10,11', `угол — 2х2: ${near.join(' ')}`);
   await p.mouse.move(5, 5); await p.waitForTimeout(150);
   check(!(await p.$('.vp-mine.vp-near')), 'ушёл с поля — подсветка снята');
+  await p.click('.vp-mines-bar [data-a="help"]'); await p.waitForTimeout(200);
+  const help = await p.$eval('.vp-mines-help', e => ({ shown: getComputedStyle(e).display !== 'none', text: e.textContent }));
+  check(help.shown && /15 мин/.test(help.text) && /флажок/.test(help.text), '«❓ Как играть» — правила открылись');
+  await p.screenshot({ path: path.join(__dirname, 'out', 'mines-help.png'), clip: await p.$eval('.vp-games-win', e => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; }) });
+  await p.click('.vp-mines-help'); await p.waitForTimeout(150);
+  check(await p.$eval('.vp-mines-help', e => getComputedStyle(e).display === 'none'), 'нажатие по правилам — закрылись');
   check(!p.errors.length, 'ошибок нет' + (p.errors.length ? ': ' + p.errors.join(' | ') : ''));
   await b.close();
   console.log(fails.length ? `\nНе прошло: ${fails.length}` : '\nВсё прошло');
