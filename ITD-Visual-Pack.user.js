@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.4.3
+// @version      3.4.3.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3955,6 +3955,12 @@
 .vp-junk-acts [data-a="del"], .vp-junk-delsel:not(:disabled) { background: #b3261e; color: #fff; }
 .vp-junk-delsel:disabled { opacity: .4; cursor: default; }
 .vp-junk-err { padding: 8px 14px; color: #ff8a8a; }
+.vp-lbadm { width: min(1080px, calc(100vw - 24px)); }
+.vp-lbadm > .vp-junk-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 10px; padding: 10px; }
+.vp-lbadm-col { min-width: 0; border-radius: 14px; background: rgba(255,255,255,.04); overflow: hidden; }
+.vp-lbadm-col .vp-junk-row:last-child { border-bottom: 0; }
+.vp-lbadm-col .vp-junk-acts { flex-wrap: wrap; }
+@media (max-width: 760px) { .vp-lbadm > .vp-junk-list { grid-template-columns: 1fr; } }
 .vp-lbadm-t { padding: 12px 14px 4px; font-size: 13px; font-weight: 700; opacity: .7; }
 .vp-lbadm-n { width: 18px; opacity: .5; }
 .vp-lbadm-v { margin-left: 8px; font-variant-numeric: tabular-nums; }
@@ -4198,10 +4204,13 @@
                         if (!cur || lbBetter(k, cur.v, o[k]) !== cur.v) rows.set(a.id, { v: o[k], a });
                     }
                     const sorted = [...rows.values()].sort((x, y) => k === 'm' ? x.v - y.v : y.v - x.v);
+                    const col = document.createElement('div');
+                    col.className = 'vp-lbadm-col';
+                    list.appendChild(col);
                     const t = document.createElement('div');
                     t.className = 'vp-lbadm-t';
                     t.textContent = g.name;
-                    list.appendChild(t);
+                    col.appendChild(t);
                     const fmt = v => k === 'm' ? `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}` : String(v);
                     sorted.forEach((r, i) => {
                         total++;
@@ -4230,9 +4239,9 @@
                             try { await lbVoidPush(token, true); } catch (e) { alert(e.message || e); }
                             draw(true);
                         }, 'del');
-                        list.appendChild(row);
+                        col.appendChild(row);
                     });
-                    if (!sorted.length) { const d = document.createElement('div'); d.className = 'vp-verify-empty'; d.textContent = 'Пусто'; list.appendChild(d); }
+                    if (!sorted.length) { const d = document.createElement('div'); d.className = 'vp-verify-empty'; d.textContent = 'Пусто'; col.appendChild(d); }
                 }
                 head.textContent = `рекордов ${total}, без повтора ${noRep}`;
             };
@@ -4835,6 +4844,8 @@
         }
 
         const CHANGELOG = [
+            ['3.4.3.1', '1 октября 2026', [
+                'Оптимизация и исправление багов']],
             ['3.4.3', '1 октября 2026', [
                 'Оптимизация и исправление багов']],
             ['3.4.2.1', '1 октября 2026', [
