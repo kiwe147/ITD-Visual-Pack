@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.15.4
+// @version      3.3.15.5
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1993,13 +1993,15 @@
         .vp-banner-buttons { inset: var(--vp-bar-top, 0px) auto auto 50% !important; width: auto !important; height: auto !important; margin: 0 !important; translate: none !important; scale: none !important; rotate: none !important;
             transform: translateX(-50%); display: flex !important; gap: 2px !important; padding: 4px 12px 7px !important;
             border-radius: 0 0 22px 22px; background: rgba(12, 12, 16, .6); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-            z-index: 3; transition: transform .25s cubic-bezier(.2,.8,.2,1), clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s; }
+            z-index: 3; transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s; }
         html.vp-light .vp-banner-buttons { background: rgba(255, 255, 255, .65); }
         .vp-banner-buttons > button { background: transparent !important; box-shadow: none !important; }
         .vp-banner-buttons > button:hover { background: rgba(128, 128, 128, .22) !important; }
         @media (hover: hover) and (pointer: fine) {
-            .vp-banner-buttons:not(.vp-banner-editing) { opacity: 0; transform: translate(-50%, -100%); clip-path: inset(100% 0 0 0); }
-            .vp-banner:hover .vp-banner-buttons, .vp-banner-buttons:has(:focus-visible) { opacity: 1; transform: translateX(-50%); clip-path: inset(0 0 0 0); }
+            .vp-banner-buttons:not(.vp-banner-editing) { opacity: 0; clip-path: inset(0 0 100% 0); visibility: hidden;
+                transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s, visibility 0s linear .25s; }
+            .vp-banner:hover .vp-banner-buttons, .vp-banner-buttons:has(:focus-visible) { opacity: 1; clip-path: inset(0 0 0 0); visibility: visible;
+                transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s, visibility 0s; }
         }
         .toggle-switch.vp-tri { width: 58px !important; }
         .toggle-switch.vp-tri[data-s="1"]::after { left: 20px !important; }
@@ -4482,6 +4484,8 @@
         }
 
         const CHANGELOG = [
+            ['3.3.15.5', '30 сентября 2026', [
+                'Баннер: шторка с кнопками раскрывается прямо на баннере сверху вниз и больше не показывается над ним']],
             ['3.3.15.4', '30 сентября 2026', [
                 'Баннер: шторка с кнопками только на баннере — не вылезает поверх верхней полосы сайта и задвигается после нажатия кнопки']],
             ['3.3.15.3', '30 сентября 2026', [
