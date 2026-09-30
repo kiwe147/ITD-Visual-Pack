@@ -1961,6 +1961,8 @@
         .vp-nick-row > a { min-width: 0; overflow: hidden; }
         .vp-nick-row .vp-nick:not(.vp-nick-large *) { min-width: 0; max-width: 100%; }
         .vp-nick-row .vp-nick-text:not(.vp-nick-large *) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
+        .vp-notif .vp-nick-row > a { max-width: 100%; }
+        .vp-notif .vp-nick-row .vp-nick:not(.vp-nick-large *) { display: flex; flex-wrap: nowrap; align-items: center; }
         article .vp-nick-row time { flex-shrink: 0; }
         .vp-clamp::after { display: none !important; }
         .vp-clamp { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); }
@@ -4025,6 +4027,9 @@
         }
 
         const CHANGELOG = [
+            ['3.3.13.6 – 3.3.13.8', '30 сентября 2026', [
+                'Уведомления: галочка ИТД X стоит рядом с ником, а не под ним; длинный ник обрезается многоточием и не вылезает за карточку',
+            ]],
             ['3.3.11 – 3.3.13.5', '29 сентября 2026', [
                 'Галочка ИТД X у ника — по центру строки и не переносится на отдельную строку',
                 'Кнопка «ИТД X» в профиле — в оттенке твоего акцентного цвета',
