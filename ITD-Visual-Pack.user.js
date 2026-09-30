@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.14.1
+// @version      3.3.14.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1004,7 +1004,7 @@
             postMedia: () => [...$$('img[data-post-media-image]'), ...F('post').flatMap(p => $$('video', p))],
             postAction: () => F('post').flatMap(p => $$('button[aria-label]', p)).filter(b => b.querySelector('[data-icon]')),
             postText: () => F('post').flatMap(p => $$('div', p)).filter(d => ownText(d) && !d.closest('header, footer, a, button, time')),
-            avatarLink: () => F('post').flatMap(p => $$(PROFILE_LINK, p)).filter(a => a.firstElementChild && a.firstElementChild.tagName === 'DIV'),
+            avatarLink: () => F('post').flatMap(p => $$(PROFILE_LINK, p)).filter(a => a.firstElementChild && a.firstElementChild.tagName === 'DIV' && !a.querySelector('[data-user-name]')),
             avatar: () => {
                 const sample = F('avatarLink').map(a => a.firstElementChild);
                 if (sample[0]) learn('avatar', sample[0]);
@@ -1013,7 +1013,7 @@
                 return [...all];
             },
             nickContainer: () => {
-                const sample = F('post').flatMap(p => $$('header ' + PROFILE_LINK + ' > span', p));
+                const sample = [...new Set(F('post').flatMap(p => $$('header ' + PROFILE_LINK + ' > span, header ' + PROFILE_LINK + ' [data-user-name]', p)))];
                 if (sample[0]) learn('nick', sample[0]);
                 const all = new Set(sample);
                 byLearned('nick').forEach(el => { if (el.textContent.trim()) all.add(el); });
@@ -1021,7 +1021,8 @@
             },
             nickText: () => F('nickContainer').map(nickTextOf).filter(Boolean),
             nickBadges: () => F('nickContainer').flatMap(c => [...c.children]
-                .filter(s => s.querySelector('img, svg') && !s.matches('.' + SELECTORS.badgeVoronoi + ', .' + SELECTORS.badgeVerify))),
+                .filter(s => !s.matches('.' + SELECTORS.badgeVoronoi + ', .' + SELECTORS.badgeVerify) && !s.querySelector('.' + SELECTORS.nickText)
+                    && $$('img, svg', s).some(x => !x.closest('.' + SELECTORS.badgeVoronoi + ', .' + SELECTORS.badgeVerify)))),
             nickRow: () => F('nickContainer').map(c => (c.closest(PROFILE_LINK) || c).parentElement).filter(Boolean),
             nickLarge: () => F('nickContainer').filter(c => !c.closest('a, article, .' + SELECTORS.post) && atLoginOf(c) && isProfileHeader(c)),
             banner: () => $$('img[alt="Banner"]').map(i => i.parentElement).filter(Boolean),
@@ -1031,7 +1032,7 @@
             bannerDraw: () => F('bannerButtons').map(c => $$('button', c)
                 .find(b => !/custom-/.test(b.className) && !/удал/i.test(b.title || '') && !b.innerHTML.includes('points="3 6 5 6 21 6"'))).filter(Boolean),
             nav: () => $$('nav').filter(n => n.querySelector('a[href="/"], a[href="/notifications"]')),
-            navLink: () => F('nav').flatMap(n => $$(':scope > a', n)),
+            navLink: () => F('nav').flatMap(n => $$('a[href]', n).filter(a => a.parentElement === n || a.parentElement.parentElement === n)),
             navIcon: () => F('navLink').map(a => a.firstElementChild).filter(s => s && s.tagName === 'SPAN' && s.querySelector('svg')),
             sidebar: () => $$('aside').filter(a => a.querySelector('nav')),
             sidebarRight: () => $$('aside').filter(a => !a.querySelector('nav')),
@@ -1978,6 +1979,7 @@
         html.vp-light .vp-emoji-tint .vp-soft-bg, html.vp-light .itd-blur-active .vp-soft-bg { background-color: rgba(255, 255, 255, .35) !important; }
         .vp-nick-row > a { min-width: 0; overflow: hidden; }
         .vp-nick-row .vp-nick:not(.vp-nick-large *) { min-width: 0; max-width: 100%; }
+        .vp-nick:not(.vp-nick-large) > :has(> .vp-nick-text) { display: inline-flex; align-items: center; gap: inherit; min-width: 0; }
         .vp-nick-row .vp-nick-text:not(.vp-nick-large *) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
         .vp-post header .vp-nick-row:not(:last-child) { padding-right: 50px; }
         @media (max-width: ${PHONE_MAX}px) { .vp-post header .vp-nick-row:not(:last-child) { padding-right: 42px; } }
@@ -4048,8 +4050,9 @@
         }
 
         const CHANGELOG = [
-            ['3.3.14.1', '30 сентября 2026', [
+            ['3.3.14.1 – 3.3.14.2', '30 сентября 2026', [
                 'Профиль: галочка ИТД X снова стоит после ника, а не перед ним',
+                'Посты: галочка ИТД X снова рядом с ником, а не под ним',
                 'Профиль на телефоне: кнопки под статистикой ровно по центру, «•••» больше не съезжает вниз']],
             ['3.3.13.6 – 3.3.13.12', '30 сентября 2026', [
                 'Фон «Матрица»: символы снова гаснут после падения — дождь, а не сплошная стена иероглифов (особенно на экранах 120–144 Гц)',
@@ -7617,7 +7620,7 @@
 
             messagesLink = document.createElement('a');
             messagesLink.href = '#';
-            const siteLinks = [...nav.querySelectorAll(':scope > a')]
+            const siteLinks = [...nav.querySelectorAll('a')].filter(a => a.parentElement === nav || a.parentElement.parentElement === nav)
                 .filter(a => a.getAttribute('href') !== '#' && a.querySelector(':scope > span svg'));
             messagesLink.className = (commonClasses(siteLinks) + ' ' + SELECTORS.navLink).trim();
 
@@ -8390,10 +8393,10 @@
         }
 
         .vp-nav-has-blob { position: relative; }
-        .vp-nav-has-blob > .vp-nav-link { position: relative; z-index: 1; transition: background-color .2s ease, opacity .2s ease !important; }
-        .vp-nav-has-blob > .vp-nav-link .vp-nav-icon { transition: none; }
-        .vp-nav-has-blob > .vp-nav-link.vp-active { background: transparent !important; }
-        .vp-nav-has-blob > div:not(.vp-nav-blob) { opacity: 0 !important; }
+        .vp-nav-has-blob .vp-nav-link { position: relative; z-index: 1; transition: background-color .2s ease, opacity .2s ease !important; }
+        .vp-nav-has-blob .vp-nav-link .vp-nav-icon { transition: none; }
+        .vp-nav-has-blob .vp-nav-link.vp-active { background: transparent !important; }
+        .vp-nav-has-blob > div:not(.vp-nav-blob):not(:has(a)) { opacity: 0 !important; }
         .vp-post-slot { border-bottom: none !important; }
         .vp-new-post { position: absolute !important; width: ${BUMP}px !important; height: ${BUMP}px !important; z-index: 2; margin: 0 !important;
             background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; }
