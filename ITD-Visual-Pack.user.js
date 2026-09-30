@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.14.3
+// @version      3.3.15
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3299,10 +3299,48 @@
         @keyframes vpCallOut { to { opacity: 0; } }
         @keyframes vpCallRing { from { transform: scale(1); opacity: .8; } to { transform: scale(1.35); opacity: 0; } }
         @media (prefers-reduced-motion: reduce) { .vp-call-ava::before, .vp-call-ava::after { animation: none; opacity: .4; } }
+        .vp-call-real .vp-call-card { position: relative; }
+        .vp-call-min { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .08);
+            color: #b5bac1; cursor: pointer; display: grid; place-items: center; }
+        .vp-call-min:hover { background: rgba(255, 255, 255, .16); color: #fff; }
+        .vp-call-emoji { position: relative; z-index: 1; font-size: 64px; line-height: 1; }
+        .vp-call-real .vp-call-btns button span { white-space: nowrap; }
+        .vp-call-end { background: #da373c; }
+        .vp-call-end svg { transform: rotate(135deg); }
+        .vp-call-mute { background: #4e5058; }
+        .vp-call-mute.vp-on { background: #f2f3f5; color: #111; }
+        .vp-call-note { margin-top: 16px; font-size: 11.5px; line-height: 1.35; color: #80848e; }
+        .vp-call-real.vp-live .vp-call-ava::before, .vp-call-real.vp-live .vp-call-ava::after { animation: none; opacity: 0; }
+        .vp-call.vp-call-mini { inset: auto 16px 16px auto; padding: 0; background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+        .vp-call-mini .vp-call-card { width: auto; max-width: calc(100vw - 32px); padding: 8px 8px 8px 16px; display: flex; align-items: center; gap: 12px; text-align: left; cursor: pointer; }
+        .vp-call-mini .vp-call-ava, .vp-call-mini .vp-call-note, .vp-call-mini .vp-call-min { display: none; }
+        .vp-call-mini .vp-call-name { font-size: 14px; text-transform: none; letter-spacing: 0; }
+        .vp-call-mini .vp-call-sub { margin: 0; font-size: 13px; }
+        .vp-call-mini .vp-call-btns { margin: 0; gap: 6px; }
+        .vp-call-mini .vp-call-btns button { width: 40px; height: 40px; flex: 0 0 auto; padding: 0; border-radius: 50%; }
+        .vp-call-mini .vp-call-btns button span { display: none; }
         .vp-call-panel input { margin: 10px 14px 4px; padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .06);
             color: #fff; font: inherit; outline: none; }
         .vp-call-panel .vp-admin-list .vp-call-pick { cursor: pointer; padding: 8px 4px; border-radius: 8px; }
         .vp-call-panel .vp-admin-list .vp-call-pick:hover { background: rgba(36, 128, 70, .25); }`;
+        function callTone(kind) {
+            let ac, t = 0;
+            try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return () => { }; }
+            if (ac.state === 'suspended') ac.resume().catch(() => { });
+            const beep = (at, freqs, len, vol, rise, trill) => {
+                const g = ac.createGain();
+                g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(vol, at + rise); g.gain.setValueAtTime(vol, at + len - .04); g.gain.linearRampToValueAtTime(0, at + len);
+                if (trill) { const lfo = ac.createOscillator(), lg = ac.createGain(); lfo.frequency.value = trill; lg.gain.value = .5; lfo.connect(lg).connect(g.gain); lfo.start(at); lfo.stop(at + len + .03); }
+                freqs.forEach(fr => { const o = ac.createOscillator(); o.frequency.value = fr; o.connect(g); o.start(at); o.stop(at + len + .03); });
+                g.connect(ac.destination);
+            };
+            const stop = () => { clearInterval(t); t = 0; if (ac) { const c = ac; ac = null; c.close().catch(() => { }); } };
+            const loop = (fn, ms) => { fn(); t = setInterval(() => ac && fn(), ms); };
+            if (kind === 'ring') loop(() => { const t0 = ac.currentTime + .05; beep(t0, [440, 480], .42, .16, .02, 22); beep(t0 + .6, [440, 480], .42, .16, .02, 22); }, 3000);
+            else if (kind === 'back') loop(() => beep(ac.currentTime + .05, [425], 1, .1, .02), 4000);
+            else { const t0 = ac.currentTime + .05; for (let i = 0; i < 3; i++) beep(t0 + i * .5, [425], .32, .18, .015); setTimeout(stop, 1800); }
+            return stop;
+        }
         function fakeCall() {
             if (document.querySelector('.vp-call')) return;
             callCss();
@@ -3314,34 +3352,7 @@
                 <div class="vp-call-btns"><button type="button" class="vp-call-no">${phone}Принять</button><button type="button" class="vp-call-yes">${phone}Принять</button></div></div>`;
             document.body.appendChild(el);
             const sub = el.querySelector('.vp-call-sub'), timers = [];
-            let ac = null, ringT = 0;
-            try {
-                ac = new (window.AudioContext || window.webkitAudioContext)();
-                const burst = at => {
-                    const g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
-                    g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(.16, at + .02); g.gain.setValueAtTime(.16, at + .38); g.gain.linearRampToValueAtTime(0, at + .42);
-                    lfo.frequency.value = 22; lg.gain.value = .5; lfo.connect(lg).connect(g.gain);
-                    [440, 480].forEach(f => { const o = ac.createOscillator(); o.frequency.value = f; o.connect(g); o.start(at); o.stop(at + .45); });
-                    lfo.start(at); lfo.stop(at + .45);
-                    g.connect(ac.destination);
-                };
-                const ring = () => { const t0 = ac.currentTime + .05; burst(t0); burst(t0 + .6); };
-                ring(); ringT = setInterval(ring, 3000);
-            } catch (e) { ac = null; }
-            if (ac && ac.state === 'suspended') ac.resume().catch(() => { });
-            const stopRing = () => { clearInterval(ringT); if (ac) { ac.close().catch(() => { }); ac = null; } };
-            const hangup = () => {
-                try {
-                    const c = new (window.AudioContext || window.webkitAudioContext)(), t0 = c.currentTime + .05;
-                    for (let i = 0; i < 3; i++) {
-                        const o = c.createOscillator(), g = c.createGain(), at = t0 + i * .5;
-                        o.frequency.value = 425;
-                        g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(.18, at + .015); g.gain.setValueAtTime(.18, at + .3); g.gain.linearRampToValueAtTime(0, at + .32);
-                        o.connect(g).connect(c.destination); o.start(at); o.stop(at + .34);
-                    }
-                    setTimeout(() => c.close().catch(() => { }), 1800);
-                } catch (e) { }
-            };
+            const stopRing = callTone('ring'), hangup = () => callTone('hang');
             const later = (fn, ms) => timers.push(setTimeout(fn, ms));
             const close = () => { stopRing(); timers.forEach(clearTimeout); el.classList.add('vp-out'); setTimeout(() => el.remove(), 320); };
             const answer = () => {
@@ -3370,6 +3381,277 @@
                 : await sendComment(MSG_POST_ID, content);
             if (!res.ok) throw new Error('звонок: ' + res.status);
             await msgSync();
+        }
+        const CALL_ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }, { urls: 'stun:stun.cloudflare.com:3478' }];
+        const CALL_RING_S = 60, CALL_PACK_MAX = 700;
+        const CALL_MIC = '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>';
+        const callNet = { cur: null, done: null, lastSync: 0, title: null };
+        function callDone() { if (!callNet.done) callNet.done = new Set(GM_getValue(acctKey('callDone'), [])); return callNet.done; }
+        function callMarkDone(key) { const d = callDone(); d.add(key); GM_setValue(acctKey('callDone'), [...d].slice(-60)); }
+        function callSig(uid, type, id, data) { return msgSend(uid, '', false, null, cat(new Uint8Array([4, type]), be32(id), data || new Uint8Array(0))); }
+        function sdpSlim(sdp, drop) {
+            const lines = sdp.split(/\r?\n/).filter(Boolean), opus = new Set();
+            lines.forEach(l => { const m = l.match(/^a=rtpmap:(\d+) opus\//i); if (m) opus.add(m[1]); });
+            return lines.filter(l => !/^a=(extmap|rtcp-fb|ssrc)/.test(l) && !/^a=candidate:\S+ \d+ tcp /i.test(l) && !(drop && drop(l))
+                && !(opus.size && /^a=(rtpmap|fmtp):\d+/.test(l) && !opus.has(l.match(/^a=\w+:(\d+)/)[1])))
+                .map(l => opus.size && /^m=audio /.test(l) ? l.split(' ').filter((x, i) => i < 3 || opus.has(x)).join(' ') : l).join('\r\n') + '\r\n';
+        }
+        async function callPack(sdp, drop) {
+            const raw = te.encode(sdpSlim(sdp, drop));
+            try {
+                const z = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer());
+                if (z.length < raw.length) return cat(new Uint8Array([1]), z);
+            } catch (e) { }
+            return cat(new Uint8Array([0]), raw);
+        }
+        async function callPackFit(sdp) {
+            const drops = [null, l => /^a=candidate:.* typ host/.test(l) && /:[0-9a-f]*:/i.test(l.split(' ')[4]), l => /^a=candidate:.* typ (host|relay)/.test(l)];
+            let out = null;
+            for (const d of drops) { out = await callPack(sdp, d); if (out.length <= CALL_PACK_MAX) break; }
+            return out;
+        }
+        async function callUnpack(b) {
+            const body = b.slice(1);
+            return td.decode(b[0] === 1 ? new Uint8Array(await new Response(new Blob([body]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer()) : body);
+        }
+        function callGather(pc) {
+            if (pc.iceGatheringState === 'complete') return Promise.resolve();
+            return new Promise(ok => {
+                const t = setTimeout(ok, 2500);
+                pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); ok(); } });
+            });
+        }
+        async function callMedia(c) {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('Браузер не даёт микрофон');
+            try { c.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+            catch (e) {
+                throw new Error(e && e.name === 'NotAllowedError' ? 'Нет доступа к микрофону — разреши его для итд.com'
+                    : e && e.name === 'NotFoundError' ? 'Микрофон не найден' : 'Микрофон не включился');
+            }
+            if (c.state === 'end') { c.stream.getTracks().forEach(t => t.stop()); return false; }
+            return true;
+        }
+        function callPeer(c) {
+            const pc = new RTCPeerConnection({ iceServers: CALL_ICE });
+            pc.ontrack = e => {
+                const a = c.audio || (c.audio = new Audio());
+                a.autoplay = true;
+                a.srcObject = e.streams[0] || new MediaStream([e.track]);
+                a.play().catch(() => { });
+            };
+            pc.onconnectionstatechange = () => {
+                const st = pc.connectionState;
+                if (c.state === 'end') return;
+                if (st === 'connected') { clearTimeout(c.lostT); callLive(c); }
+                else if (st === 'failed') callEnd(c, 'Не удалось соединиться: мешает сеть', 0);
+                else if (st === 'disconnected' && c.state === 'talk') {
+                    callSub(c, 'Связь прерывается…');
+                    clearTimeout(c.lostT);
+                    c.lostT = setTimeout(() => pc.connectionState !== 'connected' && callEnd(c, 'Связь потеряна', 0), 10000);
+                }
+            };
+            return pc;
+        }
+        function callDc(c, dc) {
+            c.dc = dc;
+            dc.onmessage = e => {
+                if (e.data === 'bye') callEnd(c, 'Собеседник положил трубку', null);
+                else if (/^mute:[01]$/.test(e.data)) { c.peerMuted = e.data === 'mute:1'; callSub(c); }
+            };
+            dc.onopen = () => { if (c.muted) try { dc.send('mute:1'); } catch (e) { } };
+        }
+        function callWho(uid) {
+            const k = msgNet.keys.get(uid), login = k ? k.login : '', p = login && msgPeople.get(login);
+            return { name: (p && p.name) || login || 'ИТД X', ava: (p && p.ava) || '👤' };
+        }
+        function callTitle(text) {
+            if (text && callNet.title === null) callNet.title = document.title;
+            if (text) document.title = text;
+            else if (callNet.title !== null) { document.title = callNet.title; callNet.title = null; }
+        }
+        const callBtn = (cls, label, glyph) => `<button type="button" class="${cls}">${svgIcon(glyph, 18)}<span>${label}</span></button>`;
+        function callUi(c) {
+            callCss();
+            const el = document.createElement('div');
+            el.className = 'vp-call vp-call-real';
+            el.innerHTML = `<div class="vp-call-card" role="dialog" aria-label="Звонок"><button type="button" class="vp-call-min" title="Свернуть">${svgIcon('<path d="M6 9l6 6 6-6"/>', 18)}</button>
+                <div class="vp-call-ava"></div><div class="vp-call-name"></div><div class="vp-call-sub"></div><div class="vp-call-btns"></div>
+                <div class="vp-call-note">Звук идёт напрямую между вами, мимо серверов ИТД. Собеседнику виден твой IP-адрес</div></div>`;
+            const ava = el.querySelector('.vp-call-ava');
+            if (/^https?:|^\//.test(c.ava)) { const im = document.createElement('img'); im.src = c.ava; im.alt = ''; ava.appendChild(im); }
+            else { const sp = document.createElement('span'); sp.className = 'vp-call-emoji'; sp.textContent = c.ava; ava.appendChild(sp); }
+            el.querySelector('.vp-call-name').textContent = c.name;
+            el.querySelector('.vp-call-min').onclick = e => { e.stopPropagation(); el.classList.add('vp-call-mini'); };
+            el.querySelector('.vp-call-card').addEventListener('click', e => { if (el.classList.contains('vp-call-mini') && !e.target.closest('button')) el.classList.remove('vp-call-mini'); });
+            document.body.appendChild(el);
+            c.el = el;
+            callPaint(c);
+        }
+        function callPaint(c) {
+            const el = c.el;
+            if (!el) return;
+            const ring = c.dir === 'in' && c.state === 'ringing', key = c.state + (c.muted ? 1 : 0) + (c.missed ? 1 : 0);
+            el.classList.toggle('vp-live', c.state === 'talk' || c.state === 'end');
+            if (el.dataset.k !== key) {
+                el.dataset.k = key;
+                const btns = el.querySelector('.vp-call-btns');
+                btns.innerHTML = c.state === 'end' ? (c.missed ? callBtn('vp-call-mute vp-call-close', 'Закрыть', GLYPH.close) + callBtn('vp-call-yes vp-call-again', 'Перезвонить', GLYPH.phone) : '')
+                    : ring ? callBtn('vp-call-end', 'Отклонить', GLYPH.phone) + callBtn('vp-call-yes', 'Принять', GLYPH.phone)
+                        : callBtn('vp-call-mute' + (c.muted ? ' vp-on' : ''), c.muted ? 'Включить' : 'Микрофон', CALL_MIC + (c.muted ? '<path d="M4 4l16 16"/>' : ''))
+                        + callBtn('vp-call-end', 'Завершить', GLYPH.phone);
+                const b = cls => btns.querySelector('.' + cls);
+                if (b('vp-call-close')) b('vp-call-close').onclick = () => callClose(c, 0);
+                else if (b('vp-call-again')) b('vp-call-again').onclick = () => { callClose(c, 0); callStart(c.uid, c.name, c.ava); };
+                if (c.state !== 'end') {
+                    if (b('vp-call-yes')) b('vp-call-yes').onclick = () => callAccept(c);
+                    if (b('vp-call-mute')) b('vp-call-mute').onclick = () => callMute(c);
+                    if (b('vp-call-end')) b('vp-call-end').onclick = () => ring ? callEnd(c, 'Звонок отклонён', 1)
+                        : callEnd(c, c.state === 'talk' ? 'Звонок завершён' : 'Звонок отменён', c.offered || c.dir === 'in' ? 0 : null);
+                }
+            }
+            callSub(c);
+        }
+        function callSub(c, text) {
+            if (text !== undefined) c.subText = text;
+            const sub = c.el && c.el.querySelector('.vp-call-sub');
+            if (sub) sub.textContent = (c.subText || '') + (c.peerMuted && c.state === 'talk' ? ' · у собеседника выключен микрофон' : '');
+        }
+        function callClose(c, wait) {
+            const el = c.el;
+            if (!el || el.dataset.closing) return;
+            el.dataset.closing = '1';
+            setTimeout(() => { el.classList.add('vp-out'); setTimeout(() => el.remove(), 320); }, wait);
+        }
+        function callLive(c) {
+            if (c.state === 'talk' || c.state === 'end') return;
+            c.state = 'talk';
+            c.stops.splice(0).forEach(f => f());
+            clearTimeout(c.connT);
+            const t0 = Date.now(), mmss = ms => { const s = Math.floor(ms / 1000); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
+            callSub(c, '00:00');
+            c.tick = setInterval(() => callSub(c, mmss(Date.now() - t0)), 1000);
+            callPaint(c);
+        }
+        function callMute(c) {
+            c.muted = !c.muted;
+            if (c.stream) c.stream.getAudioTracks().forEach(t => { t.enabled = !c.muted; });
+            if (c.dc && c.dc.readyState === 'open') try { c.dc.send(c.muted ? 'mute:1' : 'mute:0'); } catch (e) { }
+            callPaint(c);
+        }
+        function callEnd(c, text, reason) {
+            if (c.state === 'end') return;
+            const was = c.state;
+            c.state = 'end';
+            c.missed = c.dir === 'in' && was === 'ringing' && reason === null;
+            if (reason !== null && c.dc && c.dc.readyState === 'open') try { c.dc.send('bye'); } catch (e) { }
+            if (reason !== null) callSig(c.uid, 3, c.id, new Uint8Array([reason])).catch(e => logErr('звонок: отбой', e));
+            c.stops.splice(0).forEach(f => f());
+            c.timers.forEach(clearTimeout);
+            clearInterval(c.tick); clearTimeout(c.lostT); clearTimeout(c.connT);
+            if (c.pc) try { c.pc.close(); } catch (e) { }
+            if (c.stream) c.stream.getTracks().forEach(t => t.stop());
+            if (c.audio) c.audio.srcObject = null;
+            callMarkDone(c.uid + '|' + c.id);
+            if (callNet.cur === c) callNet.cur = null;
+            if (!(c.dir === 'in' && was === 'ringing')) callTone('hang');
+            if (c.missed) callTitle('📞 Пропущенный звонок'); else callTitle(null);
+            callSub(c, text);
+            callPaint(c);
+            if (c.el) c.el.classList.remove('vp-call-mini');
+            if (!c.missed) callClose(c, 1800);
+            else if (c.el) c.el.addEventListener('click', () => callTitle(null), { once: true });
+        }
+        async function callStart(uid, name, ava) {
+            if (callNet.cur) { if (callNet.cur.el) callNet.cur.el.classList.remove('vp-call-mini'); return; }
+            const c = { uid, dir: 'out', id: crypto.getRandomValues(new Uint32Array(1))[0], name, ava, state: 'calling', stops: [], timers: [] };
+            callNet.cur = c;
+            callUi(c);
+            callSub(c, 'Включаю микрофон…');
+            try {
+                if (!(await callMedia(c))) return;
+                c.pc = callPeer(c);
+                callDc(c, c.pc.createDataChannel('itdx'));
+                c.stream.getTracks().forEach(t => c.pc.addTrack(t, c.stream));
+                await c.pc.setLocalDescription(await c.pc.createOffer());
+                callSub(c, 'Соединяю…');
+                await callGather(c.pc);
+                if (c.state === 'end') return;
+                const offer = await callPackFit(c.pc.localDescription.sdp);
+                c.offered = true;
+                await callSig(uid, 1, c.id, offer);
+                if (c.state === 'end') return;
+                callSub(c, 'Вызываю…');
+                c.stops.push(callTone('back'));
+                c.timers.push(setTimeout(() => callEnd(c, 'Не отвечает', 3), (CALL_RING_S + 15) * 1000));
+                callNet.lastSync = 0;
+            } catch (e) { logErr('звонок', e); callEnd(c, e.message || 'Не вышло позвонить', c.offered ? 0 : null); }
+        }
+        async function callAnswered(c, data) {
+            if (c.answering) return;
+            c.answering = true;
+            c.stops.splice(0).forEach(f => f());
+            c.timers.forEach(clearTimeout);
+            c.state = 'connecting';
+            callPaint(c);
+            callSub(c, 'Соединяю…');
+            try { await c.pc.setRemoteDescription({ type: 'answer', sdp: await callUnpack(data) }); }
+            catch (e) { logErr('звонок: ответ', e); return callEnd(c, 'Не удалось соединиться', 0); }
+            c.connT = setTimeout(() => c.state !== 'talk' && callEnd(c, 'Не удалось соединиться: мешает сеть', 0), 25000);
+        }
+        function callIncoming(s) {
+            const w = callWho(s.uid);
+            const c = { uid: s.uid, dir: 'in', id: s.id, offer: s.data, name: w.name, ava: w.ava, state: 'ringing', stops: [callTone('ring')], timers: [] };
+            callNet.cur = c;
+            callUi(c);
+            callSub(c, 'Звонит тебе…');
+            callTitle('📞 ' + c.name + ' звонит');
+            const left = Math.max(5, CALL_RING_S + 15 - (srvNow() / 1000 - s.ts));
+            c.timers.push(setTimeout(() => callEnd(c, 'Пропущенный звонок', null), left * 1000));
+        }
+        async function callAccept(c) {
+            if (c.state !== 'ringing') return;
+            c.stops.splice(0).forEach(f => f());
+            c.timers.forEach(clearTimeout);
+            c.state = 'connecting';
+            callPaint(c);
+            callSub(c, 'Включаю микрофон…');
+            callTitle(null);
+            try {
+                if (!(await callMedia(c))) return;
+                c.pc = callPeer(c);
+                c.pc.ondatachannel = e => callDc(c, e.channel);
+                c.stream.getTracks().forEach(t => c.pc.addTrack(t, c.stream));
+                await c.pc.setRemoteDescription({ type: 'offer', sdp: await callUnpack(c.offer) });
+                await c.pc.setLocalDescription(await c.pc.createAnswer());
+                callSub(c, 'Соединяю…');
+                await callGather(c.pc);
+                if (c.state === 'end') return;
+                await callSig(c.uid, 2, c.id, await callPackFit(c.pc.localDescription.sdp));
+                if (c.state !== 'talk') c.connT = setTimeout(() => c.state !== 'talk' && callEnd(c, 'Не удалось соединиться: мешает сеть', 0), 30000);
+            } catch (e) { logErr('звонок: принять', e); callEnd(c, e.message || 'Не вышло ответить', 0); }
+        }
+        function callCheck() {
+            const sigs = msgNet.sigs || [], now = srvNow() / 1000, c = callNet.cur;
+            const ended = new Map(sigs.filter(s => s.type === 3).map(s => [s.uid + '|' + s.id, s.data[0] || 0]));
+            if (c && c.state !== 'end') {
+                const key = c.uid + '|' + c.id;
+                const ans = c.dir === 'out' && c.state === 'calling' && sigs.find(s => s.dir === 'in' && s.type === 2 && s.uid === c.uid && s.id === c.id);
+                const endIn = sigs.find(s => s.dir === 'in' && s.type === 3 && s.uid === c.uid && s.id === c.id);
+                if (endIn) {
+                    const r = ended.get(key);
+                    if (c.dir === 'in' && c.state === 'ringing') callEnd(c, 'Пропущенный звонок', null);
+                    else callEnd(c, r === 1 ? 'Звонок отклонён' : r === 2 ? 'Занято: у собеседника другой звонок' : r === 3 ? 'Не отвечает'
+                        : c.state === 'talk' ? 'Собеседник положил трубку' : c.dir === 'out' ? 'Звонок сброшен' : 'Звонок отменён', null);
+                } else if (ans) callAnswered(c, ans.data);
+            }
+            for (const s of sigs) {
+                if (s.dir !== 'in' || s.type !== 1) continue;
+                const key = s.uid + '|' + s.id;
+                if (callDone().has(key) || ended.has(key) || now - s.ts > CALL_RING_S + 10 || (callNet.cur && callNet.cur.id === s.id)) continue;
+                callMarkDone(key);
+                if (callNet.cur) { callSig(s.uid, 3, s.id, new Uint8Array([2])).catch(e => logErr('звонок: занято', e)); continue; }
+                callIncoming(s);
+            }
         }
         async function adminCallPick() {
             document.querySelectorAll('.vp-admin-panel').forEach(p => p.remove());
@@ -4051,6 +4333,11 @@
         }
 
         const CHANGELOG = [
+            ['3.3.15', '30 сентября 2026', [
+                'Звонки в сообщениях: кнопка с трубкой в шапке чата — звонок голосом другому пользователю ИТД X',
+                'Во время звонка можно выключить микрофон, свернуть звонок в плашку в углу и положить трубку',
+                'Пропущенный звонок остаётся на экране с кнопкой «Перезвонить»',
+                'Звонок доходит, если у собеседника открыт итд; быстрее всего — когда у него открыты «Сообщения»']],
             ['3.3.14.1 – 3.3.14.3', '30 сентября 2026', [
                 'Лента и профиль: после выхода из поста возвращают к тому же посту, а не в начало',
                 'Кнопка «Обновить» у поста с репостом: свои цифры получают и пост, и репост (раньше цифры поста попадали в репост)',
@@ -6270,6 +6557,7 @@
                 if (changed) msgNet.pairs.clear();
                 if (!msgNet.me) await msgLoadMe();
                 await msgDecryptAll();
+                try { callCheck(); } catch (e) { logErr('звонок', e); }
             })().finally(() => { msgNet.syncing = null; });
             return msgNet.syncing;
         }
@@ -6335,7 +6623,7 @@
                 delete m._v; delete m._i;
             }));
             conv.forEach(list => list.sort((x, y) => x.at - y.at || x.ts - y.ts));
-            const reacts = new Map(), reads = new Map(), calls = [];
+            const reacts = new Map(), reads = new Map(), calls = [], sigs = [];
             conv.forEach((list, uid) => {
                 const keep = [];
                 for (const m of list) {
@@ -6347,6 +6635,7 @@
                         if (!e[who] || e[who].ts <= m.ts) e[who] = { ts: m.ts, emoji: td.decode(m.svc.slice(6)) };
                         reacts.set(key, e);
                     } else if (k === 3 && m.dir === 'in' && uid === OWNER_ID) calls.push(m.ts);
+                    else if (k === 4 && m.svc.length >= 6) sigs.push({ uid, dir: m.dir, ts: m.ts, type: m.svc[1], id: u32(m.svc, 2), data: m.svc.slice(6) });
                     else if (k === 2 && m.svc.length >= 5) {
                         const r = reads.get(uid) || { me: 0, them: 0 }, at = u32(m.svc, 1), th = m.svc.length >= 6 ? m.svc[5] : -1;
                         r[who] = Math.max(r[who], at);
@@ -6364,7 +6653,7 @@
                 e.me = { ts: q.ts, emoji: q.emoji };
                 reacts.set(key, e);
             });
-            msgNet.reacts = reacts; msgNet.reads = reads; msgNet.calls = calls;
+            msgNet.reacts = reacts; msgNet.reads = reads; msgNet.calls = calls; msgNet.sigs = sigs;
             msgNet.conv = conv;
         }
         async function msgPrepImage(file) {
@@ -6518,7 +6807,7 @@
             setTimeout(() => el.remove(), 7000);
         }
         async function msgBackground() {
-            if (document.hidden || !myUsername) return;
+            if (!myUsername || (document.hidden && !msgNet.me)) return;
             try { await msgSync(); } catch (e) { return; }
             const myId = msgMyId(), plainCalls = ((msgNet.callNote && msgNet.callNote.list) || []).filter(x => x.u === myId).map(x => x.ts);
             const callAt = Math.max(0, ...(msgNet.me ? msgNet.calls || [] : []), ...plainCalls), callSeen = +GM_getValue(acctKey('vp_call_seen'), 0) || 0;
@@ -6539,6 +6828,13 @@
         }
         setTimeout(msgBackground, 8000);
         setInterval(msgBackground, 60000);
+        setInterval(() => {
+            const c = callNet.cur, open = messagesOverlay && messagesOverlay.classList.contains('vp-open');
+            const every = c && /^(calling|ringing|connecting)$/.test(c.state) ? 2000 : open && !document.hidden ? 8000 : 0;
+            if (!every || Date.now() - callNet.lastSync < every || msgNet.syncing || !msgNet.me) return;
+            callNet.lastSync = Date.now();
+            msgSync().catch(() => { });
+        }, 1000);
         document.addEventListener('visibilitychange', () => { if (!document.hidden) msgBackground(); });
         const msgToastCss = addCss(`
         .vp-msg-badge { position: absolute; top: -6px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; font-size: 11px; font-weight: 600;
@@ -6647,6 +6943,7 @@
             back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
             edit: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16Z"/><path d="M13.5 6.5l4 4"/></svg>',
             search: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>',
+            call: svgIcon(GLYPH.phone, 21),
             more: '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
             clip: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5 12.5 19a5 5 0 0 1-7-7L13 4.5a3.3 3.3 0 0 1 4.7 4.7l-7.4 7.4a1.7 1.7 0 0 1-2.4-2.4l6.7-6.7"/></svg>',
             smile: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01" stroke-width="2.6"/></svg>',
@@ -6784,6 +7081,7 @@
         html.vp-msgs-open .vp-msgs-under.vp-on { display: block; }
         .vp-msgs-view { display: flex; flex-direction: column; min-height: 0; flex: 1; }
         .vp-msgs-view[hidden] { display: none; }
+        .vp-msgs-call[hidden] { display: none; }
         .vp-msgs-top { display: flex; align-items: center; gap: 10px; padding: 18px 16px 10px; }
         .vp-msgs-title { font-size: 24px; font-weight: 700; margin-right: auto; }
         .vp-msgs-ib { width: 40px; height: 40px; border-radius: 50%; border: 0; padding: 0; display: flex; align-items: center; justify-content: center;
@@ -6943,7 +7241,7 @@
             <section class="vp-msgs-view vp-msgs-chat" hidden>
                 <div class="vp-msgs-chead"><button class="vp-msgs-ib vp-msgs-back" title="Назад">${MSG_ICON.back}</button>
                     <div class="vp-msgs-ava vp-sm"></div><div class="vp-msgs-who"><b></b><small></small></div>
-                    <button class="vp-msgs-ib" title="Ещё (пока не работает)">${MSG_ICON.more}</button></div>
+                    <button class="vp-msgs-ib vp-msgs-call" title="Позвонить">${MSG_ICON.call}</button><button class="vp-msgs-ib" title="Ещё (пока не работает)">${MSG_ICON.more}</button></div>
                 <div class="vp-msgs-feed" aria-live="polite"></div>
                 <form class="vp-msgs-bar"><div class="vp-msgs-field"><button type="button" class="vp-msgs-ghost vp-msgs-attach" title="Картинка">${MSG_ICON.clip}</button>
                     <input type="text" placeholder="Сообщение" enterkeyhint="send" autocomplete="off"><span class="vp-msgs-count" hidden></span>
@@ -7048,6 +7346,7 @@
                 };
                 $('.vp-msgs-who small').textContent = d.bot ? 'бот · всегда в сети' : d.support ? 'поддержка · на связи' : d.supUid ? 'обращение в поддержку'
                     : '@' + d.login + ' · ' + (d.online ? 'в сети' : d.lastSeen && seenAgo(d.lastSeen) ? 'был(а) в сети ' + seenAgo(d.lastSeen) : 'с ИТД X');
+                $('.vp-msgs-call').hidden = !d.login || !!d.support || !!d.supUid || !!d.bot;
                 if (d.login || d.support || d.supUid) { home.hidden = true; chat.hidden = false; input.value = ''; send.disabled = true; msgCount(); msgOpenPerson(d); return; }
                 feed.innerHTML = '<div class="vp-msgs-note">🤖 Бот-шутник: сообщения ему никуда не уходят и не сохраняются</div>'
                     + (d.msgs.length ? '<div class="vp-msgs-note">Сегодня</div>' : `<div class="vp-msgs-note">Это начало переписки с ${esc(d.name)}</div>`);
@@ -7256,6 +7555,13 @@
                 close(true);
                 openProfile(login);
             });
+            $('.vp-msgs-call').onclick = () => {
+                if (!current || !current.login || current.support || current.bot) return;
+                const t = msgTarget(current);
+                if (!msgNet.me || !isApprovedId(msgMyId())) return note('📞 Звонки откроются вместе с перепиской');
+                if (!t.uid) return note(t.missing);
+                callStart(t.uid, current.name, current.ava);
+            };
             search.addEventListener('input', renderList);
             $('.vp-msgs-back').onclick = closeChat;
             input.addEventListener('input', () => { send.disabled = !input.value.trim() && !pendingImg; msgCount(); });
