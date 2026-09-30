@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.13.5
+// @version      3.3.13.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1951,6 +1951,9 @@
         .vp-admin-list { overflow-y: auto; padding: 6px 14px 10px; }
         .vp-admin-list div { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255, 255, 255, .05); }
         .vp-admin-list .vp-miss { color: #ff8a8a; }
+        .vp-fab[data-count]::after { content: attr(data-count); position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; background: rgba(229, 57, 53, .92); color: #fff; font: 800 20px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            font-variant-numeric: lining-nums tabular-nums; pointer-events: none; }
         .vp-fab-a { font: 800 21px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: -.02em; }
         @media (max-width: 1172px) { [data-vp-posts] > hr { display: none !important; } }
         .vp-emoji-tint .vp-soft-bg, .itd-blur-active .vp-soft-bg { background-color: rgba(0, 0, 0, .22) !important; }
@@ -3504,7 +3507,8 @@
             const fab = document.createElement('div');
             fab.className = 'vp-fab';
             fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка">${fabFace()}</button>
-            <div class="vp-fab-menu"><button type="button" data-act="snap">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 18)}<span>Снимок для Claude</span></button>
+            <div class="vp-fab-menu"><button type="button" data-act="snap" title="На компьютере — ещё Ctrl+Shift+S">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 18)}<span>Снимок для Claude</span></button>
+                <button type="button" data-act="snap5">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><path d="M12 10v3l2 1.5"/>', 18)}<span>Снимок через 5 с</span></button>
                 <button type="button" data-act="report">${svgIcon('<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h4"/>', 18)}<span>Скопировать отчёт</span></button>
                 <button type="button" data-act="diag">${svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4M8.5 11l1.8 1.8 3.4-3.6"/>', 18)}<span>Диагностика</span></button>
                 <button type="button" data-act="verify">${svgIcon('<path d="M12 2.5l2.9 6 6.6.6-5 4.4 1.5 6.5L12 16.8 5.9 20 7.4 13.5l-5-4.4 6.6-.6z"/>', 18)}<span>Галочки</span></button>
@@ -3565,6 +3569,22 @@
             btn.addEventListener('click', e => e.stopPropagation());
             const act = (name, fn) => fab.querySelector(`[data-act="${name}"]`).addEventListener('click', e => { e.stopPropagation(); fab.classList.remove('vp-open'); fn(); });
             act('snap', () => setTimeout(pageSnapshot, 200));
+            act('snap5', () => {
+                if (fab.dataset.count) return;
+                let n = 5;
+                fab.dataset.count = n;
+                const t = setInterval(() => {
+                    if (--n > 0) { fab.dataset.count = n; return; }
+                    clearInterval(t);
+                    delete fab.dataset.count;
+                    pageSnapshot().then(() => adminToast('Снимок сохранён'));
+                }, 1000);
+            });
+            if (!IS_PHONE) addEventListener('keydown', e => {
+                if (!e.ctrlKey || !e.shiftKey || e.altKey || e.code !== 'KeyS') return;
+                e.preventDefault(); e.stopPropagation();
+                pageSnapshot().then(() => adminToast('Снимок сохранён'));
+            }, true);
             act('report', () => copyText(adminReport()).then(ok => adminToast(ok ? 'Отчёт скопирован — вставь его Claude' : 'Не вышло скопировать')));
             act('diag', adminDiag);
             act('verify', () => adminVerify());
@@ -3601,16 +3621,48 @@
         }
         onDom(adminFab);
 
-        function pageSnapshot() {
+        function blobToData(url, max) {
+            return fetch(url).then(r => r.blob()).then(b => b.size > max ? '' : new Promise(res => {
+                const fr = new FileReader();
+                fr.onload = () => res(fr.result);
+                fr.onerror = () => res('');
+                fr.readAsDataURL(b);
+            })).catch(() => '');
+        }
+        async function pageSnapshot() {
             const css = [];
             for (const sh of document.styleSheets) {
                 try { css.push(`/* ${sh.href || (sh.ownerNode && sh.ownerNode.id) || 'inline'} */\n` + [...sh.cssRules].map(r => r.cssText).join('\n')); }
                 catch (e) { css.push(`/* ${sh.href} — чужой домен, не читается */`); }
             }
             const doc = document.documentElement.cloneNode(true);
+            const live = document.querySelectorAll('input, textarea, select'), copy = doc.querySelectorAll('input, textarea, select');
+            live.forEach((el, i) => {
+                const c = copy[i];
+                if (!c || el.type === 'password' || el.type === 'file') return;
+                if (el.tagName === 'SELECT') [...c.options].forEach((o, j) => o.toggleAttribute('selected', j === el.selectedIndex));
+                else if (/^(checkbox|radio)$/.test(el.type)) c.toggleAttribute('checked', el.checked);
+                else if (el.tagName === 'TEXTAREA') c.textContent = el.value;
+                else c.setAttribute('value', el.value);
+            });
             doc.querySelectorAll('script, style, link[rel="stylesheet"], canvas, .vp-fab').forEach(el => el.remove());
+            const blobs = new Map();
+            let budget = 25e6;
+            for (const el of doc.querySelectorAll('[src^="blob:"], [poster^="blob:"]')) {
+                for (const a of ['src', 'poster']) {
+                    const u = el.getAttribute(a);
+                    if (!u || !u.startsWith('blob:')) continue;
+                    if (!blobs.has(u)) {
+                        const d = /^(VIDEO|SOURCE|AUDIO)$/.test(el.tagName) ? '' : await blobToData(u, Math.min(4e6, budget));
+                        budget -= d.length;
+                        blobs.set(u, d);
+                    }
+                    if (blobs.get(u)) el.setAttribute(a, blobs.get(u));
+                    else el.setAttribute('data-vp-blob', u);
+                }
+            }
             const info = {
-                url: location.href, width: innerWidth, height: innerHeight, dpr: devicePixelRatio,
+                url: location.href, width: innerWidth, height: innerHeight, dpr: devicePixelRatio, scrollX, scrollY,
                 ua: navigator.userAgent, version: GM_info.script.version, theme: document.documentElement.getAttribute('data-theme'), at: new Date().toISOString()
             };
             const head = doc.querySelector('head') || doc.insertBefore(document.createElement('head'), doc.firstChild);
