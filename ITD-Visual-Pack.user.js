@@ -1336,6 +1336,7 @@
         const ICONS = {
             settings: {
                 'Фон': svgIcon(I_BG),
+                'Неоновая подсветка': svgIcon('<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0 0 12 3z"/>'),
                 'Подсветка ника': svgIcon('<path d="M4 19 9 5h1l5 14M5.8 14.5h7.4"/><path d="M18.5 3.5v4M16.5 5.5h4"/><path d="M19 11.5v2M18 12.5h2"/>'),
                 'Подсветка аватарок': svgIcon('<circle cx="12" cy="10" r="3"/><path d="M7 17.5a5.5 5.5 0 0 1 10 0"/><circle cx="12" cy="12" r="9.5" stroke-dasharray="2.2 2.6"/>'),
                 'Подсветка постов': svgIcon('<rect x="5" y="6" width="14" height="12" rx="2.5"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/><rect x="2" y="3" width="20" height="18" rx="4.5" stroke-dasharray="2.2 2.6"/>'),
@@ -1489,6 +1490,8 @@
         let currentStyle = GM_getValue('nickStyle', 'white');
         let backgroundEnabled = GM_getValue('backgroundEnabled', true);
         let backgroundStyle = GM_getValue('backgroundStyle', 'matrix');
+        let neonEnabled = GM_getValue('neonEnabled', true);
+        document.documentElement.classList.toggle('vp-no-neon', !neonEnabled);
         let nickGlowEnabled = GM_getValue('nickGlowEnabled', true);
         let avatarGlowEnabled = GM_getValue('avatarGlowEnabled', true);
         let antiCensorshipEnabled = GM_getValue('antiCensorshipEnabled', true);
@@ -2021,6 +2024,12 @@
         .vp-settings-tabs { width: 320px !important; max-width: calc(100vw - 16px) !important; box-sizing: border-box !important;
             max-height: calc(100dvh - 16px); display: flex !important; flex-direction: column; overflow: hidden !important; }
         .vp-settings-tabs .vp-stabs { flex: 0 0 auto; }
+        .vp-settings-tabs .settings-option.vp-dim { opacity: .4; pointer-events: none; }
+        .vp-rcard-move { display: flex; gap: 2px; margin-left: auto; margin-right: 10px; }
+        .vp-rcard-move button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+        .vp-rcard-move button:hover:not(:disabled) { background: rgba(127, 127, 127, .18); }
+        .vp-rcard-move button:disabled { opacity: .25; cursor: default; }
+        .vp-rcards-hint { padding: 2px 12px 8px; font-size: 12px; opacity: .55; }
         .vp-tab-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
             touch-action: pan-y; -webkit-overflow-scrolling: touch; margin: 0 -12px -12px; padding: 0 12px 12px; }
         .vp-tab-body::-webkit-scrollbar { display: none; }
@@ -2578,13 +2587,14 @@
             const rainbow = currentStyle === 'rainbow';
             const dark = isDarkTheme();
             const h = Math.round(globalHue);
-            const key = [currentStyle, rainbow ? h : '', dark, nickGlowEnabled, avatarGlowEnabled, postBorderEnabled].join();
+            const key = [currentStyle, rainbow ? h : '', dark, nickGlowEnabled, avatarGlowEnabled, postBorderEnabled, neonEnabled].join();
+            const nickGlowOn = neonEnabled && nickGlowEnabled, avatarGlowOn = neonEnabled && avatarGlowEnabled;
             if (key === paintKey) return;
             paintKey = key;
             const [nick, nickBox, avatar, post, navIcon, tab, root, selection] = [...paintStyle.sheet.cssRules].map(r => r.style);
             const hsl = `hsl(${h}, 100%, ${dark ? 55 : 42}%)`;
             if (rainbow) {
-                nick.cssText = `color: ${hsl} !important; text-shadow: 0 0 5px ${hsl} !important;`;
+                nick.cssText = `color: ${hsl} !important;${neonEnabled ? ` text-shadow: 0 0 5px ${hsl} !important;` : ''}`;
             } else if (style.nickCss) {
                 nick.cssText = style.nickCss(dark);
             } else {
@@ -2596,20 +2606,20 @@
                 : dark ? style.glow
                     : currentStyle === 'white' ? 'drop-shadow(0 0 5px rgba(0, 0, 0, 0.25))'
                         : `brightness(0.8) saturate(1.3) drop-shadow(0 0 5px color-mix(in srgb, ${accentOf(style)} 55%, transparent))`;
-            nickBox.cssText = !nickGlowEnabled ? (dark || rainbow ? '' : 'filter: brightness(0.8) saturate(1.3) !important;')
+            nickBox.cssText = !nickGlowOn ? (dark || rainbow ? '' : 'filter: brightness(0.8) saturate(1.3) !important;')
                 : `filter: ${glow} !important;`;
             const ah = style.avatarHue || 210, as = style.avatarSat ?? 100;
-            avatar.cssText = !avatarGlowEnabled ? '' : `filter: ${rainbow
+            avatar.cssText = !avatarGlowOn ? '' : `filter: ${rainbow
                 ? `drop-shadow(0 0 5px ${hsl}) drop-shadow(0 0 12px ${hsl})`
                 : `drop-shadow(0 0 3px hsl(${ah}, ${as}%, 60%)) drop-shadow(0 0 6px hsl(${ah}, ${as}%, 60%))`} !important;`;
             post.cssText = '';
-            document.documentElement.classList.toggle('vp-post-hl', postBorderEnabled);
+            document.documentElement.classList.toggle('vp-post-hl', neonEnabled && postBorderEnabled);
 
             const accent = rainbow ? `hsl(${h}, 100%, ${dark ? 62 : 45}%)`
                 : dark ? accentOf(style)
                     : currentStyle === 'white' ? '#1a1a1a' : `color-mix(in srgb, ${accentOf(style)} 78%, #000)`;
-            navIcon.cssText = `color: ${accent} !important; filter: drop-shadow(0 0 6px ${accent}) !important;`;
-            tab.cssText = `box-shadow: inset 0 0 0 1px ${accent}, 0 0 14px -4px ${accent} !important;`;
+            navIcon.cssText = `color: ${accent} !important;${neonEnabled ? ` filter: drop-shadow(0 0 6px ${accent}) !important;` : ''}`;
+            tab.cssText = `box-shadow: inset 0 0 0 1px ${accent}${neonEnabled ? `, 0 0 14px -4px ${accent}` : ''} !important;`;
             const rootKey = (rainbow ? 'r' + Math.round(h / 30) : accent) + dark;
             if (rootKey !== paintRootKey) {
                 paintRootKey = rootKey;
@@ -2646,6 +2656,11 @@
                     ? `html.vp-looks [data-vp-look-av="${key}"] { filter: drop-shadow(0 0 5px hsl(300, 100%, 60%)) drop-shadow(0 0 10px hsl(190, 100%, 55%)) !important; }`
                     : `html.vp-looks [data-vp-look-av="${key}"] { filter: drop-shadow(0 0 3px hsl(${ah}, ${as}%, 60%)) drop-shadow(0 0 6px hsl(${ah}, ${as}%, 60%)) !important; }`);
             }
+            out.push('html.vp-no-neon .vp-my-nick, html.vp-no-neon [data-vp-look], html.vp-no-neon [data-vp-look] * { text-shadow: none !important; }',
+                'html.vp-no-neon.vp-no-neon [data-vp-look-glow], html.vp-no-neon.vp-no-neon [data-vp-look-av] { filter: none !important; }',
+                'html.vp-no-neon .vp-gal-ind { box-shadow: inset 0 0 0 1px var(--vp-accent) !important; }',
+                'html.vp-no-neon .vp-nav-blob { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent) 32%, transparent) !important; }',
+                'html.vp-no-neon .vp-portal { animation: none !important; filter: none !important; }');
             lookStyleEl.textContent = out.join('\n');
             document.head.appendChild(lookStyleEl);
         })();
@@ -2949,6 +2964,7 @@
         }
         const SETTINGS = [
             { label: 'Фон', get: () => backgroundEnabled, set: v => { backgroundEnabled = v; updateBackgroundVisibility(); }, key: 'backgroundEnabled' },
+            { label: 'Неоновая подсветка', get: () => neonEnabled, set: v => { neonEnabled = v; document.documentElement.classList.toggle('vp-no-neon', !v); paint(); }, key: 'neonEnabled' },
             { label: 'Подсветка ника', get: () => nickGlowEnabled, set: v => { nickGlowEnabled = v; paint(); }, key: 'nickGlowEnabled' },
             { label: 'Подсветка аватарок', get: () => avatarGlowEnabled, set: v => { avatarGlowEnabled = v; paint(); }, key: 'avatarGlowEnabled' },
             { label: 'Подсветка постов', get: () => postBorderEnabled, set: v => { postBorderEnabled = v; paint(); }, key: 'postBorderEnabled' },
@@ -2968,9 +2984,9 @@
             { label: 'Версия для ПК на планшете', get: () => GM_getValue('tabletDesktop', true), set: () => tabletViewport(), key: 'tabletDesktop' }
         ];
         const SETTINGS_TABS = [
-            { id: 'nick', name: 'Ник', items: ['Подсветка ника', 'Подсветка аватарок', 'Подсветка постов'] },
+            { id: 'nick', name: 'Ник', items: ['Неоновая подсветка', 'Подсветка ника', 'Подсветка аватарок', 'Подсветка постов'] },
             { id: 'bg', name: 'Фон', items: ['Фон'] },
-            { id: 'look', name: 'Вид', items: ['Стекло', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Версия для ПК на планшете'] },
+            { id: 'look', name: 'Вид', items: ['Стекло', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Карточки панели', 'Версия для ПК на планшете'] },
             { id: 'likes', name: 'Лайки', items: ['Автолайки'] },
             { id: 'misc', name: 'Ещё', items: ['Анти цензура', 'Звуки интерфейса', 'Громкость', 'Заставка при входе'] },
             { id: 'icon', name: 'Иконка' }
@@ -2991,6 +3007,45 @@
                 if (after) after();
             };
             return row;
+        }
+        function railCardsBox(redraw) {
+            const box = document.createElement('div');
+            box.className = 'vp-rcards';
+            box.appendChild(secTitle('Карточки панели'));
+            const st = railCards();
+            st.order.forEach((id, i) => {
+                const c = RAIL_CARDS.find(x => x.id === id), on = !st.off.includes(id);
+                const row = document.createElement('div');
+                row.className = 'settings-option vp-rcard';
+                row.dataset.card = id;
+                row.innerHTML = `<span class="vp-setting-label"><span></span></span><span class="vp-rcard-move"><button type="button" data-d="-1" aria-label="Выше">${svgIcon('<path d="m6 15 6-6 6 6"/>', 16)}</button><button type="button" data-d="1" aria-label="Ниже">${svgIcon('<path d="m6 9 6 6 6-6"/>', 16)}</button></span><div class="toggle-switch"></div>`;
+                row.querySelector('.vp-setting-label > span').textContent = c.name;
+                const ico = rail.querySelector(`.vp-rail-card[data-block="${id}"] .vp-rail-title svg`);
+                if (ico) row.querySelector('.vp-setting-label').prepend(ico.cloneNode(true));
+                row.querySelector('[data-d="-1"]').disabled = i === 0;
+                row.querySelector('[data-d="1"]').disabled = i === st.order.length - 1;
+                row.querySelector('.toggle-switch').classList.toggle('active', on);
+                row.onclick = e => {
+                    e.stopPropagation();
+                    const mv = e.target.closest('[data-d]'), cur = railCards();
+                    if (mv) {
+                        const j = cur.order.indexOf(id), k = j + +mv.dataset.d;
+                        if (k < 0 || k >= cur.order.length) return;
+                        [cur.order[j], cur.order[k]] = [cur.order[k], cur.order[j]];
+                    } else {
+                        cur.off = cur.off.filter(x => x !== id);
+                        if (on) cur.off.push(id);
+                    }
+                    railCardsSave(cur);
+                    redraw();
+                };
+                box.appendChild(row);
+            });
+            const hint = document.createElement('div');
+            hint.className = 'vp-rcards-hint';
+            hint.textContent = 'На самой панели карточки тоже можно перетаскивать за заголовок';
+            box.appendChild(hint);
+            return box;
         }
         function introModeRow() {
             const STEPS = [['off', 'Выкл'], ['silent', 'Вкл'], ['tap', 'Вкл + звук · коснись при входе']];
@@ -3057,7 +3112,10 @@
                 else for (const label of tab.items) {
                     if (label === 'Заставка при входе' && IS_PHONE) { body.appendChild(introModeRow()); continue; }
                     if (label === 'Громкость') { body.appendChild(volumeRow()); continue; }
-                    body.appendChild(settingRow(SETTINGS.find(o => o.label === label), id === 'bg' ? redraw : null));
+                    if (label === 'Карточки панели') { body.appendChild(railCardsBox(redraw)); continue; }
+                    const row = settingRow(SETTINGS.find(o => o.label === label), id === 'bg' || id === 'nick' ? redraw : null);
+                    if (!neonEnabled && label.startsWith('Подсветка ')) row.classList.add('vp-dim');
+                    body.appendChild(row);
                 }
                 if (id === 'nick') {
                     body.appendChild(secTitle('Стиль ника'));
@@ -3238,7 +3296,6 @@
             wrap.appendChild(note);
             return wrap;
         }
-        const ADMINS = ['neurosfw'];
         function adminToast(text) {
             const t = document.createElement('div');
             t.className = 'vp-admin-toast';
@@ -3874,6 +3931,23 @@
 .vp-verify-ok { background: #2e7d32; color: #fff; }
 .vp-verify-no { background: #444; color: #ddd; }
 .vp-verify-row.vp-busy { opacity: .5; pointer-events: none; }
+.vp-junk-panel { width: min(560px, calc(100vw - 24px)); max-height: 80vh; }
+.vp-junk-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 14px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.vp-junk-bar label { display: flex; align-items: center; gap: 6px; opacity: .8; cursor: pointer; }
+.vp-junk-list { overflow-y: auto; padding: 4px 0; }
+.vp-junk-row { padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.06); transition: opacity .3s; }
+.vp-junk-row.vp-busy { opacity: .5; pointer-events: none; }
+.vp-junk-row.vp-gone { opacity: 0; pointer-events: none; }
+.vp-junk-top { display: flex; align-items: center; gap: 8px; }
+.vp-junk-top a { color: #fff; font-weight: 600; text-decoration: none; }
+.vp-junk-meta { margin-left: auto; font-size: 11px; opacity: .5; white-space: nowrap; }
+.vp-junk-why { margin: 4px 0 2px 24px; color: #ffb74d; font-size: 12px; }
+.vp-junk-text { margin-left: 24px; font: 12px/1.35 ui-monospace, Consolas, monospace; opacity: .75; overflow-wrap: anywhere; }
+.vp-junk-acts { display: flex; gap: 6px; margin: 8px 0 0 24px; }
+.vp-junk-acts button, .vp-junk-delsel { padding: 5px 10px; border: 0; border-radius: 8px; background: #3a3a40; color: #eee; font-size: 12px; cursor: pointer; }
+.vp-junk-acts [data-a="del"], .vp-junk-delsel:not(:disabled) { background: #b3261e; color: #fff; }
+.vp-junk-delsel:disabled { opacity: .4; cursor: default; }
+.vp-junk-err { padding: 8px 14px; color: #ff8a8a; }
 .vp-verify-row.vp-done-ok { background: rgba(46,125,50,.15); }
 .vp-verify-row.vp-done-no { background: rgba(120,120,120,.15); }
 .vp-verify-empty { padding: 20px; text-align: center; opacity: .6; }`;
@@ -3949,6 +4023,128 @@
             }
             showVerifyPanel(pending);
         }
+        const JUNK_POSTS = [[VERIFICATION_POST_ID, 'галочки'], [MSG_POST_ID, 'личка'], [STICKER_POST_ID, 'стикеры'], [GAMES_POST_ID, 'игры']];
+        function junkKind(post, c) {
+            const raw = String(c.content || '').trim(), a = c.author || {}, owner = a.id === OWNER_ID;
+            const sealed = raw.startsWith('ITDXE '), t = sealed ? openText(raw) : raw;
+            if (sealed && !t) return { bad: 'Битая запись: начинается как запись мода, но не читается' };
+            const code = parseCode(raw);
+            if (post === VERIFICATION_POST_ID) {
+                if (code) return isAuthorCode(a, code) ? { one: 'code' } : { bad: 'Код галочки не от этого аккаунта — мод его не засчитывает' };
+                if (LOOK_RE.test(t)) return { one: 'look' };
+                if (/^ITDX-R \d+$/.test(t)) return owner ? { bad: 'Заявка на галочку от владельца — не нужна' } : { one: 'req' };
+                if (/^ITDX-(V|C|SEEN)( |$)/.test(t)) return owner ? { ok: 1 } : { bad: 'Метка владельца от чужого — мод её не читает' };
+            } else if (post === MSG_POST_ID) {
+                const mod = /^ITDXK1 [\w-]+ [\w-]+$/.test(raw) ? 'key' : /^ITDXM1 \d+ [cb]/.test(raw) ? 'vol' : /^ITDXC1 /.test(t) ? 'call' : '';
+                if (mod === 'call' && !owner) return { bad: 'Звонок-розыгрыш от чужого — мод его не читает' };
+                if (mod && !owner && !isApprovedAuthor(a)) return { bad: 'Автор без одобренной галочки — мод его записи в личке не читает' };
+                if (mod === 'key' || mod === 'call') return { one: mod };
+                if (mod === 'vol') return { ok: 1 };
+            } else if (post === STICKER_POST_ID) {
+                if (/^ITDXS \d+\/\d+ /.test(raw)) return { ok: 1 };
+                if (t.startsWith('ITDXT1 ')) return { one: 'stats' };
+            } else if (post === GAMES_POST_ID) {
+                if (/^ITDXG2? /.test(raw)) return { one: 'games' };
+            }
+            return { bad: /^ITDX/.test(t) ? 'Запись мода не того вида для этого поста' : 'Не запись мода — обычный комментарий' };
+        }
+        async function junkScan() {
+            await checkAllComments(true);
+            loadApprovedIds();
+            const okIds = new Set(GM_getValue('junkOk', []));
+            const out = [], stat = { all: 0, byAuthor: new Map() };
+            for (const [post, where] of JUNK_POSTS) {
+                let list;
+                try { list = await allComments(post); } catch (e) { out.push({ err: where + ': ' + (e.message || e) }); continue; }
+                stat.all += list.length;
+                const seen = new Map();
+                for (const c of list) {
+                    const a = c.author || {}, k = junkKind(post, c);
+                    stat.byAuthor.set(a.id, (stat.byAuthor.get(a.id) || 0) + 1);
+                    let why = k.bad || '';
+                    if (!why && k.one) {
+                        const key = k.one + '|' + a.id, n = (seen.get(key) || 0) + 1;
+                        seen.set(key, n);
+                        if (n > 1) why = 'Дубль: у автора есть такая же запись выше в списке — мод читает ту, а эту нет';
+                    }
+                    if (why && !okIds.has(c.id)) out.push({ c, post, where, why });
+                }
+            }
+            for (const r of out) if (r.c) r.total = stat.byAuthor.get((r.c.author || {}).id) || 0;
+            return { rows: out, stat };
+        }
+        function junkPreview(c) {
+            const raw = String(c.content || '').trim(), t = raw.startsWith('ITDXE ') ? openText(raw) : raw;
+            return (t || raw).replace(/\s+/g, ' ').slice(0, 160);
+        }
+        async function junkDelete(id) {
+            const res = await api(`/api/comments/${id}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('удаление: ' + res.status);
+        }
+        async function adminJunk() {
+            vpVerifyEnsureStyle();
+            document.querySelectorAll('.vp-junk-panel').forEach(p => p.remove());
+            const box = document.createElement('div');
+            box.className = 'vp-admin-panel vp-junk-panel';
+            box.innerHTML = `<div class="vp-admin-head"><b>Мусор под постами</b><span>ищу…</span><button type="button" aria-label="Закрыть">×</button></div>
+                <div class="vp-junk-bar" hidden><label><input type="checkbox" class="vp-junk-all"> все</label><button type="button" class="vp-junk-delsel" disabled>Удалить выбранные</button></div>
+                <div class="vp-junk-list"></div>`;
+            box.querySelector('.vp-admin-head button').onclick = () => box.remove();
+            document.body.appendChild(box);
+            const head = box.querySelector('.vp-admin-head span'), list = box.querySelector('.vp-junk-list'), bar = box.querySelector('.vp-junk-bar');
+            const delSel = box.querySelector('.vp-junk-delsel'), all = box.querySelector('.vp-junk-all');
+            let scan;
+            try { scan = await junkScan(); } catch (e) { head.textContent = 'не вышло: ' + (e.message || e); return; }
+            const rows = scan.rows.filter(r => r.c), errs = scan.rows.filter(r => r.err);
+            const count = () => {
+                const left = list.querySelectorAll('.vp-junk-row:not(.vp-gone)').length, sel = list.querySelectorAll('.vp-junk-row:not(.vp-gone) input:checked').length;
+                head.textContent = left ? `похоже на мусор: ${left} из ${scan.stat.all}` : `чисто · всего записей ${scan.stat.all}`;
+                delSel.disabled = !sel;
+                delSel.textContent = sel ? `Удалить выбранные (${sel})` : 'Удалить выбранные';
+                bar.hidden = !left;
+            };
+            errs.forEach(r => { const d = document.createElement('div'); d.className = 'vp-junk-err'; d.textContent = 'Не загрузилось: ' + r.err; list.appendChild(d); });
+            if (!rows.length) { const d = document.createElement('div'); d.className = 'vp-verify-empty'; d.textContent = 'Ничего подозрительного'; list.appendChild(d); }
+            const gone = row => { row.classList.add('vp-gone'); setTimeout(() => row.remove(), 400); count(); };
+            const kill = async row => {
+                row.classList.add('vp-busy');
+                try { await junkDelete(row.dataset.id); gone(row); return true; }
+                catch (e) { row.classList.remove('vp-busy'); row.querySelector('.vp-junk-why').textContent = 'Не удалилось: ' + (e.message || e); logErr('мусор', e); return false; }
+            };
+            const killMany = async rs => { for (const r of rs) { if (!await kill(r)) break; await new Promise(z => setTimeout(z, 400)); } };
+            for (const r of rows) {
+                const a = r.c.author || {}, row = document.createElement('div');
+                row.className = 'vp-junk-row';
+                row.dataset.id = r.c.id;
+                row.dataset.author = a.id || '';
+                row.innerHTML = `<div class="vp-junk-top"><input type="checkbox"><a target="_blank" rel="noopener"></a><span class="vp-junk-meta"></span></div>
+                    <div class="vp-junk-why"></div><div class="vp-junk-text"></div>
+                    <div class="vp-junk-acts"><button type="button" data-a="del">Удалить</button><button type="button" data-a="author">Всё от автора</button><button type="button" data-a="ok">Не мусор</button></div>`;
+                const link = row.querySelector('a');
+                link.textContent = '@' + (a.username || a.id || '?');
+                if (a.username) link.href = '/@' + a.username;
+                const when = r.c.createdAt || r.c.created_at;
+                row.querySelector('.vp-junk-meta').textContent = `${r.where} · ${when ? new Date(when).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''} · всего от него: ${r.total}`;
+                row.querySelector('.vp-junk-why').textContent = r.why;
+                row.querySelector('.vp-junk-text').textContent = junkPreview(r.c);
+                row.querySelector('input').onchange = count;
+                row.querySelector('[data-a="del"]').onclick = () => kill(row);
+                row.querySelector('[data-a="ok"]').onclick = () => { GM_setValue('junkOk', [...GM_getValue('junkOk', []), r.c.id].slice(-2000)); gone(row); };
+                row.querySelector('[data-a="author"]').onclick = async () => {
+                    const mine = [...list.querySelectorAll('.vp-junk-row:not(.vp-gone)')].filter(x => x.dataset.author === row.dataset.author);
+                    if (!confirm(`Удалить все ${mine.length} подозрительных записей от ${link.textContent}?`)) return;
+                    await killMany(mine);
+                };
+                list.appendChild(row);
+            }
+            all.onchange = () => { list.querySelectorAll('.vp-junk-row:not(.vp-gone) input').forEach(i => { i.checked = all.checked; }); count(); };
+            delSel.onclick = async () => {
+                const sel = [...list.querySelectorAll('.vp-junk-row:not(.vp-gone)')].filter(x => x.querySelector('input').checked);
+                if (!sel.length || !confirm(`Удалить выбранные: ${sel.length}?`)) return;
+                await killMany(sel);
+            };
+            count();
+        }
         let fpsBox = null;
         function toggleFps() {
             if (fpsBox) { fpsBox.remove(); fpsBox = null; return; }
@@ -3964,7 +4160,7 @@
         }
 
         function adminFab() {
-            if (document.querySelector('.vp-fab') || !myUsername || !(meData && meData.id ? meData.id === OWNER_ID : ADMINS.includes(myUsername.toLowerCase()))) return;
+            if (document.querySelector('.vp-fab') || !meData || meData.id !== OWNER_ID) return;
             const fab = document.createElement('div');
             fab.className = 'vp-fab';
             fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка">${fabFace()}</button>
@@ -3974,6 +4170,7 @@
                 <button type="button" data-act="report">${svgIcon('<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h4"/>', 18)}<span>Скопировать отчёт</span></button>
                 <button type="button" data-act="diag">${svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4M8.5 11l1.8 1.8 3.4-3.6"/>', 18)}<span>Диагностика</span></button>
                 <button type="button" data-act="verify">${svgIcon('<path d="M12 2.5l2.9 6 6.6.6-5 4.4 1.5 6.5L12 16.8 5.9 20 7.4 13.5l-5-4.4 6.6-.6z"/>', 18)}<span>Галочки</span></button>
+                <button type="button" data-act="junk">${svgIcon('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>', 18)}<span>Мусор под постами</span></button>
                 <button type="button" data-act="rare">${svgIcon('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.3 6L12 16.4 6.6 19.4l1.3-6L3.4 9.3l6-.7z"/>', 18)}<span>Редкая заставка</span></button>
                 <button type="button" data-act="assemble">${svgIcon('<path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z"/>', 18)}<span>Заставка «сборка»</span></button>
                 <button type="button" data-act="twist">${svgIcon('<path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/>', 18)}<span>Заставка «обманка»</span></button>
@@ -4054,6 +4251,7 @@
             act('report', () => copyText(adminReport()).then(ok => adminToast(ok ? 'Отчёт скопирован — вставь его Claude' : 'Не вышло скопировать')));
             act('diag', adminDiag);
             act('verify', () => adminVerify());
+            act('junk', () => adminJunk());
             act('fps', toggleFps);
             act('rare', () => playIntro(IS_PHONE ? 'silent' : 'desk', true));
             act('assemble', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'assemble'));
@@ -7359,6 +7557,8 @@
         .vp-msgs-b.vp-in { align-self: flex-start; background: var(--block-bg); border-bottom-left-radius: 6px; }
         .vp-msgs-b.vp-out { align-self: flex-end; background: color-mix(in srgb, var(--vp-accent) 26%, var(--block-bg)); color: var(--text-primary, #fff);
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent) 45%, transparent); border-bottom-right-radius: 6px; }
+        .vp-msgs-b a.vp-msgs-link { color: inherit; font-weight: inherit; text-decoration: underline !important; text-decoration-thickness: 1px !important; text-underline-offset: 3px; word-break: break-all; }
+        .vp-msgs-b a.vp-msgs-link:hover { text-decoration-thickness: 2px !important; }
         .vp-msgs-b i { display: block; margin-top: 2px; font-style: normal; font-size: 11px; opacity: .6; text-align: right; white-space: nowrap; }
         .vp-msgs-b i[data-tick]::after { content: ""; display: inline-block; width: 16px; height: 11px; margin-left: 3px; vertical-align: -1px; background: currentColor;
             -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6 5.6 9.1 12.5 2.2'/%3E%3C/svg%3E") center / contain no-repeat;
@@ -7513,11 +7713,42 @@
                 if (i.textContent !== txt) i.textContent = txt;
                 if (m) { if (i.dataset.tick !== String(m[2].length)) i.dataset.tick = m[2].length; } else if (i.hasAttribute('data-tick')) i.removeAttribute('data-tick');
             }
+            const MSG_LINK_RE = /(?:https?:\/\/|(?<![\w.\/@-])(?:xn--d1ah4a\.com|итд\.com)\/)[^\s<>"'«»]+/gi;
+            function msgText(el, text) {
+                const str = String(text || '');
+                let at = 0, box = null;
+                for (const m of str.matchAll(MSG_LINK_RE)) {
+                    const raw = m[0].replace(/[.,!?:;)\]]+$/, ''), end = m.index + raw.length;
+                    let u;
+                    try { u = new URL(/^https?:/i.test(raw) ? raw : 'https://' + raw); } catch (e) { continue; }
+                    if (!/^https?:$/.test(u.protocol)) continue;
+                    if (!box) { box = document.createElement('span'); box.className = 'vp-msgs-t'; }
+                    if (m.index > at) box.append(str.slice(at, m.index));
+                    const a = document.createElement('a'), own = u.hostname === location.hostname || u.hostname === 'xn--d1ah4a.com';
+                    a.href = u.href;
+                    a.textContent = raw.replace(/^(https?:\/\/)?xn--d1ah4a\.com/i, 'итд.com');
+                    a.className = 'vp-msgs-link';
+                    if (own) a.addEventListener('click', e => {
+                        if (e.button || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        close(true);
+                        history.pushState({}, '', u.pathname + u.search + u.hash);
+                        dispatchEvent(new PopStateEvent('popstate'));
+                    });
+                    else { a.target = '_blank'; a.rel = 'noopener noreferrer nofollow'; a.addEventListener('click', e => e.stopPropagation()); }
+                    box.appendChild(a);
+                    at = end;
+                }
+                if (!box) { el.append(str); return; }
+                if (at < str.length) box.append(str.slice(at));
+                el.appendChild(box);
+            }
             function bubble(dir, text, meta, imgUrl) {
                 const urls = !imgUrl ? [] : Array.isArray(imgUrl) ? imgUrl : [imgUrl];
                 const b = document.createElement('div');
                 b.className = 'vp-msgs-b vp-' + dir + (urls.length ? ' vp-has-img' : '');
-                b.textContent = text;
+                if (!urls.length) msgText(b, text);
                 if (urls.length) {
                     const cell = (u, i) => {
                         const wrap = document.createElement('span');
@@ -7543,7 +7774,7 @@
                         else if (cols === 3 && n % 3 === 2) { box.lastChild.classList.add('vp-half'); box.lastChild.previousSibling.classList.add('vp-half'); }
                     }
                     b.prepend(box);
-                    if (text) { b.childNodes[1].remove(); const cap = document.createElement('span'); cap.className = 'vp-msgs-cap'; cap.textContent = text; box.after(cap); }
+                    if (text) { const cap = document.createElement('span'); cap.className = 'vp-msgs-cap'; msgText(cap, text); box.after(cap); }
                 }
                 const i = document.createElement('i');
                 setMeta(i, meta || now());
@@ -9854,9 +10085,10 @@
         .vp-gal-count { position: absolute; right: 8px; top: 8px; padding: 3px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
             color: #fff; pointer-events: none; background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4);
             box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset; }
-        .vp-gal-dots { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); display: flex; gap: 5px; padding: 5px 7px;
-            border-radius: 999px; pointer-events: none; background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4);
-            -webkit-backdrop-filter: blur(10px) saturate(1.4); box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset; }
+        .vp-gal-dots { position: absolute; left: 50%; top: 0; transform: translateX(-50%); display: flex; gap: 5px; padding: 6px 11px 7px;
+            border-radius: 0 0 12px 12px; pointer-events: none; background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4);
+            -webkit-backdrop-filter: blur(10px) saturate(1.4);
+            box-shadow: inset 0 -1px 0 rgba(255,255,255,.12), inset 1px 0 0 rgba(255,255,255,.12), inset -1px 0 0 rgba(255,255,255,.12); }
         .vp-gal-dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.45); }
         .vp-gal-dots i.vp-on { background: #fff; }
         .vp-gal-arrow { position: absolute; top: 50%; width: 44px; height: 44px; margin-top: -22px; border: 0; border-radius: 50%; padding: 0;
@@ -11147,6 +11379,68 @@
         <section class="vp-rail-card" data-block="games"><div class="vp-rail-title">${svgIcon('<rect x="2.5" y="7" width="19" height="11" rx="5.5"/><path d="M7.5 10.5v4M5.5 12.5h4"/><circle cx="15.5" cy="11.5" r=".8"/><circle cx="17.5" cy="13.5" r=".8"/>', 16)}<span>Игры</span></div>
             <div class="vp-games-list"></div></section>`;
         document.body.appendChild(rail);
+        const RAIL_CARDS = [{ id: 'stats', name: 'Статистика' }, { id: 'club', name: 'Клуб ИТД X' }, { id: 'games', name: 'Игры' }];
+        function railCards() {
+            const v = GM_getValue('railCards', null) || {}, ids = RAIL_CARDS.map(c => c.id);
+            const order = (Array.isArray(v.order) ? v.order : []).filter(id => ids.includes(id));
+            ids.forEach(id => { if (!order.includes(id)) order.push(id); });
+            return { order, off: (Array.isArray(v.off) ? v.off : []).filter(id => ids.includes(id)) };
+        }
+        function railCardsSave(st) {
+            GM_setValue('railCards', { order: st.order, off: st.off });
+            applyRailCards();
+        }
+        function applyRailCards(place = true) {
+            const st = railCards();
+            for (const id of st.order) {
+                const card = rail.querySelector(`:scope > .vp-rail-card[data-block="${id}"]`);
+                if (!card) continue;
+                rail.appendChild(card);
+                card.hidden = st.off.includes(id);
+            }
+            if (place) placeRail();
+        }
+        applyRailCards(false);
+        rail.addEventListener('pointerdown', e => {
+            const title = e.target.closest('.vp-rail-title'), card = title && title.parentElement;
+            if (!card || e.button || e.target.closest('button, a') || mobileMenuOpen && e.pointerType !== 'mouse') return;
+            const y0 = e.clientY;
+            let base = y0, on = false;
+            const move = ev => {
+                const dy = ev.clientY - base;
+                if (!on) {
+                    if (Math.abs(ev.clientY - y0) < 6) return;
+                    on = true;
+                    card.classList.add('vp-rail-drag');
+                    rail.classList.add('vp-rail-sorting');
+                    try { card.setPointerCapture(e.pointerId); } catch (x) { }
+                }
+                ev.preventDefault();
+                const shown = [...rail.querySelectorAll(':scope > .vp-rail-card:not([hidden])')], i = shown.indexOf(card);
+                const prev = shown[i - 1], next = shown[i + 1];
+                if (next && dy > next.offsetHeight / 2) { next.after(card); base += next.offsetHeight + 12; }
+                else if (prev && dy < -prev.offsetHeight / 2) { prev.before(card); base -= prev.offsetHeight + 12; }
+                card.style.transform = `translateY(${ev.clientY - base}px)`;
+            };
+            const up = () => {
+                removeEventListener('pointermove', move, true);
+                removeEventListener('pointerup', up, true);
+                removeEventListener('pointercancel', up, true);
+                if (!on) return;
+                card.classList.remove('vp-rail-drag');
+                rail.classList.remove('vp-rail-sorting');
+                card.style.transform = '';
+                const st = railCards();
+                st.order = [...rail.querySelectorAll(':scope > .vp-rail-card')].map(c => c.dataset.block);
+                railCardsSave(st);
+                const stop = ev => { ev.stopPropagation(); ev.preventDefault(); };
+                addEventListener('click', stop, { capture: true, once: true });
+                setTimeout(() => removeEventListener('click', stop, true), 0);
+            };
+            addEventListener('pointermove', move, true);
+            addEventListener('pointerup', up, true);
+            addEventListener('pointercancel', up, true);
+        });
 
         const railCss = addCss(`
         html.vp-side-moved aside:has(nav), html.vp-side-moved .vp-sidebar { left: var(--vp-side-left) !important; }
@@ -11155,6 +11449,10 @@
         .vp-rail.vp-on { display: flex; animation: vpRailIn .4s ease-out; }
         .vp-rail-card { border-radius: 36px; padding: 20px 22px; color: var(--text-primary, #fff); background: var(--block-bg);
             backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none); }
+        .vp-rail-card[hidden] { display: none !important; }
+        .vp-rail-card > .vp-rail-title { cursor: grab; }
+        .vp-rail-card.vp-rail-drag { position: relative; z-index: 2; cursor: grabbing; box-shadow: 0 16px 40px rgba(0, 0, 0, .45); transition: none; }
+        .vp-rail-sorting { -webkit-user-select: none; user-select: none; }
         .vp-rail-title { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 16px; font-weight: 600;
             color: var(--text-primary, #fff); }
         .vp-rail-title svg { color: var(--text-secondary); flex-shrink: 0; }
@@ -11325,7 +11623,7 @@
             const right = side ? side.getBoundingClientRect().left : innerWidth;
             const gap = right - edge;
             let box = null;
-            const on = railEnabled && !!myUsername;
+            const on = railEnabled && !!myUsername && !!rail.querySelector(':scope > .vp-rail-card:not([hidden])');
             const sideEl = siteEl('sidebar');
             if (on && galOpen && sideEl && innerWidth > PHONE_MAX) {
                 const margin = Math.max(12, Math.round(sideEl.getBoundingClientRect().left)), width = 300;
