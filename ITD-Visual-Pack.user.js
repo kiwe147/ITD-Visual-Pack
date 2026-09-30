@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.13.7
+// @version      3.3.13.8
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3509,6 +3509,7 @@
             fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка">${fabFace()}</button>
             <div class="vp-fab-menu"><button type="button" data-act="snap" title="На компьютере — ещё Ctrl+Shift+S">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 18)}<span>Снимок для Claude</span></button>
                 <button type="button" data-act="snapLater">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><path d="M12 10v3l2 1.5"/>', 18)}<span>Снимок через 30 с</span></button>
+                <button type="button" data-act="snapNew" title="Только то, что появилось после прошлого снимка. На компьютере — ещё Ctrl+Shift+E, сразу">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><path d="M12 10v6M9 13h6"/>', 18)}<span>Только новое через 15 с</span></button>
                 <button type="button" data-act="report">${svgIcon('<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h4"/>', 18)}<span>Скопировать отчёт</span></button>
                 <button type="button" data-act="diag">${svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4M8.5 11l1.8 1.8 3.4-3.6"/>', 18)}<span>Диагностика</span></button>
                 <button type="button" data-act="verify">${svgIcon('<path d="M12 2.5l2.9 6 6.6.6-5 4.4 1.5 6.5L12 16.8 5.9 20 7.4 13.5l-5-4.4 6.6-.6z"/>', 18)}<span>Галочки</span></button>
@@ -3568,22 +3569,26 @@
             btn.addEventListener('pointercancel', up);
             btn.addEventListener('click', e => e.stopPropagation());
             const act = (name, fn) => fab.querySelector(`[data-act="${name}"]`).addEventListener('click', e => { e.stopPropagation(); fab.classList.remove('vp-open'); fn(); });
-            act('snap', () => setTimeout(pageSnapshot, 200));
-            act('snapLater', () => {
+            const later = (sec, fn) => {
                 if (fab.dataset.count) return;
-                let n = 30;
+                let n = sec;
                 fab.dataset.count = n;
                 const t = setInterval(() => {
                     if (--n > 0) { fab.dataset.count = n; return; }
                     clearInterval(t);
                     delete fab.dataset.count;
-                    pageSnapshot().then(() => adminToast('Снимок сохранён'));
+                    fn();
                 }, 1000);
-            });
+            };
+            const fullSnap = () => pageSnapshot().then(() => adminToast('Снимок сохранён'));
+            const newSnap = () => newSnapshot().then(n => { if (n) adminToast(`Новое сохранено: ${n} шт.`); });
+            act('snap', () => setTimeout(fullSnap, 200));
+            act('snapLater', () => later(30, fullSnap));
+            act('snapNew', () => later(15, newSnap));
             if (!IS_PHONE) addEventListener('keydown', e => {
-                if (!e.ctrlKey || !e.shiftKey || e.altKey || e.code !== 'KeyS') return;
+                if (!e.ctrlKey || !e.shiftKey || e.altKey || (e.code !== 'KeyS' && e.code !== 'KeyE')) return;
                 e.preventDefault(); e.stopPropagation();
-                pageSnapshot().then(() => adminToast('Снимок сохранён'));
+                (e.code === 'KeyS' ? fullSnap : newSnap)();
             }, true);
             act('report', () => copyText(adminReport()).then(ok => adminToast(ok ? 'Отчёт скопирован — вставь его Claude' : 'Не вышло скопировать')));
             act('diag', adminDiag);
@@ -3629,26 +3634,34 @@
                 fr.readAsDataURL(b);
             })).catch(() => '');
         }
-        async function pageSnapshot() {
-            const css = [];
+        const snapPrev = { seen: null, css: null, name: '' };
+        function snapCss(onlyNew) {
+            const css = [], lens = new WeakMap();
             for (const sh of document.styleSheets) {
-                try { css.push(`/* ${sh.href || (sh.ownerNode && sh.ownerNode.id) || 'inline'} */\n` + [...sh.cssRules].map(r => r.cssText).join('\n')); }
-                catch (e) { css.push(`/* ${sh.href} — чужой домен, не читается */`); }
+                let text = null;
+                try { text = [...sh.cssRules].map(r => r.cssText).join('\n'); } catch (e) { }
+                const key = sh.ownerNode || sh, len = text == null ? -1 : text.length;
+                lens.set(key, len);
+                if (onlyNew && snapPrev.css && snapPrev.css.get(key) === len) continue;
+                css.push(text == null ? `/* ${sh.href} — чужой домен, не читается */` : `/* ${sh.href || (sh.ownerNode && sh.ownerNode.id) || 'inline'} */\n` + text);
             }
-            const doc = document.documentElement.cloneNode(true);
-            const live = document.querySelectorAll('input, textarea, select'), copy = doc.querySelectorAll('input, textarea, select');
-            live.forEach((el, i) => {
-                const c = copy[i];
+            return { css: css.join('\n\n'), lens };
+        }
+        function snapFields(live, copy) {
+            const a = live.querySelectorAll('input, textarea, select'), b = copy.querySelectorAll('input, textarea, select');
+            a.forEach((el, i) => {
+                const c = b[i];
                 if (!c || el.type === 'password' || el.type === 'file') return;
                 if (el.tagName === 'SELECT') [...c.options].forEach((o, j) => o.toggleAttribute('selected', j === el.selectedIndex));
                 else if (/^(checkbox|radio)$/.test(el.type)) c.toggleAttribute('checked', el.checked);
                 else if (el.tagName === 'TEXTAREA') c.textContent = el.value;
                 else c.setAttribute('value', el.value);
             });
-            doc.querySelectorAll('script, style, link[rel="stylesheet"], canvas, .vp-fab').forEach(el => el.remove());
+        }
+        async function snapBlobs(root) {
             const blobs = new Map();
             let budget = 25e6;
-            for (const el of doc.querySelectorAll('[src^="blob:"], [poster^="blob:"]')) {
+            for (const el of root.querySelectorAll('[src^="blob:"], [poster^="blob:"]')) {
                 for (const a of ['src', 'poster']) {
                     const u = el.getAttribute(a);
                     if (!u || !u.startsWith('blob:')) continue;
@@ -3661,24 +3674,82 @@
                     else el.setAttribute('data-vp-blob', u);
                 }
             }
-            const info = {
+        }
+        function snapRemember(lens, name) {
+            const seen = new WeakSet();
+            for (const el of document.getElementsByTagName('*')) seen.add(el);
+            Object.assign(snapPrev, { seen, css: lens, name });
+        }
+        function snapName(kind) {
+            const d = new Date(), p = n => String(n).padStart(2, '0');
+            return `itd-${kind}-${(location.pathname.replace(/\W+/g, '-').replace(/^-|-$/g, '') || 'feed')}-${innerWidth}px-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.html`;
+        }
+        function snapWrite(doc, css, extra, name) {
+            const info = Object.assign({
                 url: location.href, width: innerWidth, height: innerHeight, dpr: devicePixelRatio, scrollX, scrollY,
-                ua: navigator.userAgent, version: GM_info.script.version, theme: document.documentElement.getAttribute('data-theme'), at: new Date().toISOString()
-            };
+                ua: navigator.userAgent, version: GM_info.script.version, theme: document.documentElement.getAttribute('data-theme'), at: new Date().toISOString(), file: name
+            }, extra);
             const head = doc.querySelector('head') || doc.insertBefore(document.createElement('head'), doc.firstChild);
             const meta = document.createElement('script');
             meta.type = 'application/json'; meta.id = 'vp-snapshot-info';
             meta.textContent = JSON.stringify(info, null, 1);
             const style = document.createElement('style');
-            style.textContent = css.join('\n\n');
+            style.textContent = css;
             head.prepend(meta, style);
             const blob = new Blob(['<!doctype html>\n' + doc.outerHTML], { type: 'text/html' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = `itd-snapshot-${(location.pathname.replace(/\W+/g, '-').replace(/^-|-$/g, '') || 'feed')}-${innerWidth}px.html`;
+            a.download = name;
+            a.className = 'vp-snap-dl';
             document.body.appendChild(a);
             a.click();
             setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
+        }
+        async function pageSnapshot() {
+            const { css, lens } = snapCss(false);
+            const doc = document.documentElement.cloneNode(true), name = snapName('snapshot');
+            snapFields(document.documentElement, doc);
+            snapRemember(lens, name);
+            doc.querySelectorAll('script, style, link[rel="stylesheet"], canvas, .vp-fab').forEach(el => el.remove());
+            await snapBlobs(doc);
+            snapWrite(doc, css, { kind: 'full' }, name);
+        }
+        function snapPath(el) {
+            const parts = [];
+            for (let e = el; e && e !== document.documentElement && parts.length < 7; e = e.parentElement) {
+                parts.unshift(e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (e.classList[0] ? '.' + e.classList[0] : ''));
+            }
+            return parts.join(' > ');
+        }
+        async function newSnapshot() {
+            if (!snapPrev.seen) { adminToast('Сначала «Снимок для Claude» — новое считается от него'); return 0; }
+            const seen = snapPrev.seen, skip = 'script, style, link, noscript, .vp-fab, .vp-admin-toast, .vp-snap-dl';
+            const tops = [...document.body.getElementsByTagName('*')].filter(el => !seen.has(el) && seen.has(el.parentElement) && !el.closest(skip));
+            const { css, lens } = snapCss(true);
+            const prev = snapPrev.name, name = snapName('new');
+            if (!tops.length) { snapRemember(lens, prev); adminToast('Нового с прошлого снимка нет'); return 0; }
+            const doc = document.documentElement.cloneNode(false);
+            doc.appendChild(document.createElement('head'));
+            const copies = new Map([[document.documentElement, doc]]);
+            const shell = el => {
+                if (copies.has(el)) return copies.get(el);
+                const c = el.cloneNode(false);
+                shell(el.parentElement).appendChild(c);
+                copies.set(el, c);
+                return c;
+            };
+            for (const el of tops) {
+                const c = el.cloneNode(true);
+                snapFields(el, c);
+                c.setAttribute('data-vp-new', '');
+                shell(el.parentElement).appendChild(c);
+            }
+            const paths = tops.map(snapPath);
+            snapRemember(lens, name);
+            doc.querySelectorAll('script, style, link[rel="stylesheet"], canvas').forEach(el => el.remove());
+            await snapBlobs(doc);
+            snapWrite(doc, css, { kind: 'new', prev, parts: paths }, name);
+            return tops.length;
         }
 
         function pillButton(cls, title, icon, open) {
