@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.4.2
+// @version      3.4.2.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1354,7 +1354,7 @@
             },
 
             PALETTE: svgIcon('<path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 0 0 5-5C21 6.4 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="14.5" cy="7" r="1"/><circle cx="17" cy="10.5" r="1"/>'),
-            GEAR: svgIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
+            SLIDERS: svgIcon('<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>', 17),
             MESSAGES: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M5 3a3 3 0 00-3 3v10a3 3 0 003 3h1v2.47a.5.5 0 00.85.36L11.12 19H19a3 3 0 003-3V6a3 3 0 00-3-3H5zm2 5a1 1 0 000 2h10a1 1 0 100-2H7zm0 4a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>`,
             SCROLL_TOP: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 4.5h14M12 20V9M7 13.5l5-5 5 5"/></svg>',
             BANNER_IMAGE: svgIcon('<path d="M20 12.5V17a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17V7a2.5 2.5 0 0 1 2.5-2.5H12"/><circle cx="9" cy="9.5" r="1.5"/><path d="m20 15.5-3.5-3.5L8 19.5"/><path d="M18 2.5v6M15 5.5h6"/>'),
@@ -4451,7 +4451,8 @@
                     const b = document.createElement('button');
                     b.type = 'button';
                     b.className = nuksta.className.replace('vp-nuksta-hidden', '').trim() + ' vp-itdx-btn';
-                    b.textContent = 'ИТД X';
+                    b.innerHTML = ICONS.SLIDERS + '<span>ИТД X</span>';
+                    b.title = 'Настройки ИТД X';
                     b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openSettingsMenu(b); });
                     nuksta.after(b);
                     if (innerWidth <= PHONE_MAX && !nuksta.parentElement.querySelector('.vp-menu-btn')) {
@@ -4469,7 +4470,7 @@
             if (document.querySelector('.vp-itdx-btn') || ru5n.querySelector('.nick-controls-panel')) return;
             const panel = document.createElement('div');
             panel.className = 'nick-controls-panel';
-            panel.append(pillButton('settings-toggle', 'ИТД X', ICONS.GEAR, openSettingsMenu));
+            panel.append(pillButton('settings-toggle', 'ИТД X', ICONS.SLIDERS, openSettingsMenu));
             const nick = ru5n.querySelector('.' + SELECTORS.nickContainer);
             if (nick) nick.after(panel);
             else ru5n.appendChild(panel);
@@ -4689,6 +4690,8 @@
         }
 
         const CHANGELOG = [
+            ['3.4.2.1', '1 октября 2026', [
+                'Кнопка «ИТД X» в профиле — со значком настроек, чтобы сразу было понятно, что там настройки']],
             ['3.4.2', '1 октября 2026', [
                 'Баннер: GIF снова можно обрезать и сдвинуть перед установкой — сайт всё равно показывает баннер обычной картинкой']],
             ['3.4.1', '1 октября 2026', [
@@ -9290,6 +9293,8 @@
         .vp-itdx-btn { background: color-mix(in srgb, var(--vp-accent) 16%, var(--block-bg)) !important;
             color: color-mix(in srgb, var(--vp-accent) 75%, #fff) !important; border-color: transparent !important;
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent) 40%, transparent) !important; transition: background-color .15s ease; }
+        .vp-itdx-btn { display: inline-flex !important; align-items: center; justify-content: center; gap: 6px; }
+        .vp-itdx-btn > svg { flex: none; }
         .vp-itdx-btn:hover { background: color-mix(in srgb, var(--vp-accent) 24%, var(--block-bg)) !important; }
         html.vp-light .vp-itdx-btn { background: color-mix(in srgb, var(--vp-accent) 12%, #fff) !important; color: color-mix(in srgb, var(--vp-accent) 80%, #000) !important; }
         .vp-nick-tail-moved { display: none !important; }
