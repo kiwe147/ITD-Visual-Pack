@@ -1,6 +1,6 @@
 // Видео в баннере (3.4.0; 3.4.1 — углы как у картинки). Сайт показывает баннер картинкой, поэтому видео — для пользователей мода: кнопка в шторке баннера →
 // файл → /api/files/upload → ссылка CDN в стиле профиля (ITDXL1 … v=<путь>). Хозяин и гости с модом видят видео поверх баннера,
-// нажал ещё раз — видео убрано. Плюс: GIF/WebP баннером уходят на сайт как есть (не в JPEG) — проверка, оживёт ли у всех.
+// нажал ещё раз — видео убрано. Видео и GIF баннером для всех сайт не принимает (видео — 400, GIF превращает в JPEG; проверено 01.10).
 // Запуск:  node test/bannervideo.js снимок-своего-профиля.html
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -13,7 +13,6 @@ const ORIGIN = 'https://xn--d1ah4a.com';
 const url = (snap.match(/"url": "([^"]+)"/) || [, ORIGIN + '/@NeuroSFW'])[1];
 const VIDEO = process.env.VIDEO || 'C:/Code/ITD/ITD/video/itdx.mp4';
 const VPATH = 'videos/0a1b2c3d-1111-4222-8333-444455556666.mp4';
-const GIF = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
 const fails = [];
 const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + what); if (!ok) fails.push(what); };
 const USERS = { NeuroSFW: { username: 'NeuroSFW', displayName: '#NeuroSFW | ИТД X', id: OWNER }, bob: { username: 'bob', displayName: 'Боб', id: '22222222-2222-4222-8222-222222222222' } };
@@ -88,17 +87,6 @@ const USERS = { NeuroSFW: { username: 'NeuroSFW', displayName: '#NeuroSFW | ИТ
   const gone = await p.evaluate(() => !document.querySelector('.vp-banner-video'));
   const looks2 = await p.evaluate(sent => sent.map(c => window.__ot(c)).filter(t => /^ITDXL1 /.test(t)), p.sent);
   check(gone && !!looks2.length && !looks2[looks2.length - 1].includes(' v='), 'нажал ещё раз — видео убрано и из стиля тоже');
-  await p.evaluate(() => scrollTo(0, 0));
-  const pick = await p.$('.custom-image-btn');
-  if (pick) {
-    const [fc2] = await Promise.all([p.waitForEvent('filechooser'), p.$eval('.custom-image-btn', x => x.click())]);
-    await fc2.setFiles({ name: 'anim.gif', mimeType: 'image/gif', buffer: GIF });
-    await p.waitForTimeout(500);
-    await p.$eval('.custom-apply-btn', x => x.click());
-    await p.waitForTimeout(1500);
-    const up = p.uploads.find(x => x.gif);
-    check(!!up && up.name === 'anim.gif' && p.put.some(x => /bannerId/.test(x)), `GIF баннером ушёл на сайт как есть, не JPEG (${JSON.stringify(p.uploads)})`);
-  } else check(false, 'кнопка смены баннера мода не найдена');
   const errs = p.errors;
   await p.close();
 

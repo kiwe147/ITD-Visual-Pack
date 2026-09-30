@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.4.1
+// @version      3.4.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4534,9 +4534,7 @@
             input.accept = 'image/jpeg,image/png,image/webp,image/gif';
             input.onchange = () => {
                 const file = input.files[0];
-                if (!file) return;
-                putBannerImage(URL.createObjectURL(file));
-                bannerEdit.file = /^image\/(gif|webp)$/.test(file.type) ? file : null;
+                if (file) putBannerImage(URL.createObjectURL(file));
             };
             input.click();
         }
@@ -4546,7 +4544,7 @@
             if (!on) {
                 if (E.img) E.img.remove();
                 if (E.url) URL.revokeObjectURL(E.url);
-                E.img = E.url = E.drag = E.file = null;
+                E.img = E.url = E.drag = null;
                 E.top = 0;
             }
             if (E.banner) E.banner.classList.toggle('vp-banner-editing', on);
@@ -4656,7 +4654,7 @@
             apply.disabled = true;
             try {
                 const token = await getAccessToken();
-                const file = await uploadBannerFile(E.file || await cropBannerImage(), token);
+                const file = await uploadBannerFile(await cropBannerImage(), token);
                 const res = await fetch('/api/users/me', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -4691,6 +4689,8 @@
         }
 
         const CHANGELOG = [
+            ['3.4.2', '1 октября 2026', [
+                'Баннер: GIF снова можно обрезать и сдвинуть перед установкой — сайт всё равно показывает баннер обычной картинкой']],
             ['3.4.1', '1 октября 2026', [
                 'Баннер: у видео в баннере скруглённые углы, как у картинки']],
             ['3.4.0', '1 октября 2026', [
@@ -4698,7 +4698,6 @@
                 'Настройки → Ник: «Неоновая подсветка» одним переключателем убирает всё свечение — и своё, и чужое',
                 'Правая панель: карточки можно перетаскивать за заголовок, а в «Вид → Карточки панели» — менять местами, прятать и возвращать (игры тоже)',
                 'Баннер: своё видео в баннере — кнопка в шторке, его видят все, у кого стоит ИТД X',
-                'Баннер: GIF и WebP ставятся как есть, без превращения в обычную картинку',
                 'Галерея: точки листания — шторкой у верхнего края',
                 'Звонки: входящий вызов доходит быстрее, во время разговора экран телефона не гаснет, понятнее, если соединиться не вышло']],
             ['3.3.15.5', '30 сентября 2026', [
