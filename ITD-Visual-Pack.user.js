@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.15.2
+// @version      3.3.15.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4482,8 +4482,12 @@
         }
 
         const CHANGELOG = [
+            ['3.3.15.3', '30 сентября 2026', [
+                'Блокировка: заблокированный видит в чате, что ты его заблокировал(а), и не может писать и звонить',
+                'Блокировка теперь общая для всех твоих устройств',
+                'Репосты: у ника автора репоста снова его стиль и галочка ИТД X']],
             ['3.3.15.2', '30 сентября 2026', [
-                'Сообщения: в «•••» чата можно заблокировать человека — его новые сообщения и звонки к тебе не приходят, он об этом не узнаёт',
+                'Сообщения: в «•••» чата можно заблокировать человека — его новые сообщения и звонки к тебе не приходят',
                 'Баннер: шторка с кнопками выезжает из-под верхнего края баннера, а не из-за верха страницы']],
             ['3.3.15.1', '30 сентября 2026', [
                 'Звонки: звук собеседника включается надёжнее',
@@ -5146,7 +5150,9 @@
                     }
                     nick.insertAdjacentElement('afterend', badge);
                 }
-                let verifiedRaw = null, verifiedSet = new Set(), verifiedPendingSet = new Set();
+                let verifiedRaw = null, verifiedSet = new Set(), verifiedPendingSet = new Set(), verifiedById = new Map();
+                const loneNicks = () => [...document.querySelectorAll('[data-user-name]')].filter(el => !el.closest(PROFILE_LINK))
+                    .map(el => ({ el, u: verifiedById.get(String(el.getAttribute('data-user-name')).toLowerCase()) })).filter(x => x.u);
                 function markVerifiedUsers() {
                     const raw = localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}';
                     if (raw !== verifiedRaw) {
@@ -5156,8 +5162,10 @@
                         let parsed;
                         try { parsed = JSON.parse(raw) || {}; } catch (e) { parsed = {}; }
                         approvedIds = new Set();
+                        verifiedById = new Map();
                         for (const [name, info] of Object.entries(parsed)) {
                             if (!info || !info.state) continue;
+                            if (info.id) verifiedById.set(String(info.id).toLowerCase(), name.toLowerCase());
                             if (info.state === 'approved') {
                                 verifiedSet.add(name.toLowerCase());
                                 if (info.id) approvedIds.add(String(info.id).toLowerCase());
@@ -5178,6 +5186,7 @@
                         if (login && allNames.has(login.toLowerCase()))
                             addVerifyBadge(nickLeaf(c), c.matches('.' + SELECTORS.nickLarge) ? 18 : 16, stateOf(login.toLowerCase()));
                     });
+                    loneNicks().forEach(({ el, u }) => { if (allNames.has(u)) addVerifyBadge(nickLeaf(el), el.closest('.' + SELECTORS.repost) ? 14 : 16, stateOf(u)); });
                 }
 
                 let lookRaw = null, lookBy = new Map();
@@ -5215,6 +5224,11 @@
                         if (!look) return;
                         const av = link.querySelector('.' + SELECTORS.avatar);
                         if (av) apply(null, av, look); else apply(nickLeaf(link), null, look);
+                    });
+                    loneNicks().forEach(({ el, u }) => {
+                        const look = u !== me && lookBy.get(u);
+                        if (!look) return;
+                        apply(nickLeaf(el), [...(el.parentElement || el).children].find(x => x.matches('.' + SELECTORS.avatar)) || null, look);
                     });
                     const look = pu && pu !== me && lookBy.get(pu);
                     if (look) {
@@ -6606,7 +6620,8 @@
         const msgPreview = m => m.imgs && m.imgs.length > 1 ? `🖼 ${m.imgs.length} фото` + (m.text ? ' · ' + m.text : '') : m.img ? '🖼 ' + (m.text || 'Фото') : m.text;
         const msgNet = { keys: new Map(), vols: [], me: null, pairs: new Map(), conv: new Map(), syncing: null, blocks: {} };
         const msgBlocks = () => GM_getValue(acctKey('msgBlocked'), {});
-        function msgIsBlocked(uid) { const p = msgBlocks()[uid]; return !!(p && p.length && !p[p.length - 1][1]); }
+        function msgIsBlocked(uid) { const p = msgNet.blocks[uid] || msgBlocks()[uid]; return !!(p && p.length && !p[p.length - 1][1]); }
+        const msgBlockedMe = uid => !!(msgNet.blockedMe && msgNet.blockedMe.get(uid) && msgNet.blockedMe.get(uid).on);
         function msgBlockedAt(uid, ts) { const p = msgNet.blocks[uid]; return !!p && p.some(([a, b]) => ts >= a && (!b || ts <= b)); }
         function msgSetBlock(uid, on) {
             const all = msgBlocks(), p = all[uid] || [], now = Math.floor(srvNow() / 1000), open = p.length && !p[p.length - 1][1];
@@ -6768,8 +6783,7 @@
         async function msgDecryptAll() {
             const me = msgNet.me;
             if (!me) return;
-            msgNet.blocks = msgBlocks();
-            const conv = new Map(), add = (uid, dir, m, v, i) => { if (dir === 'in' && msgBlockedAt(uid, m.ts)) return; if (!conv.has(uid)) conv.set(uid, []); conv.get(uid).push({ dir, ...m, _v: v, _i: i }); };
+            const conv = new Map(), add = (uid, dir, m, v, i) => { if (!conv.has(uid)) conv.set(uid, []); conv.get(uid).push({ dir, ...m, _v: v, _i: i }); };
             const others = [...msgNet.keys.keys()].filter(id => id !== me.id);
             for (const v of msgNet.vols) {
                 let recs;
@@ -6781,6 +6795,21 @@
                     if (k) for (const [i, r] of recs.entries()) { const m = await msgOpenRec(k, r); if (m) add(v.author, 'in', m, v, i); }
                 }
             }
+            const recBlocks = {}, blockedMe = new Map(), local = msgBlocks(), blocks = Object.assign({}, local);
+            conv.forEach((list, uid) => list.forEach(m => {
+                if (!m.svc || m.svc[0] !== 5 || m.svc.length < 2) return;
+                if (m.dir === 'out') (recBlocks[uid] || (recBlocks[uid] = [])).push([m.ts, !!m.svc[1]]);
+                else { const b = blockedMe.get(uid); if (!b || b.ts <= m.ts) blockedMe.set(uid, { ts: m.ts, on: !!m.svc[1] }); }
+            }));
+            for (const [uid, ev] of Object.entries(recBlocks)) {
+                ev.sort((a, b) => a[0] - b[0]);
+                const p = [];
+                for (const [ts, on] of ev) { const open = p.length && !p[p.length - 1][1]; if (on && !open) p.push([ts, 0]); if (!on && open) p[p.length - 1][1] = ts; }
+                const lp = local[uid] || [], lLast = lp.length ? lp[lp.length - 1][1] || lp[lp.length - 1][0] : 0;
+                if (ev[ev.length - 1][0] >= lLast) blocks[uid] = p;
+            }
+            msgNet.blocks = blocks; msgNet.blockedMe = blockedMe;
+            conv.forEach((list, uid) => conv.set(uid, list.filter(m => !(m.dir === 'in' && msgBlockedAt(uid, m.ts)))));
             const volSkew = new Map(), authSkew = new Map();
             conv.forEach(list => list.forEach(m => { if (m._i === 0 && m._v.made) volSkew.set(m._v, m.ts - m._v.made / 1000); }));
             volSkew.forEach((k, v) => { if (!authSkew.has(v.author)) authSkew.set(v.author, []); authSkew.get(v.author).push(k); });
@@ -6926,6 +6955,7 @@
                 d.time = msgTime(last.at || last.ts);
                 d.unread = list.filter(m => m.dir === 'in' && m.ts > seenAt(seen, t.uid, t.sup)).length;
                 if (!t.sup && msgIsBlocked(t.uid)) d.last = '🚫 Заблокирован(а)';
+                else if (!t.sup && msgBlockedMe(t.uid)) d.last = '🚫 Тебя заблокировали';
             }
         }
         function msgUnread() {
@@ -7580,7 +7610,10 @@
             const msgMetaText = (t, m) => msgTime(m.at || m.ts) + (m.dir === 'out' ? (readUpTo(t.uid, t.sup, 'them') >= m.ts ? ' ✓✓' : ' ✓') : '');
             function msgRefreshChat(d) {
                 const t = msgTarget(d);
+                if (input.dataset.vpBlocked && t.uid) blockUi(d, t);
                 if (!t.uid || !msgNet.me || input.disabled) return;
+                blockUi(d, t);
+                if (input.disabled) return;
                 const list = msgThread(t), have = new Map();
                 feed.querySelectorAll(':scope > .vp-msgs-b[data-ts]').forEach(b => { const k = b.dataset.dir + '|' + b.dataset.ts; if (!have.has(k)) have.set(k, []); have.get(k).push(b); });
                 const nearEnd = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80, keep = feed.scrollTop;
@@ -7646,8 +7679,12 @@
             }, 20000);
             root.refreshList = () => { if (!current) { msgFillDialogs(); renderList(); } };
             root.refreshCalls = () => {
-                if (!current || current.bot || current.support || current.supUid || input.disabled || !msgNet.me) return;
-                const t = msgTarget(current), near = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
+                if (!current || current.bot || current.support || current.supUid || !msgNet.me) return;
+                const t = msgTarget(current);
+                if (!t.uid) return;
+                blockUi(current, t);
+                if (input.disabled) return;
+                const near = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
                 const n = feed.querySelectorAll(':scope > .vp-msgs-callrow').length;
                 paintCalls(t);
                 if (near && feed.querySelectorAll(':scope > .vp-msgs-callrow').length !== n) feed.scrollTop = feed.scrollHeight;
@@ -7759,21 +7796,28 @@
                 openProfile(login);
             });
             function blockUi(d, t) {
+                const ok = !!(d && t && t.uid && !t.sup), mine = ok && msgIsBlocked(t.uid), them = ok && !mine && msgBlockedMe(t.uid);
+                const kind = mine ? 'mine' : them ? 'them' : '', old = feed.querySelector(':scope > .vp-msgs-blocked');
+                if (d) $('.vp-msgs-call').hidden = !!kind || !d.login || !!d.support || !!d.supUid || !!d.bot;
+                if (old && old.dataset.kind === kind && old === feed.lastElementChild) return;
                 feed.querySelectorAll(':scope > .vp-msgs-blocked').forEach(x => x.remove());
-                const on = !!(d && t && t.uid && !t.sup && msgIsBlocked(t.uid));
-                if (d) $('.vp-msgs-call').hidden = on || !d.login || !!d.support || !!d.supUid || !!d.bot;
-                if (!on) {
+                if (!kind) {
                     if (input.dataset.vpBlocked) { delete input.dataset.vpBlocked; input.placeholder = input.dataset.vpPh || ''; input.disabled = false; }
                     return;
                 }
-                const n = note(`🚫 Ты заблокировал(а) ${d.name}: новые сообщения и звонки от этого человека к тебе не приходят`), b = document.createElement('button');
+                const n = note(mine ? `🚫 Ты заблокировал(а) ${d.name}: новые сообщения и звонки от этого человека к тебе не приходят`
+                    : `🚫 ${d.name} заблокировал(а) тебя: твои сообщения и звонки сюда не доходят`);
                 n.classList.add('vp-msgs-blocked');
-                b.type = 'button';
-                b.textContent = 'Разблокировать';
-                b.onclick = () => msgBlockToggle(d, t, false);
-                n.appendChild(b);
+                n.dataset.kind = kind;
+                if (mine) {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.textContent = 'Разблокировать';
+                    b.onclick = () => msgBlockToggle(d, t, false);
+                    n.appendChild(b);
+                }
                 if (!input.dataset.vpBlocked) { input.dataset.vpBlocked = '1'; input.dataset.vpPh = input.placeholder; }
-                input.placeholder = 'Сначала разблокируй';
+                input.placeholder = mine ? 'Сначала разблокируй' : 'Тебя заблокировали';
                 input.value = '';
                 input.disabled = true;
                 send.disabled = true;
@@ -7786,6 +7830,8 @@
                 msgFillDialogs();
                 msgBadge();
                 if (current === d) msgOpenPerson(d);
+                try { await msgSend(t.uid, '', false, null, new Uint8Array([5, on ? 1 : 0])); }
+                catch (e) { logErr('блокировка', e); }
             }
             const blockMenu = $('.vp-msgs-hmenu');
             $('.vp-msgs-more').onclick = e => {
@@ -7827,7 +7873,7 @@
                 let sg = '';
                 if (msgNet.reacts) msgNet.reacts.forEach((v, k) => { if (k.startsWith(uid + '|')) sg += k + (v.me ? v.me.emoji : '') + '/' + (v.them ? v.them.emoji : '') + ';'; });
                 const r = msgNet.reads && msgNet.reads.get(uid);
-                return sg + '|' + (r ? (r.them0 || 0) + '/' + (r.them1 || 0) : 0) + '|' + (msgNet.sigs || []).filter(x => x.uid === uid).length;
+                return sg + '|' + (r ? (r.them0 || 0) + '/' + (r.them1 || 0) : 0) + '|' + (msgNet.sigs || []).filter(x => x.uid === uid).length + '|' + (msgIsBlocked(uid) ? 1 : 0) + (msgBlockedMe(uid) ? 1 : 0);
             };
             function paintCalls(t) {
                 feed.querySelectorAll(':scope > .vp-msgs-callrow').forEach(x => x.remove());

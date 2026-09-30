@@ -1,5 +1,6 @@
-// Блокировка в личке (3.3.15.2): «•••» в шапке чата → «Заблокировать». От заблокированного не приходят новые сообщения,
-// звонки и всплывашки; поле ввода и звонок выключены. Разблокировал — новое снова приходит, написанное во время блокировки — нет.
+// Блокировка в личке (3.3.15.2, 3.3.15.3): «•••» в шапке чата → «Заблокировать». От заблокированного не приходят новые сообщения,
+// звонки и всплывашки; у него самого в чате «… заблокировал(а) тебя», поле ввода и звонок выключены. Разблокировал — новое
+// снова приходит, написанное во время блокировки — нет. Старая версия мода у заблокированного изображается включённым полем ввода.
 // Запуск:  node test/block.js снимок-ленты.html
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -91,6 +92,19 @@ let comments = [], n = 0;
   const ui = await A.p.evaluate(() => ({ note: (document.querySelector('.vp-msgs-blocked') || {}).textContent || '', input: document.querySelector('.vp-msgs-bar input').disabled, call: document.querySelector('.vp-msgs-call').hidden }));
   check(/заблокировал/.test(ui.note) && ui.input && ui.call, `после блокировки: плашка, поле ввода и звонок выключены (${JSON.stringify(ui)})`);
   await A.p.screenshot({ path: path.join(__dirname, 'out', 'block-2-blocked.png') });
+  const knows = await B.p.waitForFunction(() => /заблокировал\(а\) тебя/.test((document.querySelector('.vp-msgs-blocked') || {}).textContent || ''), null, { timeout: 25000 }).then(() => true, () => false);
+  const bui = await B.p.evaluate(() => ({ input: document.querySelector('.vp-msgs-bar input').disabled, ph: document.querySelector('.vp-msgs-bar input').placeholder, call: document.querySelector('.vp-msgs-call').hidden, unblockBtn: !!document.querySelector('.vp-msgs-blocked button') }));
+  check(knows && bui.input && bui.call && !bui.unblockBtn, `bob видит «Нейро заблокировал(а) тебя», писать и звонить нельзя (${JSON.stringify(bui)})`);
+  await B.p.screenshot({ path: path.join(__dirname, 'out', 'block-3-blocked-side.png') });
+  const A2 = await open('NeuroSFW', 'bob');
+  await A2.p.fill('.vp-msgs-key input >> nth=0', 'лунный кот 42');
+  await A2.p.click('.vp-msgs-key button');
+  await A2.p.waitForTimeout(3000);
+  await reopen(A2.p, 'u:bob');
+  const a2 = await A2.p.evaluate(() => (document.querySelector('.vp-msgs-blocked') || {}).textContent || '');
+  check(/Ты заблокировал/.test(a2), `второе устройство NeuroSFW тоже знает о блокировке (${a2.slice(0, 40)})`);
+  await A2.ctx.close();
+  await B.p.evaluate(() => { const i = document.querySelector('.vp-msgs-bar input'); i.disabled = false; });
   await say(B.p, 'во время блокировки');
   await clickEl(B.p, '.vp-msgs-call');
   await A.p.waitForTimeout(16000);
@@ -104,6 +118,8 @@ let comments = [], n = 0;
   await A.p.waitForTimeout(3000);
   const after = await A.p.evaluate(() => ({ input: document.querySelector('.vp-msgs-bar input').disabled, note: !!document.querySelector('.vp-msgs-blocked'), call: document.querySelector('.vp-msgs-call').hidden }));
   check(!after.input && !after.note && !after.call, `разблокировал — всё снова работает (${JSON.stringify(after)})`);
+  const freed = await B.p.waitForFunction(() => !document.querySelector('.vp-msgs-blocked') && !document.querySelector('.vp-msgs-bar input').disabled, null, { timeout: 25000 }).then(() => true, () => false);
+  check(freed, 'у bob плашка пропала, писать снова можно');
   await say(B.p, 'после разблокировки');
   await A.p.waitForTimeout(3000);
   await reopen(A.p, 'u:bob');
