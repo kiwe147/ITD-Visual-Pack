@@ -1,4 +1,4 @@
-// Видео в баннере (3.4.0). Сайт показывает баннер картинкой, поэтому видео — для пользователей мода: кнопка в шторке баннера →
+// Видео в баннере (3.4.0; 3.4.1 — углы как у картинки). Сайт показывает баннер картинкой, поэтому видео — для пользователей мода: кнопка в шторке баннера →
 // файл → /api/files/upload → ссылка CDN в стиле профиля (ITDXL1 … v=<путь>). Хозяин и гости с модом видят видео поверх баннера,
 // нажал ещё раз — видео убрано. Плюс: GIF/WebP баннером уходят на сайт как есть (не в JPEG) — проверка, оживёт ли у всех.
 // Запуск:  node test/bannervideo.js снимок-своего-профиля.html
@@ -67,11 +67,12 @@ const USERS = { NeuroSFW: { username: 'NeuroSFW', displayName: '#NeuroSFW | ИТ
   const st = await p.evaluate(() => {
     const v = document.querySelector('.vp-banner-video'), img = document.querySelector('.vp-banner img[alt="Banner"]');
     const a = v.getBoundingClientRect(), c = img.getBoundingClientRect();
-    return { gm: Object.entries(window.__gm).find(([k]) => k.startsWith('vp_banner_video')), src: v.src, muted: v.muted, loop: v.loop, dx: Math.abs(a.left - c.left) + Math.abs(a.width - c.width) + Math.abs(a.height - c.height) };
+    return { rad: [getComputedStyle(img).borderRadius, getComputedStyle(v).borderRadius], gm: Object.entries(window.__gm).find(([k]) => k.startsWith('vp_banner_video')), src: v.src, muted: v.muted, loop: v.loop, dx: Math.abs(a.left - c.left) + Math.abs(a.width - c.width) + Math.abs(a.height - c.height) };
   });
   check(live && st.src.endsWith(VPATH) && st.muted && st.loop, `видео играет в баннере, без звука, по кругу (${st.src.slice(-50)})`);
   check(st.dx < 2, `видео ровно поверх картинки баннера (расхождение ${st.dx.toFixed(1)} px)`);
   check(st.gm && st.gm[1] === VPATH, 'путь видео сохранён по аккаунту');
+  check(st.rad[0] === st.rad[1] && st.rad[0] !== '0px', `углы видео скруглены как у картинки (${st.rad.join(' / ')})`);
   await p.waitForTimeout(1500);
   const looks = await p.evaluate(sent => sent.map(c => window.__ot(c)).filter(t => /^ITDXL1 /.test(t)), p.sent);
   check(looks.some(t => t.includes(' v=' + VPATH)), `в стиль профиля ушло v=<видео> (${looks.slice(-1)[0] || 'ничего'})`);
