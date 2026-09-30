@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.4.4.2
+// @version      3.4.4.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4284,7 +4284,7 @@
                     const fmt = v => k === 'm' ? `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}` : String(v);
                     sorted.forEach((r, i) => {
                         total++;
-                        const uid = r.a.id, off = lbIsVoid(voids, uid, k, r.v), rp = reps.get(uid) && reps.get(uid)[k];
+                        const uid = r.a.id, rp = reps.get(uid) && reps.get(uid)[k], tag = repTag(rp, r.v), off = lbIsVoid(voids, uid, k, r.v, tag);
                         const whole = !!rp && rp.parts.filter(Boolean).length === rp.n;
                         if (!whole) noRep++;
                         const warn = k === 's' && r.v > 253 ? 'выше возможного (поле 16×16)' : k === 'm' && r.v < 5 ? 'слишком быстро для человека' : '';
@@ -4302,7 +4302,7 @@
                         if (warn) why.textContent = warn; else why.remove();
                         const acts = row.querySelector('.vp-junk-acts'), btn = (txt, fn, cls) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; if (cls) b.dataset.a = cls; b.onclick = fn; acts.appendChild(b); return b; };
                         if (whole) btn('Смотреть повтор', () => repView(g.id, r, rp));
-                        const token = `${String(uid).toLowerCase()}:${k}:${r.v}`;
+                        const token = `${String(uid).toLowerCase()}:${k}:${r.v}:${tag}`;
                         if (off) btn('Вернуть в топ', async () => { try { await lbVoidPush(token, false); } catch (e) { alert(e.message || e); } draw(true); });
                         else btn('Убрать из топа', async () => {
                             if (!confirm(`Убрать ${fmt(r.v)} (${link.textContent}) из «${g.name}»? У него на устройстве этот рекорд тоже обнулится.`)) return;
@@ -4916,6 +4916,8 @@
         }
 
         const CHANGELOG = [
+            ['3.4.4.3', '1 октября 2026', [
+                'Оптимизация и исправление багов']],
             ['3.4.4.2', '1 октября 2026', [
                 'Обновления: если сайт долго открыт, мод сам раз в 10 минут проверяет, не вышла ли новая версия, и показывает кнопку «Обновить»']],
             ['3.4.4.1', '1 октября 2026', [
@@ -12870,20 +12872,21 @@
                 if (!c.author || c.author.id !== OWNER_ID) continue;
                 const t = openText(c.content);
                 if (!t.startsWith(LB_VOID + ' ')) continue;
-                for (const tok of t.slice(LB_VOID.length + 1).split(/\s+/)) if (/^[0-9a-f-]{36}:[smt]:\d+$/i.test(tok)) out.add(tok.toLowerCase());
+                for (const tok of t.slice(LB_VOID.length + 1).split(/\s+/)) { const m = tok.match(/^([0-9a-f-]{36}):([smt]):(\d+)(?::([\w-]{1,12}))?$/i); if (m) out.add(`${m[1].toLowerCase()}:${m[2]}:${m[3]}:${m[4] || '-'}`); }
             }
             return out;
         }
-        const lbIsVoid = (voids, uid, k, v) => !!(uid && v && voids.has(`${String(uid).toLowerCase()}:${k}:${v}`));
-        function lbDropVoid(voids, o) {
-            const me = meData && meData.id, r = Object.assign({}, o);
-            for (const k of ['s', 'm', 't']) if (lbIsVoid(voids, me, k, r[k])) r[k] = 0;
+        const lbIsVoid = (voids, uid, k, v, tag) => !!(uid && v && voids.has(`${String(uid).toLowerCase()}:${k}:${v}:${tag || '-'}`));
+        const repTag = (rp, v) => rp && rp.n && rp.parts[0] && rp.score === v ? rp.parts[0].slice(0, 10) : '-';
+        function lbDropVoid(voids, o, all) {
+            const me = meData && meData.id, r = Object.assign({}, o), mine = lbReplays(all).get(me) || {};
+            for (const k of ['s', 'm', 't']) if (lbIsVoid(voids, me, k, r[k], repTag(mine[k], r[k]))) r[k] = 0;
             return r;
         }
         function lbResetVoidLocal(voids) {
             const me = meData && meData.id, loc = lbLocal();
             let hit = false;
-            for (const k of ['s', 'm', 't']) if (lbIsVoid(voids, me, k, loc[k])) { GM_setValue(acctKey(LB_LOCAL_KEYS[k]), 0); GM_setValue(acctKey('vp_rep_' + k), null); hit = true; }
+            for (const k of ['s', 'm', 't']) if (lbIsVoid(voids, me, k, loc[k], (r => r && r.tag && r.score === loc[k] ? r.tag : '-')(GM_getValue(acctKey('vp_rep_' + k), null)))) { GM_setValue(acctKey(LB_LOCAL_KEYS[k]), 0); GM_setValue(acctKey('vp_rep_' + k), null); hit = true; }
             if (hit) renderGamesMenu();
             return hit;
         }
@@ -12926,7 +12929,7 @@
             const b = openB64(b64);
             return repUnpack(await repZip(obfBytes(b.slice(1), b[0]), true));
         }
-        const REP_RE = /^ITDXP1 ([smt]) (\d+)\/(\d+) (\S+)$/;
+        const REP_RE = /^ITDXP1 ([smt]) (\d+)\/(\d+) (?:(\d+) )?(\S+)$/;
         function lbReplays(all) {
             const out = new Map();
             for (const c of all || []) {
@@ -12934,8 +12937,8 @@
                 if (!x || !c.author || !+x[3]) continue;
                 const u = out.get(c.author.id) || {};
                 out.set(c.author.id, u);
-                const r = u[x[1]] || (u[x[1]] = { n: +x[3], parts: [] });
-                if (r.n === +x[3]) r.parts[+x[2] - 1] = x[4];
+                const r = u[x[1]] || (u[x[1]] = { n: +x[3], parts: [], score: x[4] ? +x[4] : null });
+                if (r.n === +x[3]) r.parts[+x[2] - 1] = x[5];
             }
             return out;
         }
@@ -12948,13 +12951,14 @@
                 if (parts.length <= 12) {
                     const mine = all.filter(c => lbIsMe(c.author) && String(c.content || '').trim().startsWith(`ITDXP1 ${g} `));
                     for (let i = 0; i < Math.max(parts.length, mine.length); i++) {
-                        const text = i < parts.length ? `ITDXP1 ${g} ${i + 1}/${parts.length} ${parts[i]}` : `ITDXP1 ${g} 0/0 -`, c = mine[i];
+                        const text = i < parts.length ? `ITDXP1 ${g} ${i + 1}/${parts.length} ${r.score} ${parts[i]}` : `ITDXP1 ${g} 0/0 -`, c = mine[i];
                         if (c && String(c.content).trim() === text) continue;
                         const res = c ? await editComment(c.id, text) : await sendComment(GAMES_POST_ID, text);
                         if (!res.ok) throw new Error('повтор: ' + res.status);
                     }
                 }
                 r.up = true;
+                if (parts.length <= 12) r.tag = parts[0].slice(0, 10);
                 GM_setValue(acctKey('vp_rep_' + g), r);
             }
         }
@@ -12990,7 +12994,7 @@
                 const all = await lbComments();
                 const voids = lbVoids(all), hit = lbResetVoidLocal(voids);
                 const mine = all.find(c => lbIsMe(c.author) && parseLB(c.content, true));
-                const raw = mine && parseLB(mine.content, true), remote = raw && lbDropVoid(voids, raw);
+                const raw = mine && parseLB(mine.content, true), remote = raw && lbDropVoid(voids, raw, all);
                 if (mine) lbMergeIntoLocal(remote);
                 if (mine && (hit || !String(mine.content).trim().startsWith('ITDXG2 ') || ['s', 'm', 't'].some(k => (raw[k] || 0) !== (remote[k] || 0)))) gamesRecord();
                 renderGamesMenu();
@@ -13013,7 +13017,7 @@
                 const voids = lbVoids(all);
                 lbResetVoidLocal(voids);
                 const mine = all.find(c => lbIsMe(c.author) && parseLB(c.content, true));
-                const was = mine ? lbDropVoid(voids, parseLB(mine.content, true)) : {}, loc = lbLocal(), now = {};
+                const was = mine ? lbDropVoid(voids, parseLB(mine.content, true), all) : {}, loc = lbLocal(), now = {};
                 for (const k of ['s', 'm', 't']) {
                     now[k] = lbBetter(k, was[k], loc[k]);
                     if (now[k] && now[k] !== loc[k]) GM_setValue(acctKey(LB_LOCAL_KEYS[k]), now[k]);
@@ -13044,10 +13048,10 @@
             try { all = await lbComments(); } catch (e) { box.lastElementChild.textContent = 'Не загрузилось'; return; }
             if (!box.isConnected) return;
             loadApprovedIds();
-            const best = new Map(), voids = lbVoids(all);
+            const best = new Map(), voids = lbVoids(all), reps = lbReplays(all);
             for (const c of all) {
                 const a = c.author, o = a && parseLB(c.content, lbIsMe(a));
-                if (!o || !o[k] || lbIsVoid(voids, a.id, k, o[k])) continue;
+                if (!o || !o[k] || lbIsVoid(voids, a.id, k, o[k], repTag((reps.get(a && a.id) || {})[k], o[k]))) continue;
                 if (!lbIsMe(a) && !isApprovedAuthor(a)) continue;
                 const key = a.id || a.username, cur = best.get(key);
                 if (!cur || lbBetter(k, cur.v, o[k]) !== cur.v) best.set(key, { v: o[k], name: a.displayName || a.username || '?', me: lbIsMe(a) });
