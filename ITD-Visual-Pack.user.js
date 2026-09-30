@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.4.4.1
+// @version      3.4.4.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4916,6 +4916,8 @@
         }
 
         const CHANGELOG = [
+            ['3.4.4.2', '1 октября 2026', [
+                'Обновления: если сайт долго открыт, мод сам раз в 10 минут проверяет, не вышла ли новая версия, и показывает кнопку «Обновить»']],
             ['3.4.4.1', '1 октября 2026', [
                 'Заставка: редкие варианты выпадают чаще — 5% вместо 1%']],
             ['3.4.4', '1 октября 2026', [
@@ -5779,15 +5781,18 @@
                 });
 
                 const updateUrl = 'https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js?t=' + Date.now();
-                function latestVersion() {
+                const UPDATE_EVERY = 10 * 60 * 1000;
+                let updateAskedAt = 0;
+                function latestVersion(fresh) {
                     let cached = null;
                     try { cached = JSON.parse(GM_getValue('vp_latest', 'null')); } catch (e) { }
-                    if (cached && (Date.now() - cached.at < 10 * 60 * 1000 || versionCompare(cached.v, GM_info.script.version) > 0)) {
+                    if (cached && (versionCompare(cached.v, GM_info.script.version) > 0 || !fresh && Date.now() - cached.at < UPDATE_EVERY)) {
                         return Promise.resolve(cached.v);
                     }
+                    updateAskedAt = Date.now();
                     return new Promise(resolve => GM_xmlhttpRequest({
                         method: 'GET',
-                        url: updateUrl,
+                        url: updateUrl.replace(/t=\d+$/, 't=' + Date.now()),
                         headers: { Range: 'bytes=0-2047' },
                         onload: res => {
                             const m = (res.status === 200 || res.status === 206) && res.responseText.match(/\/\/\s*@version\s+([\d.]+)/);
@@ -5830,6 +5835,25 @@
                     return updateAvailable;
                 });
                 updateCheck.then(yes => { if (yes) setTimeout(createUpdateButton, 1000); });
+                let updateTimer = 0;
+                function updatePoll() {
+                    if (updateAvailable) { clearInterval(updateTimer); return; }
+                    if (document.hidden || Date.now() - updateAskedAt < UPDATE_EVERY - 5000) return;
+                    latestVersion(true).then(v => {
+                        if (updateAvailable || !v || versionCompare(v, GM_info.script.version) <= 0) return;
+                        updateAvailable = true;
+                        clearInterval(updateTimer);
+                        document.removeEventListener('visibilitychange', updatePoll);
+                        console.log(`[ITD VP] обновление: вышла ${v}, у тебя ${GM_info.script.version}`);
+                        createUpdateButton();
+                    });
+                }
+                updateCheck.then(yes => {
+                    if (yes) return;
+                    updateAskedAt = updateAskedAt || Date.now();
+                    updateTimer = setInterval(updatePoll, 60 * 1000);
+                    document.addEventListener('visibilitychange', updatePoll);
+                });
 
                 const originalReplaceIcon = replaceIcon;
                 replaceIcon = function () {
