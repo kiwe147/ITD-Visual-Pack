@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.15.5
+// @version      3.4.0
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2147,9 +2147,13 @@
             };
             input.click();
         }
-        let bgGuest = null;
+        let bgGuest = null, bannerVideoGuest = '', bannerVideoBusy = false;
+        const BANNER_VIDEO_RE = /^[\w-]+(\/[\w-]+)*\.(mp4|webm|mov)$/i;
+        const bannerVideoOwn = () => { const v = GM_getValue(acctKey('vp_banner_video'), ''); return BANNER_VIDEO_RE.test(v) ? v : ''; };
         const effBg = () => bgGuest ? bgGuest.b : backgroundStyle;
         function setBgGuest(look) {
+            const gv = showLooks && look && look.v || '';
+            if (gv !== bannerVideoGuest) { bannerVideoGuest = gv; bannerVideoSync(); }
             const g = showLooks && look && look.b && look.b !== '-' && (look.b !== 'custom' || look.i)
                 ? { b: look.b, n: look.n, img: look.b === 'custom' ? lookImgUrl(look.i) : '' } : null;
             const key = g ? g.b + '|' + g.n + '|' + g.img : '';
@@ -2674,6 +2678,7 @@
             const look = { n: o.n, b: '-', g: /^[01]{2}$/.test(o.g || '') ? o.g : '11' };
             if (o.b === 'custom' ? /^[0-4][0-9a-f]{32}$/.test(o.i || '') : BACKGROUNDS[o.b]) look.b = o.b;
             if (look.b === 'custom') look.i = o.i;
+            if (BANNER_VIDEO_RE.test(o.v || '')) look.v = o.v;
             return look;
         }
         function lookImgUrl(ref) {
@@ -2716,7 +2721,7 @@
                 const b = backgroundEnabled ? backgroundStyle : '-';
                 let img = '';
                 if (b === 'custom') img = await customBgCdn().catch(e => { logErr('свой фон на сервер', e); return ''; });
-                const text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '');
+                const text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (bannerVideoOwn() ? ' v=' + bannerVideoOwn() : '');
                 if (text === lookSent) return;
                 const all = await loadVerificationComments();
                 const mine = all.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
@@ -3603,7 +3608,7 @@
                 const st = pc.connectionState;
                 if (c.state === 'end') return;
                 if (st === 'connected') { clearTimeout(c.lostT); callLive(c); }
-                else if (st === 'failed') { callInfo(c).then(t => logErr('звонок: не соединились', new Error(t.split('\n').slice(2, 4).join('; ')))); callEnd(c, 'Не удалось соединиться: мешает сеть', 0); }
+                else if (st === 'failed') { callInfo(c).then(t => logErr('звонок: не соединились', new Error(t.split('\n').slice(2, 4).join('; ')))); callEnd(c, 'Не удалось соединиться напрямую — обычно мешает мобильный интернет. Попробуйте, чтобы хотя бы у одного был Wi-Fi', 0); }
                 else if (st === 'disconnected' && c.state === 'talk') {
                     callSub(c, 'Связь прерывается…');
                     clearTimeout(c.lostT);
@@ -3700,6 +3705,7 @@
             c.stops.splice(0).forEach(f => f());
             clearTimeout(c.connT);
             const t0 = c.t0 = Date.now();
+            try { if (navigator.wakeLock) navigator.wakeLock.request('screen').then(w => { if (c.state === 'end') w.release().catch(() => { }); else c.wake = w; }, () => { }); } catch (e) { }
             callSub(c, '00:00');
             c.tick = setInterval(() => callSub(c, callMmss(Math.floor((Date.now() - t0) / 1000))), 1000);
             c.lvT = setInterval(() => callLevels(c), 120);
@@ -3732,6 +3738,7 @@
             c.stops.splice(0).forEach(f => f());
             c.timers.forEach(clearTimeout);
             clearInterval(c.tick); clearInterval(c.lvT); clearTimeout(c.lostT); clearTimeout(c.connT);
+            if (c.wake) { c.wake.release().catch(() => { }); c.wake = null; }
             if (c.pc) try { c.pc.close(); } catch (e) { }
             if (c.stream) c.stream.getTracks().forEach(t => t.stop());
             if (c.audio) { c.audio.srcObject = null; c.audio.remove(); }
@@ -4527,7 +4534,9 @@
             input.accept = 'image/jpeg,image/png,image/webp,image/gif';
             input.onchange = () => {
                 const file = input.files[0];
-                if (file) putBannerImage(URL.createObjectURL(file));
+                if (!file) return;
+                putBannerImage(URL.createObjectURL(file));
+                bannerEdit.file = /^image\/(gif|webp)$/.test(file.type) ? file : null;
             };
             input.click();
         }
@@ -4537,7 +4546,7 @@
             if (!on) {
                 if (E.img) E.img.remove();
                 if (E.url) URL.revokeObjectURL(E.url);
-                E.img = E.url = E.drag = null;
+                E.img = E.url = E.drag = E.file = null;
                 E.top = 0;
             }
             if (E.banner) E.banner.classList.toggle('vp-banner-editing', on);
@@ -4625,7 +4634,7 @@
         function uploadBannerFile(blob, token) {
             return new Promise((resolve, reject) => {
                 const form = new FormData();
-                form.append('file', blob, 'banner.jpg');
+                form.append('file', blob, blob.name || 'banner.jpg');
                 const xhr = new XMLHttpRequest();
                 xhr.open('POST', '/api/files/upload');
                 xhr.setRequestHeader('Authorization', `Bearer ${token}`);
@@ -4647,7 +4656,7 @@
             apply.disabled = true;
             try {
                 const token = await getAccessToken();
-                const file = await uploadBannerFile(await cropBannerImage(), token);
+                const file = await uploadBannerFile(E.file || await cropBannerImage(), token);
                 const res = await fetch('/api/users/me', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -4682,6 +4691,14 @@
         }
 
         const CHANGELOG = [
+            ['3.4.0', '1 октября 2026', [
+                'Сообщения: ссылки в тексте нажимаются — ссылки на итд открываются сразу, остальные в новой вкладке',
+                'Настройки → Ник: «Неоновая подсветка» одним переключателем убирает всё свечение — и своё, и чужое',
+                'Правая панель: карточки можно перетаскивать за заголовок, а в «Вид → Карточки панели» — менять местами, прятать и возвращать (игры тоже)',
+                'Баннер: своё видео в баннере — кнопка в шторке, его видят все, у кого стоит ИТД X',
+                'Баннер: GIF и WebP ставятся как есть, без превращения в обычную картинку',
+                'Галерея: точки листания — шторкой у верхнего края',
+                'Звонки: входящий вызов доходит быстрее, во время разговора экран телефона не гаснет, понятнее, если соединиться не вышло']],
             ['3.3.15.5', '30 сентября 2026', [
                 'Баннер: шторка с кнопками раскрывается прямо на баннере сверху вниз и больше не показывается над ним']],
             ['3.3.15.4', '30 сентября 2026', [
@@ -7234,7 +7251,7 @@
         setInterval(msgBackground, 60000);
         setInterval(() => {
             const c = callNet.cur, open = messagesOverlay && messagesOverlay.classList.contains('vp-open');
-            const every = c && /^(calling|ringing|connecting)$/.test(c.state) ? 2000 : open && !document.hidden ? 8000 : 0;
+            const every = c && /^(calling|ringing|connecting)$/.test(c.state) ? 2000 : document.hidden ? 0 : open ? 8000 : 20000;
             if (!every || Date.now() - callNet.lastSync < every || msgNet.syncing || !msgNet.me) return;
             callNet.lastSync = Date.now();
             msgSync().catch(() => { });
@@ -11126,7 +11143,7 @@
             const y = Math.round(past * .35);
             const glassEl = banner.querySelector(':scope > [aria-label="Стекло"]'), glass = !bannerNoGlass && glassEl;
             const tf = calm ? '' : `translateY(${y}px)` + (glassEl ? '' : ' scale(1.15)'), op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
-            for (const el of glass ? [img, glass] : [img]) {
+            for (const el of [img, banner.querySelector(':scope > .vp-banner-video'), glass].filter(Boolean)) {
                 if (el.style.transform !== tf) el.style.transform = tf;
                 if (el.style.opacity !== op) el.style.opacity = op;
             }
@@ -11177,12 +11194,93 @@
                 btn.classList.toggle('vp-off', off);
                 if (btn.title !== fx.titles[+off]) btn.title = fx.titles[+off];
             }
+            let vb = document.querySelector('.vp-banner-vid');
+            const mine = myUsername && (location.pathname.match(/^\/@([\w.]+)\/?$/) || [])[1];
+            if (!(row && banner && bannerBtns.draw && mine && mine.toLowerCase() === myUsername.toLowerCase())) { if (vb) vb.remove(); return; }
+            if (!vb || vb.parentElement !== row) {
+                if (vb) vb.remove();
+                vb = bannerButton('vp-banner-fx vp-banner-vid', '', svgIcon('<rect x="3" y="6" width="13" height="12" rx="3"/><path d="m16 10 5-3v10l-5-3z"/>', 20));
+                vb.onclick = e => { e.stopPropagation(); bannerVideoPick(); };
+                row.insertBefore(vb, row.querySelector('.' + SELECTORS.bannerDelete));
+            }
+            const has = !!bannerVideoOwn(), t = bannerVideoBusy ? 'Видео загружается…' : has ? 'Убрать видео с баннера' : 'Видео в баннер — его видят те, у кого стоит ИТД X';
+            vb.classList.toggle('vp-on', has);
+            vb.classList.toggle('vp-busy', bannerVideoBusy);
+            if (vb.title !== t) vb.title = t;
         }
         onDom(bannerFx);
+        function bannerVideoWant() {
+            const m = location.pathname.match(/^\/@([\w.]+)\/?$/);
+            if (!m) return '';
+            if (myUsername && m[1].toLowerCase() === myUsername.toLowerCase()) return bannerVideoOwn();
+            return showLooks ? bannerVideoGuest : '';
+        }
+        function bannerVideoSync() {
+            const banner = siteEl('banner'), img = banner && banner.querySelector(':scope > img[alt="Banner"]');
+            let v = document.querySelector('.vp-banner-video');
+            const want = img && !bannerEdit.img && bannerVideoWant();
+            if (!want) { if (v) v.remove(); return; }
+            const src = 'https://cdn.xn--d1ah4a.com/' + want;
+            if (!v || v.parentElement !== banner) {
+                if (v) v.remove();
+                v = document.createElement('video');
+                v.className = 'vp-banner-video';
+                v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true;
+                v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+                v.addEventListener('error', () => v.classList.add('vp-fail'));
+                v.addEventListener('playing', () => v.classList.add('vp-live'));
+                img.after(v);
+            }
+            const box = `left: ${img.offsetLeft}px; top: ${img.offsetTop}px; width: ${img.offsetWidth}px; height: ${img.offsetHeight}px;`;
+            if (v.dataset.box !== box) { v.dataset.box = box; v.style.cssText = box + (img.style.transform ? ` transform: ${img.style.transform};` : ''); }
+            if (v.getAttribute('src') !== src) { v.classList.remove('vp-fail', 'vp-live'); v.src = src; v.play().catch(() => { }); }
+        }
+        onDom(bannerVideoSync);
+        function bannerVideoPick() {
+            if (bannerVideoBusy) return;
+            if (bannerVideoOwn()) {
+                GM_setValue(acctKey('vp_banner_video'), '');
+                publishLook();
+                bannerFx();
+                bannerVideoSync();
+                return;
+            }
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'video/mp4,video/webm,video/quicktime';
+            input.onchange = async () => {
+                const f = input.files && input.files[0];
+                if (!f) return;
+                if (!/^video\//.test(f.type)) { alert('Нужен видеофайл: mp4, webm или mov'); return; }
+                if (f.size > 30 * 1024 * 1024) { alert('Видео больше 30 МБ — возьми покороче или сожми'); return; }
+                bannerVideoBusy = true;
+                bannerFx();
+                try {
+                    const fd = new FormData();
+                    fd.append('file', f, f.name || 'banner.mp4');
+                    const res = await api('/api/files/upload', { method: 'POST', body: fd });
+                    const j = await res.json().catch(() => null), d = j && (j.data || j);
+                    if (!res.ok) throw new Error((d && (d.error && d.error.message || d.message)) || 'сайт ответил ' + res.status);
+                    const m = String(d && d.url || '').match(/^https:\/\/cdn\.xn--d1ah4a\.com\/(.+)$/);
+                    if (!m || !BANNER_VIDEO_RE.test(m[1])) throw new Error('сайт вернул не видео: ' + String(d && d.url || '—').slice(0, 90));
+                    GM_setValue(acctKey('vp_banner_video'), m[1]);
+                    publishLook();
+                    bannerVideoSync();
+                } catch (e) { logErr('видео в баннер', e); alert('Не вышло загрузить видео: ' + (e && e.message || e)); }
+                finally { bannerVideoBusy = false; bannerFx(); }
+            };
+            input.click();
+        }
         addCss(`
         html.vp-no-glass .vp-banner > [aria-label="Стекло"] { display: none !important; }
         html.vp-no-banner-stickers .vp-banner > [aria-label^="Оформление профиля"] { display: none !important; }
         .vp-banner-fx { position: relative; }
+        .vp-banner-vid.vp-on { color: var(--vp-accent); }
+        .vp-banner-vid.vp-busy { opacity: .5; pointer-events: none; animation: vpBvPulse 1s ease-in-out infinite alternate; }
+        @keyframes vpBvPulse { to { opacity: .25; } }
+        .vp-banner-video { position: absolute; object-fit: cover; pointer-events: none; opacity: 0; transition: opacity .4s; }
+        .vp-banner-video.vp-live { opacity: 1; }
+        .vp-banner-video.vp-fail { display: none; }
         .vp-banner-fx.vp-off { opacity: .55; }
         .vp-banner-fx.vp-off::after { content: ''; position: absolute; left: 50%; top: 50%; width: 22px; height: 2px; border-radius: 2px;
             background: currentColor; transform: translate(-50%, -50%) rotate(-45deg); pointer-events: none; }
