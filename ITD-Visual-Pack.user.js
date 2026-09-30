@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.13.9
+// @version      3.3.13.10
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4029,8 +4029,8 @@
         }
 
         const CHANGELOG = [
-            ['3.3.13.6 – 3.3.13.9', '30 сентября 2026', [
-                'Посты: время и значки у ника больше не заезжают под кнопку «•••» — длинный ник обрезается многоточием',
+            ['3.3.13.6 – 3.3.13.10', '30 сентября 2026', [
+                'Посты: время и значки у ника больше не заезжают под кнопки «Скопировать картинку», «Скопировать ссылку» и «•••» — длинный ник обрезается многоточием',
                 'Уведомления: галочка ИТД X стоит рядом с ником, а не под ним; длинный ник обрезается многоточием и не вылезает за карточку',
             ]],
             ['3.3.11 – 3.3.13.5', '29 сентября 2026', [
@@ -9938,6 +9938,10 @@
             if (!mr.width) return;
             const top = Math.round(mr.top - cr.top + (mr.height - 32) / 2) + 'px', right = Math.round(cr.right - mr.left + 2) + 'px';
             if (b.style.top !== top || b.style.right !== right) Object.assign(b.style, { position: 'absolute', zIndex: '2', top, right });
+            const row = menu.parentElement && menu.parentElement.querySelector(':scope > .' + SELECTORS.nickRow);
+            if (!row) return;
+            const need = Math.max(0, Math.round(row.getBoundingClientRect().right - (cr.right - parseFloat(right) - b.offsetWidth) + 8)) + 'px';
+            if (row.style.paddingRight !== need) row.style.paddingRight = need;
         }
         addEventListener('resize', () => document.querySelectorAll('.vp-post-tools').forEach(placeRefresh));
         function postShownImage(card) {
