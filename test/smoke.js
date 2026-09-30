@@ -34,7 +34,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   await p.route('**/*', r => {
     const u = r.request().url();
     if (u.includes('/auth/refresh')) return r.fulfill({ contentType: 'application/json', body: '{"accessToken":"t"}' });
-    if (u.endsWith('/api/users/me')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ username: 'NeuroSFW', displayName: '#NeuroSFW | ЧБ' }) });
+    if (u.endsWith('/api/users/me')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ username: 'NeuroSFW', displayName: '#NeuroSFW | ЧБ', id: src.match(/const OWNER_ID = '([^']+)'/)[1] }) });
     if (u === URL0) return r.fulfill({ contentType: 'text/html; charset=utf-8', body: snap });
     return r.fulfill({ status: 404, body: '' });
   });
