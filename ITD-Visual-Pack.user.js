@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.13.8
+// @version      3.3.13.9
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1961,6 +1961,8 @@
         .vp-nick-row > a { min-width: 0; overflow: hidden; }
         .vp-nick-row .vp-nick:not(.vp-nick-large *) { min-width: 0; max-width: 100%; }
         .vp-nick-row .vp-nick-text:not(.vp-nick-large *) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
+        .vp-post header .vp-nick-row:not(:last-child) { padding-right: 50px; }
+        @media (max-width: 1173px) { .vp-post header .vp-nick-row:not(:last-child) { padding-right: 42px; } }
         .vp-notif .vp-nick-row > a { max-width: 100%; }
         .vp-notif .vp-nick-row .vp-nick:not(.vp-nick-large *) { display: flex; flex-wrap: nowrap; align-items: center; }
         article .vp-nick-row time { flex-shrink: 0; }
@@ -4027,7 +4029,8 @@
         }
 
         const CHANGELOG = [
-            ['3.3.13.6 – 3.3.13.8', '30 сентября 2026', [
+            ['3.3.13.6 – 3.3.13.9', '30 сентября 2026', [
+                'Посты: время и значки у ника больше не заезжают под кнопку «•••» — длинный ник обрезается многоточием',
                 'Уведомления: галочка ИТД X стоит рядом с ником, а не под ним; длинный ник обрезается многоточием и не вылезает за карточку',
             ]],
             ['3.3.11 – 3.3.13.5', '29 сентября 2026', [
