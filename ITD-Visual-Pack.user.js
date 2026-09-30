@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.13.6
+// @version      3.3.13.7
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3508,7 +3508,7 @@
             fab.className = 'vp-fab';
             fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка">${fabFace()}</button>
             <div class="vp-fab-menu"><button type="button" data-act="snap" title="На компьютере — ещё Ctrl+Shift+S">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', 18)}<span>Снимок для Claude</span></button>
-                <button type="button" data-act="snap5">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><path d="M12 10v3l2 1.5"/>', 18)}<span>Снимок через 5 с</span></button>
+                <button type="button" data-act="snapLater">${svgIcon('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><path d="M12 10v3l2 1.5"/>', 18)}<span>Снимок через 30 с</span></button>
                 <button type="button" data-act="report">${svgIcon('<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h4"/>', 18)}<span>Скопировать отчёт</span></button>
                 <button type="button" data-act="diag">${svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4M8.5 11l1.8 1.8 3.4-3.6"/>', 18)}<span>Диагностика</span></button>
                 <button type="button" data-act="verify">${svgIcon('<path d="M12 2.5l2.9 6 6.6.6-5 4.4 1.5 6.5L12 16.8 5.9 20 7.4 13.5l-5-4.4 6.6-.6z"/>', 18)}<span>Галочки</span></button>
@@ -3569,9 +3569,9 @@
             btn.addEventListener('click', e => e.stopPropagation());
             const act = (name, fn) => fab.querySelector(`[data-act="${name}"]`).addEventListener('click', e => { e.stopPropagation(); fab.classList.remove('vp-open'); fn(); });
             act('snap', () => setTimeout(pageSnapshot, 200));
-            act('snap5', () => {
+            act('snapLater', () => {
                 if (fab.dataset.count) return;
-                let n = 5;
+                let n = 30;
                 fab.dataset.count = n;
                 const t = setInterval(() => {
                     if (--n > 0) { fab.dataset.count = n; return; }
