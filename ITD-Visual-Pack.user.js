@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.4.3.1
+// @version      3.4.3.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4844,6 +4844,8 @@
         }
 
         const CHANGELOG = [
+            ['3.4.3.2', '1 октября 2026', [
+                'Сообщения: кнопка «вниз» — если отлистал переписку вверх, одно нажатие возвращает к последним сообщениям, на ней видно, сколько пришло новых']],
             ['3.4.3.1', '1 октября 2026', [
                 'Оптимизация и исправление багов']],
             ['3.4.3', '1 октября 2026', [
@@ -7728,6 +7730,14 @@
         .vp-msgs-who { display: flex; flex-direction: column; min-width: 0; margin-right: auto; }
         .vp-msgs-who b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .vp-msgs-who small { font-size: 12px; color: var(--text-secondary); }
+        .vp-msgs-chat { position: relative; }
+        .vp-msgs-down { position: absolute; right: 14px; bottom: 78px; z-index: 3; width: 42px; height: 42px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+            display: grid; place-items: center; color: var(--text-primary, #fff); background: var(--block-bg, #1f1f23);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(127, 127, 127, .25); transition: opacity .18s, transform .18s; }
+        .vp-msgs-down[hidden] { display: grid !important; opacity: 0; transform: translateY(10px) scale(.9); pointer-events: none; }
+        .vp-msgs-down span { position: absolute; top: -6px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px;
+            font: 600 11px/18px system-ui, sans-serif; text-align: center; color: var(--vp-on-accent, #fff); background: var(--vp-accent, #3b82f6); }
+        .vp-msgs-down span:empty { display: none; }
         .vp-msgs-feed { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; overscroll-behavior: contain; }
         .vp-msgs-note { align-self: center; margin: 2px 0 8px; padding: 6px 12px; border-radius: 999px; font-size: 12px;
             background: var(--block-bg); color: var(--text-secondary); text-align: center; }
@@ -7847,6 +7857,7 @@
                     <button class="vp-msgs-ib vp-msgs-call" title="Позвонить">${MSG_ICON.call}</button><button class="vp-msgs-ib vp-msgs-more" title="Ещё">${MSG_ICON.more}</button>
                     <div class="vp-msgs-hmenu" hidden></div></div>
                 <div class="vp-msgs-feed" aria-live="polite"></div>
+                <button type="button" class="vp-msgs-down" title="Вниз" hidden>${svgIcon('<path d="m6 9 6 6 6-6"/>', 22)}<span></span></button>
                 <form class="vp-msgs-bar"><div class="vp-msgs-field"><button type="button" class="vp-msgs-ghost vp-msgs-attach" title="Картинка">${MSG_ICON.clip}</button>
                     <input type="text" placeholder="Сообщение" enterkeyhint="send" autocomplete="off"><span class="vp-msgs-count" hidden></span>
                     <button type="button" class="vp-msgs-ghost vp-msgs-emoji" title="Эмодзи">${MSG_ICON.smile}</button></div>
@@ -7858,6 +7869,17 @@
             document.body.appendChild(under);
 
             const $ = s => root.querySelector(s);
+            const downBtn = root.querySelector('.vp-msgs-down'), downNum = downBtn.lastElementChild;
+            let downNew = 0;
+            const feedEl = root.querySelector('.vp-msgs-feed');
+            const downSync = () => {
+                const far = feedEl.scrollHeight - feedEl.scrollTop - feedEl.clientHeight > 320;
+                if (!far) downNew = 0;
+                downBtn.hidden = !far;
+                downNum.textContent = downNew ? (downNew > 99 ? '99+' : String(downNew)) : '';
+            };
+            feedEl.addEventListener('scroll', downSync, { passive: true });
+            downBtn.addEventListener('click', () => { downNew = 0; feedEl.scrollTo({ top: feedEl.scrollHeight, behavior: 'smooth' }); });
             const list = $('.vp-msgs-list'), home = $('.vp-msgs-home'), chat = $('.vp-msgs-chat'), feed = $('.vp-msgs-feed');
             const input = $('.vp-msgs-bar input'), send = $('.vp-msgs-send'), search = $('.vp-msgs-search input');
             const countEl = $('.vp-msgs-count');
@@ -7871,12 +7893,27 @@
             const isUrl = a => /^https?:|^\//.test(a);
             const avaHtml = a => isUrl(a) ? `<img src="${esc(a)}" alt="">` : esc(a);
 
+            let supDir = false;
             function renderList() {
                 const q = search.value.trim().toLowerCase();
                 const pins = msgPins();
-                const rows = sortDialogs(MSG_DIALOGS).filter(d => !q || (d.name + ' ' + d.login + ' ' + d.last).toLowerCase().includes(q));
+                let rows = sortDialogs(MSG_DIALOGS).filter(d => !q || (d.name + ' ' + d.login + ' ' + d.last).toLowerCase().includes(q));
                 const people = MSG_DIALOGS.filter(d => d.login).length;
-                $('.vp-msgs-sub').textContent = people ? `Сервер ИТД, поддержка и ${people} ${plural(people, 'человек', 'человека', 'человек')} с ИТД X` : 'Пока никого с ИТД X — список обновится сам';
+                const sups = msgIsSupport() ? sortDialogs(MSG_DIALOGS.filter(d => d.supUid)) : [];
+                if (sups.length && !q) {
+                    if (supDir) rows = [{ id: '@back', ava: '←', name: 'Все чаты', last: `Обращения в поддержку: ${sups.length}`, time: '', unread: 0 }, ...sups.map(d => Object.assign({}, d, { name: d.name.replace(/^🛟\s*/, '') }))];
+                    else {
+                        const top = sups.reduce((a, d) => (d.lastTs || 0) > (a.lastTs || 0) ? d : a, sups[0]);
+                        const opened = msgOpened(), act = d => Math.max(d.lastTs || 0, opened[d.id] || 0), fAct = Math.max(...sups.map(act));
+                        const folder = { id: '@sup', ava: '🛟', name: 'Поддержка', last: top.last ? top.name.replace(/^🛟\s*/, '') + ': ' + top.last : `обращений: ${sups.length}`,
+                            time: top.time || '', lastTs: top.lastTs || 0, unread: sups.reduce((n, d) => n + (d.unread || 0), 0) };
+                        rows = rows.filter(d => !d.supUid);
+                        const at = rows.findIndex(d => !pins.includes(d.id) && act(d) < fAct);
+                        rows.splice(at < 0 ? rows.length : at, 0, folder);
+                    }
+                }
+                if (!sups.length) supDir = false;
+                $('.vp-msgs-sub').textContent = supDir && sups.length && !q ? 'Все, кто писал в поддержку' : people ? `Сервер ИТД, поддержка и ${people} ${plural(people, 'человек', 'человека', 'человек')} с ИТД X` : 'Пока никого с ИТД X — список обновится сам';
                 list.innerHTML = rows.length ? rows.map(d => `
                 <div class="vp-msgs-row${pins.includes(d.id) ? ' vp-pinned' : ''}" data-id="${d.id}">
                     <div class="vp-msgs-ava${d.online ? ' vp-online' : ''}">${avaHtml(d.ava)}</div>
@@ -7973,6 +8010,7 @@
                 $('.vp-msgs-hmenu').hidden = true;
                 $('.vp-msgs-more').hidden = !d.login || !!d.support || !!d.supUid || !!d.bot;
                 current = d;
+                downNew = 0;
                 d.unread = 0;
                 msgMarkOpened(d.id);
                 $('.vp-msgs-chead .vp-msgs-ava').innerHTML = avaHtml(d.ava);
@@ -8050,6 +8088,8 @@
                 }
                 if (added) feed.querySelectorAll(':scope > .vp-msgs-note.vp-msgs-first').forEach(n => n.remove());
                 feed.scrollTop = nearEnd ? feed.scrollHeight : keep;
+                if (added && !nearEnd && d.shown) downNew += list.slice(-added).filter(m => m.dir === 'in').length;
+                downSync();
                 paintCalls(t);
                 d.shown = list.length; d.sig = chatSig(t.uid);
                 msgReadNow(d, t, list);
@@ -8182,7 +8222,7 @@
             let holdT = 0, held = false, holdAt = null;
             list.addEventListener('pointerdown', e => {
                 const r = e.target.closest('.vp-msgs-row');
-                if (!r || e.button > 0) return;
+                if (!r || e.button > 0 || r.dataset.id[0] === '@') return;
                 held = false; holdAt = [e.clientX, e.clientY];
                 clearTimeout(holdT);
                 holdT = setTimeout(() => { held = true; if (navigator.vibrate) navigator.vibrate(12); showCtx(r, holdAt[0], holdAt[1]); }, 450);
@@ -8191,7 +8231,7 @@
             ['pointerup', 'pointercancel'].forEach(t => list.addEventListener(t, () => { clearTimeout(holdT); holdAt = null; }));
             list.addEventListener('contextmenu', e => {
                 const r = e.target.closest('.vp-msgs-row');
-                if (!r) return;
+                if (!r || r.dataset.id[0] === '@') return;
                 e.preventDefault();
                 clearTimeout(holdT);
                 if (!held) showCtx(r, e.clientX, e.clientY);
@@ -8203,6 +8243,7 @@
             list.addEventListener('click', e => {
                 const r = e.target.closest('.vp-msgs-row');
                 if (held) { held = false; return; }
+                if (r && r.dataset.id[0] === '@') { supDir = r.dataset.id === '@sup'; list.scrollTop = 0; renderList(); return; }
                 if (r) openChat(MSG_DIALOGS.find(d => d.id === r.dataset.id));
             });
             root.querySelectorAll('.vp-msgs-who, .vp-msgs-chead .vp-msgs-ava').forEach(el => el.onclick = () => {

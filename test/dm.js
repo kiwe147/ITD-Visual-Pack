@@ -83,7 +83,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   };
   // открыть чат и дождаться, пока в нём n сообщений (переписка расшифровывается не мгновенно)
   const chatWith = async (p, id, n) => {
-    await p.evaluate(id => { const b = document.querySelector('.vp-msgs-chat:not([hidden]) .vp-msgs-back'); if (b) b.click(); document.querySelector(`.vp-msgs-row[data-id="${id}"]`).click(); }, id);
+    await p.evaluate(id => { const b = document.querySelector('.vp-msgs-chat:not([hidden]) .vp-msgs-back'); if (b) b.click(); const dir = document.querySelector(`.vp-msgs-row[data-id="${id.startsWith('sup:') ? '@sup' : '@back'}"]`); if (dir && !document.querySelector(`.vp-msgs-row[data-id="${id}"]`)) dir.click(); document.querySelector(`.vp-msgs-row[data-id="${id}"]`).click(); }, id);
     await p.waitForFunction(n => document.querySelectorAll('.vp-msgs-feed .vp-msgs-b').length >= n, n, { timeout: 15000 }).catch(() => { });
   };
   const bubbles = p => p.$$eval('.vp-msgs-feed .vp-msgs-b', bs => bs.map(x => (x.classList.contains('vp-out') ? '→' : '←') + x.firstChild.textContent));
@@ -127,7 +127,9 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   await A.p.$eval('.vp-msgs-back', b => b.click()); await A.p.waitForTimeout(2500);
   const rowsA = await A.p.$$eval('.vp-msgs-row', rs => rs.map(r => r.dataset.id));
   console.log('—    список у NeuroSFW: ' + rowsA.join(', '));
-  check(rowsA.includes('sup:u2') && !rowsA.includes('support'), 'у поддержки — диалог «🛟 bob», своей строки «Поддержка» нет');
+  check(rowsA.includes('@sup') && !rowsA.includes('sup:u2') && !rowsA.includes('support'), 'у поддержки (3.4.3.2) — папка «Поддержка», обращения внутри неё');
+  await A.p.$eval('.vp-msgs-row[data-id="@sup"]', r => r.click()); await A.p.waitForTimeout(300);
+  check((await A.p.$$eval('.vp-msgs-row', rs => rs.map(r => r.dataset.id))).includes('sup:u2'), 'в папке — диалог «bob»');
   await A.p.$eval('.vp-msgs-row[data-id="sup:u2"]', r => r.click()); await A.p.waitForTimeout(1500);
   check((await bubbles(A.p)).join('|') === '←Не открывается галерея', 'в «🛟 bob» — только обращение, без личной переписки');
   await say(A.p, 'Починим сегодня');
@@ -190,6 +192,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   const rawAll = comments.map(c => c.content).join('\n');
   check(!rawAll.includes(IMG_ID) && !/cdn|котик/.test(rawAll), 'на сервере нет ни ссылки на картинку, ни подписи — только шифр');
   await A.p.$eval('.vp-msgs-back', b => b.click()).catch(() => { }); await A.p.waitForTimeout(3000);
+  await A.p.$eval('.vp-msgs-row[data-id="@back"]', b => b.click()).catch(() => { });
   const preview = await A.p.$eval('.vp-msgs-row[data-id="u:bob"] .vp-msgs-last', e => e.textContent).catch(() => '');
   check(preview === '🖼 котик', `в списке у NeuroSFW: «${preview}»`);
   await chatWith(A.p, 'u:bob', 1);
@@ -342,7 +345,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   await A2.p.$eval('.vp-msgs-back', b => b.click()).catch(() => { }); await A2.p.waitForTimeout(2500);
   const u2 = await unreadOf(A2.p);
   console.log('—    непрочитанные: ' + JSON.stringify(u1) + ' / второе устройство ' + JSON.stringify(u2));
-  check(Object.keys(u1).length > 2 && JSON.stringify(u1) === JSON.stringify(u2) && Object.keys(u2).some(k => k.startsWith('sup:')) && Object.values(u2).every(n => n === 0), 'второе устройство: непрочитанные как на первом (и «Поддержка», которую там не открывали)');
+  check(Object.keys(u1).length > 2 && JSON.stringify(u1) === JSON.stringify(u2) && Object.keys(u2).some(k => k === '@sup') && Object.values(u2).every(n => n === 0), 'второе устройство: непрочитанные как на первом (и «Поддержка», которую там не открывали)');
   A2.p.errors.length && check(false, 'A2 ошибки: ' + A2.p.errors.join(' | '));
   for (const x of [A.p, B2.p, C2.p]) check(!x.errors.length, 'ошибок нет' + (x.errors.length ? ': ' + x.errors.join(' | ') : ''));
   await b.close();
