@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.4.0
+// @version      3.4.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4691,6 +4691,8 @@
         }
 
         const CHANGELOG = [
+            ['3.4.1', '1 октября 2026', [
+                'Баннер: у видео в баннере скруглённые углы, как у картинки']],
             ['3.4.0', '1 октября 2026', [
                 'Сообщения: ссылки в тексте нажимаются — ссылки на итд открываются сразу, остальные в новой вкладке',
                 'Настройки → Ник: «Неоновая подсветка» одним переключателем убирает всё свечение — и своё, и чужое',
@@ -11231,7 +11233,7 @@
                 v.addEventListener('playing', () => v.classList.add('vp-live'));
                 img.after(v);
             }
-            const box = `left: ${img.offsetLeft}px; top: ${img.offsetTop}px; width: ${img.offsetWidth}px; height: ${img.offsetHeight}px;`;
+            const box = `left: ${img.offsetLeft}px; top: ${img.offsetTop}px; width: ${img.offsetWidth}px; height: ${img.offsetHeight}px; border-radius: ${getComputedStyle(img).borderRadius};`;
             if (v.dataset.box !== box) { v.dataset.box = box; v.style.cssText = box + (img.style.transform ? ` transform: ${img.style.transform};` : ''); }
             if (v.getAttribute('src') !== src) { v.classList.remove('vp-fail', 'vp-live'); v.src = src; v.play().catch(() => { }); }
         }
