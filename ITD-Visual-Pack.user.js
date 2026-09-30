@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.13.10
+// @version      3.3.13.11
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2215,9 +2215,14 @@
             ctx.drawImage(sprite(kind, h, s, l), x - r, y - r, r * 2, r * 2);
             ctx.globalAlpha = 1;
         }
+        let fadeAcc = 0;
         function fadeOut(k, dt) {
+            fadeAcc += dt;
+            const a = 1 - Math.pow(1 - k, fadeAcc);
+            if (a < 0.08) return;
+            fadeAcc = 0;
             ctx.globalCompositeOperation = 'destination-out';
-            ctx.fillStyle = `rgba(0, 0, 0, ${1 - Math.pow(1 - k, dt)})`;
+            ctx.fillStyle = `rgba(0, 0, 0, ${a})`;
             ctx.fillRect(0, 0, W, H);
             ctx.globalCompositeOperation = 'source-over';
         }
@@ -4029,7 +4034,9 @@
         }
 
         const CHANGELOG = [
-            ['3.3.13.6 – 3.3.13.10', '30 сентября 2026', [
+            ['3.3.13.6 – 3.3.13.11', '30 сентября 2026', [
+                'Фон «Матрица»: символы снова гаснут после падения — дождь, а не сплошная стена иероглифов (особенно на экранах 120–144 Гц)',
+                'Уведомления: служебные записи ИТД X («ITDXE …», куски стикерпаков) больше не показываются',
                 'Посты: время и значки у ника больше не заезжают под кнопки «Скопировать картинку», «Скопировать ссылку» и «•••» — длинный ник обрезается многоточием',
                 'Уведомления: галочка ИТД X стоит рядом с ником, а не под ним; длинный ник обрезается многоточием и не вылезает за карточку',
             ]],
@@ -10292,14 +10299,20 @@
                 const txt = tail.textContent;
                 if (!txt.trim()) return;
                 let node = sp._vpTail;
+                const last = sp.lastChild, was = sp.dataset.vpTail;
+                if (!node && was && last && last.nodeType === 3 && last.nodeValue.endsWith(was)) {
+                    node = last.nodeValue.length > was.length ? last.splitText(last.nodeValue.length - was.length) : last !== sp.firstChild ? last : null;
+                    if (node) sp._vpTail = node;
+                }
                 if (!node || node.parentNode !== sp) { node = document.createTextNode(''); sp.appendChild(node); sp._vpTail = node; }
                 if (node.nodeValue !== txt) node.nodeValue = txt;
+                if (sp.dataset.vpTail !== txt) sp.dataset.vpTail = txt;
                 if (!tail.classList.contains('vp-nick-tail-moved')) tail.classList.add('vp-nick-tail-moved');
             });
         });
         onDom(function hideServiceNotifs() {
             document.querySelectorAll('.' + SELECTORS.notification).forEach(n => {
-                if (n.dataset.vpSvc || !/(^|\s)ITDX[A-Z0-9]* [\w\-/+=]{8,}/.test(n.textContent)) return;
+                if (n.dataset.vpSvc || !/(^|[^A-Za-z0-9])ITDX[A-Z0-9-]*(?: \S{1,12}){0,3} [\w\-/+=]{8,}/.test(n.textContent)) return;
                 n.dataset.vpSvc = '1'; n.style.display = 'none';
             });
         });
