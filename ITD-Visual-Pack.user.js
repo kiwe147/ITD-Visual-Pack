@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.15.1
+// @version      3.3.15.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1993,13 +1993,13 @@
         .vp-banner-buttons { inset: var(--vp-bar-top, 0px) auto auto 50% !important; width: auto !important; height: auto !important; margin: 0 !important; translate: none !important; scale: none !important; rotate: none !important;
             transform: translateX(-50%); display: flex !important; gap: 2px !important; padding: 4px 12px 7px !important;
             border-radius: 0 0 22px 22px; background: rgba(12, 12, 16, .6); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-            z-index: 3; transition: transform .25s cubic-bezier(.2,.8,.2,1), opacity .2s; }
+            z-index: 3; transition: transform .25s cubic-bezier(.2,.8,.2,1), clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s; }
         html.vp-light .vp-banner-buttons { background: rgba(255, 255, 255, .65); }
         .vp-banner-buttons > button { background: transparent !important; box-shadow: none !important; }
         .vp-banner-buttons > button:hover { background: rgba(128, 128, 128, .22) !important; }
         @media (hover: hover) and (pointer: fine) {
-            .vp-banner-buttons:not(.vp-banner-editing) { opacity: 0; transform: translate(-50%, -100%); }
-            .vp-banner:hover .vp-banner-buttons, .vp-banner-buttons:focus-within { opacity: 1; transform: translateX(-50%); }
+            .vp-banner-buttons:not(.vp-banner-editing) { opacity: 0; transform: translate(-50%, -100%); clip-path: inset(100% 0 0 0); }
+            .vp-banner:hover .vp-banner-buttons, .vp-banner-buttons:focus-within { opacity: 1; transform: translateX(-50%); clip-path: inset(0 0 0 0); }
         }
         .toggle-switch.vp-tri { width: 58px !important; }
         .toggle-switch.vp-tri[data-s="1"]::after { left: 20px !important; }
@@ -4482,6 +4482,9 @@
         }
 
         const CHANGELOG = [
+            ['3.3.15.2', '30 сентября 2026', [
+                'Сообщения: в «•••» чата можно заблокировать человека — его новые сообщения и звонки к тебе не приходят, он об этом не узнаёт',
+                'Баннер: шторка с кнопками выезжает из-под верхнего края баннера, а не из-за верха страницы']],
             ['3.3.15.1', '30 сентября 2026', [
                 'Звонки: звук собеседника включается надёжнее',
                 'В окне звонка видно, идёт ли звук от тебя и от собеседника; если браузер не дал включить звук — кнопка «Включить звук»',
@@ -6601,7 +6604,17 @@
         const msgBytesUuid = b => [...b].map(x => x.toString(16).padStart(2, '0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
         const MSG_ALBUM_MAX = 10;
         const msgPreview = m => m.imgs && m.imgs.length > 1 ? `🖼 ${m.imgs.length} фото` + (m.text ? ' · ' + m.text : '') : m.img ? '🖼 ' + (m.text || 'Фото') : m.text;
-        const msgNet = { keys: new Map(), vols: [], me: null, pairs: new Map(), conv: new Map(), syncing: null };
+        const msgNet = { keys: new Map(), vols: [], me: null, pairs: new Map(), conv: new Map(), syncing: null, blocks: {} };
+        const msgBlocks = () => GM_getValue(acctKey('msgBlocked'), {});
+        function msgIsBlocked(uid) { const p = msgBlocks()[uid]; return !!(p && p.length && !p[p.length - 1][1]); }
+        function msgBlockedAt(uid, ts) { const p = msgNet.blocks[uid]; return !!p && p.some(([a, b]) => ts >= a && (!b || ts <= b)); }
+        function msgSetBlock(uid, on) {
+            const all = msgBlocks(), p = all[uid] || [], now = Math.floor(srvNow() / 1000), open = p.length && !p[p.length - 1][1];
+            if (on && !open) p.push([now, 0]);
+            if (!on && open) p[p.length - 1][1] = now;
+            all[uid] = p.slice(-20);
+            GM_setValue(acctKey('msgBlocked'), all);
+        }
         const te = new TextEncoder(), td = new TextDecoder();
         const cat = (...a) => { const o = new Uint8Array(a.reduce((n, x) => n + x.length, 0)); let i = 0; for (const x of a) { o.set(x, i); i += x.length; } return o; };
         const rnd = n => crypto.getRandomValues(new Uint8Array(n));
@@ -6755,7 +6768,8 @@
         async function msgDecryptAll() {
             const me = msgNet.me;
             if (!me) return;
-            const conv = new Map(), add = (uid, dir, m, v, i) => { if (!conv.has(uid)) conv.set(uid, []); conv.get(uid).push({ dir, ...m, _v: v, _i: i }); };
+            msgNet.blocks = msgBlocks();
+            const conv = new Map(), add = (uid, dir, m, v, i) => { if (dir === 'in' && msgBlockedAt(uid, m.ts)) return; if (!conv.has(uid)) conv.set(uid, []); conv.get(uid).push({ dir, ...m, _v: v, _i: i }); };
             const others = [...msgNet.keys.keys()].filter(id => id !== me.id);
             for (const v of msgNet.vols) {
                 let recs;
@@ -6911,6 +6925,7 @@
                 d.lastTs = last.at || last.ts;
                 d.time = msgTime(last.at || last.ts);
                 d.unread = list.filter(m => m.dir === 'in' && m.ts > seenAt(seen, t.uid, t.sup)).length;
+                if (!t.sup && msgIsBlocked(t.uid)) d.last = '🚫 Заблокирован(а)';
             }
         }
         function msgUnread() {
@@ -7236,7 +7251,20 @@
         html.vp-msgs-open .vp-msgs-under.vp-on { display: block; }
         .vp-msgs-view { display: flex; flex-direction: column; min-height: 0; flex: 1; }
         .vp-msgs-view[hidden] { display: none; }
-        .vp-msgs-call[hidden] { display: none; }
+        .vp-msgs-call[hidden], .vp-msgs-more[hidden] { display: none; }
+        .vp-msgs-chead { position: relative; }
+        .vp-msgs-hmenu { position: absolute; top: calc(100% - 4px); right: 12px; z-index: 5; min-width: 190px; padding: 6px; border-radius: 14px;
+            background: #202024; box-shadow: 0 12px 34px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(128, 128, 128, .2); }
+        .vp-msgs-hmenu[hidden] { display: none; }
+        html.vp-light .vp-msgs-hmenu { background: #fff; }
+        .vp-msgs-hmenu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: 10px; background: none;
+            color: var(--text-primary, #fff); font: inherit; font-size: 14px; cursor: pointer; text-align: left; }
+        .vp-msgs-hmenu button:hover { background: rgba(128, 128, 128, .16); }
+        .vp-msgs-hmenu button.vp-danger { color: #f23f43; }
+        .vp-msgs-blocked { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .vp-msgs-blocked button { padding: 6px 14px; border: 0; border-radius: 999px; background: rgba(128, 128, 128, .2); color: var(--text-primary, #fff);
+            font: inherit; font-size: 13px; cursor: pointer; }
+        .vp-msgs-blocked button:hover { background: rgba(128, 128, 128, .3); }
         .vp-msgs-callrow { align-self: center; display: flex; align-items: center; gap: 7px; width: fit-content; margin: 8px auto; padding: 6px 12px; border-radius: 14px;
             background: rgba(128, 128, 128, .14); color: var(--text-secondary, #b5bac1); font-size: 13px; cursor: pointer; }
         .vp-msgs-callrow:hover { background: rgba(128, 128, 128, .22); }
@@ -7401,7 +7429,8 @@
             <section class="vp-msgs-view vp-msgs-chat" hidden>
                 <div class="vp-msgs-chead"><button class="vp-msgs-ib vp-msgs-back" title="Назад">${MSG_ICON.back}</button>
                     <div class="vp-msgs-ava vp-sm"></div><div class="vp-msgs-who"><b></b><small></small></div>
-                    <button class="vp-msgs-ib vp-msgs-call" title="Позвонить">${MSG_ICON.call}</button><button class="vp-msgs-ib" title="Ещё (пока не работает)">${MSG_ICON.more}</button></div>
+                    <button class="vp-msgs-ib vp-msgs-call" title="Позвонить">${MSG_ICON.call}</button><button class="vp-msgs-ib vp-msgs-more" title="Ещё">${MSG_ICON.more}</button>
+                    <div class="vp-msgs-hmenu" hidden></div></div>
                 <div class="vp-msgs-feed" aria-live="polite"></div>
                 <form class="vp-msgs-bar"><div class="vp-msgs-field"><button type="button" class="vp-msgs-ghost vp-msgs-attach" title="Картинка">${MSG_ICON.clip}</button>
                     <input type="text" placeholder="Сообщение" enterkeyhint="send" autocomplete="off"><span class="vp-msgs-count" hidden></span>
@@ -7494,6 +7523,9 @@
                     history[overlayAt('vpChat') ? 'replaceState' : 'pushState'](st, '', location.href);
                 }
                 if (current !== d) clearPending();
+                blockUi(null);
+                $('.vp-msgs-hmenu').hidden = true;
+                $('.vp-msgs-more').hidden = !d.login || !!d.support || !!d.supUid || !!d.bot;
                 current = d;
                 d.unread = 0;
                 msgMarkOpened(d.id);
@@ -7543,6 +7575,7 @@
                 d.shown = list.length; d.sig = chatSig(t.uid);
                 input.disabled = false; input.focus();
                 msgReadNow(d, t, list);
+                blockUi(d, t);
             }
             const msgMetaText = (t, m) => msgTime(m.at || m.ts) + (m.dir === 'out' ? (readUpTo(t.uid, t.sup, 'them') >= m.ts ? ' ✓✓' : ' ✓') : '');
             function msgRefreshChat(d) {
@@ -7725,6 +7758,52 @@
                 close(true);
                 openProfile(login);
             });
+            function blockUi(d, t) {
+                feed.querySelectorAll(':scope > .vp-msgs-blocked').forEach(x => x.remove());
+                const on = !!(d && t && t.uid && !t.sup && msgIsBlocked(t.uid));
+                if (d) $('.vp-msgs-call').hidden = on || !d.login || !!d.support || !!d.supUid || !!d.bot;
+                if (!on) {
+                    if (input.dataset.vpBlocked) { delete input.dataset.vpBlocked; input.placeholder = input.dataset.vpPh || ''; input.disabled = false; }
+                    return;
+                }
+                const n = note(`🚫 Ты заблокировал(а) ${d.name}: новые сообщения и звонки от этого человека к тебе не приходят`), b = document.createElement('button');
+                n.classList.add('vp-msgs-blocked');
+                b.type = 'button';
+                b.textContent = 'Разблокировать';
+                b.onclick = () => msgBlockToggle(d, t, false);
+                n.appendChild(b);
+                if (!input.dataset.vpBlocked) { input.dataset.vpBlocked = '1'; input.dataset.vpPh = input.placeholder; }
+                input.placeholder = 'Сначала разблокируй';
+                input.value = '';
+                input.disabled = true;
+                send.disabled = true;
+                feed.scrollTop = feed.scrollHeight;
+            }
+            async function msgBlockToggle(d, t, on) {
+                msgSetBlock(t.uid, on);
+                if (on && callNet.cur && callNet.cur.uid === t.uid) callEnd(callNet.cur, 'Звонок завершён', 0);
+                await msgDecryptAll();
+                msgFillDialogs();
+                msgBadge();
+                if (current === d) msgOpenPerson(d);
+            }
+            const blockMenu = $('.vp-msgs-hmenu');
+            $('.vp-msgs-more').onclick = e => {
+                e.stopPropagation();
+                if (!blockMenu.hidden) { blockMenu.hidden = true; return; }
+                if (!current || !current.login || current.support || current.supUid || current.bot) return;
+                const t = msgTarget(current), d = current;
+                if (!t.uid) return note(t.missing);
+                const on = msgIsBlocked(t.uid);
+                blockMenu.innerHTML = '<button type="button"></button>';
+                const b = blockMenu.firstChild;
+                b.innerHTML = svgIcon(on ? '<path d="m5 12.5 4.5 4.5L19 7.5"/>' : '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>', 18) + '<span></span>';
+                b.querySelector('span').textContent = on ? 'Разблокировать' : 'Заблокировать';
+                b.classList.toggle('vp-danger', !on);
+                b.onclick = () => { blockMenu.hidden = true; msgBlockToggle(d, t, !on); };
+                blockMenu.hidden = false;
+            };
+            root.addEventListener('click', e => { if (!blockMenu.hidden && !e.target.closest('.vp-msgs-hmenu, .vp-msgs-more')) blockMenu.hidden = true; });
             $('.vp-msgs-call').onclick = () => {
                 if (!current || !current.login || current.support || current.bot) return;
                 const t = msgTarget(current);
