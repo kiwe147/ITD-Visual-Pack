@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.14.2
+// @version      3.3.14.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -116,7 +116,7 @@
         [...OVERLAY_KEYS, ...STACK_KEYS].forEach(k => delete st[k]);
         history.replaceState(st, '', location.href);
     }
-    const postIndex = { byMedia: new Map(), byUser: new Map(), byRepost: new Map() };
+    const postIndex = { byMedia: new Map(), byUser: new Map(), byRepost: new Map(), original: new Map() };
     const normText = t => String(t || '').replace(/\s+/g, ' ').trim();
     const POSTS_URL = /\/api\/posts(?:\/user\/[^/?#]+(?:\/liked)?|\/[0-9a-f-]{36})?\/?(?:[?#]|$)/;
     const POST_INDEX_MAX = 4000;
@@ -130,6 +130,7 @@
                 (p.attachments || []).forEach(a => a && a.url && postIndex.byMedia.set(a.url, p.id));
                 const user = String(p.author.username || '').toLowerCase(), text = normText(p.content);
                 const o = p.originalPost;
+                if (o && o.id) { postIndex.original.set(p.id, o.id); trimMap(postIndex.original); }
                 if (o && user) {
                     (o.attachments || []).forEach(a => a && a.url && postIndex.byRepost.set(user + '|' + a.url, p.id));
                     const ot = normText(o.content);
@@ -1988,7 +1989,7 @@
         article .vp-nick-row time { flex-shrink: 0; }
         .vp-clamp::after { display: none !important; }
         .vp-clamp { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); }
-        .vp-banner-buttons { inset: 0 auto auto 50% !important; width: auto !important; height: auto !important;
+        .vp-banner-buttons { inset: var(--vp-bar-top, 0px) auto auto 50% !important; width: auto !important; height: auto !important; margin: 0 !important; translate: none !important; scale: none !important; rotate: none !important;
             transform: translateX(-50%); display: flex !important; gap: 2px !important; padding: 4px 12px 7px !important;
             border-radius: 0 0 22px 22px; background: rgba(12, 12, 16, .6); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
             z-index: 3; transition: transform .25s cubic-bezier(.2,.8,.2,1), opacity .2s; }
@@ -4050,7 +4051,11 @@
         }
 
         const CHANGELOG = [
-            ['3.3.14.1 – 3.3.14.2', '30 сентября 2026', [
+            ['3.3.14.1 – 3.3.14.3', '30 сентября 2026', [
+                'Лента и профиль: после выхода из поста возвращают к тому же посту, а не в начало',
+                'Кнопка «Обновить» у поста с репостом: свои цифры получают и пост, и репост (раньше цифры поста попадали в репост)',
+                'Баннер: в шторке появились кнопки «убрать стекло» и «скрыть стикеры» на время ивента, выбор помнится после перезагрузки',
+                'Баннер: шторка с кнопками больше не вылезает выше баннера',
                 'Профиль: галочка ИТД X снова стоит после ника, а не перед ним',
                 'Посты: галочка ИТД X снова рядом с ником, а не под ним',
                 'Профиль на телефоне: кнопки под статистикой ровно по центру, «•••» больше не съезжает вниз']],
@@ -8907,6 +8912,80 @@
             sceneKick();
         });
 
+        const feedSaved = new Map();
+        let feedLoc = location.pathname + location.search, feedAt = feedPath(), feedJob = null, feedSaveTimer = 0;
+        function feedPath() { return location.pathname.includes('/post/') ? null : location.pathname + location.search; }
+        function feedPosts() { return [...document.querySelectorAll('article.' + SELECTORS.post)].filter(a => !a.parentElement.closest('article.' + SELECTORS.post)); }
+        function feedTop(el) { let y = 0; for (let e = el; e; e = e.offsetParent) y += e.offsetTop; return y; }
+        function feedId(a) {
+            try { const id = postIdOf(a); if (id) return id; } catch (e) { }
+            for (const at of a.attributes) if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(at.value)) return at.value;
+            return null;
+        }
+        function feedFp(a) {
+            const link = a.querySelector('header ' + PROFILE_LINK);
+            const text = [...a.querySelectorAll('.' + SELECTORS.postText)].map(t => t.textContent).join(' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+            const img = [...a.querySelectorAll('img')].find(i => !i.closest('header'));
+            return (link ? link.getAttribute('href') : '') + '|' + text + '|' + (img ? img.getAttribute('src') : '');
+        }
+        function feedSave(anchor) {
+            const k = feedPath();
+            if (!k || k !== feedAt || (feedJob && feedJob.k === k)) return;
+            const posts = feedPosts();
+            const edge = Math.min(120, innerHeight * 0.15);
+            const a = anchor || posts.find(p => p.getBoundingClientRect().bottom > edge);
+            if (!a) return;
+            feedSaved.delete(k);
+            feedSaved.set(k, { id: feedId(a), fp: feedFp(a), off: feedTop(a) - scrollY, y: scrollY, idx: posts.indexOf(a) });
+            if (feedSaved.size > 30) feedSaved.delete(feedSaved.keys().next().value);
+        }
+        function feedRestore(k, s) {
+            const job = { k }, t0 = performance.now(), stops = ['wheel', 'touchstart', 'keydown', 'mousedown'];
+            feedJob = job;
+            let count = -1, grewAt = t0, calm = 0;
+            const quit = () => { if (feedJob === job) feedJob = null; };
+            stops.forEach(t => addEventListener(t, quit, { capture: true, passive: true }));
+            const go = y => scrollTo({ top: y, behavior: 'instant' });
+            const step = () => {
+                const now = performance.now();
+                if (feedJob !== job || feedPath() !== k || now - t0 > 15000) {
+                    if (feedJob === job) feedJob = null;
+                    return stops.forEach(t => removeEventListener(t, quit, true));
+                }
+                const posts = feedPosts();
+                const a = posts.find(p => (s.id && feedId(p) === s.id) || feedFp(p) === s.fp);
+                if (a) {
+                    const y = Math.max(0, feedTop(a) - s.off);
+                    if (Math.abs(scrollY - y) > 1) { go(y); calm = now; } else if (!calm) calm = now;
+                    if (now - calm > 800) feedJob = null;
+                } else if (posts.length) {
+                    if (posts.length !== count) { count = posts.length; grewAt = now; }
+                    if (now - grewAt > 3000 || posts.length > s.idx + 60) { go(s.y); feedJob = null; }
+                    else go(document.documentElement.scrollHeight);
+                }
+                setTimeout(step, 100);
+            };
+            step();
+        }
+        function feedNav(pop) {
+            const was = feedLoc;
+            feedLoc = location.pathname + location.search;
+            if (feedLoc === was) return;
+            feedAt = feedPath();
+            feedJob = null;
+            const s = feedAt && feedSaved.get(feedAt);
+            if (s && (pop || was.includes('/post/'))) feedRestore(feedAt, s);
+        }
+        addEventListener('popstate', () => feedNav(true));
+        document.addEventListener('vp-loc', () => feedNav(false));
+        addEventListener('scroll', () => { clearTimeout(feedSaveTimer); feedSaveTimer = setTimeout(() => feedSave(), 150); }, { passive: true });
+        document.addEventListener('click', e => {
+            const a = e.target.closest && e.target.closest('article.' + SELECTORS.post);
+            if (!a) return;
+            clearTimeout(feedSaveTimer);
+            feedSave(feedPosts().find(p => p.contains(a)));
+        }, true);
+
         let ambientEnabled = GM_getValue('ambientEnabled', true);
         const ambient = new Map();
         const ambientSeen = new Set();
@@ -9882,8 +9961,12 @@
             for (const [id, t] of posts) if (t === text || text.startsWith(t) || t.startsWith(text)) return id;
             return null;
         }
-        function postCounters(card) {
-            const foot = card.querySelector('footer');
+        function postFooters(card) {
+            const all = [...card.querySelectorAll('footer')];
+            const own = all.filter(f => !f.closest('.' + SELECTORS.repost)).pop() || all.pop();
+            return { own, repost: all.find(f => f !== own) };
+        }
+        function postCounters(foot) {
             if (!foot) return null;
             const num = el => el && [...el.querySelectorAll('span')].reverse().find(sp => !sp.children.length && /^\d[\d\s.,KkКк]*$/.test(sp.textContent.trim()));
             const btn = label => num(foot.querySelector(`button[aria-label="${label}"]`));
@@ -9895,19 +9978,28 @@
             if (!id || btn.classList.contains('vp-spin')) return;
             btn.classList.add('vp-spin');
             try {
-                const res = await api('/api/posts/stats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [id] }) });
+                const foots = postFooters(card), orig = foots.repost && postIndex.original.get(id);
+                const ids = orig ? [id, orig] : [id];
+                const res = await api('/api/posts/stats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
                 const j = res.ok ? await res.json() : null;
-                const st = j && ((j.posts || (j.data && j.data.posts) || [])[0]);
+                const list = j ? (j.posts || (j.data && j.data.posts) || []) : [];
+                const pick = (pid, i) => list.find(x => x && x.id === pid) || (list.every(x => !x || !x.id) ? list[i] : null);
+                const st = pick(id, 0);
                 if (!st) throw new Error('счётчики: ' + res.status);
-                const els = postCounters(card) || {};
                 let changed = 0;
-                for (const k of ['likesCount', 'commentsCount', 'repostsCount', 'viewsCount']) {
-                    const el = els[k];
-                    if (!el || typeof st[k] !== 'number' || el.textContent.trim() === String(st[k])) continue;
-                    el.textContent = String(st[k]);
-                    el.classList.remove('vp-bump'); void el.offsetWidth; el.classList.add('vp-bump');
-                    changed++;
-                }
+                const put = (foot, st) => {
+                    const els = postCounters(foot) || {};
+                    for (const k of ['likesCount', 'commentsCount', 'repostsCount', 'viewsCount']) {
+                        const el = els[k];
+                        if (!el || typeof st[k] !== 'number' || el.textContent.trim() === String(st[k])) continue;
+                        el.textContent = String(st[k]);
+                        el.classList.remove('vp-bump'); void el.offsetWidth; el.classList.add('vp-bump');
+                        changed++;
+                    }
+                };
+                put(foots.own, st);
+                const ost = orig && pick(orig, 1);
+                if (ost) put(foots.repost, ost);
                 btn.title = changed ? 'Обновлено' : 'Ничего нового';
             } catch (e) {
                 logErr('обновить пост', e);
@@ -10175,15 +10267,69 @@
             if (r.bottom < -40 || r.top > innerHeight) return;
             const past = Math.max(0, -r.top);
             const y = Math.round(past * .35);
-            const glass = banner.querySelector(':scope > [aria-label="Стекло"]');
-            const tf = calm ? '' : `translateY(${y}px)` + (glass ? '' : ' scale(1.15)'), op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
+            const glassEl = banner.querySelector(':scope > [aria-label="Стекло"]'), glass = !bannerNoGlass && glassEl;
+            const tf = calm ? '' : `translateY(${y}px)` + (glassEl ? '' : ' scale(1.15)'), op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
             for (const el of glass ? [img, glass] : [img]) {
                 if (el.style.transform !== tf) el.style.transform = tf;
                 if (el.style.opacity !== op) el.style.opacity = op;
             }
+            const bar = banner.querySelector(':scope > .' + SELECTORS.bannerButtons);
+            if (bar) {
+                const pane = glass ? [glass, glass.firstElementChild].filter(e => e && e.offsetWidth > banner.offsetWidth / 2) : [];
+                const top = Math.max(img.getBoundingClientRect().top, ...pane.map(e => e.getBoundingClientRect().top));
+                const off = Math.max(0, Math.round(top - r.top)) + 'px';
+                if (bar.style.getPropertyValue('--vp-bar-top') !== off) bar.style.setProperty('--vp-bar-top', off);
+            }
         }
         addEventListener('scroll', () => { if (!bannerQueued) { bannerQueued = true; requestAnimationFrame(bannerDepth); } }, { capture: true, passive: true });
         onDom(function bannerDepthDom() { bannerDepth(); });
+
+        let bannerNoGlass = GM_getValue('bannerGlassOff', false), bannerNoStickers = GM_getValue('bannerStickersOff', false);
+        document.documentElement.classList.toggle('vp-no-glass', bannerNoGlass);
+        document.documentElement.classList.toggle('vp-no-banner-stickers', bannerNoStickers);
+        const BANNER_FX = [
+            { cls: 'vp-banner-glass', find: b => b.querySelector(':scope > [aria-label="Стекло"]'), key: 'bannerGlassOff', html: 'vp-no-glass',
+                get: () => bannerNoGlass, set: v => { bannerNoGlass = v; }, titles: ['Убрать стекло с баннера', 'Вернуть стекло на баннер'],
+                icon: svgIcon('<rect x="3" y="5" width="18" height="14" rx="4"/><path d="M7.5 12.5l4-4M7.5 16l7.5-7.5"/>', 20) },
+            { cls: 'vp-banner-stickers', find: b => { const d = b.querySelector(':scope > [aria-label^="Оформление профиля"]'); return d && (d.firstElementChild || bannerNoStickers) ? d : null; },
+                key: 'bannerStickersOff', html: 'vp-no-banner-stickers', get: () => bannerNoStickers, set: v => { bannerNoStickers = v; },
+                titles: ['Скрыть стикеры на баннере', 'Показать стикеры на баннере'],
+                icon: svgIcon('<path d="M15 3H7a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h6l8-8V7a4 4 0 0 0-4-4z"/><path d="M13 21v-4a4 4 0 0 1 4-4h4"/>', 20) }
+        ];
+        function bannerFx() {
+            const banner = siteEl('banner'), row = siteEl('bannerButtons');
+            for (const fx of BANNER_FX) {
+                let btn = document.querySelector('.' + fx.cls);
+                const want = row && banner && bannerBtns.draw && fx.find(banner);
+                if (!want) { if (btn) btn.remove(); continue; }
+                if (!btn || btn.parentElement !== row) {
+                    if (btn) btn.remove();
+                    btn = bannerButton('vp-banner-fx ' + fx.cls, '', fx.icon);
+                    btn.onclick = e => {
+                        e.stopPropagation();
+                        const v = !fx.get();
+                        fx.set(v);
+                        GM_setValue(fx.key, v);
+                        document.documentElement.classList.toggle(fx.html, v);
+                        bannerFx();
+                        bannerDepth();
+                    };
+                    row.insertBefore(btn, row.querySelector('.' + SELECTORS.bannerDelete));
+                }
+                const off = fx.get();
+                btn.classList.toggle('vp-off', off);
+                if (btn.title !== fx.titles[+off]) btn.title = fx.titles[+off];
+            }
+        }
+        onDom(bannerFx);
+        addCss(`
+        html.vp-no-glass .vp-banner > [aria-label="Стекло"] { display: none !important; }
+        html.vp-no-banner-stickers .vp-banner > [aria-label^="Оформление профиля"] { display: none !important; }
+        .vp-banner-fx { position: relative; }
+        .vp-banner-fx.vp-off { opacity: .55; }
+        .vp-banner-fx.vp-off::after { content: ''; position: absolute; left: 50%; top: 50%; width: 22px; height: 2px; border-radius: 2px;
+            background: currentColor; transform: translate(-50%, -50%) rotate(-45deg); pointer-events: none; }
+        `);
 
         const COUNT_LABEL = /подпис|пост|лайк|друз/i;
         const counted = new Set();
