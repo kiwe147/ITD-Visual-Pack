@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.14
+// @version      3.3.14.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4048,6 +4048,9 @@
         }
 
         const CHANGELOG = [
+            ['3.3.14.1', '30 сентября 2026', [
+                'Профиль: галочка ИТД X снова стоит после ника, а не перед ним',
+                'Профиль на телефоне: кнопки под статистикой ровно по центру, «•••» больше не съезжает вниз']],
             ['3.3.13.6 – 3.3.13.12', '30 сентября 2026', [
                 'Фон «Матрица»: символы снова гаснут после падения — дождь, а не сплошная стена иероглифов (особенно на экранах 120–144 Гц)',
                 'Посты: время и значки у ника больше не заезжают под кнопки «Скопировать картинку», «Скопировать ссылку» и «•••» — длинный ник обрезается многоточием',
@@ -10268,11 +10271,17 @@
             document.querySelectorAll('.vp-nick-text').forEach(sp => {
                 const hash = [...sp.classList].find(c => !/^(vp-|my-|mod-)/.test(c));
                 if (!hash) return;
+                const badges = '.mod-badge-voronoi, .mod-badge-verify';
+                const up = sp.parentElement, hops = [sp];
+                if (up && !up.matches('.vp-nick') && [...up.children].every(c => c === sp || c.matches(badges))) hops.push(up);
                 let tail = null;
-                for (let n = sp.nextElementSibling; n && !tail; n = n.nextElementSibling) {
-                    if (n.matches('.mod-badge-voronoi, .mod-badge-verify')) continue;
-                    tail = n.matches('span.' + hash) ? n : n.querySelector('span.' + hash);
-                    if (!tail) break;
+                for (const from of hops) {
+                    for (let n = from.nextElementSibling; n && !tail; n = n.nextElementSibling) {
+                        if (n.matches(badges)) continue;
+                        tail = n.matches('span.' + hash) ? n : n.querySelector('span.' + hash);
+                        if (!tail) break;
+                    }
+                    if (tail) break;
                 }
                 if (!tail || tail === sp) return;
                 const txt = tail.textContent;
@@ -10415,7 +10424,9 @@
     `);
 
         const menuBtnCss = addCss(`.vp-menu-btn { display: none !important; }
-        @media (max-width: ${PHONE_MAX}px) { .vp-menu-btn { display: inline-flex !important; } }
+        @media (max-width: ${PHONE_MAX}px) { .vp-menu-btn { display: inline-flex !important; }
+            div:has(> div > .vp-itdx-btn) { flex-wrap: wrap; justify-content: center; align-items: center; }
+            div:has(> .vp-itdx-btn) { display: contents; } }
         .vp-menu { position: fixed; inset: 0; z-index: 2147483000; display: flex; flex-direction: column; box-sizing: border-box;
             background: var(--bg-primary, #000); color: var(--text-primary, #fff); font-family: inherit; animation: vpMenuIn .22s ease-out; overflow: hidden; }
         @keyframes vpMenuIn { from { opacity: 0; } }
