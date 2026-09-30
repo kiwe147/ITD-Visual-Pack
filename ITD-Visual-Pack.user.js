@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.4.2.1
+// @version      3.4.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3955,6 +3955,25 @@
 .vp-junk-acts [data-a="del"], .vp-junk-delsel:not(:disabled) { background: #b3261e; color: #fff; }
 .vp-junk-delsel:disabled { opacity: .4; cursor: default; }
 .vp-junk-err { padding: 8px 14px; color: #ff8a8a; }
+.vp-lbadm-t { padding: 12px 14px 4px; font-size: 13px; font-weight: 700; opacity: .7; }
+.vp-lbadm-n { width: 18px; opacity: .5; }
+.vp-lbadm-v { margin-left: 8px; font-variant-numeric: tabular-nums; }
+.vp-lbadm-row.vp-off { opacity: .5; }
+.vp-lbadm-row .vp-junk-acts button[data-a="del"] { background: #b3261e; color: #fff; }
+.vp-rep { position: fixed; inset: 0; z-index: 2147483002; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.6); }
+.vp-rep-win { display: flex; flex-direction: column; max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); border-radius: 20px; overflow: hidden; color: #fff;
+    font: 13px system-ui, sans-serif; background: rgba(20,20,24,.98); border: 1px solid rgba(255,255,255,.14); box-shadow: 0 16px 40px rgba(0,0,0,.5); }
+.vp-rep-verdict { padding: 10px 14px 0; font-weight: 600; color: #81c784; }
+.vp-rep-verdict.vp-bad { color: #ff8a80; }
+.vp-rep-info { padding: 4px 14px 8px; opacity: .6; }
+.vp-rep-body { display: flex; justify-content: center; padding: 8px 14px; overflow: auto; }
+.vp-rep-body .vp-g-canvas { width: auto !important; height: min(56vh, 520px) !important; }
+.vp-rep-body .vp-g-side .vp-g-canvas { width: 88px !important; height: 88px !important; }
+.vp-rep-body .vp-g-pad, .vp-rep-body .vp-games-hint, .vp-rep-body .vp-mines-bar { display: none !important; }
+.vp-rep-bar { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-top: 1px solid rgba(255,255,255,.08); }
+.vp-rep-bar button { padding: 5px 10px; border: 0; border-radius: 8px; background: #3a3a40; color: #eee; cursor: pointer; }
+.vp-rep-bar button.vp-on { background: #fff; color: #111; }
+.vp-rep-t { margin-left: auto; opacity: .7; font-variant-numeric: tabular-nums; }
 .vp-verify-row.vp-done-ok { background: rgba(46,125,50,.15); }
 .vp-verify-row.vp-done-no { background: rgba(120,120,120,.15); }
 .vp-verify-empty { padding: 20px; text-align: center; opacity: .6; }`;
@@ -4051,6 +4070,8 @@
                 if (/^ITDXS \d+\/\d+ /.test(raw)) return { ok: 1 };
                 if (t.startsWith('ITDXT1 ')) return { one: 'stats' };
             } else if (post === GAMES_POST_ID) {
+                if (REP_RE.test(raw) || /^ITDXP1 [smt] 0\/0 -$/.test(raw)) return { ok: 1 };
+                if (t.startsWith(LB_VOID + ' ')) return owner ? { ok: 1 } : { bad: 'Метка владельца от чужого — мод её не читает' };
                 if (/^ITDXG2? /.test(raw)) return { one: 'games' };
             }
             return { bad: /^ITDX/.test(t) ? 'Запись мода не того вида для этого поста' : 'Не запись мода — обычный комментарий' };
@@ -4152,6 +4173,128 @@
             };
             count();
         }
+        async function adminRecords() {
+            vpVerifyEnsureStyle();
+            document.querySelectorAll('.vp-lbadm').forEach(x => x.remove());
+            const box = document.createElement('div');
+            box.className = 'vp-admin-panel vp-junk-panel vp-lbadm';
+            box.innerHTML = `<div class="vp-admin-head"><b>Рекорды и повторы</b><span>загрузка…</span><button type="button" aria-label="Закрыть">×</button></div><div class="vp-junk-list"></div>`;
+            box.querySelector('.vp-admin-head button').onclick = () => box.remove();
+            document.body.appendChild(box);
+            const head = box.querySelector('.vp-admin-head span'), list = box.querySelector('.vp-junk-list');
+            const draw = async fresh => {
+                let all;
+                try { all = await lbComments(fresh); } catch (e) { head.textContent = 'не загрузилось'; return; }
+                loadApprovedIds();
+                const voids = lbVoids(all), reps = lbReplays(all);
+                list.textContent = '';
+                let total = 0, noRep = 0;
+                for (const g of GAMES) {
+                    const k = LB_KEYS[g.id], rows = new Map();
+                    for (const c of all) {
+                        const a = c.author, o = a && parseLB(c.content, true);
+                        if (!o || !o[k] || !isApprovedAuthor(a)) continue;
+                        const cur = rows.get(a.id);
+                        if (!cur || lbBetter(k, cur.v, o[k]) !== cur.v) rows.set(a.id, { v: o[k], a });
+                    }
+                    const sorted = [...rows.values()].sort((x, y) => k === 'm' ? x.v - y.v : y.v - x.v);
+                    const t = document.createElement('div');
+                    t.className = 'vp-lbadm-t';
+                    t.textContent = g.name;
+                    list.appendChild(t);
+                    const fmt = v => k === 'm' ? `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}` : String(v);
+                    sorted.forEach((r, i) => {
+                        total++;
+                        const uid = r.a.id, off = lbIsVoid(voids, uid, k, r.v), rp = reps.get(uid) && reps.get(uid)[k];
+                        const whole = !!rp && rp.parts.filter(Boolean).length === rp.n;
+                        if (!whole) noRep++;
+                        const warn = k === 's' && r.v > 253 ? 'выше возможного (поле 16×16)' : k === 'm' && r.v < 5 ? 'слишком быстро для человека' : '';
+                        const row = document.createElement('div');
+                        row.className = 'vp-junk-row vp-lbadm-row' + (off ? ' vp-off' : '');
+                        row.innerHTML = `<div class="vp-junk-top"><span class="vp-lbadm-n"></span><a target="_blank" rel="noopener"></a><b class="vp-lbadm-v"></b><span class="vp-junk-meta"></span></div>
+                            <div class="vp-junk-why"></div><div class="vp-junk-acts"></div>`;
+                        row.querySelector('.vp-lbadm-n').textContent = i + 1;
+                        const link = row.querySelector('a');
+                        link.textContent = r.a.displayName || r.a.username || '?';
+                        if (r.a.username) link.href = '/@' + r.a.username;
+                        row.querySelector('.vp-lbadm-v').textContent = fmt(r.v);
+                        row.querySelector('.vp-junk-meta').textContent = off ? 'убран из топа' : whole ? 'есть повтор' : rp ? 'повтор неполный' : 'повтора нет';
+                        const why = row.querySelector('.vp-junk-why');
+                        if (warn) why.textContent = warn; else why.remove();
+                        const acts = row.querySelector('.vp-junk-acts'), btn = (txt, fn, cls) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; if (cls) b.dataset.a = cls; b.onclick = fn; acts.appendChild(b); return b; };
+                        if (whole) btn('Смотреть повтор', () => repView(g.id, r, rp));
+                        const token = `${String(uid).toLowerCase()}:${k}:${r.v}`;
+                        if (off) btn('Вернуть в топ', async () => { try { await lbVoidPush(token, false); } catch (e) { alert(e.message || e); } draw(true); });
+                        else btn('Убрать из топа', async () => {
+                            if (!confirm(`Убрать ${fmt(r.v)} (${link.textContent}) из «${g.name}»? У него на устройстве этот рекорд тоже обнулится.`)) return;
+                            try { await lbVoidPush(token, true); } catch (e) { alert(e.message || e); }
+                            draw(true);
+                        }, 'del');
+                        list.appendChild(row);
+                    });
+                    if (!sorted.length) { const d = document.createElement('div'); d.className = 'vp-verify-empty'; d.textContent = 'Пусто'; list.appendChild(d); }
+                }
+                head.textContent = `рекордов ${total}, без повтора ${noRep}`;
+            };
+            draw(true);
+        }
+        async function repView(id, r, rp) {
+            let d;
+            try { d = await repDecode(rp.parts.join('')); } catch (e) { alert('Повтор не читается: ' + (e.message || e)); return; }
+            const k = LB_KEYS[id], fmt = v => k === 'm' ? `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}` : String(v);
+            let res;
+            try { const chk = GAME_MAKERS[id](() => { }, { seed: d.seed, ev: d.ev, instant: true }); chk.repTo(Infinity); res = chk.repRes(); chk.destroy(); }
+            catch (e) { res = { score: -1 }; logErr('повтор', e); }
+            const same = res.score === r.v && d.score === r.v;
+            const gaps = [];
+            for (let i = 1; i < d.ev.length; i++) gaps.push(d.ev[i][0] - d.ev[i - 1][0]);
+            const w = document.createElement('div');
+            w.className = 'vp-rep';
+            w.innerHTML = `<div class="vp-rep-win"><div class="vp-admin-head"><b></b><span></span><button type="button" aria-label="Закрыть">×</button></div>
+                <div class="vp-rep-verdict"></div><div class="vp-rep-info"></div><div class="vp-rep-body"></div>
+                <div class="vp-rep-bar"><button type="button" data-s="1">×1</button><button type="button" data-s="4">×4</button><button type="button" data-s="16">×16</button><button type="button" data-s="0">С начала</button><span class="vp-rep-t"></span></div></div>`;
+            w.querySelector('b').textContent = `${GAMES.find(g => g.id === id).name} · ${r.a.displayName || r.a.username || '?'}`;
+            w.querySelector('.vp-admin-head span').textContent = `в топе ${fmt(r.v)}`;
+            const v = w.querySelector('.vp-rep-verdict');
+            v.classList.toggle('vp-bad', !same);
+            v.textContent = same ? `Совпадает: партия по повтору даёт ${fmt(res.score)}`
+                : `Не сходится: в топе ${fmt(r.v)}, повтор записан для ${fmt(d.score)}, партия по повтору даёт ${res.score > 0 ? fmt(res.score) : (k === 'm' ? 'не разминировано' : '0')}`;
+            const info = [`ходов: ${d.ev.length}`];
+            if (k !== 's' && gaps.length) info.push(`самая короткая пауза между ходами: ${Math.min(...gaps)} мс`, `пауз короче 50 мс: ${gaps.filter(x => x < 50).length}`);
+            w.querySelector('.vp-rep-info').textContent = info.join(' · ');
+            const body = w.querySelector('.vp-rep-body'), tEl = w.querySelector('.vp-rep-t');
+            let inst = null, vt = 0, sp = 1, raf = 0, prev = 0;
+            const tick = now => {
+                raf = 0;
+                if (!w.isConnected || !inst) return;
+                vt += (now - prev) * sp; prev = now;
+                inst.repTo(vt);
+                if (!inst.repRes().done) raf = requestAnimationFrame(tick);
+            };
+            const play = () => {
+                if (inst) inst.destroy();
+                inst = GAME_MAKERS[id](txt => { tEl.textContent = txt; }, { seed: d.seed, ev: d.ev });
+                body.replaceChildren(inst.el);
+                inst.resize();
+                const g = inst.el.querySelector('.vp-mines');
+                if (g) g.style.setProperty('--vp-mc', '28px');
+                vt = 0; prev = performance.now();
+                if (!raf) raf = requestAnimationFrame(tick);
+            };
+            w.querySelector('.vp-rep-bar').onclick = e => {
+                const b = e.target.closest('[data-s]');
+                if (!b) return;
+                if (b.dataset.s === '0') return play();
+                sp = +b.dataset.s;
+                w.querySelectorAll('.vp-rep-bar [data-s]').forEach(x => x.classList.toggle('vp-on', x === b));
+            };
+            const close = () => { cancelAnimationFrame(raf); if (inst) inst.destroy(); w.remove(); };
+            w.querySelector('.vp-admin-head button').onclick = close;
+            w.addEventListener('click', e => { if (e.target === w) close(); });
+            document.body.appendChild(w);
+            w.querySelector('[data-s="1"]').classList.add('vp-on');
+            play();
+        }
         let fpsBox = null;
         function toggleFps() {
             if (fpsBox) { fpsBox.remove(); fpsBox = null; return; }
@@ -4178,6 +4321,7 @@
                 <button type="button" data-act="diag">${svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4M8.5 11l1.8 1.8 3.4-3.6"/>', 18)}<span>Диагностика</span></button>
                 <button type="button" data-act="verify">${svgIcon('<path d="M12 2.5l2.9 6 6.6.6-5 4.4 1.5 6.5L12 16.8 5.9 20 7.4 13.5l-5-4.4 6.6-.6z"/>', 18)}<span>Галочки</span></button>
                 <button type="button" data-act="junk">${svgIcon('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>', 18)}<span>Мусор под постами</span></button>
+                <button type="button" data-act="records">${svgIcon('<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>', 18)}<span>Рекорды и повторы</span></button>
                 <button type="button" data-act="rare">${svgIcon('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.3 6L12 16.4 6.6 19.4l1.3-6L3.4 9.3l6-.7z"/>', 18)}<span>Редкая заставка</span></button>
                 <button type="button" data-act="assemble">${svgIcon('<path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z"/>', 18)}<span>Заставка «сборка»</span></button>
                 <button type="button" data-act="twist">${svgIcon('<path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/>', 18)}<span>Заставка «обманка»</span></button>
@@ -4259,6 +4403,7 @@
             act('diag', adminDiag);
             act('verify', () => adminVerify());
             act('junk', () => adminJunk());
+            act('records', () => adminRecords());
             act('fps', toggleFps);
             act('rare', () => playIntro(IS_PHONE ? 'silent' : 'desk', true));
             act('assemble', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'assemble'));
@@ -4690,6 +4835,8 @@
         }
 
         const CHANGELOG = [
+            ['3.4.3', '1 октября 2026', [
+                'Оптимизация и исправление багов']],
             ['3.4.2.1', '1 октября 2026', [
                 'Кнопка «ИТД X» в профиле — со значком настроек, чтобы сразу было понятно, что там настройки']],
             ['3.4.2', '1 октября 2026', [
@@ -12126,7 +12273,13 @@
             return cell * dpr;
         }
 
-        function snakeGame(setScore) {
+        const repRng = seed => () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+        const repNew = g => ({ g, seed: (Math.random() * 4294967296) >>> 0, ev: [] });
+        function repSave(rec, score) {
+            if (!rec || rec.ev.length > 30000) return;
+            GM_setValue(acctKey('vp_rep_' + rec.g), { score, seed: rec.seed, ev: rec.ev.slice(), at: Date.now(), up: false });
+        }
+        function snakeGame(setScore, rp) {
             const el = document.createElement('div');
             const cv = document.createElement('canvas');
             cv.className = 'vp-g-canvas'; cv.tabIndex = 0;
@@ -12137,9 +12290,12 @@
             const g = cv.getContext('2d'), CELLS = 16, STEP = 115;
             let snake, prev, dir, queue, food, on = false, dead = false, score = 0, last = 0, raf = 0, msg = 'Змейка\nнажми или стрелку', cell = 0;
             let best = GM_getValue(acctKey('vp_snake_best'), 0);
-            const show = () => setScore(`${score} · рекорд ${best}`);
-            const rnd = () => ({ x: Math.random() * CELLS | 0, y: Math.random() * CELLS | 0, ch: MATRIX_CHARS[Math.random() * MATRIX_CHARS.length | 0] });
+            const show = () => setScore(rp ? `счёт ${score}` : `${score} · рекорд ${best}`);
+            let rng = Math.random, rec = null, steps = 0, ei = 0;
+            const DIRV = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+            const rnd = () => ({ x: rng() * CELLS | 0, y: rng() * CELLS | 0, ch: MATRIX_CHARS[rng() * MATRIX_CHARS.length | 0] });
             function reset() {
+                rng = repRng(rp ? rp.seed : (rec = repNew('s')).seed); steps = 0; ei = 0;
                 snake = [{ x: 7, y: 11 }, { x: 6, y: 11 }, { x: 5, y: 11 }];
                 prev = snake.map(p => ({ ...p }));
                 dir = { x: 1, y: 0 }; queue = []; score = 0;
@@ -12176,19 +12332,20 @@
                 }
             }
             function step() {
+                steps++;
                 if (queue.length) dir = queue.shift();
                 const head = { x: (snake[0].x + dir.x + CELLS) % CELLS, y: (snake[0].y + dir.y + CELLS) % CELLS };
                 if (snake.slice(0, -1).some(p => p.x === head.x && p.y === head.y)) {
                     on = false;
-                    if (score > best) { best = score; GM_setValue(acctKey('vp_snake_best'), best); renderGamesMenu(); gamesRecord(); }
-                    msg = `Съел себя · ${score}\nнажми — ещё раз`;
+                    if (!rp && score > best) { best = score; GM_setValue(acctKey('vp_snake_best'), best); repSave(rec, score); renderGamesMenu(); gamesRecord(); }
+                    msg = rp ? `Съел себя · ${score}` : `Съел себя · ${score}\nнажми — ещё раз`;
                     show(); draw(); dead = true;
                     return;
                 }
                 prev = snake.map(p => ({ ...p }));
                 snake.unshift(head);
                 if (head.x === food.x && head.y === food.y) {
-                    score++; uiSound('click'); show();
+                    score++; if (!rp) uiSound('click'); show();
                     do food = rnd(); while (snake.some(p => p.x === food.x && p.y === food.y));
                 } else snake.pop();
             }
@@ -12207,8 +12364,8 @@
             function pause() { if (!on) return; on = false; msg = 'Пауза\nнажми — дальше'; draw(); }
             function turn(x, y) {
                 const tail = queue.length ? queue[queue.length - 1] : dir;
-                if ((x === -tail.x && y === -tail.y) || (x === tail.x && y === tail.y)) return;
-                if (queue.length < 3) queue.push({ x, y });
+                if (rp || (x === -tail.x && y === -tail.y) || (x === tail.x && y === tail.y)) return;
+                if (queue.length < 3) { queue.push({ x, y }); if (rec && rec.ev.length < 30000) rec.ev.push([steps, DIRV.findIndex(d => d[0] === x && d[1] === y)]); }
                 if (!on) start();
             }
             const TURN = {
@@ -12233,14 +12390,23 @@
                 swiped = true;
                 Math.abs(dx) > Math.abs(dy) ? turn(Math.sign(dx), 0) : turn(0, Math.sign(dy));
             });
-            cv.addEventListener('pointerup', () => { if (!swiped) (on ? pause() : start()); });
+            cv.addEventListener('pointerup', () => { if (!swiped && !rp) (on ? pause() : start()); });
             function resize() { cell = fitCanvas(cv, CELLS, CELLS, 0, 34); draw(); }
-            reset(); msg = 'Змейка\nнажми или стрелку';
-            el._vpTest = () => ({ head: snake[0], dir, queue: queue.length, on, score });
-            return { el, key, pause, resize, destroy() { on = false; cancelAnimationFrame(raf); } };
+            function repTo(vt) {
+                if (!on && !dead) { on = true; msg = ''; }
+                const target = Math.min(Math.floor(vt / STEP), 500000);
+                while (!dead && steps < target) {
+                    while (ei < rp.ev.length && rp.ev[ei][0] <= steps) { const d = DIRV[rp.ev[ei++][1]] || DIRV[1]; if (queue.length < 3) queue.push({ x: d[0], y: d[1] }); }
+                    step();
+                }
+                if (!rp.instant) { last = performance.now() - STEP; draw(); }
+            }
+            reset(); msg = rp ? '' : 'Змейка\nнажми или стрелку';
+            el._vpTest = () => ({ head: snake[0], dir, queue: queue.length, on, score, food, len: snake.length, dead });
+            return { el, key: e => { if (!rp) key(e); }, pause, resize, repTo, repRes: () => ({ score, done: dead }), destroy() { on = false; cancelAnimationFrame(raf); } };
         }
 
-        function minesGame(setScore) {
+        function minesGame(setScore, rp) {
             const W = 10, H = 10, M = 15;
             const el = document.createElement('div');
             el.innerHTML = `<div class="vp-mines-bar"><button type="button" data-a="new">Новая игра</button><button type="button" data-a="flag">🚩 флажки</button><button type="button" data-a="help">❓ Как играть</button></div>
@@ -12255,12 +12421,22 @@
             <li>Новая игра — кнопка сверху или клавиша R.</li></ul></div></div><div class="vp-mines-msg"></div>`;
             const grid = el.querySelector('.vp-mines'), msgEl = el.querySelector('.vp-mines-msg'), flagBtn = el.querySelector('[data-a="flag"]');
             grid.style.gridTemplateColumns = `repeat(${W}, auto)`;
-            let cells, first, over, opened, flags, t0 = 0, timer = 0, flagMode = false;
+            let cells, first, over, opened, flags, t0 = 0, timer = 0, flagMode = false, rec = null, rng = Math.random, repNow = 0, nowT = null, ei = 0, won = false;
             const nb = i => { const x = i % W, y = i / W | 0, out = []; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nx = x + dx, ny = y + dy; if ((dx || dy) && nx >= 0 && ny >= 0 && nx < W && ny < H) out.push(ny * W + nx); } return out; };
-            const secs = () => t0 ? Math.floor((performance.now() - t0) / 1000) : 0;
+            const secs = () => rp ? Math.floor(repNow / 1000) : nowT !== null ? Math.floor(nowT / 1000) : t0 ? Math.floor((performance.now() - t0) / 1000) : 0;
             const fmt = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-            const show = () => { const b = GM_getValue(acctKey('vp_mines_best'), 0); setScore(`💣 ${M - flags} · ${fmt(secs())}` + (b ? ` · лучшее ${fmt(b)}` : '')); };
+            const show = () => { const b = rp ? 0 : GM_getValue(acctKey('vp_mines_best'), 0); setScore(`💣 ${M - flags} · ${fmt(secs())}` + (b ? ` · лучшее ${fmt(b)}` : '')); };
+            function userAct(i, fl) {
+                if (rp || over) return;
+                const t = t0 ? Math.round(performance.now() - t0) : 0;
+                if (fl && cells[i].open) return;
+                if (rec && rec.ev.length < 30000) rec.ev.push([t, fl ? 1 : 0, i]);
+                nowT = t0 ? t : null;
+                fl ? flag(i) : open(i);
+                nowT = null;
+            }
             function reset() {
+                rng = repRng(rp ? rp.seed : (rec = repNew('m')).seed); ei = 0; won = false;
                 cells = Array.from({ length: W * H }, () => ({ mine: false, n: 0, open: false, flag: false }));
                 first = true; over = false; opened = 0; flags = 0; t0 = 0; clearInterval(timer); msgEl.textContent = '';
                 grid.textContent = '';
@@ -12269,11 +12445,11 @@
                     b.type = 'button'; b.className = 'vp-mine'; b.dataset.i = i;
                     c.b = b;
                     let lp = 0, longed = false;
-                    b.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') { longed = false; lp = setTimeout(() => { longed = true; flag(i); }, 400); } });
+                    b.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') { longed = false; lp = setTimeout(() => { longed = true; userAct(i, true); }, 400); } });
                     const cancel = () => clearTimeout(lp);
                     b.addEventListener('pointerup', cancel); b.addEventListener('pointerleave', cancel);
-                    b.addEventListener('click', () => { if (longed) { longed = false; return; } flagMode ? flag(i) : open(i); });
-                    b.addEventListener('contextmenu', e => { e.preventDefault(); flag(i); });
+                    b.addEventListener('click', () => { if (longed) { longed = false; return; } userAct(i, flagMode); });
+                    b.addEventListener('contextmenu', e => { e.preventDefault(); userAct(i, true); });
                     grid.appendChild(b);
                 });
                 show();
@@ -12287,9 +12463,10 @@
             function plant(safe) {
                 const ban = new Set([safe, ...nb(safe)]);
                 let left = M;
-                while (left) { const i = Math.random() * W * H | 0; if (!ban.has(i) && !cells[i].mine) { cells[i].mine = true; left--; } }
+                while (left) { const i = rng() * W * H | 0; if (!ban.has(i) && !cells[i].mine) { cells[i].mine = true; left--; } }
                 cells.forEach((c, i) => { c.n = nb(i).filter(j => cells[j].mine).length; });
-                t0 = performance.now(); timer = setInterval(show, 1000);
+                t0 = rp ? 1 : performance.now();
+                if (!rp) timer = setInterval(show, 1000);
             }
             function end(win, boom) {
                 over = true; clearInterval(timer);
@@ -12297,8 +12474,9 @@
                 if (boom != null) cells[boom].b.classList.add('vp-boom');
                 const s = secs();
                 if (win) {
+                    won = true;
                     const b = GM_getValue(acctKey('vp_mines_best'), 0);
-                    if (!b || s < b) { GM_setValue(acctKey('vp_mines_best'), s); renderGamesMenu(); gamesRecord(); }
+                    if (!rp && (!b || s < b)) { GM_setValue(acctKey('vp_mines_best'), s); repSave(rec, s); renderGamesMenu(); gamesRecord(); }
                     msgEl.textContent = `Разминировано за ${fmt(s)}!`;
                 } else msgEl.textContent = 'Бум! Нажми «Новая игра»';
                 show();
@@ -12320,7 +12498,7 @@
                     d.open = true; opened++; paint(d);
                     if (!d.n) nb(j).forEach(k => { if (!cells[k].open && !cells[k].mine) stack.push(k); });
                 }
-                uiSound('click');
+                if (!rp) uiSound('click');
                 if (opened === W * H - M) end(true);
             }
             function flag(i) {
@@ -12344,7 +12522,7 @@
                 near.forEach(x => x.classList.add('vp-near'));
             });
             grid.addEventListener('auxclick', e => { if (e.button === 1) e.preventDefault(); });
-            el.querySelector('[data-a="new"]').addEventListener('click', () => { unhot(); hotI = -1; reset(); });
+            el.querySelector('[data-a="new"]').addEventListener('click', () => { if (rp) return; unhot(); hotI = -1; reset(); });
             const helpEl = el.querySelector('.vp-mines-help'), helpBtn = el.querySelector('[data-a="help"]');
             helpBtn.addEventListener('click', () => { helpEl.hidden = !helpEl.hidden; helpBtn.classList.toggle('vp-on', !helpEl.hidden); });
             helpEl.addEventListener('click', () => { helpEl.hidden = true; helpBtn.classList.remove('vp-on'); });
@@ -12354,11 +12532,17 @@
                 const side = Math.min(body ? body.clientWidth : innerWidth - 56, (body ? body.clientHeight : innerHeight - 180) - 90);
                 grid.style.setProperty('--vp-mc', Math.max(24, Math.floor((side - 3 * (W - 1)) / W)) + 'px');
             }
+            function repTo(vt) {
+                while (!over && ei < rp.ev.length && rp.ev[ei][0] <= vt) { const [t, fl, i] = rp.ev[ei++]; repNow = t; if (fl) { if (!cells[i].open) flag(i); } else open(i); }
+                if (!rp.instant) show();
+            }
             reset();
-            return { el, key: e => { if (e.key === 'F2' || e.key.toLowerCase() === 'r' || e.key.toLowerCase() === 'к') { e.preventDefault(); reset(); } }, pause() { }, resize, destroy() { clearInterval(timer); } };
+            el._vpTest = () => ({ cells: cells.map(c => ({ mine: c.mine, open: c.open, flag: c.flag })), over, first });
+            return { el, key: e => { if (!rp && (e.key === 'F2' || e.key.toLowerCase() === 'r' || e.key.toLowerCase() === 'к')) { e.preventDefault(); reset(); } }, pause() { }, resize, repTo,
+                repRes: () => ({ score: won ? secs() : 0, win: won, done: over || ei >= rp.ev.length }), destroy() { clearInterval(timer); } };
         }
 
-        function tetrisGame(setScore) {
+        function tetrisGame(setScore, rp) {
             const COLS = 10, ROWS = 20;
             const SHAPES = {
                 I: [[1, 1, 1, 1]], O: [[1, 1], [1, 1]], T: [[0, 1, 0], [1, 1, 1]], S: [[0, 1, 1], [1, 1, 0]],
@@ -12381,12 +12565,13 @@
             const nx = side.querySelector('canvas'), g = cv.getContext('2d'), ng = nx.getContext('2d');
             let board, cur, next, score, lines, level, on = false, over = false, last = 0, raf = 0, cell = 0, msg = 'Тетрис\nнажми или стрелку';
             let best = GM_getValue(acctKey('vp_tetris_best'), 0);
-            const bag = []; const take = () => { if (!bag.length) bag.push(...Object.keys(SHAPES).sort(() => Math.random() - .5)); return bag.pop(); };
+            let acc = 0, since = 0, lastT = 0, rec = null, rng = Math.random, ei = 0;
+            const bag = []; const take = () => { if (!bag.length) { const k = Object.keys(SHAPES); for (let i = k.length - 1; i > 0; i--) { const j = rng() * (i + 1) | 0; [k[i], k[j]] = [k[j], k[i]]; } bag.push(...k); } return bag.pop(); };
             const piece = t => ({ t, m: SHAPES[t].map(r => [...r]), x: 0, y: 0 });
             const speed = () => Math.max(90, 800 - (level - 1) * 70);
             const show = () => {
                 side.querySelector('[data-v="score"]').textContent = score; side.querySelector('[data-v="lines"]').textContent = lines;
-                side.querySelector('[data-v="level"]').textContent = level; setScore(`${score} · рекорд ${best}`);
+                side.querySelector('[data-v="level"]').textContent = level; setScore(rp ? `счёт ${score}` : `${score} · рекорд ${best}`);
             };
             const fits = (m, x, y) => m.every((r, j) => r.every((v, i) => !v || (x + i >= 0 && x + i < COLS && y + j < ROWS && (y + j < 0 || !board[y + j][x + i]))));
             const rotate = (m, dir) => dir > 0 ? m[0].map((_, i) => m.map(r => r[i]).reverse()) : m[0].map((_, i) => m.map(r => r[r.length - 1 - i]));
@@ -12396,23 +12581,31 @@
                 if (!fits(cur.m, cur.x, cur.y + 1)) return gameOver();
                 cur.y = 0;
             }
-            function reset() { board = Array.from({ length: ROWS }, () => Array(COLS).fill(null)); score = 0; lines = 0; level = 1; over = false; next = null; spawn(); show(); }
+            function reset() { rng = repRng(rp ? rp.seed : (rec = repNew('t')).seed); bag.length = 0; acc = 0; lastT = 0; ei = 0; board = Array.from({ length: ROWS }, () => Array(COLS).fill(null)); score = 0; lines = 0; level = 1; over = false; next = null; spawn(); show(); }
             function gameOver() {
                 on = false; over = true;
-                if (score > best) { best = score; GM_setValue(acctKey('vp_tetris_best'), best); renderGamesMenu(); gamesRecord(); }
-                msg = `Конец · ${score}\nнажми — ещё раз`; show(); draw();
+                if (!rp && score > best) { best = score; GM_setValue(acctKey('vp_tetris_best'), best); repSave(rec, score); renderGamesMenu(); gamesRecord(); }
+                msg = rp ? `Конец · ${score}` : `Конец · ${score}\nнажми — ещё раз`; show(); draw();
             }
             function lock() {
                 cur.m.forEach((r, j) => r.forEach((v, i) => { if (v && cur.y + j >= 0) board[cur.y + j][cur.x + i] = cur.t; }));
                 let n = 0;
                 for (let y = ROWS - 1; y >= 0; y--) if (board[y].every(Boolean)) { board.splice(y, 1); board.unshift(Array(COLS).fill(null)); n++; y++; }
-                if (n) { score += [0, 100, 300, 500, 800][n] * level; lines += n; level = Math.floor(lines / 10) + 1; uiSound('click'); }
+                if (n) { score += [0, 100, 300, 500, 800][n] * level; lines += n; level = Math.floor(lines / 10) + 1; if (!rp) uiSound('click'); }
                 show(); spawn();
             }
             function move(dx, dy) { if (fits(cur.m, cur.x + dx, cur.y + dy)) { cur.x += dx; cur.y += dy; return true; } return false; }
             function turn(dir) { const m = rotate(cur.m, dir); for (const k of [0, -1, 1, -2, 2]) if (fits(m, cur.x + k, cur.y)) { cur.m = m; cur.x += k; return; } }
-            function drop() { if (!move(0, 1)) lock(); last = performance.now(); }
-            function hard() { let n = 0; while (move(0, 1)) n++; score += n * 2; lock(); last = performance.now(); }
+            function hard() { let n = 0; while (move(0, 1)) n++; score += n * 2; lock(); }
+            const clock = () => Math.round(acc + (on && !rp ? performance.now() - since : 0));
+            function advance(T) { let n = 0; while (on && !over && T - lastT >= speed() && n++ < 1e6) { lastT += speed(); if (!move(0, 1)) lock(); } }
+            const ACTS = ['left', 'right', 'down', 'rot', 'back', 'drop'];
+            function doAct(a, T) {
+                ({
+                    left: () => move(-1, 0), right: () => move(1, 0), down: () => { if (move(0, 1)) score++; else lock(); lastT = T; show(); },
+                    rot: () => turn(1), back: () => turn(-1), drop: () => { hard(); lastT = T; }
+                })[a]();
+            }
             function cellAt(ctx, x, y, c, s, alpha = 1) {
                 ctx.globalAlpha = alpha; ctx.fillStyle = c;
                 ctx.beginPath(); ctx.roundRect(x * s + s * .06, y * s + s * .06, s * .88, s * .88, s * .2); ctx.fill(); ctx.globalAlpha = 1;
@@ -12439,18 +12632,20 @@
             function loop(now) {
                 raf = 0;
                 if (!on) return;
-                if (now - last >= speed()) { last = now; drop(); }
+                advance(clock());
                 if (on) { draw(); raf = requestAnimationFrame(loop); }
             }
-            function start() { if (over) reset(); on = true; msg = ''; last = performance.now(); if (!raf) raf = requestAnimationFrame(loop); }
-            function pause() { if (!on) return; on = false; msg = 'Пауза\nнажми — дальше'; draw(); }
+            function start() { if (rp) return; if (over) reset(); on = true; msg = ''; since = performance.now(); if (!raf) raf = requestAnimationFrame(loop); }
+            function pause() { if (!on || rp) return; acc += performance.now() - since; on = false; msg = 'Пауза\nнажми — дальше'; draw(); }
             const act = a => {
+                if (rp) return;
                 if (a === 'pause') return on ? pause() : start();
                 if (!on) return start();
-                ({
-                    left: () => move(-1, 0), right: () => move(1, 0), down: () => { if (move(0, 1)) score++; else lock(); last = performance.now(); show(); },
-                    rot: () => turn(1), back: () => turn(-1), drop: hard
-                })[a]();
+                const T = clock();
+                advance(T);
+                if (!on) return draw();
+                if (rec && rec.ev.length < 30000) rec.ev.push([T, ACTS.indexOf(a)]);
+                doAct(a, T);
                 draw();
             };
             const KEYS = {
@@ -12466,8 +12661,15 @@
                 const dpr = devicePixelRatio || 1; nx.width = nx.height = Math.round(88 * dpr);
                 draw();
             }
-            reset(); msg = 'Тетрис\nнажми или стрелку';
-            return { el, key, pause, resize, destroy() { on = false; cancelAnimationFrame(raf); } };
+            function repTo(vt) {
+                if (!on && !over) { on = true; msg = ''; }
+                while (on && ei < rp.ev.length && rp.ev[ei][0] <= vt) { const [T, a] = rp.ev[ei++]; advance(T); if (on) doAct(ACTS[a] || 'down', T); }
+                if (on) advance(ei < rp.ev.length ? Math.min(vt, rp.ev[ei][0]) : vt);
+                if (!rp.instant) draw();
+            }
+            reset(); msg = rp ? '' : 'Тетрис\nнажми или стрелку';
+            el._vpTest = () => ({ on, over, score, cur: cur && { t: cur.t, x: cur.x, y: cur.y } });
+            return { el, key, pause, resize, repTo, repRes: () => ({ score, done: over }), destroy() { on = false; cancelAnimationFrame(raf); } };
         }
 
         const LB_KEYS = { snake: 's', mines: 'm', tetris: 't' };
@@ -12509,6 +12711,114 @@
             if (!parts.length) return null;
             return 'ITDXG2 ' + lbEncode('ITDXG' + parts.join(''));
         };
+        const LB_VOID = 'ITDX-LBX';
+        function lbVoids(all) {
+            const out = new Set();
+            for (const c of all || []) {
+                if (!c.author || c.author.id !== OWNER_ID) continue;
+                const t = openText(c.content);
+                if (!t.startsWith(LB_VOID + ' ')) continue;
+                for (const tok of t.slice(LB_VOID.length + 1).split(/\s+/)) if (/^[0-9a-f-]{36}:[smt]:\d+$/i.test(tok)) out.add(tok.toLowerCase());
+            }
+            return out;
+        }
+        const lbIsVoid = (voids, uid, k, v) => !!(uid && v && voids.has(`${String(uid).toLowerCase()}:${k}:${v}`));
+        function lbDropVoid(voids, o) {
+            const me = meData && meData.id, r = Object.assign({}, o);
+            for (const k of ['s', 'm', 't']) if (lbIsVoid(voids, me, k, r[k])) r[k] = 0;
+            return r;
+        }
+        function lbResetVoidLocal(voids) {
+            const me = meData && meData.id, loc = lbLocal();
+            let hit = false;
+            for (const k of ['s', 'm', 't']) if (lbIsVoid(voids, me, k, loc[k])) { GM_setValue(acctKey(LB_LOCAL_KEYS[k]), 0); GM_setValue(acctKey('vp_rep_' + k), null); hit = true; }
+            if (hit) renderGamesMenu();
+            return hit;
+        }
+        async function repZip(u8, back) {
+            const st = new Blob([u8]).stream().pipeThrough(back ? new DecompressionStream('deflate-raw') : new CompressionStream('deflate-raw'));
+            return new Uint8Array(await new Response(st).arrayBuffer());
+        }
+        function repPack(g, r) {
+            const out = [], vi = n => { n = Math.max(0, Math.round(n)); while (n > 127) { out.push((n % 128) | 128); n = Math.floor(n / 128); } out.push(n); };
+            out.push(1, 'smt'.indexOf(g)); vi(r.score); vi(r.seed); vi(r.ev.length);
+            let p = 0;
+            for (const e of r.ev) {
+                const d = Math.max(0, e[0] - p);
+                p = Math.max(p, e[0]);
+                if (g === 's') vi(d * 4 + e[1]); else if (g === 'm') { vi(d); out.push(e[1] * 128 + e[2]); } else vi(d * 8 + e[1]);
+            }
+            return new Uint8Array(out);
+        }
+        function repUnpack(b) {
+            let i = 0;
+            const vi = () => { let n = 0, m = 1, x; do { if (i >= b.length) throw new Error('обрыв повтора'); x = b[i++]; n += (x & 127) * m; m *= 128; } while (x & 128); return n; };
+            if (b[i++] !== 1) throw new Error('незнакомый повтор');
+            const g = 'smt'[b[i++]];
+            if (!g) throw new Error('незнакомая игра');
+            const score = vi(), seed = vi() >>> 0, n = vi(), ev = [];
+            let p = 0;
+            for (let j = 0; j < n; j++) {
+                if (g === 's') { const v = vi(); p += Math.floor(v / 4); ev.push([p, v % 4]); }
+                else if (g === 'm') { p += vi(); const x = b[i++]; ev.push([p, x >> 7, x & 127]); }
+                else { const v = vi(); p += Math.floor(v / 8); ev.push([p, v % 8]); }
+            }
+            return { g, score, seed, ev };
+        }
+        async function repEncode(g, r) {
+            const z = await repZip(repPack(g, r)), salt = (Math.random() * 256) | 0, body = new Uint8Array(z.length + 1);
+            body[0] = salt; body.set(obfBytes(z, salt), 1);
+            return sealB64(body);
+        }
+        async function repDecode(b64) {
+            const b = openB64(b64);
+            return repUnpack(await repZip(obfBytes(b.slice(1), b[0]), true));
+        }
+        const REP_RE = /^ITDXP1 ([smt]) (\d+)\/(\d+) (\S+)$/;
+        function lbReplays(all) {
+            const out = new Map();
+            for (const c of all || []) {
+                const x = String(c.content || '').trim().match(REP_RE);
+                if (!x || !c.author || !+x[3]) continue;
+                const u = out.get(c.author.id) || {};
+                out.set(c.author.id, u);
+                const r = u[x[1]] || (u[x[1]] = { n: +x[3], parts: [] });
+                if (r.n === +x[3]) r.parts[+x[2] - 1] = x[4];
+            }
+            return out;
+        }
+        async function lbRepUpload(all) {
+            for (const g of ['s', 'm', 't']) {
+                const r = GM_getValue(acctKey('vp_rep_' + g), null), best = lbLocal()[g];
+                if (!r || r.up || r.score !== best || !Array.isArray(r.ev)) continue;
+                const b64 = await repEncode(g, r), parts = [];
+                for (let i = 0; i < b64.length; i += 900) parts.push(b64.slice(i, i + 900));
+                if (parts.length <= 12) {
+                    const mine = all.filter(c => lbIsMe(c.author) && String(c.content || '').trim().startsWith(`ITDXP1 ${g} `));
+                    for (let i = 0; i < Math.max(parts.length, mine.length); i++) {
+                        const text = i < parts.length ? `ITDXP1 ${g} ${i + 1}/${parts.length} ${parts[i]}` : `ITDXP1 ${g} 0/0 -`, c = mine[i];
+                        if (c && String(c.content).trim() === text) continue;
+                        const res = c ? await editComment(c.id, text) : await sendComment(GAMES_POST_ID, text);
+                        if (!res.ok) throw new Error('повтор: ' + res.status);
+                    }
+                }
+                r.up = true;
+                GM_setValue(acctKey('vp_rep_' + g), r);
+            }
+        }
+        async function lbVoidPush(token, add) {
+            const all = await lbComments(true);
+            const mine = all.find(c => c.author && c.author.id === OWNER_ID && openText(c.content).startsWith(LB_VOID + ' '));
+            let toks = mine ? openText(mine.content).slice(LB_VOID.length + 1).split(/\s+/).filter(Boolean) : [];
+            toks = toks.filter(t => t !== token);
+            if (add) toks.push(token);
+            while (toks.length && sealText(LB_VOID + ' ' + toks.join(' ')).length > 990) toks.shift();
+            const text = sealText(LB_VOID + ' ' + toks.join(' '));
+            const res = mine ? await editComment(mine.id, text) : await sendComment(GAMES_POST_ID, text);
+            lbLoad = null;
+            if (!res.ok) throw new Error('метка рекорда: ' + res.status);
+            if (gw.el) lbRender();
+        }
         const lbBetter = (k, a, b) => !a ? b : !b ? a : k === 'm' ? Math.min(a, b) : Math.max(a, b);
         const lbLocal = () => ({ s: +GM_getValue(acctKey('vp_snake_best'), 0) || 0, m: +GM_getValue(acctKey('vp_mines_best'), 0) || 0, t: +GM_getValue(acctKey('vp_tetris_best'), 0) || 0 });
         const LB_LOCAL_KEYS = { s: 'vp_snake_best', m: 'vp_mines_best', t: 'vp_tetris_best' };
@@ -12526,9 +12836,11 @@
             if (!myUsername) return;
             try {
                 const all = await lbComments();
+                const voids = lbVoids(all), hit = lbResetVoidLocal(voids);
                 const mine = all.find(c => lbIsMe(c.author) && parseLB(c.content, true));
-                if (mine) lbMergeIntoLocal(parseLB(mine.content, true));
-                if (mine && !String(mine.content).trim().startsWith('ITDXG2 ')) gamesRecord();
+                const raw = mine && parseLB(mine.content, true), remote = raw && lbDropVoid(voids, raw);
+                if (mine) lbMergeIntoLocal(remote);
+                if (mine && (hit || !String(mine.content).trim().startsWith('ITDXG2 ') || ['s', 'm', 't'].some(k => (raw[k] || 0) !== (remote[k] || 0)))) gamesRecord();
                 renderGamesMenu();
             } catch (e) { }
         }
@@ -12546,18 +12858,22 @@
             lbBusy = true;
             try {
                 const all = await lbComments(true);
+                const voids = lbVoids(all);
+                lbResetVoidLocal(voids);
                 const mine = all.find(c => lbIsMe(c.author) && parseLB(c.content, true));
-                const was = mine ? parseLB(mine.content, true) : {}, loc = lbLocal(), now = {};
+                const was = mine ? lbDropVoid(voids, parseLB(mine.content, true)) : {}, loc = lbLocal(), now = {};
                 for (const k of ['s', 'm', 't']) {
                     now[k] = lbBetter(k, was[k], loc[k]);
                     if (now[k] && now[k] !== loc[k]) GM_setValue(acctKey(LB_LOCAL_KEYS[k]), now[k]);
                 }
                 const text = lbText(now);
-                if (!text || (mine && String(mine.content).trim() === text)) return;
-                const res = mine
-                    ? await api(`/api/comments/${mine.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) })
-                    : await api(`/api/posts/${GAMES_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) });
-                if (!res.ok) throw new Error('лидерборд: ' + res.status);
+                if (text && !(mine && String(mine.content).trim() === text)) {
+                    const res = mine
+                        ? await api(`/api/comments/${mine.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) })
+                        : await api(`/api/posts/${GAMES_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) });
+                    if (!res.ok) throw new Error('лидерборд: ' + res.status);
+                }
+                await lbRepUpload(all);
                 lbLoad = null;
                 if (gw.el) lbRender();
             } catch (e) { logErr('лидерборд', e); } finally { lbBusy = false; }
@@ -12576,10 +12892,10 @@
             try { all = await lbComments(); } catch (e) { box.lastElementChild.textContent = 'Не загрузилось'; return; }
             if (!box.isConnected) return;
             loadApprovedIds();
-            const best = new Map();
+            const best = new Map(), voids = lbVoids(all);
             for (const c of all) {
                 const a = c.author, o = a && parseLB(c.content, lbIsMe(a));
-                if (!o || !o[k]) continue;
+                if (!o || !o[k] || lbIsVoid(voids, a.id, k, o[k])) continue;
                 if (!lbIsMe(a) && !isApprovedAuthor(a)) continue;
                 const key = a.id || a.username, cur = best.get(key);
                 if (!cur || lbBetter(k, cur.v, o[k]) !== cur.v) best.set(key, { v: o[k], name: a.displayName || a.username || '?', me: lbIsMe(a) });
