@@ -3,7 +3,7 @@
 // «Завершить» у одного — у другого сразу конец. Потом: отклонён, отменён до ответа (у bob «Пропущенный» и «Перезвонить»).
 // Вызов и ответ — зашифрованные служебные записи в томах лички, каждый том не длиннее 990 знаков, в чате их не видно.
 // Запуск:  node test/realcall.js снимок-ленты.html
-const { chromium } = require('playwright');
+const { chromium, firefox } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const snap = fs.readFileSync(process.argv[2], 'utf8');
@@ -17,10 +17,11 @@ const fails = [];
 const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + what); if (!ok) fails.push(what); };
 let comments = [], n = 0, longest = 0;
 (async () => {
-  const b = await chromium.launch({ ...(process.env.CHROME ? { executablePath: process.env.CHROME } : {}), args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
-  const open = async (who, other) => {
-    const ctx = await b.newContext({ viewport: { width: 1200, height: 860 } });
-    await ctx.grantPermissions(['microphone'], { origin: ORIGIN });
+  const b = await chromium.launch({ ...(process.env.CHROME ? { executablePath: process.env.CHROME } : {}), args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
+  const bf = process.env.FIREFOX ? await firefox.launch({ firefoxUserPrefs: { 'media.navigator.streams.fake': true, 'media.navigator.permission.disabled': true } }) : null;
+  const open = async (who, other, fx) => {
+    const ctx = await (fx ? bf : b).newContext({ viewport: { width: 1200, height: 860 } });
+    if (!fx) await ctx.grantPermissions(['microphone', 'clipboard-read', 'clipboard-write'], { origin: ORIGIN });
     const p = await ctx.newPage();
     p.errors = [];
     p.on('pageerror', e => p.errors.push(e.message));
@@ -82,13 +83,15 @@ let comments = [], n = 0, longest = 0;
     if (!c || !c.pc) return null;
     let got = 0, sent = 0;
     (await c.pc.getStats()).forEach(r => { if (r.type === 'inbound-rtp' && r.kind === 'audio') got += r.bytesReceived || 0; if (r.type === 'outbound-rtp' && r.kind === 'audio') sent += r.bytesSent || 0; });
-    return { got, sent };
+    const a = [...document.querySelectorAll('audio')].concat(c.audio ? [c.audio] : []).find(x => x.srcObject);
+    return { got, sent, playing: !!a && !a.paused && a.srcObject.getAudioTracks().some(t => t.readyState === 'live') };
   });
   const shot = (p, name) => p.screenshot({ path: path.join(__dirname, 'out', `realcall-${name}.png`) });
 
   const A = await open('NeuroSFW', 'bob');
   await key(A.p, 'лунный кот 42');
-  const B = await open('bob', 'NeuroSFW');
+  const B = await open('bob', 'NeuroSFW', !!bf);
+  if (bf) console.log('—    bob в Firefox');
   await key(B.p, 'bob-password-1');
   await reopen(A.p, 'u:bob');
   const bubblesBefore = await A.p.$$eval('.vp-msgs-feed .vp-msgs-b', x => x.length);
@@ -114,7 +117,17 @@ let comments = [], n = 0, longest = 0;
   const sa = await bytes(A.p), sb = await bytes(B.p);
   console.log('—    байты звука:', JSON.stringify({ NeuroSFW: sa, bob: sb }));
   check(sa && sb && sa.got > 2000 && sb.got > 2000, 'звук идёт в обе стороны');
+  check(sa && sb && sa.playing && sb.playing, 'звук играет у обоих (элемент звука не на паузе)');
   await shot(A.p, '3-talk');
+  const heard = await A.p.evaluate(() => __callNet.cur.heard || {}), heardB = await B.p.evaluate(() => __callNet.cur.heard || {});
+  console.log('—    индикаторы:', JSON.stringify({ NeuroSFW: heard, bob: heardB }));
+  check(heard.me && heard.them && heardB.me && heardB.them, 'индикаторы «ты / собеседник» шевелятся у обоих');
+  check(await A.p.evaluate(() => /Ловит даже на парковке/.test(document.querySelector('.vp-call-real').textContent)), 'подпись «Ловит даже на парковке» в окне звонка');
+  await A.p.click('.vp-call-info');
+  await A.p.waitForTimeout(700);
+  const info = await A.p.evaluate(() => navigator.clipboard.readText()).catch(e => 'нет: ' + e.message);
+  console.log('—    сведения:\n' + info.split('\n').map(l => '       ' + l.slice(0, 160)).join('\n'));
+  check(/путь: /.test(info) && /пришло: \d+/.test(info) && /звук: играет/.test(info), 'сведения о звонке копируются (путь, байты, звук играет)');
   await A.p.click('.vp-call-mute');
   await B.p.waitForTimeout(800);
   const cb = await card(B.p), ca = await card(A.p);
@@ -123,6 +136,7 @@ let comments = [], n = 0, longest = 0;
   await A.p.click('.vp-call-min');
   await A.p.waitForTimeout(400);
   check((await card(A.p)).mini, 'свернул — плашка в углу');
+  check(await A.p.evaluate(() => !document.querySelector('.vp-call .vp-modal, .vp-call.vp-modal')), 'окно звонка не считается модальным (нет размытия страницы под плашкой)');
   await shot(A.p, '4-mini');
   await A.p.click('.vp-call-mini .vp-call-end');
   const byeFast = await waitCard(B.p, 'положил трубку', 4000);
@@ -148,10 +162,21 @@ let comments = [], n = 0, longest = 0;
   await A.p.waitForTimeout(3000);
   check(await A.p.evaluate(() => document.querySelectorAll('.vp-call-real').length === 1), 'пропущенный не звонит повторно');
 
+  for (const p of [A.p, B.p]) await p.waitForFunction(() => document.querySelectorAll('.vp-msgs-callrow').length >= 3, null, { timeout: 15000 }).catch(() => { });
+  const rows = p => p.$$eval('.vp-msgs-callrow', r => r.map(x => (x.classList.contains('vp-miss') ? '!' : '') + x.querySelector('span').textContent));
+  const ra = await rows(A.p), rb = await rows(B.p);
+  console.log('—    звонки в чате у NeuroSFW: ' + ra.join(' | '));
+  console.log('—    звонки в чате у bob: ' + rb.join(' | '));
+  check(ra.length === 3 && /^Исходящий звонок · 00:\d\d$/.test(ra[0]) && ra[1] === 'Исходящий звонок · отклонён' && ra[2] === '!Пропущенный звонок', 'в чате у NeuroSFW: исходящий с длительностью, отклонён, пропущенный (красным)');
+  check(rb.length === 3 && /^Входящий звонок · 00:\d\d$/.test(rb[0]) && rb[1] === 'Входящий звонок · отклонён' && rb[2] === 'Исходящий звонок · отменён', 'в чате у bob: входящий с длительностью, отклонён, отменён');
+  await A.p.evaluate(() => document.querySelector('.vp-call-real .vp-call-close') && document.querySelector('.vp-call-real .vp-call-close').click());
+  await A.p.waitForTimeout(500);
+  await A.p.screenshot({ path: path.join(__dirname, 'out', 'realcall-6-history.png'), clip: { x: 0, y: 0, width: 1200, height: 860 } });
   check(!A.p.errors.length && !B.p.errors.length, 'ошибок нет' + (A.p.errors.length + B.p.errors.length ? ': ' + [...A.p.errors, ...B.p.errors].join(' | ') : ''));
   const errs = await A.p.evaluate(() => (window.vpErrors || []).join(' | '));
   if (errs) console.log('—    журнал мода:', errs);
   await b.close();
+  if (bf) await bf.close();
   console.log(fails.length ? `\nНе прошло: ${fails.length}` : '\nВсё прошло');
   process.exit(fails.length ? 1 : 0);
 })();
