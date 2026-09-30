@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.3.15.3
+// @version      3.3.15.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1999,7 +1999,7 @@
         .vp-banner-buttons > button:hover { background: rgba(128, 128, 128, .22) !important; }
         @media (hover: hover) and (pointer: fine) {
             .vp-banner-buttons:not(.vp-banner-editing) { opacity: 0; transform: translate(-50%, -100%); clip-path: inset(100% 0 0 0); }
-            .vp-banner:hover .vp-banner-buttons, .vp-banner-buttons:focus-within { opacity: 1; transform: translateX(-50%); clip-path: inset(0 0 0 0); }
+            .vp-banner:hover .vp-banner-buttons, .vp-banner-buttons:has(:focus-visible) { opacity: 1; transform: translateX(-50%); clip-path: inset(0 0 0 0); }
         }
         .toggle-switch.vp-tri { width: 58px !important; }
         .toggle-switch.vp-tri[data-s="1"]::after { left: 20px !important; }
@@ -4482,6 +4482,8 @@
         }
 
         const CHANGELOG = [
+            ['3.3.15.4', '30 сентября 2026', [
+                'Баннер: шторка с кнопками только на баннере — не вылезает поверх верхней полосы сайта и задвигается после нажатия кнопки']],
             ['3.3.15.3', '30 сентября 2026', [
                 'Блокировка: заблокированный видит в чате, что ты его заблокировал(а), и не может писать и звонить',
                 'Блокировка теперь общая для всех твоих устройств',
@@ -9066,6 +9068,7 @@
             transition: opacity .25s ease, background-color .4s ease; }
 
         .vp-banner.vp-depth { background: transparent !important; }
+        .vp-banner { isolation: isolate; }
         .vp-banner.vp-depth > img[alt="Banner"], .vp-banner.vp-depth > [aria-label="Стекло"] { will-change: transform; transform-origin: 50% 50%;
             -webkit-mask-image: linear-gradient(to bottom, #000 58%, transparent); mask-image: linear-gradient(to bottom, #000 58%, transparent); }
 
