@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.4.3.2
+// @version      3.4.4.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -256,7 +256,7 @@
         X_GAP: 150,
         SPLIT: 380,
         IDLE: 3000,
-        RARE: [[true, 0.01 / 3], ['assemble', 0.01 / 3], ['twist', 0.01 / 3]],
+        RARE: [[true, 0.05 / 3], ['assemble', 0.05 / 3], ['twist', 0.05 / 3]],
         RARE_HOLD: 550
     };
     INTRO.X = INTRO.LOCK[2] + 220;
@@ -2669,6 +2669,9 @@
             document.head.appendChild(lookStyleEl);
         })();
         const LOOK_RE = /^ITDXL1 (.+)$/;
+        const VER_RE = /^\d{1,3}(\.\d{1,4}){1,4}$/;
+        const MOD_VER = (() => { try { const v = GM_info.script.version; return VER_RE.test(v) ? v : ''; } catch (e) { return ''; } })();
+        const verCmp = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; } return 0; };
         function parseLook(t) {
             const m = openText(t).match(LOOK_RE);
             if (!m) return null;
@@ -2679,6 +2682,7 @@
             if (o.b === 'custom' ? /^[0-4][0-9a-f]{32}$/.test(o.i || '') : BACKGROUNDS[o.b]) look.b = o.b;
             if (look.b === 'custom') look.i = o.i;
             if (BANNER_VIDEO_RE.test(o.v || '')) look.v = o.v;
+            if (VER_RE.test(o.ver || '')) look.ver = o.ver;
             return look;
         }
         function lookImgUrl(ref) {
@@ -2721,7 +2725,7 @@
                 const b = backgroundEnabled ? backgroundStyle : '-';
                 let img = '';
                 if (b === 'custom') img = await customBgCdn().catch(e => { logErr('свой фон на сервер', e); return ''; });
-                const text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (bannerVideoOwn() ? ' v=' + bannerVideoOwn() : '');
+                const text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (bannerVideoOwn() ? ' v=' + bannerVideoOwn() : '') + (MOD_VER ? ' ver=' + MOD_VER : '');
                 if (text === lookSent) return;
                 const all = await loadVerificationComments();
                 const mine = all.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
@@ -3956,6 +3960,16 @@
 .vp-junk-delsel:disabled { opacity: .4; cursor: default; }
 .vp-junk-err { padding: 8px 14px; color: #ff8a8a; }
 .vp-lbadm { width: min(1080px, calc(100vw - 24px)); }
+.vp-vers { width: min(520px, calc(100vw - 24px)); }
+.vp-vers-sum { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.vp-vers-chip { padding: 3px 9px; border-radius: 999px; font-size: 12px; font-variant-numeric: tabular-nums; background: rgba(255,255,255,.08); }
+.vp-vers-chip.vp-new, .vp-vers-v.vp-new { color: #81c784; }
+.vp-vers-chip.vp-old, .vp-vers-v.vp-old { color: #ffb74d; }
+.vp-vers-chip.vp-unk, .vp-vers-v.vp-unk { color: rgba(255,255,255,.45); }
+.vp-vers-row { padding: 8px 14px; }
+.vp-vers-st { font-size: 11px; opacity: .5; }
+.vp-vers-v { margin-left: auto; font-variant-numeric: tabular-nums; }
+.vp-vers-row .vp-junk-meta { margin-left: 10px; min-width: 96px; text-align: right; }
 .vp-lbadm > .vp-junk-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 10px; padding: 10px; }
 .vp-lbadm-col { min-width: 0; border-radius: 14px; background: rgba(255,255,255,.04); overflow: hidden; }
 .vp-lbadm-col .vp-junk-row:last-child { border-bottom: 0; }
@@ -4179,6 +4193,62 @@
             };
             count();
         }
+        async function adminVersions() {
+            vpVerifyEnsureStyle();
+            document.querySelectorAll('.vp-vers').forEach(x => x.remove());
+            const box = document.createElement('div');
+            box.className = 'vp-admin-panel vp-junk-panel vp-vers';
+            box.innerHTML = `<div class="vp-admin-head"><b>Версии у пользователей</b><span>загрузка…</span><button type="button" aria-label="Закрыть">×</button></div>
+                <div class="vp-vers-sum"></div><div class="vp-junk-list"></div>`;
+            box.querySelector('.vp-admin-head button').onclick = () => box.remove();
+            document.body.appendChild(box);
+            const head = box.querySelector('.vp-admin-head span'), list = box.querySelector('.vp-junk-list'), sum = box.querySelector('.vp-vers-sum');
+            let all;
+            try { all = await loadVerificationComments(true); } catch (e) { head.textContent = 'не загрузилось: ' + (e.message || e); return; }
+            const verified = readVerified(), stateOf = id => { for (const v of Object.values(verified)) if (v && v.id === id) return v.state; return ''; };
+            const people = new Map();
+            for (const c of all) {
+                const a = c.author;
+                if (!a || !a.id) continue;
+                const at = Date.parse(c.updatedAt || c.updated_at || c.createdAt || c.created_at || '') || 0;
+                const p = people.get(a.id) || { a, ver: '', at: 0, mod: false };
+                people.set(a.id, p);
+                const code = parseCode(String(c.content || '').trim());
+                if (code && isAuthorCode(a, code)) p.mod = true;
+                const look = parseLook(c.content);
+                if (look) { p.mod = true; if (look.ver && (!p.ver || verCmp(look.ver, p.ver) > 0)) { p.ver = look.ver; p.at = at; } }
+            }
+            const rows = [...people.values()].filter(p => p.mod && p.a.id !== OWNER_ID);
+            rows.sort((x, y) => (y.ver ? 1 : 0) - (x.ver ? 1 : 0) || (y.ver && x.ver ? verCmp(y.ver, x.ver) : 0) || (x.a.username || '').localeCompare(y.a.username || ''));
+            const newest = rows.reduce((m, p) => p.ver && (!m || verCmp(p.ver, m) > 0) ? p.ver : m, MOD_VER);
+            const groups = new Map();
+            rows.forEach(p => groups.set(p.ver || '?', (groups.get(p.ver || '?') || 0) + 1));
+            head.textContent = `с модом ${rows.length}, на последней ${groups.get(newest) || 0}`;
+            sum.textContent = '';
+            for (const [v, n] of groups) {
+                const chip = document.createElement('span');
+                chip.className = 'vp-vers-chip' + (v === newest ? ' vp-new' : v === '?' ? ' vp-unk' : ' vp-old');
+                chip.textContent = `${v === '?' ? 'старше 3.4.4' : v} · ${n}`;
+                chip.title = v === '?' ? 'Версия ещё не пришла: у человека стоит мод старше 3.4.4 или он давно не заходил' : '';
+                sum.appendChild(chip);
+            }
+            for (const p of rows) {
+                const row = document.createElement('div');
+                row.className = 'vp-junk-row vp-vers-row';
+                row.innerHTML = '<div class="vp-junk-top"><a target="_blank" rel="noopener"></a><span class="vp-vers-st"></span><b class="vp-vers-v"></b><span class="vp-junk-meta"></span></div>';
+                const link = row.querySelector('a');
+                link.textContent = p.a.displayName || p.a.username || '?';
+                if (p.a.username) link.href = '/@' + p.a.username;
+                const st = stateOf(p.a.id);
+                row.querySelector('.vp-vers-st').textContent = st === 'approved' ? '' : st === 'quarantine' ? 'ждёт галочку' : 'без галочки';
+                const v = row.querySelector('.vp-vers-v');
+                v.textContent = p.ver || 'старше 3.4.4';
+                v.className = 'vp-vers-v ' + (!p.ver ? 'vp-unk' : p.ver === newest ? 'vp-new' : 'vp-old');
+                row.querySelector('.vp-junk-meta').textContent = p.at ? 'с ' + new Date(p.at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+                list.appendChild(row);
+            }
+            if (!rows.length) { const d = document.createElement('div'); d.className = 'vp-verify-empty'; d.textContent = 'Пока никого'; list.appendChild(d); }
+        }
         async function adminRecords() {
             vpVerifyEnsureStyle();
             document.querySelectorAll('.vp-lbadm').forEach(x => x.remove());
@@ -4331,6 +4401,7 @@
                 <button type="button" data-act="verify">${svgIcon('<path d="M12 2.5l2.9 6 6.6.6-5 4.4 1.5 6.5L12 16.8 5.9 20 7.4 13.5l-5-4.4 6.6-.6z"/>', 18)}<span>Галочки</span></button>
                 <button type="button" data-act="junk">${svgIcon('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>', 18)}<span>Мусор под постами</span></button>
                 <button type="button" data-act="records">${svgIcon('<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>', 18)}<span>Рекорды и повторы</span></button>
+                <button type="button" data-act="versions">${svgIcon('<path d="M4 7h16M4 12h10M4 17h6"/><path d="m16 15 2.5 2.5L22 13"/>', 18)}<span>Версии у пользователей</span></button>
                 <button type="button" data-act="rare">${svgIcon('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.3 6L12 16.4 6.6 19.4l1.3-6L3.4 9.3l6-.7z"/>', 18)}<span>Редкая заставка</span></button>
                 <button type="button" data-act="assemble">${svgIcon('<path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z"/>', 18)}<span>Заставка «сборка»</span></button>
                 <button type="button" data-act="twist">${svgIcon('<path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/>', 18)}<span>Заставка «обманка»</span></button>
@@ -4413,6 +4484,7 @@
             act('verify', () => adminVerify());
             act('junk', () => adminJunk());
             act('records', () => adminRecords());
+            act('versions', () => adminVersions());
             act('fps', toggleFps);
             act('rare', () => playIntro(IS_PHONE ? 'silent' : 'desk', true));
             act('assemble', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'assemble'));
@@ -4844,6 +4916,12 @@
         }
 
         const CHANGELOG = [
+            ['3.4.4.2', '1 октября 2026', [
+                'Обновления: если сайт долго открыт, мод сам раз в 10 минут проверяет, не вышла ли новая версия, и показывает кнопку «Обновить»']],
+            ['3.4.4.1', '1 октября 2026', [
+                'Заставка: редкие варианты выпадают чаще — 5% вместо 1%']],
+            ['3.4.4', '1 октября 2026', [
+                'Оптимизация и исправление багов']],
             ['3.4.3.2', '1 октября 2026', [
                 'Сообщения: кнопка «вниз» — если отлистал переписку вверх, одно нажатие возвращает к последним сообщениям, на ней видно, сколько пришло новых']],
             ['3.4.3.1', '1 октября 2026', [
@@ -5703,15 +5781,18 @@
                 });
 
                 const updateUrl = 'https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js?t=' + Date.now();
-                function latestVersion() {
+                const UPDATE_EVERY = 10 * 60 * 1000;
+                let updateAskedAt = 0;
+                function latestVersion(fresh) {
                     let cached = null;
                     try { cached = JSON.parse(GM_getValue('vp_latest', 'null')); } catch (e) { }
-                    if (cached && (Date.now() - cached.at < 10 * 60 * 1000 || versionCompare(cached.v, GM_info.script.version) > 0)) {
+                    if (cached && (versionCompare(cached.v, GM_info.script.version) > 0 || !fresh && Date.now() - cached.at < UPDATE_EVERY)) {
                         return Promise.resolve(cached.v);
                     }
+                    updateAskedAt = Date.now();
                     return new Promise(resolve => GM_xmlhttpRequest({
                         method: 'GET',
-                        url: updateUrl,
+                        url: updateUrl.replace(/t=\d+$/, 't=' + Date.now()),
                         headers: { Range: 'bytes=0-2047' },
                         onload: res => {
                             const m = (res.status === 200 || res.status === 206) && res.responseText.match(/\/\/\s*@version\s+([\d.]+)/);
@@ -5754,6 +5835,25 @@
                     return updateAvailable;
                 });
                 updateCheck.then(yes => { if (yes) setTimeout(createUpdateButton, 1000); });
+                let updateTimer = 0;
+                function updatePoll() {
+                    if (updateAvailable) { clearInterval(updateTimer); return; }
+                    if (document.hidden || Date.now() - updateAskedAt < UPDATE_EVERY - 5000) return;
+                    latestVersion(true).then(v => {
+                        if (updateAvailable || !v || versionCompare(v, GM_info.script.version) <= 0) return;
+                        updateAvailable = true;
+                        clearInterval(updateTimer);
+                        document.removeEventListener('visibilitychange', updatePoll);
+                        console.log(`[ITD VP] обновление: вышла ${v}, у тебя ${GM_info.script.version}`);
+                        createUpdateButton();
+                    });
+                }
+                updateCheck.then(yes => {
+                    if (yes) return;
+                    updateAskedAt = updateAskedAt || Date.now();
+                    updateTimer = setInterval(updatePoll, 60 * 1000);
+                    document.addEventListener('visibilitychange', updatePoll);
+                });
 
                 const originalReplaceIcon = replaceIcon;
                 replaceIcon = function () {
