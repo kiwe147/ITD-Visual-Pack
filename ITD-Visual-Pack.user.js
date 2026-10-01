@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.0.2
+// @version      3.5.0.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2955,7 +2955,7 @@
         }
         let palsOn = GM_getValue('palsEnabled', false);
         const PALS = { miku: { key: 'palMiku', file: 'miku.webp', r: 540 / 533 }, teto: { key: 'palTeto', file: 'teto.webp', r: 540 / 509 } };
-        const PAL_VER = 3;
+        const PAL_VER = 4;
         let palsBox = null;
         function palStore(key, blob) {
             return bgDb().then(db => new Promise((ok, no) => {
@@ -2986,21 +2986,32 @@
             if (!palsBox.isConnected) document.body.appendChild(palsBox);
             palsBox.style.setProperty('--vp-pal-h', GM_getValue('palSize', 45) + 'vh');
             document.documentElement.classList.toggle('vp-pals-r', palsOn && GM_getValue('palMiku', true));
+            const imgs = [];
+            let fresh = false;
             for (const [id, pal] of Object.entries(PALS)) {
                 const want = palsOn && GM_getValue(pal.key, true);
                 let img = palsBox.querySelector('.vp-pal-' + id);
                 if (!want) { if (img) { URL.revokeObjectURL(img.src); img.remove(); } continue; }
-                if (img) continue;
-                img = document.createElement('img');
-                img.className = 'vp-pal vp-pal-' + id;
-                img.alt = '';
-                img.style.setProperty('--vp-pal-r', pal.r);
-                palsBox.appendChild(img);
-                palBlob(id).then(b => {
-                    if (!b || !img.isConnected) return;
-                    img.src = URL.createObjectURL(b);
-                }).catch(e => logErr('персонаж', e));
+                if (!img) {
+                    img = document.createElement('img');
+                    img.className = 'vp-pal vp-pal-' + id;
+                    img.alt = '';
+                    img.style.setProperty('--vp-pal-r', pal.r);
+                    palsBox.appendChild(img);
+                    fresh = true;
+                }
+                imgs.push([id, img]);
             }
+            if (!fresh) return;
+            const gen = palsApply.gen = (palsApply.gen || 0) + 1;
+            Promise.all(imgs.map(([id]) => palBlob(id))).then(blobs => {
+                if (gen !== palsApply.gen) return;
+                imgs.forEach(([, img], i) => {
+                    if (!blobs[i] || !img.isConnected) return;
+                    if (img.src) URL.revokeObjectURL(img.src);
+                    img.src = URL.createObjectURL(blobs[i]);
+                });
+            }).catch(e => logErr('персонаж', e));
         }
         function palSizeRow() {
             const row = document.createElement('div');
@@ -4153,6 +4164,8 @@
         }
 
         const CHANGELOG = [
+            ['3.5.0.3', '1 октября 2026', [
+                'Мику и Тето прыгают вместе и в такт — 120 ударов в минуту']],
             ['3.5.0.2', '1 октября 2026', [
                 'Мику и Тето двигаются плавнее и спокойнее']],
             ['3.5.0.1', '1 октября 2026', [
