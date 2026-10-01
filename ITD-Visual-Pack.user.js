@@ -1351,6 +1351,9 @@
                 'Сцена ленты': svgIcon('<rect x="5" y="3" width="14" height="5" rx="1.5" stroke-dasharray="2 2"/><rect x="4" y="10" width="16" height="5" rx="1.5"/><rect x="3" y="17" width="18" height="5" rx="1.5"/>'),
                 'Свечение видео': svgIcon('<rect x="6" y="7" width="12" height="10" rx="2"/><path d="m11 10 3 2-3 2z"/><path d="M3 5.5 4.5 7M21 5.5 19.5 7M3 18.5 4.5 17M21 18.5 19.5 17M12 2.5v2M12 19.5v2"/>'),
                 'Заставка при входе': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><path d="m10 9 5 3-5 3z"/>'),
+                'Мику и Тето': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="13" r="2"/><circle cx="15.5" cy="13" r="2"/><path d="M5 20c.5-2 2-3 3.5-3s3 1 3.5 3M12 20c.5-2 2-3 3.5-3s3 1 3.5 3"/>'),
+                'Мику справа': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="16" cy="13" r="2.2"/><path d="M12 20c.6-2.2 2.2-3.3 4-3.3s3.4 1.1 4 3.3"/>'),
+                'Тето слева': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8" cy="13" r="2.2"/><path d="M4 20c.6-2.2 2.2-3.3 4-3.3s3.4 1.1 4 3.3"/>'),
                 'Автолайки': svgIcon('<path transform="translate(.5 1) scale(.74)" stroke-width="2.43" d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/><path d="M21.3 17.2a3.3 3.3 0 1 1-1-2.4"/><path d="M21 12.9v2.3h-2.3"/>')
             },
 
@@ -1988,6 +1991,13 @@
             max-height: calc(100dvh - 16px); display: flex !important; flex-direction: column; overflow: hidden !important; }
         .vp-settings-tabs .vp-stabs { flex: 0 0 auto; }
         .vp-settings-tabs .settings-option.vp-dim { opacity: .4; pointer-events: none; }
+        .vp-pals { position: fixed; inset: 0; z-index: 2147482000; pointer-events: none; overflow: hidden; }
+        .vp-pal { position: absolute; bottom: 0; width: auto; height: min(var(--vp-pal-h, 45vh), calc(48vw * var(--vp-pal-r, 1))); pointer-events: none;
+            user-select: none; -webkit-user-drag: none; animation: vpPalIn .7s cubic-bezier(.2, .9, .3, 1.15) both; }
+        .vp-pal-miku { right: 0; transform: translate(4%, 3%); }
+        .vp-pal-teto { left: 0; transform: scaleX(-1) translate(4%, 3%); }
+        @keyframes vpPalIn { from { translate: 0 60%; opacity: 0; } }
+        @media (prefers-reduced-motion: reduce) { .vp-pal { animation: none; } }
         .vp-rcard-move { display: flex; gap: 2px; margin-left: auto; margin-right: 10px; }
         .vp-rcard-move button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
         .vp-rcard-move button:hover:not(:disabled) { background: rgba(127, 127, 127, .18); }
@@ -2941,6 +2951,67 @@
             }
             colorizePosts();
         }
+        let palsOn = GM_getValue('palsEnabled', false);
+        const PALS = { miku: { key: 'palMiku', file: 'miku.webp', r: 540 / 533 }, teto: { key: 'palTeto', file: 'teto.webp', r: 540 / 509 } };
+        const PAL_VER = 1;
+        let palsBox = null;
+        function palStore(key, blob) {
+            return bgDb().then(db => new Promise((ok, no) => {
+                const st = db.transaction('files', blob ? 'readwrite' : 'readonly').objectStore('files'), r = blob ? st.put(blob, key) : st.get(key);
+                r.onsuccess = () => ok(blob || r.result || null);
+                r.onerror = () => no(r.error);
+            }));
+        }
+        function palFetch(url) {
+            return new Promise((ok, no) => GM_xmlhttpRequest({
+                method: 'GET', url, responseType: 'blob', timeout: 60000,
+                onload: r => r.status === 200 && r.response && r.response.size > 1000 ? ok(new Blob([r.response], { type: 'image/webp' })) : no(new Error('персонаж: ' + r.status)),
+                onerror: no, ontimeout: no
+            }));
+        }
+        async function palBlob(id) {
+            const key = `pal-${id}@${PAL_VER}`;
+            const have = await palStore(key).catch(() => null);
+            if (have) return have;
+            for (const branch of ['main', 'claude/github-script-access-ihd9ne']) {
+                const b = await palFetch(`https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/${branch}/assets/${PALS[id].file}`).catch(() => null);
+                if (b) { await palStore(key, b).catch(() => { }); return b; }
+            }
+            return null;
+        }
+        function palsApply() {
+            if (!palsBox) { palsBox = document.createElement('div'); palsBox.className = 'vp-pals'; }
+            if (!palsBox.isConnected) document.body.appendChild(palsBox);
+            palsBox.style.setProperty('--vp-pal-h', GM_getValue('palSize', 45) + 'vh');
+            for (const [id, pal] of Object.entries(PALS)) {
+                const want = palsOn && GM_getValue(pal.key, true);
+                let img = palsBox.querySelector('.vp-pal-' + id);
+                if (!want) { if (img) { URL.revokeObjectURL(img.src); img.remove(); } continue; }
+                if (img) continue;
+                img = document.createElement('img');
+                img.className = 'vp-pal vp-pal-' + id;
+                img.alt = '';
+                img.style.setProperty('--vp-pal-r', pal.r);
+                palsBox.appendChild(img);
+                palBlob(id).then(b => {
+                    if (!b || !img.isConnected) return;
+                    img.src = URL.createObjectURL(b);
+                }).catch(e => logErr('персонаж', e));
+            }
+        }
+        function palSizeRow() {
+            const row = document.createElement('div');
+            row.className = 'settings-option vp-vol-row';
+            row.innerHTML = `<span class="vp-setting-label">${ICONS.settings['Мику и Тето'] || ''}<span>Размер</span></span>`
+                + `<span class="vp-vol"><input type="range" min="25" max="70" step="5" aria-label="Размер"><b></b></span>`;
+            const inp = row.querySelector('input'), out = row.querySelector('b');
+            inp.value = GM_getValue('palSize', 45);
+            const show = () => { out.textContent = inp.value + '%'; inp.style.setProperty('--vp-vol', ((inp.value - 25) / 45 * 100) + '%'); };
+            show();
+            inp.addEventListener('input', () => { GM_setValue('palSize', +inp.value); show(); palsApply(); });
+            row.onclick = e => e.stopPropagation();
+            return row;
+        }
         const SETTINGS = [
             { label: 'Фон', get: () => backgroundEnabled, set: v => { backgroundEnabled = v; updateBackgroundVisibility(); }, key: 'backgroundEnabled' },
             { label: 'Неоновая подсветка', get: () => neonEnabled, set: v => { neonEnabled = v; document.documentElement.classList.toggle('vp-no-neon', !v); paint(); }, key: 'neonEnabled' },
@@ -2960,13 +3031,17 @@
             { label: 'Сцена ленты', get: () => sceneEnabled, set: v => { sceneEnabled = v; sceneAutoOff = false; document.documentElement.classList.toggle('vp-scene', v); sceneKick(); }, key: 'sceneEnabled' },
             { label: 'Свечение видео', get: () => ambientEnabled, set: v => { ambientEnabled = v; applyAmbient(); }, key: 'ambientEnabled' },
             { label: 'Боковая панель', get: () => railEnabled, set: v => { railEnabled = v; placeRail(); }, key: 'railEnabled' },
-            { label: 'Версия для ПК на планшете', get: () => GM_getValue('tabletDesktop', true), set: () => tabletViewport(), key: 'tabletDesktop' }
+            { label: 'Версия для ПК на планшете', get: () => GM_getValue('tabletDesktop', true), set: () => tabletViewport(), key: 'tabletDesktop' },
+            { label: 'Мику и Тето', get: () => palsOn, set: v => { palsOn = v; palsApply(); }, key: 'palsEnabled' },
+            { label: 'Мику справа', get: () => GM_getValue('palMiku', true), set: () => palsApply(), key: 'palMiku' },
+            { label: 'Тето слева', get: () => GM_getValue('palTeto', true), set: () => palsApply(), key: 'palTeto' }
         ];
         const SETTINGS_TABS = [
             { id: 'nick', name: 'Ник', items: ['Неоновая подсветка', 'Подсветка ника', 'Подсветка аватарок', 'Подсветка постов'] },
             { id: 'bg', name: 'Фон', items: ['Фон'] },
             { id: 'look', name: 'Вид', items: ['Стекло', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Карточки панели', 'Версия для ПК на планшете'] },
             { id: 'likes', name: 'Лайки', items: ['Автолайки'] },
+            { id: 'pals', name: 'Мику', items: ['Мику и Тето', 'Мику справа', 'Тето слева', 'Размер персонажей'] },
             { id: 'misc', name: 'Ещё', items: ['Анти цензура', 'Звуки интерфейса', 'Громкость', 'Заставка при входе'] },
             { id: 'icon', name: 'Иконка' }
         ];
@@ -3092,8 +3167,10 @@
                     if (label === 'Заставка при входе' && IS_PHONE) { body.appendChild(introModeRow()); continue; }
                     if (label === 'Громкость') { body.appendChild(volumeRow()); continue; }
                     if (label === 'Карточки панели') { body.appendChild(railCardsBox(redraw)); continue; }
-                    const row = settingRow(SETTINGS.find(o => o.label === label), id === 'bg' || id === 'nick' ? redraw : null);
+                    if (label === 'Размер персонажей') { const r = palSizeRow(); if (!palsOn) r.classList.add('vp-dim'); body.appendChild(r); continue; }
+                    const row = settingRow(SETTINGS.find(o => o.label === label), id === 'bg' || id === 'nick' || id === 'pals' ? redraw : null);
                     if (!neonEnabled && label.startsWith('Подсветка ')) row.classList.add('vp-dim');
+                    if (!palsOn && (label === 'Мику справа' || label === 'Тето слева')) row.classList.add('vp-dim');
                     body.appendChild(row);
                 }
                 if (id === 'nick') {
@@ -4074,6 +4151,7 @@
 
         const CHANGELOG = [
             ['3.5.0', '1 октября 2026', [
+                'Мику и Тето: в настройках новая вкладка «Мику» — Мику держится за экран справа, Тето слева. Можно оставить одну и поменять размер',
                 'Оптимизация и исправление багов']],
             ['3.4.4.3', '1 октября 2026', [
                 'Оптимизация и исправление багов']],
@@ -12268,6 +12346,7 @@
         renderGamesMenu();
 
         placeRail();
+        if (palsOn) palsApply();
 
         let admLinked = false;
         onDom(function admLink() {
