@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.1.5
+// @version      3.5.1.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2999,9 +2999,8 @@
             return null;
         }
         function palsApply() {
-            if (!palsBox) { palsBox = document.createElement('div'); palsBox.className = 'vp-pals' + (IS_PHONE ? ' vp-pals-phone' : ''); }
+            if (!palsBox) { palsBox = document.createElement('div'); palsBox.className = 'vp-pals'; }
             if (!palsBox.isConnected) document.body.appendChild(palsBox);
-            palsBox.style.setProperty('--vp-pal-h', IS_PHONE ? GM_getValue('palSize', 45) * 0.8 + 'vw' : GM_getValue('palSize', 45) + 'vh');
             palsNav();
             palsBox.dataset.look = GM_getValue('palLook', 'plain');
             document.documentElement.classList.toggle('vp-pals-r', palsOn && GM_getValue('palMiku', true));
@@ -3032,15 +3031,17 @@
                 });
             }).catch(e => logErr('персонаж', e));
         }
-        let palNavEl = null;
+        let palNavEl = null, palNavAt = -1e9;
         function palsNav() {
-            if (!IS_PHONE || !palsBox || !palsOn) return;
-            if (!palNavEl || !palNavEl.isConnected) {
-                palNavEl = null;
+            if (!palsBox || !palsOn) return;
+            if (palNavEl && (!palNavEl.isConnected || palNavEl.getBoundingClientRect().bottom < innerHeight - 200)) palNavEl = null;
+            if (!palNavEl && performance.now() - palNavAt > 800) {
+                palNavAt = performance.now();
                 const nav = document.querySelector('nav.' + SELECTORS.nav) || [...document.querySelectorAll('nav a')].find(a => a.textContent.trim() === 'Лента')?.closest('nav');
                 for (let e = nav; e && e !== document.body; e = e.parentElement) {
                     if (getComputedStyle(e).position !== 'fixed') continue;
-                    if (e.getBoundingClientRect().width >= innerWidth * 0.8) palNavEl = e;
+                    const r = e.getBoundingClientRect();
+                    if (r.width >= innerWidth * 0.8 && r.bottom >= innerHeight - 200) palNavEl = e;
                     break;
                 }
                 if (!palNavEl) for (const d of [3, 24, 48, 80, 120]) {
@@ -3056,6 +3057,9 @@
                     if (palNavEl) break;
                 }
             }
+            const mob = !!palNavEl, size = GM_getValue('palSize', 45), ph = mob ? size * 0.8 + 'vw' : size + 'vh';
+            palsBox.classList.toggle('vp-pals-phone', mob);
+            if (palsBox.style.getPropertyValue('--vp-pal-h') !== ph) palsBox.style.setProperty('--vp-pal-h', ph);
             const pill = palNavEl && (palNavEl.matches('nav') ? palNavEl : palNavEl.querySelector('nav')) || palNavEl, top = pill ? pill.getBoundingClientRect().top : innerHeight, z = palNavEl ? parseInt(getComputedStyle(palNavEl).zIndex) : NaN;
             const nav = Math.max(0, Math.round(innerHeight - top)) + 'px', zi = z > 1 ? String(Math.min(z - 1, 9000)) : '';
             if (palsBox.style.getPropertyValue('--vp-pal-nav') !== nav) palsBox.style.setProperty('--vp-pal-nav', nav);
@@ -4228,7 +4232,7 @@
         }
 
         const CHANGELOG = [
-            ['3.5.1 – 3.5.1.5', '1 октября 2026', [
+            ['3.5.1 – 3.5.1.6', '1 октября 2026', [
                 'Мику и Тето теперь и на телефоне: выглядывают из-за нижней панели вкладок и ничего не закрывают',
                 'Кто не заходил с модом больше трёх месяцев, теряет галочку и место в клубе ИТД X, его стиль больше не показывается. Зайдёт снова — всё вернётся само']],
             ['3.5.0 – 3.5.0.8', '1 октября 2026', [
