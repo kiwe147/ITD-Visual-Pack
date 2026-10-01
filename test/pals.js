@@ -172,7 +172,8 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   const phone = await ph.evaluate(() => {
     const nav = [...document.querySelectorAll('body *')].find(e => getComputedStyle(e).position === 'fixed' && e.getBoundingClientRect().bottom >= innerHeight - 4 && e.getBoundingClientRect().width >= innerWidth * 0.8 && !e.closest('.vp-pals'));
     const box = document.querySelector('.vp-pals'), r = id => { const x = document.querySelector('.vp-pal-' + id).getBoundingClientRect(); return { l: Math.round(x.left), r: Math.round(x.right), t: Math.round(x.top), b: Math.round(x.bottom), h: Math.round(x.height) }; };
-    return { pals: document.querySelectorAll('.vp-pal').length, navTop: nav ? Math.round(nav.getBoundingClientRect().top) : null, navZ: nav ? +getComputedStyle(nav).zIndex : null,
+    const pill = nav && (nav.querySelector('nav') || nav);
+    return { pals: document.querySelectorAll('.vp-pal').length, navTop: pill ? Math.round(pill.getBoundingClientRect().top) : null, navZ: nav ? +getComputedStyle(nav).zIndex : null,
       z: +getComputedStyle(box).zIndex, mask: getComputedStyle(box).maskImage || getComputedStyle(box).webkitMaskImage || '', miku: r('miku'), teto: r('teto'), vw: innerWidth };
   });
   check(phone.pals === 2, `на телефоне Мику и Тето снова есть (${phone.pals})`);
