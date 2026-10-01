@@ -98,7 +98,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     while (i < b.length) { const L = b.readUInt32LE(i + 4); if (b.toString('latin1', i, i + 4) === 'ANMF') { k++; d += b.readUIntLE(i + 20, 3); } i += 8 + L + (L & 1); } return { n: k, d }; };
   sync.out = { miku: pace('miku.webp'), teto: pace('teto.webp') };
   console.log('—    ' + JSON.stringify(sync));
-  check(sync.out.miku.n === 221 && sync.out.teto.n === 221 && sync.out.miku.d === 8500 && sync.out.teto.d === 8500, `обе по 221 кадру, круг 8,5 с — прыжок (13 кадров) ровно 0,5 с, 120 в минуту (${JSON.stringify(sync.out)})`);
+  check(sync.out.miku.n === 13 && sync.out.teto.n === 13 && sync.out.miku.d === 500 && sync.out.teto.d === 500, `обе — один прыжок из 13 кадров ровно за 0,5 с, 120 в минуту (${JSON.stringify(sync.out)})`);
   check(sync.batches.length === 1 && sync.batches[0] === 'miku,teto', `вернул Тето — обе перезапустились в один момент (${JSON.stringify(sync.batches)})`);
   const edge = await p.evaluate(() => ({ cw: document.documentElement.clientWidth, iw: innerWidth }));
   check(edge.cw === edge.iw, `полосы прокрутки справа нет — Мику прижата к самому краю экрана (${edge.cw} из ${edge.iw})`);
