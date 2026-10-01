@@ -140,20 +140,47 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(s.length === 1 && s[0].loaded && asked.length === n, `после перезагрузки Мику на месте, повторно не качалась (запросов было ${n}, стало ${asked.length})`);
   check(asked.every(u => /\/main\/assets\//.test(u)), 'качается из папки assets репозитория');
   check(!p.errors.length, 'ошибок нет' + (p.errors.length ? ': ' + p.errors.join(' | ') : ''));
-  const ph = await (await b.newContext({ viewport: { width: 412, height: 892 }, isMobile: true, hasTouch: true })).newPage();
+  const phSnap = process.argv[3] ? fs.readFileSync(process.argv[3], 'utf8') : snap;
+  const phUrl = (phSnap.match(/"url": "([^"]+)"/) || [, ORIGIN + '/'])[1];
+  const phCtx = await b.newContext({ viewport: { width: 412, height: 892 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  await phCtx.exposeFunction('__asset', u => { const m = u.match(/\/main\/assets\/(\w+\.webp)$/); return m ? ASSET(m[1]) : ''; });
+  const ph = await phCtx.newPage();
+  ph.errors = [];
+  ph.on('pageerror', e => ph.errors.push(e.message));
   await ph.route('**/*', r => { const u = new URL(r.request().url()), t = r.request().resourceType();
-    if (u.origin === ORIGIN && t === 'document') return r.fulfill({ contentType: 'text/html; charset=utf-8', body: snap });
+    if (u.origin === ORIGIN && t === 'document') return r.fulfill({ contentType: 'text/html; charset=utf-8', body: phSnap });
+    if (['image', 'stylesheet', 'font'].includes(t) && !u.protocol.startsWith('blob')) return r.continue();
     if (u.pathname === '/api/users/me') return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ username: 'NeuroSFW', id: OWNER }) });
     return r.fulfill({ status: 404, body: '' }); });
-  await ph.addInitScript(m => { const s = { introEnabled: false, introMobile: 'off', palsEnabled: true, settingsTab: 'pals' };
-    window.GM_getValue = (k, d) => k in s ? s[k] : d; window.GM_setValue = (k, v) => { s[k] = v; }; window.GM_xmlhttpRequest = o => setTimeout(() => o.onerror && o.onerror('x'), 0);
+  await ph.addInitScript(m => { const s = { introEnabled: false, introMobile: 'off', palsEnabled: true, backgroundEnabled: false };
+    window.GM_getValue = (k, d) => k in s ? s[k] : d; window.GM_setValue = (k, v) => { s[k] = v; };
+    window.GM_xmlhttpRequest = o => {
+      if (!/raw\.githubusercontent\.com\/.*\/assets\//.test(o.url)) return setTimeout(() => o.onerror && o.onerror('x'), 0);
+      window.__asset(o.url).then(b64 => {
+        if (!b64) return o.onload({ status: 404, response: null });
+        const bin = atob(b64), u8 = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+        o.onload({ status: 200, response: new Blob([u8], { type: 'image/webp' }) });
+      });
+    };
     window.GM_info = { script: { version: 't' }, scriptMetaStr: m }; window.unsafeWindow = window; }, src.slice(0, src.indexOf('==/UserScript==')));
-  await ph.goto(url);
+  await ph.goto(phUrl);
   await ph.evaluate(() => document.querySelectorAll('.vp-pals, .vp-itdx-btn, .settings-dropdown').forEach(e => e.remove()));
   await ph.addScriptTag({ content: src });
-  await ph.waitForTimeout(2500);
-  const phone = await ph.evaluate(() => ({ pals: document.querySelectorAll('.vp-pal').length, scroll: document.documentElement.classList.contains('vp-pals-r') }));
-  check(phone.pals === 0 && !phone.scroll, `на телефоне Мику и Тето не показываются, даже если включены (${JSON.stringify(phone)})`);
+  await ph.waitForFunction(() => document.querySelectorAll('.vp-pal').length === 2 && [...document.querySelectorAll('.vp-pal')].every(i => i.complete && i.naturalWidth), null, { timeout: 15000 }).catch(() => { });
+  await ph.waitForTimeout(1200);
+  const phone = await ph.evaluate(() => {
+    const nav = [...document.querySelectorAll('body *')].find(e => getComputedStyle(e).position === 'fixed' && e.getBoundingClientRect().bottom >= innerHeight - 4 && e.getBoundingClientRect().width >= innerWidth * 0.8 && !e.closest('.vp-pals'));
+    const box = document.querySelector('.vp-pals'), r = id => { const x = document.querySelector('.vp-pal-' + id).getBoundingClientRect(); return { l: Math.round(x.left), r: Math.round(x.right), t: Math.round(x.top), b: Math.round(x.bottom), h: Math.round(x.height) }; };
+    return { pals: document.querySelectorAll('.vp-pal').length, navTop: nav ? Math.round(nav.getBoundingClientRect().top) : null, navZ: nav ? +getComputedStyle(nav).zIndex : null,
+      z: +getComputedStyle(box).zIndex, mask: getComputedStyle(box).maskImage || getComputedStyle(box).webkitMaskImage || '', miku: r('miku'), teto: r('teto'), vw: innerWidth };
+  });
+  check(phone.pals === 2, `на телефоне Мику и Тето снова есть (${phone.pals})`);
+  check(phone.navTop !== null && phone.z < phone.navZ && phone.z >= phone.navZ - 1, `слой под нижней панелью вкладок: ${phone.z} < ${phone.navZ}`);
+  check(Math.abs(phone.miku.b - phone.miku.h * 0.05 - phone.navTop - 4) < 3 && Math.abs(phone.teto.b - phone.teto.h * 0.05 - phone.navTop - 4) < 3 && phone.mask.includes('gradient'), `выглядывают из-за панели, низ растворяется за её краем (панель ${phone.navTop}, Мику ${JSON.stringify(phone.miku)})`);
+  check(phone.miku.r > phone.vw && phone.teto.l < 0 && phone.miku.l > phone.teto.r, `рука за краем экрана, друг на друга не налезают (${JSON.stringify([phone.teto, phone.miku])})`);
+  check(!ph.errors.length, 'телефон: ошибок нет' + (ph.errors.length ? ': ' + ph.errors.join(' | ') : ''));
+  await ph.screenshot({ path: path.join(__dirname, 'out', 'pals-phone.png') });
   await b.close();
   console.log(fails.length ? `\nНе прошло: ${fails.length}` : '\nВсё прошло');
   process.exit(fails.length ? 1 : 0);
