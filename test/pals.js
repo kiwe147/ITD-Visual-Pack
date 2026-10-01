@@ -80,7 +80,18 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(tt && tt.l < 0 && tt.r < 700 && tt.b > 900 && tt.flip, 'Тето слева, отзеркалена: рука за левым краем, низ утоплен');
   check(mk && Math.abs(mk.h - 405) < 6, `высота по умолчанию — 45% экрана (${mk && mk.h} из 900)`);
   check(s.every(x => x.pe === 'none'), 'сквозь них можно кликать');
-  await p.screenshot({ path: path.join(__dirname, 'out', 'pals.png') });
+  await p.screenshot({ path: path.join(__dirname, 'out', 'pals-screen.png') });
+  const edge = await p.evaluate(() => ({ cw: document.documentElement.clientWidth, iw: innerWidth }));
+  check(edge.cw === edge.iw, `полосы прокрутки справа нет — Мику прижата к самому краю экрана (${edge.cw} из ${edge.iw})`);
+  const shot = await p.screenshot({ clip: { x: 1392, y: 620, width: 8, height: 200 } });
+  const col = await p.evaluate(async b64 => {
+    const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode();
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+    const d = g.getImageData(img.width - 1, 0, 1, img.height).data; let lit = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 120) lit++;
+    return lit / img.height;
+  }, shot.toString('base64'));
+  check(col > 0.6, `рука доходит до последнего столбца пикселей экрана (закрашено ${Math.round(col * 100)}% столбца у края)`);
   for (let i = 0; i < 2 && !(await p.$('.vp-stab[data-tab="pals"]')); i++) { await p.click('.vp-itdx-btn'); await p.waitForTimeout(300); }
   await p.$eval('.vp-stab[data-tab="pals"]', x => x.click());
   await p.waitForTimeout(200);
@@ -88,7 +99,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   await p.$eval('.vp-tab-body input[type="range"]', i => { i.value = 60; i.dispatchEvent(new Event('input', { bubbles: true })); });
   await p.waitForTimeout(300);
   s = await pals(p);
-  check(s.length === 1 && s[0].id === 'miku' && Math.abs(s[0].h - 540) < 6, `Тето выключил, размер 60% — осталась Мику высотой ${s[0] && s[0].h}`);
+  check(s.length === 1 && s[0].id === 'miku' && Math.abs(s[0].h - 540) < 6 && await p.evaluate(() => document.documentElement.classList.contains('vp-pals-r')), `Тето выключил, размер 60% — осталась Мику высотой ${s[0] && s[0].h}`);
   const n = asked.length;
   await p.close();
   p = await open();

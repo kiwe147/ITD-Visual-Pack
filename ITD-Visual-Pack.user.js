@@ -1994,8 +1994,10 @@
         .vp-pals { position: fixed; inset: 0; z-index: 2147482000; pointer-events: none; overflow: hidden; }
         .vp-pal { position: absolute; bottom: 0; width: auto; height: min(var(--vp-pal-h, 45vh), calc(48vw * var(--vp-pal-r, 1))); pointer-events: none;
             user-select: none; -webkit-user-drag: none; animation: vpPalIn .7s cubic-bezier(.2, .9, .3, 1.15) both; }
-        .vp-pal-miku { right: 0; transform: translate(4%, 3%); }
-        .vp-pal-teto { left: 0; transform: scaleX(-1) translate(4%, 3%); }
+        .vp-pal-miku { right: 0; transform: translate(6%, 5%); }
+        .vp-pal-teto { left: 0; transform: scaleX(-1) translate(6%, 5%); }
+        html.vp-pals-r { scrollbar-width: none !important; scrollbar-gutter: auto !important; }
+        html.vp-pals-r::-webkit-scrollbar { display: none !important; }
         @keyframes vpPalIn { from { translate: 0 60%; opacity: 0; } }
         @media (prefers-reduced-motion: reduce) { .vp-pal { animation: none; } }
         .vp-rcard-move { display: flex; gap: 2px; margin-left: auto; margin-right: 10px; }
@@ -2983,6 +2985,7 @@
             if (!palsBox) { palsBox = document.createElement('div'); palsBox.className = 'vp-pals'; }
             if (!palsBox.isConnected) document.body.appendChild(palsBox);
             palsBox.style.setProperty('--vp-pal-h', GM_getValue('palSize', 45) + 'vh');
+            document.documentElement.classList.toggle('vp-pals-r', palsOn && GM_getValue('palMiku', true));
             for (const [id, pal] of Object.entries(PALS)) {
                 const want = palsOn && GM_getValue(pal.key, true);
                 let img = palsBox.querySelector('.vp-pal-' + id);
