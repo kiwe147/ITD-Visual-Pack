@@ -80,6 +80,8 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(tt && tt.l < 0 && tt.r < 700 && tt.b > 900 && tt.flip, 'Тето слева, отзеркалена: рука за левым краем, низ утоплен');
   check(mk && Math.abs(mk.h - 405) < 6, `высота по умолчанию — 45% экрана (${mk && mk.h} из 900)`);
   check(s.every(x => x.pe === 'none'), 'сквозь них можно кликать');
+  const layer = await p.evaluate(() => { const box = document.querySelector('.vp-pals'), z = +getComputedStyle(box).zIndex; return { z, rail: +getComputedStyle(document.querySelector('.vp-rail') || document.body).zIndex || 0 }; });
+  check(layer.z > layer.rail && layer.z < 10001, `персонажи над страницей и правой панелью, но под меню настроек и окнами сайта (слой ${layer.z})`);
   await p.screenshot({ path: path.join(__dirname, 'out', 'pals-screen.png') });
   const sync = await p.evaluate(async () => {
     const box = document.querySelector('.vp-pals'), batches = [];
@@ -117,6 +119,19 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   await p.waitForTimeout(300);
   s = await pals(p);
   check(s.length === 1 && s[0].id === 'miku' && Math.abs(s[0].h - 540) < 6 && await p.evaluate(() => document.documentElement.classList.contains('vp-pals-r')), `Тето выключил, размер 60% — осталась Мику высотой ${s[0] && s[0].h}`);
+  const fx = {};
+  for (const name of ['Неон', 'Под тему', 'Как есть']) {
+    if (!(await p.$('.vp-stab[data-tab="pals"]'))) { await p.click('.vp-itdx-btn'); await p.waitForTimeout(300); await p.$eval('.vp-stab[data-tab="pals"]', x => x.click()); await p.waitForTimeout(200); }
+    await p.$$eval('.vp-tab-body .nick-style-option', (rs, n) => rs.find(r => r.textContent.trim() === n).click(), name);
+    await p.waitForTimeout(200);
+    fx[name] = await p.evaluate(() => ({ f: getComputedStyle(document.querySelector('.vp-pal-miku')).filter, on: [...document.querySelectorAll('.vp-tab-body .nick-style-option.vp-active')].map(r => r.textContent.trim()).join() }));
+    if (name === 'Неон') await p.screenshot({ path: path.join(__dirname, 'out', 'pals-neon.png'), clip: { x: 900, y: 400, width: 500, height: 500 } });
+    if (name === 'Неон') { const m = await p.$('.settings-dropdown'); if (m) await m.screenshot({ path: path.join(__dirname, 'out', 'pals-tab.png') }); }
+  }
+  console.log('—    вид: ' + JSON.stringify(fx));
+  check(/drop-shadow/.test(fx['Неон'].f) && /rgba\(120, 255, 245/.test(fx['Неон'].f) && fx['Неон'].on === 'Неон', 'вид «Неон»: светящийся контур в её цвете, отмечен в настройках');
+  check(/brightness\(0\.82\)/.test(fx['Под тему'].f) && fx['Под тему'].on === 'Под тему', 'вид «Под тему»: приглушена и с тенью');
+  check(fx['Как есть'].f === 'none' && store.palLook === 'plain', 'вид «Как есть»: без эффектов, выбор сохранён');
   const n = asked.length;
   await p.close();
   p = await open();

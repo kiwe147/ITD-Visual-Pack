@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.0.3
+// @version      3.5.0.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1991,11 +1991,14 @@
             max-height: calc(100dvh - 16px); display: flex !important; flex-direction: column; overflow: hidden !important; }
         .vp-settings-tabs .vp-stabs { flex: 0 0 auto; }
         .vp-settings-tabs .settings-option.vp-dim { opacity: .4; pointer-events: none; }
-        .vp-pals { position: fixed; inset: 0; z-index: 2147482000; pointer-events: none; overflow: hidden; }
+        .vp-pals { position: fixed; inset: 0; z-index: 9000; pointer-events: none; overflow: hidden; }
         .vp-pal { position: absolute; bottom: 0; width: auto; height: min(var(--vp-pal-h, 45vh), calc(48vw * var(--vp-pal-r, 1))); pointer-events: none;
             user-select: none; -webkit-user-drag: none; animation: vpPalIn .7s cubic-bezier(.2, .9, .3, 1.15) both; }
         .vp-pal-miku { right: 0; transform: translate(6%, 5%); }
         .vp-pal-teto { left: 0; transform: scaleX(-1) translate(6%, 5%); }
+        .vp-pals[data-look="neon"] .vp-pal-miku { filter: drop-shadow(0 0 1.5px rgba(120, 255, 245, .9)) drop-shadow(0 0 10px rgba(57, 197, 187, .55)); }
+        .vp-pals[data-look="neon"] .vp-pal-teto { filter: drop-shadow(0 0 1.5px rgba(255, 150, 170, .9)) drop-shadow(0 0 10px rgba(255, 77, 109, .55)); }
+        .vp-pals[data-look="dim"] .vp-pal { filter: brightness(.82) saturate(.85) contrast(1.05) drop-shadow(0 10px 28px rgba(0, 0, 0, .65)); }
         html.vp-pals-r { scrollbar-width: none !important; scrollbar-gutter: auto !important; }
         html.vp-pals-r::-webkit-scrollbar { display: none !important; }
         @keyframes vpPalIn { from { translate: 0 60%; opacity: 0; } }
@@ -2956,6 +2959,11 @@
         let palsOn = GM_getValue('palsEnabled', false);
         const PALS = { miku: { key: 'palMiku', file: 'miku.webp', r: 540 / 533 }, teto: { key: 'palTeto', file: 'teto.webp', r: 540 / 509 } };
         const PAL_VER = 4;
+        const PAL_LOOKS = [
+            ['plain', 'Как есть', '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="12" cy="11" r="3"/><path d="M7 20c.8-2.6 2.8-4 5-4s4.2 1.4 5 4"/>'],
+            ['neon', 'Неон', '<circle cx="12" cy="10" r="3.5"/><path d="M5.5 20c1-3.3 3.5-5 6.5-5s5.5 1.7 6.5 5"/><path d="M12 2.5v2M4.6 5.6l1.4 1.4M19.4 5.6 18 7"/>'],
+            ['dim', 'Под тему', '<circle cx="12" cy="10" r="3.5"/><path d="M5.5 20c1-3.3 3.5-5 6.5-5s5.5 1.7 6.5 5"/><path d="M18 3.5a3 3 0 1 0 2.5 4.5 3.5 3.5 0 0 1-2.5-4.5z"/>']
+        ];
         let palsBox = null;
         function palStore(key, blob) {
             return bgDb().then(db => new Promise((ok, no) => {
@@ -2985,6 +2993,7 @@
             if (!palsBox) { palsBox = document.createElement('div'); palsBox.className = 'vp-pals'; }
             if (!palsBox.isConnected) document.body.appendChild(palsBox);
             palsBox.style.setProperty('--vp-pal-h', GM_getValue('palSize', 45) + 'vh');
+            palsBox.dataset.look = GM_getValue('palLook', 'plain');
             document.documentElement.classList.toggle('vp-pals-r', palsOn && GM_getValue('palMiku', true));
             const imgs = [];
             let fresh = false;
@@ -3186,6 +3195,20 @@
                     if (!neonEnabled && label.startsWith('Подсветка ')) row.classList.add('vp-dim');
                     if (!palsOn && (label === 'Мику справа' || label === 'Тето слева')) row.classList.add('vp-dim');
                     body.appendChild(row);
+                }
+                if (id === 'pals') {
+                    body.appendChild(secTitle('Вид'));
+                    const grid = document.createElement('div');
+                    grid.className = 'vp-pick-grid' + (palsOn ? '' : ' vp-dim');
+                    const look = GM_getValue('palLook', 'plain');
+                    PAL_LOOKS.forEach(([key, name, glyph]) => {
+                        const icon = document.createElement('div');
+                        icon.className = 'vp-menu-icon';
+                        icon.innerHTML = svgIcon(glyph);
+                        grid.appendChild(pickRow(icon, name, key === look, () => { GM_setValue('palLook', key); palsApply(); }, redraw));
+                    });
+                    grid.style.gridTemplateRows = `repeat(${Math.ceil(grid.children.length / 2)}, auto)`;
+                    body.appendChild(grid);
                 }
                 if (id === 'nick') {
                     body.appendChild(secTitle('Стиль ника'));
@@ -4164,6 +4187,8 @@
         }
 
         const CHANGELOG = [
+            ['3.5.0.4', '1 октября 2026', [
+                'Мику и Тето: во вкладке «Мику» можно выбрать вид — как есть, неоновый контур или приглушённые под тёмный сайт']],
             ['3.5.0.3', '1 октября 2026', [
                 'Мику и Тето прыгают вместе и в такт — 120 ударов в минуту']],
             ['3.5.0.2', '1 октября 2026', [
