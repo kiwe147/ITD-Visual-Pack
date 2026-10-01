@@ -182,6 +182,15 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(Math.abs(phone.miku.b - (phone.miku.h + 48) * 0.05 - phone.navTop - 4) < 3 && Math.abs(phone.teto.b - (phone.teto.h + 48) * 0.05 - phone.navTop - 4) < 3 && phone.mask.includes('gradient'), `выглядывают из-за панели, низ растворяется за её краем (панель ${phone.navTop}, Мику ${JSON.stringify(phone.miku)})`);
   check(phone.miku.r > phone.vw && phone.teto.l < 0 && phone.miku.l > phone.teto.r, `рука за краем экрана, друг на друга не налезают (${JSON.stringify([phone.teto, phone.miku])})`);
   check(!ph.errors.length, 'телефон: ошибок нет' + (ph.errors.length ? ': ' + ph.errors.join(' | ') : ''));
+  const lifted = await ph.evaluate(async () => {
+    const pill = document.querySelector('nav.vp-nav'); let w = pill; while (w && getComputedStyle(w).position !== 'fixed') w = w.parentElement;
+    w.style.setProperty('padding-bottom', (parseFloat(getComputedStyle(w).paddingBottom) + 70) + 'px', 'important');
+    dispatchEvent(new Event('resize'));
+    await new Promise(r => setTimeout(r, 300));
+    const t = Math.round(pill.getBoundingClientRect().top), m = document.querySelector('.vp-pal-miku'), q = m.getBoundingClientRect(), d = parseFloat(getComputedStyle(m).paddingLeft) || 0;
+    return { navTop: t, b: Math.round(q.bottom - d), h: Math.round(q.height - 2 * d), z: +getComputedStyle(document.querySelector('.vp-pals')).zIndex };
+  });
+  check(Math.abs(lifted.b - (lifted.h + 48) * 0.05 - lifted.navTop - 4) < 3 && lifted.z < 800, `панель поднята над полосой жестов телефона — персонажи всё равно над ней и под ней слоем (${JSON.stringify(lifted)})`);
   await ph.screenshot({ path: path.join(__dirname, 'out', 'pals-phone.png') });
   await b.close();
   console.log(fails.length ? `\nНе прошло: ${fails.length}` : '\nВсё прошло');
