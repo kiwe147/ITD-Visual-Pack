@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.1.3
+// @version      3.5.1.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -923,7 +923,9 @@
         && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
         const preview = GM_getValue('introPreview', '');
         const pickIntro = () => { let r = Math.random(); for (const [v, p] of INTRO.RARE) { if (r < p) return v; r -= p; } return false; };
-        try { playIntro(introMode(), preview ? (preview === 'rare' || preview) : pickIntro()); } catch (e) { console.warn('[ITD VP] заставка', e); }
+        let again = false;
+        try { again = Date.now() - (+sessionStorage.getItem('vp-intro-at') || 0) < 60000; sessionStorage.setItem('vp-intro-at', Date.now()); } catch (e) { }
+        if (!again || preview) try { playIntro(introMode(), preview ? (preview === 'rare' || preview) : pickIntro()); } catch (e) { console.warn('[ITD VP] заставка', e); }
     }
 
     const start = () => {
@@ -4220,7 +4222,7 @@
         }
 
         const CHANGELOG = [
-            ['3.5.1 – 3.5.1.3', '1 октября 2026', [
+            ['3.5.1 – 3.5.1.4', '1 октября 2026', [
                 'Мику и Тето теперь и на телефоне: выглядывают из-за нижней панели вкладок и ничего не закрывают',
                 'Кто не заходил с модом больше трёх месяцев, теряет галочку и место в клубе ИТД X, его стиль больше не показывается. Зайдёт снова — всё вернётся само']],
             ['3.5.0 – 3.5.0.8', '1 октября 2026', [
