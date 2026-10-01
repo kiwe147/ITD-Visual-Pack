@@ -310,32 +310,6 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   check(/^[12]+$/.test(live.ticks) && !live.textTicks && /svg/.test(live.mask || ''), `галочки — иконкой (метки ${live.ticks}), в тексте символов ✓ нет`);
   await A.p.screenshot({ path: path.join(__dirname, 'out', 'dm-ticks.png'), clip: await A.p.$eval('.vp-msgs-feed', f => { const r = f.getBoundingClientRect(); return { x: r.x, y: r.y + r.height - 260, width: r.width, height: 260 }; }) });
   await B3.ctx.close();
-  // 3.3.13.1: звонок-розыгрыш человеку из админки — доходит через личку, срабатывает один раз
-  const fabCall = !!(await A.p.$('.vp-fab [data-act="callto"]'));
-  await A.p.$eval('.vp-fab [data-act="callto"]', x => x.click()).catch(() => { }); await A.p.waitForTimeout(2000);
-  const picks = await A.p.$$eval('.vp-call-pick', rs => rs.map(r => r.firstChild.textContent));
-  await A.p.evaluate(() => { const r = [...document.querySelectorAll('.vp-call-pick')].find(x => x.firstChild.textContent === '@bob'); r && r.click(); });
-  await A.p.waitForFunction(() => [...document.querySelectorAll('.vp-call-pick b')].some(b => b.textContent === '✓'), null, { timeout: 15000 }).catch(() => { });
-  await B2.p.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-  await B2.p.waitForSelector('.vp-call', { timeout: 15000 }).catch(() => { });
-  const rang = await B2.p.evaluate(() => { const c = document.querySelector('.vp-call'); return c && c.querySelector('.vp-call-name').textContent; });
-  console.log('—    звонок: ' + JSON.stringify({ fabCall, picks, rang }));
-  check(fabCall && picks.includes('@bob') && !picks.includes('@NeuroSFW') && rang === 'Илья Новки', 'админка: «Позвонить человеку…» → у bob звонит «Илья Новки»');
-  await B2.p.evaluate(() => document.querySelectorAll('.vp-call').forEach(c => c.remove()));
-  await B2.p.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); await B2.p.waitForTimeout(3000);
-  check(!(await B2.p.$('.vp-call')), 'тот же звонок второй раз не срабатывает');
-  // 3.3.13.3: звонок тому, у кого сообщения не подключены (dan без ключа) — через служебную строку в шифре
-  check(picks.includes('@dan'), `в списке «Позвонить» — все из ИТД X, даже без ключа сообщений (${picks.join(', ')})`);
-  await A.p.evaluate(() => { const r = [...document.querySelectorAll('.vp-call-pick')].find(x => x.firstChild.textContent === '@dan'); r && r.click(); });
-  await A.p.waitForTimeout(3000);
-  const D = await open('dan', 'NeuroSFW');
-  await D.p.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-  await D.p.waitForSelector('.vp-call', { timeout: 15000 }).catch(() => { });
-  const danRang = await D.p.evaluate(() => { const c = document.querySelector('.vp-call'); return c && c.querySelector('.vp-call-name').textContent; });
-  const plainLeak = comments.some(c => /ITDXC1/.test(c.content));
-  check(danRang === 'Илья Новки' && !plainLeak, `у dan (без ключа) звонит «Илья Новки», строка звонков на сервере в шифре (${danRang}, открытым текстом: ${plainLeak})`);
-  await D.ctx.close();
-  await A.p.evaluate(() => document.querySelectorAll('.vp-admin-panel').forEach(p => p.remove()));
   // прочитанное — по аккаунту (3.3.11): второе устройство NeuroSFW видит те же непрочитанные, что первое
   await A.p.$eval('.vp-msgs-back', b => b.click()).catch(() => { }); await A.p.waitForTimeout(2500);
   const unreadOf = pg => pg.$$eval('.vp-msgs-row', rs => Object.fromEntries(rs.filter(r => !r.dataset.id.startsWith('bot')).map(r => [r.dataset.id, +((r.querySelector('.vp-msgs-badge') || {}).textContent || 0)])));

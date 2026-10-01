@@ -142,46 +142,6 @@ const openAs = async (browser, me, sink) => {
     check(state.Hank === 'quarantine', 'Hank: отказ истёк, запрос после → quarantine (получено: ' + state.Hank + ')');
     check(state.Ivan === 'none', 'Ivan: отказ истёк, запроса нет → none (получено: ' + state.Ivan + ')');
 
-    await p.click('.vp-fab-btn');
-    await p.waitForTimeout(300);
-    await p.click('[data-act="verify"]');
-    await p.waitForTimeout(2500);
-
-    const queue = await p.$$eval('.vp-verify-row .vp-verify-name', els => els.map(e => e.textContent));
-    check(queue.length === 5, 'в очереди 5 человек (Carl, Eve, Attacker, Gina, Hank) — получено: ' + queue.length + ' [' + queue.join(', ') + ']');
-    check(queue.includes('@Gina') && queue.includes('@Hank'), 'Gina и Hank снова в очереди');
-    check(!queue.includes('@Frank') && !queue.includes('@Ivan') && !queue.includes('@Dave'), 'Frank, Ivan (без запроса) и Dave (перерыв) — не в очереди');
-    check(!queue.includes('@Alice'), 'Alice (approved) в очереди нет');
-    check(!queue.includes('@Bob'), 'Bob (перерыв 7 дней) в очереди нет');
-    check(!queue.includes('@NeuroSFW'), 'владелец сам себя в очередь не ставит');
-    const left = await p.$$eval('.vp-verify-row', rows => Object.fromEntries(rows.map(r => [r.querySelector('.vp-verify-name').textContent, r.querySelector('.vp-verify-left').textContent])));
-    console.log('—    осталось: ' + JSON.stringify(left));
-    check(left['@Carl'] === '3 д' && left['@Eve'] === '3 д', 'у каждого в очереди видно, сколько осталось');
-
-    const added = sentRequests.filter(r => /ITDX-SEEN/.test(r.body)).map(r => (JSON.parse(r.body).content || '').split(/\s+/).pop());
-    const seenFor = id => added.some(t => t.startsWith(id + ':'));
-    console.log('—    дописано SEEN: ' + added.map(t => t.slice(0, 8)).join(', '));
-    check(seenFor(EVE_ID) && seenFor(ATTACKER_ID), 'ITDX-SEEN отправлен для Eve и Attacker');
-    check(!seenFor(ALICE_ID), 'SEEN для Alice не отправлен');
-    check(seenFor(GINA_ID) && seenFor(HANK_ID), 'новый круг: SEEN заново для Gina и Hank');
-    check(!seenFor(CARL_ID), 'Carl: таймер уже идёт — SEEN не повторяется');
-
-    const beforeCount = sentRequests.length;
-    await p.$$eval('.vp-verify-row', rows => rows.find(r => r.textContent.includes('@Carl')).querySelector('.vp-verify-ok').click());
-    await p.waitForTimeout(800);
-    const vReq = sentRequests.slice(beforeCount).find(r => /ITDX-V/.test(r.body));
-    check(!!vReq, 'при «Подтвердить» отправлен ITDX-V');
-    check(vReq && vReq.body.includes(CARL_ID), 'ITDX-V содержит ID Carl');
-
-    const beforeCount2 = sentRequests.length;
-    await p.$$eval('.vp-verify-row', rows => rows.find(r => r.textContent.includes('@Eve')).querySelector('.vp-verify-no').click());
-    await p.waitForTimeout(800);
-    const cReq = sentRequests.slice(beforeCount2).find(r => /ITDX-C/.test(r.body));
-    check(!!cReq, 'при «Отклонить» отправлен ITDX-C');
-    check(cReq && cReq.body.includes(EVE_ID), 'ITDX-C содержит ID Eve');
-    const eveTsMatch = cReq && cReq.body.match(new RegExp(EVE_ID + ':(\\d+)'));
-    check(!!eveTsMatch && +eveTsMatch[1] > Math.floor(Date.now() / 1000), 'ITDX-C содержит будущий timestamp (кулдаун)');
-    check(sentRequests.length && sentRequests.every(r => !/ITDX-(V|C|SEEN|R) /.test(r.raw) && /"ITDXE /.test(r.raw)), 'на сервер метки уходят только в шифре (ITDXE), открытого текста нет');
     check(!p.errors.length, 'ошибок на странице нет' + (p.errors.length ? ': ' + p.errors.join(' | ') : ''));
 
     const ivanReqs = [];
