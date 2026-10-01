@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.0
+// @version      3.5.0.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2955,7 +2955,7 @@
         }
         let palsOn = GM_getValue('palsEnabled', false);
         const PALS = { miku: { key: 'palMiku', file: 'miku.webp', r: 540 / 533 }, teto: { key: 'palTeto', file: 'teto.webp', r: 540 / 509 } };
-        const PAL_VER = 1;
+        const PAL_VER = 2;
         let palsBox = null;
         function palStore(key, blob) {
             return bgDb().then(db => new Promise((ok, no) => {
@@ -4153,6 +4153,8 @@
         }
 
         const CHANGELOG = [
+            ['3.5.0.1', '1 октября 2026', [
+                'Мику и Тето двигаются в своём темпе, а не в два раза быстрее']],
             ['3.5.0', '1 октября 2026', [
                 'Мику и Тето: в настройках новая вкладка «Мику» — Мику держится за экран справа, Тето слева. Можно оставить одну и поменять размер',
                 'Оптимизация и исправление багов']],
