@@ -71,7 +71,7 @@ const comments = [
     { id: 'c11', content: genCode(OLGA_ID) + '1', author: user(OLGA_ID, 'Olga'), createdAt: isoAgo(200) },
     { id: 'l11', content: sealText('ITDXL1 n=white b=- g=11 t=' + (dayNow - 100), src), author: user(OLGA_ID, 'Olga'), createdAt: isoAgo(150), editedAt: isoAgo(100) },
     { id: 'c12', content: genCode(PETE_ID) + '1', author: user(PETE_ID, 'Pete'), createdAt: isoAgo(200) },
-    { id: 'l12', content: sealText('ITDXL1 n=white b=- g=11 t=' + (dayNow - 10), src), author: user(PETE_ID, 'Pete'), createdAt: isoAgo(150), editedAt: isoAgo(10) },
+    { id: 'l12', content: sealText('ITDXL1 n=white b=- g=11 t=' + (dayNow + 110), src), author: user(PETE_ID, 'Pete'), createdAt: isoAgo(150), editedAt: isoAgo(10) },
     { id: 'c13', content: genCode(QUINN_ID) + '1', author: user(QUINN_ID, 'Quinn'), createdAt: isoAgo(130) },
     { id: 'l13', content: 'ITDXL1 n=white b=- g=11', author: user(QUINN_ID, 'Quinn'), createdAt: isoAgo(120), editedAt: isoAgo(95) },
     { id: 'm1', content: sealText('ITDX-V ' + [ALICE_ID, OLGA_ID, PETE_ID, QUINN_ID].join(' '), src), author: { id: OWNER_ID, username: 'NeuroSFW' } },
@@ -87,7 +87,7 @@ const comments = [
     { id: 'f2', content: 'ITDX-R ' + nowSec, author: { id: ATTACKER_ID, username: 'Attacker' } },
 ];
 
-const openAs = async (browser, me, sink) => {
+const openAs = async (browser, me, sink, shift = 0) => {
     const p = await browser.newPage({ viewport: { width: 1280, height: 860 } });
     p.errors = [];
     p.on('pageerror', e => p.errors.push(e.message));
@@ -110,6 +110,7 @@ const openAs = async (browser, me, sink) => {
         if (u === URL0) return r.fulfill({ contentType: 'text/html; charset=utf-8', body: snap });
         return r.fulfill({ status: 404, body: '' });
     });
+    if (shift) await p.addInitScript(k => { const n = Date.now; Date.now = () => n() + k; }, shift * 864e5);
     await p.addInitScript(m => {
         const s = { introEnabled: false, introMobile: 'off' };
         window.GM_getValue = (k, d) => k in s ? s[k] : d;
@@ -151,11 +152,14 @@ const openAs = async (browser, me, sink) => {
     check(state.Gina === 'quarantine', 'Gina: перерыв прошёл, запрос после него → quarantine (получено: ' + state.Gina + ')');
     check(state.Hank === 'quarantine', 'Hank: отказ истёк, запрос после → quarantine (получено: ' + state.Hank + ')');
     check(state.Ivan === 'none', 'Ivan: отказ истёк, запроса нет → none (получено: ' + state.Ivan + ')');
-    check(state.Olga === 'gone', 'Olga: с галочкой, но не заходила 100 дней → gone (получено: ' + state.Olga + ')');
-    check(state.Pete === 'approved', 'Pete: с галочкой, заходил 10 дней назад → approved (получено: ' + state.Pete + ')');
-    check(state.Quinn === 'gone', 'Quinn: старый мод без отметки, запись не менялась 95 дней → gone (получено: ' + state.Quinn + ')');
-    const olga = await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('itd_verified_users') || '{}'); return { look: !!(d.Olga && d.Olga.look), peteLook: !!(d.Pete && d.Pete.look) }; });
-    check(!olga.look && olga.peteLook, 'стиль ушедшей не показывается, у Pete — есть');
+    check(state.Olga === 'approved' && state.Pete === 'approved' && state.Quinn === 'approved', 'сейчас (до 30 декабря) правило 3 месяцев никого не снимает: ' + [state.Olga, state.Pete, state.Quinn]);
+    const fut = await openAs(browser, user(OWNER_ID, 'NeuroSFW'), [], 120);
+    const fs2 = await fut.evaluate(() => { const d = JSON.parse(localStorage.getItem('itd_verified_users') || '{}'); return { o: d.Olga && d.Olga.state, p: d.Pete && d.Pete.state, q: d.Quinn && d.Quinn.state, a: d.Alice && d.Alice.state, ol: !!(d.Olga && d.Olga.look), pl: !!(d.Pete && d.Pete.look) }; });
+    check(fs2.o === 'gone', '+120 дней: Olga не заходила 220 дней → gone (' + fs2.o + ')');
+    check(fs2.p === 'approved', '+120 дней: Pete отметился недавно → approved (' + fs2.p + ')');
+    check(fs2.q === 'gone' && fs2.a === 'gone', '+120 дней: без отметки после 30 декабря → gone (' + fs2.q + ', ' + fs2.a + ')');
+    check(!fs2.ol && fs2.pl, 'стиль ушедшей не показывается, у Pete — есть');
+    await fut.close();
 
     check(!p.errors.length, 'ошибок на странице нет' + (p.errors.length ? ': ' + p.errors.join(' | ') : ''));
 
