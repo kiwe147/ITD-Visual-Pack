@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.0.8
+// @version      3.5.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1447,6 +1447,7 @@
 
         const QUARANTINE_MS = 3 * 24 * 60 * 60 * 1000;
         const COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+        const GONE_MS = 90 * 24 * 60 * 60 * 1000;
 
         let approvedIds = new Set();
         function isApprovedId(id) {
@@ -1999,6 +2000,9 @@
         .vp-pals[data-look="neon"] .vp-pal-miku { filter: drop-shadow(0 0 1.5px rgba(120, 255, 245, .9)) drop-shadow(0 0 10px rgba(57, 197, 187, .55)); }
         .vp-pals[data-look="neon"] .vp-pal-teto { filter: drop-shadow(0 0 1.5px rgba(255, 150, 170, .9)) drop-shadow(0 0 10px rgba(255, 77, 109, .55)); }
         .vp-pals[data-look="dim"] .vp-pal { filter: brightness(.82) saturate(.85) contrast(1.05) drop-shadow(0 10px 28px rgba(0, 0, 0, .65)); }
+        .vp-pals-phone { -webkit-mask-image: linear-gradient(to top, transparent calc(var(--vp-pal-nav, 0px) - 6px), #000 calc(var(--vp-pal-nav, 0px) + 20px));
+            mask-image: linear-gradient(to top, transparent calc(var(--vp-pal-nav, 0px) - 6px), #000 calc(var(--vp-pal-nav, 0px) + 20px)); }
+        .vp-pals-phone .vp-pal { bottom: calc(var(--vp-pal-nav, 0px) - 4px); }
         html.vp-pals-r { scrollbar-width: none !important; scrollbar-gutter: auto !important; }
         html.vp-pals-r::-webkit-scrollbar { display: none !important; }
         @keyframes vpPalIn { from { translate: 0 60%; opacity: 0; } }
@@ -2661,6 +2665,7 @@
             if (look.b === 'custom') look.i = o.i;
             if (BANNER_VIDEO_RE.test(o.v || '')) look.v = o.v;
             if (VER_RE.test(o.ver || '')) look.ver = o.ver;
+            if (/^\d{5,6}$/.test(o.t || '')) look.t = +o.t;
             return look;
         }
         function lookImgUrl(ref) {
@@ -2708,18 +2713,19 @@
             lookBusy = true;
             try {
                 const b = backgroundEnabled ? backgroundStyle : '-';
+                const today = Math.floor(srvNow() / 864e5), was = GM_getValue(acctKey('vp_look_day'), 0), day = today - was < 7 && today >= was ? was : today;
                 let img = '';
                 if (b === 'custom') img = await customBgCdn().catch(e => { logErr('свой фон на сервер', e); return ''; });
-                const text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (bannerVideoOwn() ? ' v=' + bannerVideoOwn() : '') + await lookVer().then(x => x ? ' vx=' + x : '');
+                const text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (bannerVideoOwn() ? ' v=' + bannerVideoOwn() : '') + await lookVer().then(x => x ? ' vx=' + x : '') + ' t=' + day;
                 if (text === lookSent) return;
                 const all = await loadVerificationComments();
                 const mine = all.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
-                if (mine && openText(mine.content) === text && String(mine.content).startsWith('ITDXE ')) { lookSent = text; return; }
+                if (mine && openText(mine.content) === text && String(mine.content).startsWith('ITDXE ')) { lookSent = text; GM_setValue(acctKey('vp_look_day'), day); return; }
                 const content = sealText(text);
                 const res = mine
                     ? await editComment(mine.id, content)
                     : await sendComment(VERIFICATION_POST_ID, content);
-                if (res.ok) lookSent = text;
+                if (res.ok) { lookSent = text; GM_setValue(acctKey('vp_look_day'), day); }
             } catch (e) { logErr('стиль', e); } finally { lookBusy = false; }
         }
         let accentProbe = null;
@@ -2956,7 +2962,7 @@
             }
             colorizePosts();
         }
-        let palsOn = !IS_PHONE && GM_getValue('palsEnabled', false);
+        let palsOn = GM_getValue('palsEnabled', false);
         const PALS = { miku: { key: 'palMiku', file: 'miku.webp', r: 800 / 790 }, teto: { key: 'palTeto', file: 'teto.webp', r: 776 / 734 } };
         const PAL_VER = 7;
         const PAL_LOOKS = [
@@ -2990,9 +2996,10 @@
             return null;
         }
         function palsApply() {
-            if (!palsBox) { palsBox = document.createElement('div'); palsBox.className = 'vp-pals'; }
+            if (!palsBox) { palsBox = document.createElement('div'); palsBox.className = 'vp-pals' + (IS_PHONE ? ' vp-pals-phone' : ''); }
             if (!palsBox.isConnected) document.body.appendChild(palsBox);
-            palsBox.style.setProperty('--vp-pal-h', GM_getValue('palSize', 45) + 'vh');
+            palsBox.style.setProperty('--vp-pal-h', IS_PHONE ? GM_getValue('palSize', 45) * 0.8 + 'vw' : GM_getValue('palSize', 45) + 'vh');
+            palsNav();
             palsBox.dataset.look = GM_getValue('palLook', 'plain');
             document.documentElement.classList.toggle('vp-pals-r', palsOn && GM_getValue('palMiku', true));
             const imgs = [];
@@ -3022,6 +3029,31 @@
                 });
             }).catch(e => logErr('персонаж', e));
         }
+        let palNavEl = null;
+        function palsNav() {
+            if (!IS_PHONE || !palsBox || !palsOn) return;
+            if (!palNavEl || !palNavEl.isConnected) {
+                palNavEl = null;
+                for (const d of [3, 24, 48]) {
+                    for (let e of document.elementsFromPoint(innerWidth / 2, innerHeight - d)) {
+                        for (; e && e !== document.body; e = e.parentElement) {
+                            if (getComputedStyle(e).position !== 'fixed') continue;
+                            const r = e.getBoundingClientRect();
+                            if (r.width >= innerWidth * 0.8 && r.height < 200 && r.bottom >= innerHeight - 4) palNavEl = e;
+                            break;
+                        }
+                        if (palNavEl) break;
+                    }
+                    if (palNavEl) break;
+                }
+            }
+            const top = palNavEl ? palNavEl.getBoundingClientRect().top : innerHeight, z = palNavEl ? parseInt(getComputedStyle(palNavEl).zIndex) : NaN;
+            const nav = Math.max(0, Math.round(innerHeight - top)) + 'px', zi = z > 1 ? String(Math.min(z - 1, 9000)) : '';
+            if (palsBox.style.getPropertyValue('--vp-pal-nav') !== nav) palsBox.style.setProperty('--vp-pal-nav', nav);
+            if (palsBox.style.zIndex !== zi) palsBox.style.zIndex = zi;
+        }
+        onDom(palsNav);
+        addEventListener('resize', palsNav);
         function palSizeRow() {
             const row = document.createElement('div');
             row.className = 'settings-option vp-vol-row';
@@ -3064,7 +3096,7 @@
             { id: 'bg', name: 'Фон', items: ['Фон'] },
             { id: 'look', name: 'Вид', items: ['Стекло', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Карточки панели', 'Версия для ПК на планшете'] },
             { id: 'likes', name: 'Лайки', items: ['Автолайки'] },
-            ...(IS_PHONE ? [] : [{ id: 'pals', name: 'Мику', items: ['Мику и Тето', 'Мику справа', 'Тето слева', 'Размер персонажей'] }]),
+            { id: 'pals', name: 'Мику', items: ['Мику и Тето', 'Мику справа', 'Тето слева', 'Размер персонажей'] },
             { id: 'misc', name: 'Ещё', items: ['Анти цензура', 'Звуки интерфейса', 'Громкость', 'Заставка при входе'] },
             { id: 'icon', name: 'Иконка' }
         ];
@@ -4187,6 +4219,9 @@
         }
 
         const CHANGELOG = [
+            ['3.5.1', '1 октября 2026', [
+                'Мику и Тето теперь и на телефоне: выглядывают из-за нижней панели вкладок и ничего не закрывают',
+                'Кто не заходил с модом больше трёх месяцев, теряет галочку и место в клубе ИТД X, его стиль больше не показывается. Зайдёт снова — всё вернётся само']],
             ['3.5.0 – 3.5.0.8', '1 октября 2026', [
                 'Мику и Тето: новая вкладка «Мику» в настройках — Мику держится за экран справа, Тето слева. Прыгают вместе и в такт, можно оставить одну, поменять размер и вид: как есть, неоновый контур или приглушённые под тёмный сайт. Пока только на компьютере. Без потери качества, а весят всего по 2–3 МБ',
                 'Оптимизация и исправление багов']],
@@ -4645,25 +4680,28 @@
                 const comments = await loadVerificationComments(fresh);
                 const lists = parseAllOwnerLists(comments);
                 const now = Date.now();
-                const verifiedUsers = {}, looks = new Map();
+                const verifiedUsers = {}, looks = new Map(), lookAt = new Map(), myId = meData && meData.id;
+                const when = c => Date.parse(c.editedAt || c.updatedAt || c.updated_at || c.createdAt || c.created_at || '') || 0;
                 for (const c of comments) {
                     const a = c.author;
                     if (!a || !a.id || looks.has(a.id)) continue;
                     const l = parseLook(c.content);
-                    if (l) looks.set(a.id, l);
+                    if (l) { looks.set(a.id, l); lookAt.set(a.id, l.t ? l.t * 864e5 : when(c)); }
                 }
                 for (const c of comments) {
                     const name = c.author?.username;
                     const parsed = parseCode(c.content);
                     if (!name || verifiedUsers[name] || !isAuthorCode(c.author, parsed)) continue;
                     const a = c.author, ava = a.avatar && (a.avatar.url || a.avatar) || a.avatarUrl || a.emoji;
+                    const seen = Math.max(lookAt.get(a.id) || 0, when(c));
+                    const gone = a.id !== OWNER_ID && a.id !== myId && seen > 0 && now - seen > GONE_MS;
                     verifiedUsers[name] = {
                         code: parsed.code, commentId: c.id, hasMod: true, flags: parsed.flags,
                         id: a.id || undefined,
                         displayName: a.displayName || a.display_name || undefined,
                         avatar: typeof ava === 'string' ? ava : undefined,
-                        state: a.id === OWNER_ID ? 'approved' : resolveVerifyState(a.id, lists, now),
-                        look: looks.get(a.id) || undefined
+                        state: a.id === OWNER_ID ? 'approved' : gone ? 'gone' : resolveVerifyState(a.id, lists, now),
+                        look: gone ? undefined : looks.get(a.id) || undefined
                     };
                 }
                 if (JSON.stringify(verifiedUsers) !== localStorage.getItem(VERIFICATION_STORAGE_KEY)) {
