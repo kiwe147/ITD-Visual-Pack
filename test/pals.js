@@ -142,7 +142,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(!p.errors.length, 'ошибок нет' + (p.errors.length ? ': ' + p.errors.join(' | ') : ''));
   const phSnap = process.argv[3] ? fs.readFileSync(process.argv[3], 'utf8') : snap;
   const phUrl = (phSnap.match(/"url": "([^"]+)"/) || [, ORIGIN + '/'])[1];
-  const phCtx = await b.newContext({ viewport: { width: 412, height: 892 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  const phCtx = await b.newContext({ viewport: { width: 412, height: 892 }, isMobile: true, hasTouch: !process.env.FINE, deviceScaleFactor: 2 });
   await phCtx.exposeFunction('__asset', u => { const m = u.match(/\/main\/assets\/(\w+\.webp)$/); return m ? ASSET(m[1]) : ''; });
   const ph = await phCtx.newPage();
   ph.errors = [];
