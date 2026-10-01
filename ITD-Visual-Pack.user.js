@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.1.2
+// @version      3.5.1.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1994,15 +1994,15 @@
         .vp-settings-tabs .vp-stabs { flex: 0 0 auto; }
         .vp-settings-tabs .settings-option.vp-dim { opacity: .4; pointer-events: none; }
         .vp-pals { position: fixed; inset: 0; z-index: 9000; pointer-events: none; overflow: hidden; }
-        .vp-pal { position: absolute; bottom: 0; width: auto; height: min(var(--vp-pal-h, 45vh), calc(48vw * var(--vp-pal-r, 1))); pointer-events: none;
+        .vp-pal { position: absolute; bottom: 0; box-sizing: content-box; padding: 24px; margin: -24px; width: auto; height: min(var(--vp-pal-h, 45vh), calc(48vw * var(--vp-pal-r, 1))); pointer-events: none;
             user-select: none; -webkit-user-drag: none; animation: vpPalIn .7s cubic-bezier(.2, .9, .3, 1.15) both; }
         .vp-pal-miku { right: 0; transform: translate(6%, 5%); }
         .vp-pal-teto { left: 0; transform: scaleX(-1) translate(6%, 5%); }
         .vp-pals[data-look="neon"] .vp-pal-miku { filter: drop-shadow(0 0 1.5px rgba(120, 255, 245, .9)) drop-shadow(0 0 10px rgba(57, 197, 187, .55)); }
         .vp-pals[data-look="neon"] .vp-pal-teto { filter: drop-shadow(0 0 1.5px rgba(255, 150, 170, .9)) drop-shadow(0 0 10px rgba(255, 77, 109, .55)); }
         .vp-pals[data-look="dim"] .vp-pal { filter: brightness(.82) saturate(.85) contrast(1.05) drop-shadow(0 10px 28px rgba(0, 0, 0, .65)); }
-        .vp-pals-phone { -webkit-mask-image: linear-gradient(to top, transparent calc(var(--vp-pal-nav, 0px) + 14px), #000 calc(var(--vp-pal-nav, 0px) + 40px));
-            mask-image: linear-gradient(to top, transparent calc(var(--vp-pal-nav, 0px) + 14px), #000 calc(var(--vp-pal-nav, 0px) + 40px)); }
+        .vp-pals-phone { -webkit-mask-image: linear-gradient(to top, transparent calc(var(--vp-pal-nav, 0px) - 6px), #000 calc(var(--vp-pal-nav, 0px) + 20px));
+            mask-image: linear-gradient(to top, transparent calc(var(--vp-pal-nav, 0px) - 6px), #000 calc(var(--vp-pal-nav, 0px) + 20px)); }
         .vp-pals-phone .vp-pal { bottom: calc(var(--vp-pal-nav, 0px) - 4px); }
         html.vp-pals-r { scrollbar-width: none !important; scrollbar-gutter: auto !important; }
         html.vp-pals-r::-webkit-scrollbar { display: none !important; }
@@ -4220,7 +4220,7 @@
         }
 
         const CHANGELOG = [
-            ['3.5.1 – 3.5.1.2', '1 октября 2026', [
+            ['3.5.1 – 3.5.1.3', '1 октября 2026', [
                 'Мику и Тето теперь и на телефоне: выглядывают из-за нижней панели вкладок и ничего не закрывают',
                 'Кто не заходил с модом больше трёх месяцев, теряет галочку и место в клубе ИТД X, его стиль больше не показывается. Зайдёт снова — всё вернётся само']],
             ['3.5.0 – 3.5.0.8', '1 октября 2026', [

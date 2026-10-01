@@ -54,7 +54,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     return p;
   };
   const pals = p => p.evaluate(() => [...document.querySelectorAll('.vp-pal')].map(i => {
-    const r = i.getBoundingClientRect(), m = new DOMMatrix(getComputedStyle(i).transform);
+    const r = (e => { const q = e.getBoundingClientRect(), d = parseFloat(getComputedStyle(e).paddingLeft) || 0; return { left: q.left + d, right: q.right - d, top: q.top + d, bottom: q.bottom - d, height: q.height - 2 * d }; })(i), m = new DOMMatrix(getComputedStyle(i).transform);
     return { id: i.className.match(/vp-pal-(\w+)/)[1], loaded: i.complete && i.naturalWidth > 0, l: Math.round(r.left), r: Math.round(r.right), t: Math.round(r.top), b: Math.round(r.bottom), h: Math.round(r.height), flip: m.a < 0, pe: getComputedStyle(i).pointerEvents };
   }));
   const waitLoaded = p => p.waitForFunction(() => [...document.querySelectorAll('.vp-pal')].every(i => i.complete && i.naturalWidth > 0), null, { timeout: 20000 }).catch(() => { });
@@ -171,14 +171,15 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   await ph.waitForTimeout(1200);
   const phone = await ph.evaluate(() => {
     const nav = [...document.querySelectorAll('body *')].find(e => getComputedStyle(e).position === 'fixed' && e.getBoundingClientRect().bottom >= innerHeight - 4 && e.getBoundingClientRect().width >= innerWidth * 0.8 && !e.closest('.vp-pals'));
-    const box = document.querySelector('.vp-pals'), r = id => { const x = document.querySelector('.vp-pal-' + id).getBoundingClientRect(); return { l: Math.round(x.left), r: Math.round(x.right), t: Math.round(x.top), b: Math.round(x.bottom), h: Math.round(x.height) }; };
+    const box = document.querySelector('.vp-pals'), r = id => { const x = (e => { const q = e.getBoundingClientRect(), d = parseFloat(getComputedStyle(e).paddingLeft) || 0; return { left: q.left + d, right: q.right - d, top: q.top + d, bottom: q.bottom - d, height: q.height - 2 * d }; })(document.querySelector('.vp-pal-' + id)); return { l: Math.round(x.left), r: Math.round(x.right), t: Math.round(x.top), b: Math.round(x.bottom), h: Math.round(x.height) }; };
     const pill = nav && (nav.querySelector('nav') || nav);
     return { pals: document.querySelectorAll('.vp-pal').length, navTop: pill ? Math.round(pill.getBoundingClientRect().top) : null, navZ: nav ? +getComputedStyle(nav).zIndex : null,
-      z: +getComputedStyle(box).zIndex, mask: getComputedStyle(box).maskImage || getComputedStyle(box).webkitMaskImage || '', miku: r('miku'), teto: r('teto'), vw: innerWidth };
+      z: +getComputedStyle(box).zIndex, mask: getComputedStyle(box).maskImage || getComputedStyle(box).webkitMaskImage || '', pad: getComputedStyle(document.querySelector('.vp-pal')).paddingLeft, miku: r('miku'), teto: r('teto'), vw: innerWidth };
   });
   check(phone.pals === 2, `на телефоне Мику и Тето снова есть (${phone.pals})`);
-  check(phone.navTop !== null && phone.z < phone.navZ && phone.z >= phone.navZ - 1, `слой под нижней панелью вкладок: ${phone.z} < ${phone.navZ}`);
-  check(Math.abs(phone.miku.b - phone.miku.h * 0.05 - phone.navTop - 4) < 3 && Math.abs(phone.teto.b - phone.teto.h * 0.05 - phone.navTop - 4) < 3 && phone.mask.includes('gradient'), `выглядывают из-за панели, низ растворяется за её краем (панель ${phone.navTop}, Мику ${JSON.stringify(phone.miku)})`);
+  check(phone.navTop !== null && phone.z === phone.navZ - 1, `слой под нижней панелью вкладок: ${phone.z} < ${phone.navZ}`);
+  check(phone.pad === '24px', `вокруг персонажей прозрачные поля, неон не обрезается по краю картинки (${phone.pad})`);
+  check(Math.abs(phone.miku.b - (phone.miku.h + 48) * 0.05 - phone.navTop - 4) < 3 && Math.abs(phone.teto.b - (phone.teto.h + 48) * 0.05 - phone.navTop - 4) < 3 && phone.mask.includes('gradient'), `выглядывают из-за панели, низ растворяется за её краем (панель ${phone.navTop}, Мику ${JSON.stringify(phone.miku)})`);
   check(phone.miku.r > phone.vw && phone.teto.l < 0 && phone.miku.l > phone.teto.r, `рука за краем экрана, друг на друга не налезают (${JSON.stringify([phone.teto, phone.miku])})`);
   check(!ph.errors.length, 'телефон: ошибок нет' + (ph.errors.length ? ': ' + ph.errors.join(' | ') : ''));
   await ph.screenshot({ path: path.join(__dirname, 'out', 'pals-phone.png') });
