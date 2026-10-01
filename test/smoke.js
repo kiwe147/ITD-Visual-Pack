@@ -208,15 +208,6 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   await p.waitForTimeout(600);
   check(!(await p.$('#vpTest')) && new URL(p.url()).pathname === pagePath, '«назад» закрывает окно сайта и не уходит со страницы');
 
-  // админ-островок
-  const fab = await p.$('.vp-fab');
-  check(!!fab, 'админ-островок на месте');
-  if (fab) {
-    await p.click('.vp-fab-btn'); await p.waitForTimeout(300);
-    await p.click('[data-act="diag"]'); await p.waitForTimeout(300);
-    check(!!(await p.$('.vp-admin-panel')), 'диагностика открывается');
-    await p.screenshot({ path: path.join(out, mode + '-diag.png') });
-  }
 
   check(errors.length === 0, 'ошибок на странице нет' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await browser.close();

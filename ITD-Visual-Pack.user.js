@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.4.4.3
+// @version      3.5.0
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -30,6 +30,7 @@
     const MSG_POST_ID = 'a53b53e0-9950-4f62-83f4-91e5985ef6c5';
     const GAMES_POST_ID = 'd5f8b7c0-b97d-40cd-bdd4-3c07b3ea0611';
     const OWNER_ID = '5e064703-104d-4794-bc28-9ed6f5847cca';
+    const OWNER_PUB = 'BLrLT8O1H3uwudBCiyDf7xEWqFo-5AQCAInPIe_rP3Jn-Ws1gjwZJ5RvN0nNWNMY9cfHt2w32qVTBc3HwtwJ-tc';
     const TG_URL = 'https://t.me/NeuroSFW';
     const TG_CHAT_URL = 'https://t.me/+P7NeR_AEc35lYjEy';
     const AUTO_LIKE_KEY = 'itd_auto_like_ids';
@@ -1350,6 +1351,9 @@
                 'Сцена ленты': svgIcon('<rect x="5" y="3" width="14" height="5" rx="1.5" stroke-dasharray="2 2"/><rect x="4" y="10" width="16" height="5" rx="1.5"/><rect x="3" y="17" width="18" height="5" rx="1.5"/>'),
                 'Свечение видео': svgIcon('<rect x="6" y="7" width="12" height="10" rx="2"/><path d="m11 10 3 2-3 2z"/><path d="M3 5.5 4.5 7M21 5.5 19.5 7M3 18.5 4.5 17M21 18.5 19.5 17M12 2.5v2M12 19.5v2"/>'),
                 'Заставка при входе': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><path d="m10 9 5 3-5 3z"/>'),
+                'Мику и Тето': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="13" r="2"/><circle cx="15.5" cy="13" r="2"/><path d="M5 20c.5-2 2-3 3.5-3s3 1 3.5 3M12 20c.5-2 2-3 3.5-3s3 1 3.5 3"/>'),
+                'Мику справа': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="16" cy="13" r="2.2"/><path d="M12 20c.6-2.2 2.2-3.3 4-3.3s3.4 1.1 4 3.3"/>'),
+                'Тето слева': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8" cy="13" r="2.2"/><path d="M4 20c.6-2.2 2.2-3.3 4-3.3s3.4 1.1 4 3.3"/>'),
                 'Автолайки': svgIcon('<path transform="translate(.5 1) scale(.74)" stroke-width="2.43" d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/><path d="M21.3 17.2a3.3 3.3 0 1 1-1-2.4"/><path d="M21 12.9v2.3h-2.3"/>')
             },
 
@@ -1941,44 +1945,6 @@
             left: 20px !important;
         }
         .vp-feed-bar .vp-tabs button { white-space: nowrap !important; }
-        .vp-fab { position: fixed; z-index: 2147483000; width: 48px; height: 48px; touch-action: none; }
-        .vp-fab.vp-snap { transition: left .28s cubic-bezier(.3, .8, .3, 1), top .28s cubic-bezier(.3, .8, .3, 1); }
-        .vp-fab-btn { width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .16); padding: 0; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; color: #fff; touch-action: none;
-            background: rgba(24, 24, 28, .72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, .45); transition: opacity .3s, transform .15s; }
-        .vp-fab-btn:active { transform: scale(.92); }
-        .vp-fab.vp-idle:not(.vp-open) .vp-fab-btn { opacity: .45; }
-        .vp-fab-menu { position: absolute; top: 50%; right: 56px; transform: translateY(-50%) scale(.9); transform-origin: right center;
-            opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; padding: 6px; border-radius: 20px;
-            background: rgba(24, 24, 28, .86); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-            border: 1px solid rgba(255, 255, 255, .12); box-shadow: 0 8px 24px rgba(0, 0, 0, .45); }
-        .vp-fab.vp-left .vp-fab-menu { right: auto; left: 56px; transform-origin: left center; }
-        .vp-fab.vp-open .vp-fab-menu { opacity: 1; pointer-events: auto; transform: translateY(-50%) scale(1); }
-        .vp-fab-menu button { display: flex; align-items: center; gap: 10px; white-space: nowrap; border: 0; background: none; color: #fff;
-            font: inherit; font-size: 14px; padding: 10px 14px; border-radius: 14px; cursor: pointer; }
-        .vp-fab-menu button:active { background: rgba(255, 255, 255, .1); }
-        .vp-fab svg { flex: 0 0 auto; width: 20px !important; height: 20px !important; }
-        .vp-fab-btn img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; pointer-events: none; }
-        .vp-fab-btn:has(img) { overflow: hidden; padding: 0; }
-        .vp-admin-toast { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 2147483001; padding: 10px 16px; border-radius: 999px;
-            background: rgba(20, 20, 24, .92); color: #fff; font: 500 14px system-ui, sans-serif; border: 1px solid rgba(255, 255, 255, .14); pointer-events: none; }
-        .vp-fps { position: fixed; left: 8px; top: 8px; z-index: 2147483001; padding: 4px 8px; border-radius: 8px; pointer-events: none;
-            background: rgba(0, 0, 0, .75); color: #6f6; font: 600 12px ui-monospace, monospace; }
-        .vp-fps[data-bad="1"] { color: #ff6b6b; }
-        .vp-admin-panel { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2147483001; width: min(340px, calc(100vw - 24px));
-            max-height: 70vh; display: flex; flex-direction: column; border-radius: 20px; overflow: hidden; color: #fff; font: 13px system-ui, sans-serif;
-            background: rgba(20, 20, 24, .96); border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 16px 40px rgba(0, 0, 0, .5); }
-        .vp-admin-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid rgba(255, 255, 255, .1); }
-        .vp-admin-head b { font-size: 15px; } .vp-admin-head span { color: rgba(255, 255, 255, .5); margin-right: auto; }
-        .vp-admin-head button { border: 0; background: none; color: #fff; font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px; }
-        .vp-admin-list { overflow-y: auto; padding: 6px 14px 10px; }
-        .vp-admin-list div { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255, 255, 255, .05); }
-        .vp-admin-list .vp-miss { color: #ff8a8a; }
-        .vp-fab[data-count]::after { content: attr(data-count); position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-            border-radius: 50%; background: rgba(229, 57, 53, .92); color: #fff; font: 800 20px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-            font-variant-numeric: lining-nums tabular-nums; pointer-events: none; }
-        .vp-fab-a { font: 800 21px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: -.02em; }
         @media (max-width: ${PHONE_MAX}px) { [data-vp-posts] > hr { display: none !important; } }
         .vp-emoji-tint .vp-soft-bg, .itd-blur-active .vp-soft-bg { background-color: rgba(0, 0, 0, .22) !important; }
         html.vp-light .vp-emoji-tint .vp-soft-bg, html.vp-light .itd-blur-active .vp-soft-bg { background-color: rgba(255, 255, 255, .35) !important; }
@@ -2025,6 +1991,15 @@
             max-height: calc(100dvh - 16px); display: flex !important; flex-direction: column; overflow: hidden !important; }
         .vp-settings-tabs .vp-stabs { flex: 0 0 auto; }
         .vp-settings-tabs .settings-option.vp-dim { opacity: .4; pointer-events: none; }
+        .vp-pals { position: fixed; inset: 0; z-index: 2147482000; pointer-events: none; overflow: hidden; }
+        .vp-pal { position: absolute; bottom: 0; width: auto; height: min(var(--vp-pal-h, 45vh), calc(48vw * var(--vp-pal-r, 1))); pointer-events: none;
+            user-select: none; -webkit-user-drag: none; animation: vpPalIn .7s cubic-bezier(.2, .9, .3, 1.15) both; }
+        .vp-pal-miku { right: 0; transform: translate(6%, 5%); }
+        .vp-pal-teto { left: 0; transform: scaleX(-1) translate(6%, 5%); }
+        html.vp-pals-r { scrollbar-width: none !important; scrollbar-gutter: auto !important; }
+        html.vp-pals-r::-webkit-scrollbar { display: none !important; }
+        @keyframes vpPalIn { from { translate: 0 60%; opacity: 0; } }
+        @media (prefers-reduced-motion: reduce) { .vp-pal { animation: none; } }
         .vp-rcard-move { display: flex; gap: 2px; margin-left: auto; margin-right: 10px; }
         .vp-rcard-move button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
         .vp-rcard-move button:hover:not(:disabled) { background: rgba(127, 127, 127, .18); }
@@ -2717,6 +2692,13 @@
             return ref;
         }
         let lookBusy = false, lookSent = '';
+        async function lookVer() {
+            if (!MOD_VER) return '';
+            const c = GM_getValue('vp_vx', null);
+            if (c && c.v === MOD_VER && c.x) return c.x;
+            try { const x = await ownerSeal(new TextEncoder().encode(MOD_VER)); GM_setValue('vp_vx', { v: MOD_VER, x }); return x; }
+            catch (e) { logErr('версия', e); return ''; }
+        }
         async function publishLook() {
             const myId = meData && meData.id;
             if (!myId || lookBusy) return;
@@ -2725,7 +2707,7 @@
                 const b = backgroundEnabled ? backgroundStyle : '-';
                 let img = '';
                 if (b === 'custom') img = await customBgCdn().catch(e => { logErr('свой фон на сервер', e); return ''; });
-                const text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (bannerVideoOwn() ? ' v=' + bannerVideoOwn() : '') + (MOD_VER ? ' ver=' + MOD_VER : '');
+                const text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (bannerVideoOwn() ? ' v=' + bannerVideoOwn() : '') + await lookVer().then(x => x ? ' vx=' + x : '');
                 if (text === lookSent) return;
                 const all = await loadVerificationComments();
                 const mine = all.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
@@ -2971,6 +2953,68 @@
             }
             colorizePosts();
         }
+        let palsOn = GM_getValue('palsEnabled', false);
+        const PALS = { miku: { key: 'palMiku', file: 'miku.webp', r: 540 / 533 }, teto: { key: 'palTeto', file: 'teto.webp', r: 540 / 509 } };
+        const PAL_VER = 1;
+        let palsBox = null;
+        function palStore(key, blob) {
+            return bgDb().then(db => new Promise((ok, no) => {
+                const st = db.transaction('files', blob ? 'readwrite' : 'readonly').objectStore('files'), r = blob ? st.put(blob, key) : st.get(key);
+                r.onsuccess = () => ok(blob || r.result || null);
+                r.onerror = () => no(r.error);
+            }));
+        }
+        function palFetch(url) {
+            return new Promise((ok, no) => GM_xmlhttpRequest({
+                method: 'GET', url, responseType: 'blob', timeout: 60000,
+                onload: r => r.status === 200 && r.response && r.response.size > 1000 ? ok(new Blob([r.response], { type: 'image/webp' })) : no(new Error('персонаж: ' + r.status)),
+                onerror: no, ontimeout: no
+            }));
+        }
+        async function palBlob(id) {
+            const key = `pal-${id}@${PAL_VER}`;
+            const have = await palStore(key).catch(() => null);
+            if (have) return have;
+            for (const branch of ['main', 'claude/github-script-access-ihd9ne']) {
+                const b = await palFetch(`https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/${branch}/assets/${PALS[id].file}`).catch(() => null);
+                if (b) { await palStore(key, b).catch(() => { }); return b; }
+            }
+            return null;
+        }
+        function palsApply() {
+            if (!palsBox) { palsBox = document.createElement('div'); palsBox.className = 'vp-pals'; }
+            if (!palsBox.isConnected) document.body.appendChild(palsBox);
+            palsBox.style.setProperty('--vp-pal-h', GM_getValue('palSize', 45) + 'vh');
+            document.documentElement.classList.toggle('vp-pals-r', palsOn && GM_getValue('palMiku', true));
+            for (const [id, pal] of Object.entries(PALS)) {
+                const want = palsOn && GM_getValue(pal.key, true);
+                let img = palsBox.querySelector('.vp-pal-' + id);
+                if (!want) { if (img) { URL.revokeObjectURL(img.src); img.remove(); } continue; }
+                if (img) continue;
+                img = document.createElement('img');
+                img.className = 'vp-pal vp-pal-' + id;
+                img.alt = '';
+                img.style.setProperty('--vp-pal-r', pal.r);
+                palsBox.appendChild(img);
+                palBlob(id).then(b => {
+                    if (!b || !img.isConnected) return;
+                    img.src = URL.createObjectURL(b);
+                }).catch(e => logErr('персонаж', e));
+            }
+        }
+        function palSizeRow() {
+            const row = document.createElement('div');
+            row.className = 'settings-option vp-vol-row';
+            row.innerHTML = `<span class="vp-setting-label">${ICONS.settings['Мику и Тето'] || ''}<span>Размер</span></span>`
+                + `<span class="vp-vol"><input type="range" min="25" max="70" step="5" aria-label="Размер"><b></b></span>`;
+            const inp = row.querySelector('input'), out = row.querySelector('b');
+            inp.value = GM_getValue('palSize', 45);
+            const show = () => { out.textContent = inp.value + '%'; inp.style.setProperty('--vp-vol', ((inp.value - 25) / 45 * 100) + '%'); };
+            show();
+            inp.addEventListener('input', () => { GM_setValue('palSize', +inp.value); show(); palsApply(); });
+            row.onclick = e => e.stopPropagation();
+            return row;
+        }
         const SETTINGS = [
             { label: 'Фон', get: () => backgroundEnabled, set: v => { backgroundEnabled = v; updateBackgroundVisibility(); }, key: 'backgroundEnabled' },
             { label: 'Неоновая подсветка', get: () => neonEnabled, set: v => { neonEnabled = v; document.documentElement.classList.toggle('vp-no-neon', !v); paint(); }, key: 'neonEnabled' },
@@ -2990,13 +3034,17 @@
             { label: 'Сцена ленты', get: () => sceneEnabled, set: v => { sceneEnabled = v; sceneAutoOff = false; document.documentElement.classList.toggle('vp-scene', v); sceneKick(); }, key: 'sceneEnabled' },
             { label: 'Свечение видео', get: () => ambientEnabled, set: v => { ambientEnabled = v; applyAmbient(); }, key: 'ambientEnabled' },
             { label: 'Боковая панель', get: () => railEnabled, set: v => { railEnabled = v; placeRail(); }, key: 'railEnabled' },
-            { label: 'Версия для ПК на планшете', get: () => GM_getValue('tabletDesktop', true), set: () => tabletViewport(), key: 'tabletDesktop' }
+            { label: 'Версия для ПК на планшете', get: () => GM_getValue('tabletDesktop', true), set: () => tabletViewport(), key: 'tabletDesktop' },
+            { label: 'Мику и Тето', get: () => palsOn, set: v => { palsOn = v; palsApply(); }, key: 'palsEnabled' },
+            { label: 'Мику справа', get: () => GM_getValue('palMiku', true), set: () => palsApply(), key: 'palMiku' },
+            { label: 'Тето слева', get: () => GM_getValue('palTeto', true), set: () => palsApply(), key: 'palTeto' }
         ];
         const SETTINGS_TABS = [
             { id: 'nick', name: 'Ник', items: ['Неоновая подсветка', 'Подсветка ника', 'Подсветка аватарок', 'Подсветка постов'] },
             { id: 'bg', name: 'Фон', items: ['Фон'] },
             { id: 'look', name: 'Вид', items: ['Стекло', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Карточки панели', 'Версия для ПК на планшете'] },
             { id: 'likes', name: 'Лайки', items: ['Автолайки'] },
+            { id: 'pals', name: 'Мику', items: ['Мику и Тето', 'Мику справа', 'Тето слева', 'Размер персонажей'] },
             { id: 'misc', name: 'Ещё', items: ['Анти цензура', 'Звуки интерфейса', 'Громкость', 'Заставка при входе'] },
             { id: 'icon', name: 'Иконка' }
         ];
@@ -3122,8 +3170,10 @@
                     if (label === 'Заставка при входе' && IS_PHONE) { body.appendChild(introModeRow()); continue; }
                     if (label === 'Громкость') { body.appendChild(volumeRow()); continue; }
                     if (label === 'Карточки панели') { body.appendChild(railCardsBox(redraw)); continue; }
-                    const row = settingRow(SETTINGS.find(o => o.label === label), id === 'bg' || id === 'nick' ? redraw : null);
+                    if (label === 'Размер персонажей') { const r = palSizeRow(); if (!palsOn) r.classList.add('vp-dim'); body.appendChild(r); continue; }
+                    const row = settingRow(SETTINGS.find(o => o.label === label), id === 'bg' || id === 'nick' || id === 'pals' ? redraw : null);
                     if (!neonEnabled && label.startsWith('Подсветка ')) row.classList.add('vp-dim');
+                    if (!palsOn && (label === 'Мику справа' || label === 'Тето слева')) row.classList.add('vp-dim');
                     body.appendChild(row);
                 }
                 if (id === 'nick') {
@@ -3305,13 +3355,6 @@
             wrap.appendChild(note);
             return wrap;
         }
-        function adminToast(text) {
-            const t = document.createElement('div');
-            t.className = 'vp-admin-toast';
-            t.textContent = text;
-            document.body.appendChild(t);
-            setTimeout(() => t.remove(), 2600);
-        }
         function copyText(text) {
             if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(() => true, () => fallback());
             return Promise.resolve(fallback());
@@ -3322,25 +3365,6 @@
                 let ok = false; try { ok = document.execCommand('copy'); } catch (e) { }
                 ta.remove(); return ok;
             }
-        }
-        function diagRows() {
-            tagAll();
-            return ROLE_ORDER.map(r => [r, roleCount[r] || 0]);
-        }
-        function adminReport() {
-            const found = diagRows(), missing = found.filter(([, n]) => !n).map(([r]) => r);
-            const opts = SETTINGS.map(o => (o.get() ? '+' : '-') + o.label).join(', ');
-            return [
-                `ИТД X ${GM_info.script.version} · ${new Date().toISOString()}`,
-                `Страница: ${location.pathname} · тема ${document.documentElement.getAttribute('data-theme') || '?'}`,
-                `Экран: ${innerWidth}×${innerHeight} @${devicePixelRatio} · ${IS_PHONE ? 'телефон' : 'компьютер'}`,
-                `Браузер: ${navigator.userAgent}`,
-                `Стиль ника: ${currentStyle} · фон: ${backgroundStyle} · иконка: ${appIcon}`,
-                `Настройки: ${opts}`,
-                `Не нашлось на странице: ${missing.join(', ') || '—'}`,
-                `Найдено: ${found.filter(([, n]) => n).map(([r, n]) => r + ' ' + n).join(', ')}`,
-                `Ошибки (${vpErrors.length}):` + (vpErrors.length ? '\n' + vpErrors.join('\n') : ' нет')
-            ].join('\n');
         }
         const callCss = () => { if (!document.getElementById('vp-call-css')) addCss(CALL_CSS).id = 'vp-call-css'; };
         const CALL_CSS = `
@@ -3400,11 +3424,7 @@
         .vp-call-mini .vp-call-sub { margin: 0; font-size: 13px; }
         .vp-call-mini .vp-call-btns { margin: 0; gap: 6px; }
         .vp-call-mini .vp-call-btns button { width: 40px; height: 40px; flex: 0 0 auto; padding: 0; border-radius: 50%; }
-        .vp-call-mini .vp-call-btns button span { display: none; }
-        .vp-call-panel input { margin: 10px 14px 4px; padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .06);
-            color: #fff; font: inherit; outline: none; }
-        .vp-call-panel .vp-admin-list .vp-call-pick { cursor: pointer; padding: 8px 4px; border-radius: 8px; }
-        .vp-call-panel .vp-admin-list .vp-call-pick:hover { background: rgba(36, 128, 70, .25); }`;
+        .vp-call-mini .vp-call-btns button span { display: none; }`;
         function callTone(kind) {
             let ac, t = 0;
             try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return () => { }; }
@@ -3451,18 +3471,6 @@
             };
             el.querySelectorAll('.vp-call-btns button').forEach(b => b.addEventListener('click', answer));
             later(() => { stopRing(); el.classList.add('vp-talk'); sub.textContent = 'Пропущенный звонок'; hangup(); later(close, 1700); }, 30000);
-        }
-        async function callSend(uid) {
-            if (msgNet.me && msgNet.keys.get(uid)) return msgSend(uid, '', false, null, new Uint8Array([3]));
-            const now = Math.floor(srvNow() / 1000), cur = msgNet.callNote;
-            const list = ((cur && cur.list) || []).filter(x => now - x.ts < 600 && x.u !== uid).slice(-9);
-            list.push({ u: uid, ts: now });
-            const content = sealText('ITDXC1 ' + list.map(x => x.u + ':' + x.ts).join(' '));
-            const res = cur
-                ? await editComment(cur.cid, content)
-                : await sendComment(MSG_POST_ID, content);
-            if (!res.ok) throw new Error('звонок: ' + res.status);
-            await msgSync();
         }
         const CALL_ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }, { urls: 'stun:stun.cloudflare.com:3478' }];
         const CALL_RING_S = 60;
@@ -3872,777 +3880,6 @@
             }
             if (messagesOverlay && messagesOverlay.refreshCalls) messagesOverlay.refreshCalls();
         }
-        async function adminCallPick() {
-            document.querySelectorAll('.vp-admin-panel').forEach(p => p.remove());
-            callCss();
-            const box = document.createElement('div');
-            box.className = 'vp-admin-panel vp-call-panel';
-            box.innerHTML = '<div class="vp-admin-head"><b>Позвонить</b><span>звонок-розыгрыш</span><button type="button" aria-label="Закрыть">×</button></div><input type="search" placeholder="Ник"><div class="vp-admin-list"></div>';
-            const list = box.querySelector('.vp-admin-list'), q = box.querySelector('input');
-            box.querySelector('button').onclick = () => box.remove();
-            document.body.appendChild(box);
-            list.textContent = 'Загружаю…';
-            try { await msgSync(); } catch (e) { list.textContent = 'Не загрузилось: ' + (e.message || e); return; }
-            const meId = msgMyId(), byId = new Map();
-            verifiedNames().forEach(n => { const v = verifiedInfo(n); if (v && v.id) byId.set(v.id, { id: v.id, login: n }); });
-            msgNet.keys.forEach(k => { if (k.login) byId.set(k.id, { id: k.id, login: k.login }); });
-            byId.delete(meId);
-            const people = [...byId.values()].sort((a, b) => a.login.localeCompare(b.login));
-            const draw = () => {
-                const f = q.value.trim().toLowerCase();
-                list.textContent = '';
-                people.filter(k => !f || k.login.toLowerCase().includes(f)).forEach(k => {
-                    const row = document.createElement('div');
-                    row.className = 'vp-call-pick';
-                    row.innerHTML = '<span></span><b>📞</b>';
-                    row.firstChild.textContent = '@' + k.login;
-                    row.onclick = async () => {
-                        if (row.dataset.busy) return;
-                        row.dataset.busy = '1'; row.lastChild.textContent = '…';
-                        try { await callSend(k.id); row.lastChild.textContent = '✓'; adminToast(`Звоню @${k.login} — дойдёт в течение минуты, если у него открыт итд`); }
-                        catch (e) { row.lastChild.textContent = '✕'; adminToast('Не вышло: ' + (e.message || e)); }
-                        setTimeout(() => { delete row.dataset.busy; row.lastChild.textContent = '📞'; }, 4000);
-                    };
-                    list.appendChild(row);
-                });
-                if (!list.children.length) list.textContent = people.length ? 'Никого с таким ником' : 'Пока никого — нужен ключ сообщений';
-            };
-            q.addEventListener('input', draw);
-            draw();
-            q.focus();
-        }
-        function adminDiag() {
-            document.querySelectorAll('.vp-admin-panel').forEach(p => p.remove());
-            const rows = diagRows();
-            const box = document.createElement('div');
-            box.className = 'vp-admin-panel';
-            const miss = rows.filter(([, n]) => !n).length;
-            box.innerHTML = `<div class="vp-admin-head"><b>Диагностика</b><span>${miss ? 'не нашлось: ' + miss : 'всё на месте'}</span><button type="button" aria-label="Закрыть">×</button></div><div class="vp-admin-list"></div>`;
-            const list = box.querySelector('.vp-admin-list');
-            rows.sort((a, b) => (a[1] ? 1 : 0) - (b[1] ? 1 : 0)).forEach(([r, n]) => {
-                const d = document.createElement('div');
-                d.className = n ? '' : 'vp-miss';
-                d.innerHTML = '<span></span><b></b>';
-                d.firstChild.textContent = r; d.lastChild.textContent = n || '—';
-                list.appendChild(d);
-            });
-            box.querySelector('button').onclick = () => box.remove();
-            document.body.appendChild(box);
-        }
-        function vpVerifyEnsureStyle() {
-            if (document.getElementById('vp-verify-style')) return;
-            const st = document.createElement('style');
-            st.id = 'vp-verify-style';
-            st.textContent = `.vp-verify-list { max-height: 320px; overflow-y: auto; padding: 4px 0; }
-.vp-verify-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,.06); }
-.vp-verify-ava { font-size: 20px; width: 28px; text-align: center; }
-.vp-verify-name { flex: 1; font-size: 14px; }
-.vp-verify-left { font-size: 12px; opacity: .6; white-space: nowrap; }
-.vp-verify-ok, .vp-verify-no { padding: 6px 12px; border-radius: 8px; border: 0; cursor: pointer; font-size: 13px; }
-.vp-verify-ok { background: #2e7d32; color: #fff; }
-.vp-verify-no { background: #444; color: #ddd; }
-.vp-verify-row.vp-busy { opacity: .5; pointer-events: none; }
-.vp-junk-panel { width: min(560px, calc(100vw - 24px)); max-height: 80vh; }
-.vp-junk-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 14px; border-bottom: 1px solid rgba(255,255,255,.08); }
-.vp-junk-bar label { display: flex; align-items: center; gap: 6px; opacity: .8; cursor: pointer; }
-.vp-junk-list { overflow-y: auto; padding: 4px 0; }
-.vp-junk-row { padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.06); transition: opacity .3s; }
-.vp-junk-row.vp-busy { opacity: .5; pointer-events: none; }
-.vp-junk-row.vp-gone { opacity: 0; pointer-events: none; }
-.vp-junk-top { display: flex; align-items: center; gap: 8px; }
-.vp-junk-top a { color: #fff; font-weight: 600; text-decoration: none; }
-.vp-junk-meta { margin-left: auto; font-size: 11px; opacity: .5; white-space: nowrap; }
-.vp-junk-why { margin: 4px 0 2px 24px; color: #ffb74d; font-size: 12px; }
-.vp-junk-text { margin-left: 24px; font: 12px/1.35 ui-monospace, Consolas, monospace; opacity: .75; overflow-wrap: anywhere; }
-.vp-junk-acts { display: flex; gap: 6px; margin: 8px 0 0 24px; }
-.vp-junk-acts button, .vp-junk-delsel { padding: 5px 10px; border: 0; border-radius: 8px; background: #3a3a40; color: #eee; font-size: 12px; cursor: pointer; }
-.vp-junk-acts [data-a="del"], .vp-junk-delsel:not(:disabled) { background: #b3261e; color: #fff; }
-.vp-junk-delsel:disabled { opacity: .4; cursor: default; }
-.vp-junk-err { padding: 8px 14px; color: #ff8a8a; }
-.vp-lbadm { width: min(1080px, calc(100vw - 24px)); }
-.vp-vers { width: min(520px, calc(100vw - 24px)); }
-.vp-vers-sum { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.08); }
-.vp-vers-chip { padding: 3px 9px; border-radius: 999px; font-size: 12px; font-variant-numeric: tabular-nums; background: rgba(255,255,255,.08); }
-.vp-vers-chip.vp-new, .vp-vers-v.vp-new { color: #81c784; }
-.vp-vers-chip.vp-old, .vp-vers-v.vp-old { color: #ffb74d; }
-.vp-vers-chip.vp-unk, .vp-vers-v.vp-unk { color: rgba(255,255,255,.45); }
-.vp-vers-row { padding: 8px 14px; }
-.vp-vers-st { font-size: 11px; opacity: .5; }
-.vp-vers-v { margin-left: auto; font-variant-numeric: tabular-nums; }
-.vp-vers-row .vp-junk-meta { margin-left: 10px; min-width: 96px; text-align: right; }
-.vp-lbadm > .vp-junk-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 10px; padding: 10px; }
-.vp-lbadm-col { min-width: 0; border-radius: 14px; background: rgba(255,255,255,.04); overflow: hidden; }
-.vp-lbadm-col .vp-junk-row:last-child { border-bottom: 0; }
-.vp-lbadm-col .vp-junk-acts { flex-wrap: wrap; }
-@media (max-width: 760px) { .vp-lbadm > .vp-junk-list { grid-template-columns: 1fr; } }
-.vp-lbadm-t { padding: 12px 14px 4px; font-size: 13px; font-weight: 700; opacity: .7; }
-.vp-lbadm-n { width: 18px; opacity: .5; }
-.vp-lbadm-v { margin-left: 8px; font-variant-numeric: tabular-nums; }
-.vp-lbadm-row.vp-off { opacity: .5; }
-.vp-lbadm-row .vp-junk-acts button[data-a="del"] { background: #b3261e; color: #fff; }
-.vp-rep { position: fixed; inset: 0; z-index: 2147483002; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.6); }
-.vp-rep-win { display: flex; flex-direction: column; max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); border-radius: 20px; overflow: hidden; color: #fff;
-    font: 13px system-ui, sans-serif; background: rgba(20,20,24,.98); border: 1px solid rgba(255,255,255,.14); box-shadow: 0 16px 40px rgba(0,0,0,.5); }
-.vp-rep-verdict { padding: 10px 14px 0; font-weight: 600; color: #81c784; }
-.vp-rep-verdict.vp-bad { color: #ff8a80; }
-.vp-rep-info { padding: 4px 14px 8px; opacity: .6; }
-.vp-rep-body { display: flex; justify-content: center; padding: 8px 14px; overflow: auto; }
-.vp-rep-body .vp-g-canvas { width: auto !important; height: min(56vh, 520px) !important; }
-.vp-rep-body .vp-g-side .vp-g-canvas { width: 88px !important; height: 88px !important; }
-.vp-rep-body .vp-g-pad, .vp-rep-body .vp-games-hint, .vp-rep-body .vp-mines-bar { display: none !important; }
-.vp-rep-bar { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-top: 1px solid rgba(255,255,255,.08); }
-.vp-rep-bar button { padding: 5px 10px; border: 0; border-radius: 8px; background: #3a3a40; color: #eee; cursor: pointer; }
-.vp-rep-bar button.vp-on { background: #fff; color: #111; }
-.vp-rep-t { margin-left: auto; opacity: .7; font-variant-numeric: tabular-nums; }
-.vp-verify-row.vp-done-ok { background: rgba(46,125,50,.15); }
-.vp-verify-row.vp-done-no { background: rgba(120,120,120,.15); }
-.vp-verify-empty { padding: 20px; text-align: center; opacity: .6; }`;
-            document.head.appendChild(st);
-        }
-        async function ownerMarkPush(prefix, token) {
-            const fresh = await loadVerificationComments(true);
-            const mine = fresh.filter(c => c.author && c.author.id === OWNER_ID && openText(c.content).startsWith(prefix + ' '));
-            for (const c of mine) {
-                const txt = openText(c.content);
-                if (txt.split(/\s+/).includes(token)) return true;
-                const sealed = sealText(txt + ' ' + token);
-                if (sealed.length <= 990) {
-                    const res = await api(`/api/comments/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: sealed }) });
-                    if (res.ok) return true;
-                }
-            }
-            const res = await api(`/api/posts/${VERIFICATION_POST_ID}/comments`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: sealText(prefix + ' ' + token) })
-            });
-            return res.ok;
-        }
-        function showVerifyPanel(pending) {
-            vpVerifyEnsureStyle();
-            document.querySelectorAll('.vp-verify-panel').forEach(p => p.remove());
-            const box = document.createElement('div');
-            box.className = 'vp-admin-panel vp-verify-panel';
-            box.innerHTML = `<div class="vp-admin-head"><b>Галочки</b><span>${pending.length ? 'ждут: ' + pending.length : 'пусто'}</span><button type="button" aria-label="Закрыть">×</button></div><div class="vp-verify-list"></div>`;
-            const list = box.querySelector('.vp-verify-list');
-            if (!pending.length) list.innerHTML = '<div class="vp-verify-empty">Никого нет в очереди</div>';
-            for (const p of pending) {
-                const row = document.createElement('div');
-                row.className = 'vp-verify-row';
-                row.innerHTML = '<span class="vp-verify-ava"></span><span class="vp-verify-name"></span><span class="vp-verify-left"></span><button type="button" class="vp-verify-ok">Подтвердить</button><button type="button" class="vp-verify-no">Отклонить</button>';
-                row.querySelector('.vp-verify-ava').textContent = p.avatar || '👤';
-                row.querySelector('.vp-verify-name').textContent = '@' + p.name;
-                const h = Math.max(1, Math.ceil((p.left || 0) / 3600000));
-                row.querySelector('.vp-verify-left').textContent = h > 24 ? `${Math.ceil(h / 24)} д` : `${h} ч`;
-                row.querySelector('.vp-verify-left').title = 'Сколько осталось до авто-отказа на 7 дней';
-                row.querySelector('.vp-verify-ok').onclick = async () => {
-                    row.classList.add('vp-busy');
-                    const ok = await ownerMarkPush('ITDX-V', p.id);
-                    if (ok) { await checkAllComments(true); row.classList.add('vp-done-ok'); setTimeout(() => row.remove(), 800); }
-                    else { row.classList.remove('vp-busy'); alert('Не вышло — попробуй ещё'); }
-                };
-                row.querySelector('.vp-verify-no').onclick = async () => {
-                    row.classList.add('vp-busy');
-                    const until = Math.floor((Date.now() + COOLDOWN_MS) / 1000);
-                    const ok = await ownerMarkPush('ITDX-C', p.id + ':' + until);
-                    if (ok) { await checkAllComments(true); row.classList.add('vp-done-no'); setTimeout(() => row.remove(), 800); }
-                    else { row.classList.remove('vp-busy'); alert('Не вышло — попробуй ещё'); }
-                };
-                list.appendChild(row);
-            }
-            box.querySelector('button').onclick = () => box.remove();
-            document.body.appendChild(box);
-        }
-        async function adminVerify() {
-            await checkAllComments(true);
-            const comments = await loadVerificationComments(true);
-            const lists = parseAllOwnerLists(comments);
-            const now = Date.now(), nowSec = Math.floor(now / 1000);
-            const all = readVerified();
-            const pending = [];
-            for (const [name, info] of Object.entries(all)) {
-                if (!info || info.state !== 'quarantine' || !info.id) continue;
-                if (String(info.id) === OWNER_ID) continue;
-                const t = verifyTimeline(info.id, lists, now);
-                pending.push({ name, id: info.id, displayName: info.displayName || name, avatar: info.avatar || '👤', left: t.seenCur ? t.until - now : QUARANTINE_MS });
-                if (!t.seenCur) {
-                    try { await ownerMarkPush('ITDX-SEEN', info.id + ':' + nowSec); } catch (e) { }
-                }
-            }
-            showVerifyPanel(pending);
-        }
-        const JUNK_POSTS = [[VERIFICATION_POST_ID, 'галочки'], [MSG_POST_ID, 'личка'], [STICKER_POST_ID, 'стикеры'], [GAMES_POST_ID, 'игры']];
-        function junkKind(post, c) {
-            const raw = String(c.content || '').trim(), a = c.author || {}, owner = a.id === OWNER_ID;
-            const sealed = raw.startsWith('ITDXE '), t = sealed ? openText(raw) : raw;
-            if (sealed && !t) return { bad: 'Битая запись: начинается как запись мода, но не читается' };
-            const code = parseCode(raw);
-            if (post === VERIFICATION_POST_ID) {
-                if (code) return isAuthorCode(a, code) ? { one: 'code' } : { bad: 'Код галочки не от этого аккаунта — мод его не засчитывает' };
-                if (LOOK_RE.test(t)) return { one: 'look' };
-                if (/^ITDX-R \d+$/.test(t)) return owner ? { bad: 'Заявка на галочку от владельца — не нужна' } : { one: 'req' };
-                if (/^ITDX-(V|C|SEEN)( |$)/.test(t)) return owner ? { ok: 1 } : { bad: 'Метка владельца от чужого — мод её не читает' };
-            } else if (post === MSG_POST_ID) {
-                const mod = /^ITDXK1 [\w-]+ [\w-]+$/.test(raw) ? 'key' : /^ITDXM1 \d+ [cb]/.test(raw) ? 'vol' : /^ITDXC1 /.test(t) ? 'call' : '';
-                if (mod === 'call' && !owner) return { bad: 'Звонок-розыгрыш от чужого — мод его не читает' };
-                if (mod && !owner && !isApprovedAuthor(a)) return { bad: 'Автор без одобренной галочки — мод его записи в личке не читает' };
-                if (mod === 'key' || mod === 'call') return { one: mod };
-                if (mod === 'vol') return { ok: 1 };
-            } else if (post === STICKER_POST_ID) {
-                if (/^ITDXS \d+\/\d+ /.test(raw)) return { ok: 1 };
-                if (t.startsWith('ITDXT1 ')) return { one: 'stats' };
-            } else if (post === GAMES_POST_ID) {
-                if (REP_RE.test(raw) || /^ITDXP1 [smt] 0\/0 -$/.test(raw)) return { ok: 1 };
-                if (t.startsWith(LB_VOID + ' ')) return owner ? { ok: 1 } : { bad: 'Метка владельца от чужого — мод её не читает' };
-                if (/^ITDXG2? /.test(raw)) return { one: 'games' };
-            }
-            return { bad: /^ITDX/.test(t) ? 'Запись мода не того вида для этого поста' : 'Не запись мода — обычный комментарий' };
-        }
-        async function junkScan() {
-            await checkAllComments(true);
-            loadApprovedIds();
-            const okIds = new Set(GM_getValue('junkOk', []));
-            const out = [], stat = { all: 0, byAuthor: new Map() };
-            for (const [post, where] of JUNK_POSTS) {
-                let list;
-                try { list = await allComments(post); } catch (e) { out.push({ err: where + ': ' + (e.message || e) }); continue; }
-                stat.all += list.length;
-                const seen = new Map();
-                for (const c of list) {
-                    const a = c.author || {}, k = junkKind(post, c);
-                    stat.byAuthor.set(a.id, (stat.byAuthor.get(a.id) || 0) + 1);
-                    let why = k.bad || '';
-                    if (!why && k.one) {
-                        const key = k.one + '|' + a.id, n = (seen.get(key) || 0) + 1;
-                        seen.set(key, n);
-                        if (n > 1) why = 'Дубль: у автора есть такая же запись выше в списке — мод читает ту, а эту нет';
-                    }
-                    if (why && !okIds.has(c.id)) out.push({ c, post, where, why });
-                }
-            }
-            for (const r of out) if (r.c) r.total = stat.byAuthor.get((r.c.author || {}).id) || 0;
-            return { rows: out, stat };
-        }
-        function junkPreview(c) {
-            const raw = String(c.content || '').trim(), t = raw.startsWith('ITDXE ') ? openText(raw) : raw;
-            return (t || raw).replace(/\s+/g, ' ').slice(0, 160);
-        }
-        async function junkDelete(id) {
-            const res = await api(`/api/comments/${id}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('удаление: ' + res.status);
-        }
-        async function adminJunk() {
-            vpVerifyEnsureStyle();
-            document.querySelectorAll('.vp-junk-panel').forEach(p => p.remove());
-            const box = document.createElement('div');
-            box.className = 'vp-admin-panel vp-junk-panel';
-            box.innerHTML = `<div class="vp-admin-head"><b>Мусор под постами</b><span>ищу…</span><button type="button" aria-label="Закрыть">×</button></div>
-                <div class="vp-junk-bar" hidden><label><input type="checkbox" class="vp-junk-all"> все</label><button type="button" class="vp-junk-delsel" disabled>Удалить выбранные</button></div>
-                <div class="vp-junk-list"></div>`;
-            box.querySelector('.vp-admin-head button').onclick = () => box.remove();
-            document.body.appendChild(box);
-            const head = box.querySelector('.vp-admin-head span'), list = box.querySelector('.vp-junk-list'), bar = box.querySelector('.vp-junk-bar');
-            const delSel = box.querySelector('.vp-junk-delsel'), all = box.querySelector('.vp-junk-all');
-            let scan;
-            try { scan = await junkScan(); } catch (e) { head.textContent = 'не вышло: ' + (e.message || e); return; }
-            const rows = scan.rows.filter(r => r.c), errs = scan.rows.filter(r => r.err);
-            const count = () => {
-                const left = list.querySelectorAll('.vp-junk-row:not(.vp-gone)').length, sel = list.querySelectorAll('.vp-junk-row:not(.vp-gone) input:checked').length;
-                head.textContent = left ? `похоже на мусор: ${left} из ${scan.stat.all}` : `чисто · всего записей ${scan.stat.all}`;
-                delSel.disabled = !sel;
-                delSel.textContent = sel ? `Удалить выбранные (${sel})` : 'Удалить выбранные';
-                bar.hidden = !left;
-            };
-            errs.forEach(r => { const d = document.createElement('div'); d.className = 'vp-junk-err'; d.textContent = 'Не загрузилось: ' + r.err; list.appendChild(d); });
-            if (!rows.length) { const d = document.createElement('div'); d.className = 'vp-verify-empty'; d.textContent = 'Ничего подозрительного'; list.appendChild(d); }
-            const gone = row => { row.classList.add('vp-gone'); setTimeout(() => row.remove(), 400); count(); };
-            const kill = async row => {
-                row.classList.add('vp-busy');
-                try { await junkDelete(row.dataset.id); gone(row); return true; }
-                catch (e) { row.classList.remove('vp-busy'); row.querySelector('.vp-junk-why').textContent = 'Не удалилось: ' + (e.message || e); logErr('мусор', e); return false; }
-            };
-            const killMany = async rs => { for (const r of rs) { if (!await kill(r)) break; await new Promise(z => setTimeout(z, 400)); } };
-            for (const r of rows) {
-                const a = r.c.author || {}, row = document.createElement('div');
-                row.className = 'vp-junk-row';
-                row.dataset.id = r.c.id;
-                row.dataset.author = a.id || '';
-                row.innerHTML = `<div class="vp-junk-top"><input type="checkbox"><a target="_blank" rel="noopener"></a><span class="vp-junk-meta"></span></div>
-                    <div class="vp-junk-why"></div><div class="vp-junk-text"></div>
-                    <div class="vp-junk-acts"><button type="button" data-a="del">Удалить</button><button type="button" data-a="author">Всё от автора</button><button type="button" data-a="ok">Не мусор</button></div>`;
-                const link = row.querySelector('a');
-                link.textContent = '@' + (a.username || a.id || '?');
-                if (a.username) link.href = '/@' + a.username;
-                const when = r.c.createdAt || r.c.created_at;
-                row.querySelector('.vp-junk-meta').textContent = `${r.where} · ${when ? new Date(when).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''} · всего от него: ${r.total}`;
-                row.querySelector('.vp-junk-why').textContent = r.why;
-                row.querySelector('.vp-junk-text').textContent = junkPreview(r.c);
-                row.querySelector('input').onchange = count;
-                row.querySelector('[data-a="del"]').onclick = () => kill(row);
-                row.querySelector('[data-a="ok"]').onclick = () => { GM_setValue('junkOk', [...GM_getValue('junkOk', []), r.c.id].slice(-2000)); gone(row); };
-                row.querySelector('[data-a="author"]').onclick = async () => {
-                    const mine = [...list.querySelectorAll('.vp-junk-row:not(.vp-gone)')].filter(x => x.dataset.author === row.dataset.author);
-                    if (!confirm(`Удалить все ${mine.length} подозрительных записей от ${link.textContent}?`)) return;
-                    await killMany(mine);
-                };
-                list.appendChild(row);
-            }
-            all.onchange = () => { list.querySelectorAll('.vp-junk-row:not(.vp-gone) input').forEach(i => { i.checked = all.checked; }); count(); };
-            delSel.onclick = async () => {
-                const sel = [...list.querySelectorAll('.vp-junk-row:not(.vp-gone)')].filter(x => x.querySelector('input').checked);
-                if (!sel.length || !confirm(`Удалить выбранные: ${sel.length}?`)) return;
-                await killMany(sel);
-            };
-            count();
-        }
-        async function adminVersions() {
-            vpVerifyEnsureStyle();
-            document.querySelectorAll('.vp-vers').forEach(x => x.remove());
-            const box = document.createElement('div');
-            box.className = 'vp-admin-panel vp-junk-panel vp-vers';
-            box.innerHTML = `<div class="vp-admin-head"><b>Версии у пользователей</b><span>загрузка…</span><button type="button" aria-label="Закрыть">×</button></div>
-                <div class="vp-vers-sum"></div><div class="vp-junk-list"></div>`;
-            box.querySelector('.vp-admin-head button').onclick = () => box.remove();
-            document.body.appendChild(box);
-            const head = box.querySelector('.vp-admin-head span'), list = box.querySelector('.vp-junk-list'), sum = box.querySelector('.vp-vers-sum');
-            let all;
-            try { all = await loadVerificationComments(true); } catch (e) { head.textContent = 'не загрузилось: ' + (e.message || e); return; }
-            const verified = readVerified(), stateOf = id => { for (const v of Object.values(verified)) if (v && v.id === id) return v.state; return ''; };
-            const people = new Map();
-            for (const c of all) {
-                const a = c.author;
-                if (!a || !a.id) continue;
-                const at = Date.parse(c.updatedAt || c.updated_at || c.createdAt || c.created_at || '') || 0;
-                const p = people.get(a.id) || { a, ver: '', at: 0, mod: false };
-                people.set(a.id, p);
-                const code = parseCode(String(c.content || '').trim());
-                if (code && isAuthorCode(a, code)) p.mod = true;
-                const look = parseLook(c.content);
-                if (look) { p.mod = true; if (look.ver && (!p.ver || verCmp(look.ver, p.ver) > 0)) { p.ver = look.ver; p.at = at; } }
-            }
-            const rows = [...people.values()].filter(p => p.mod && p.a.id !== OWNER_ID);
-            rows.sort((x, y) => (y.ver ? 1 : 0) - (x.ver ? 1 : 0) || (y.ver && x.ver ? verCmp(y.ver, x.ver) : 0) || (x.a.username || '').localeCompare(y.a.username || ''));
-            const newest = rows.reduce((m, p) => p.ver && (!m || verCmp(p.ver, m) > 0) ? p.ver : m, MOD_VER);
-            const groups = new Map();
-            rows.forEach(p => groups.set(p.ver || '?', (groups.get(p.ver || '?') || 0) + 1));
-            head.textContent = `с модом ${rows.length}, на последней ${groups.get(newest) || 0}`;
-            sum.textContent = '';
-            for (const [v, n] of groups) {
-                const chip = document.createElement('span');
-                chip.className = 'vp-vers-chip' + (v === newest ? ' vp-new' : v === '?' ? ' vp-unk' : ' vp-old');
-                chip.textContent = `${v === '?' ? 'старше 3.4.4' : v} · ${n}`;
-                chip.title = v === '?' ? 'Версия ещё не пришла: у человека стоит мод старше 3.4.4 или он давно не заходил' : '';
-                sum.appendChild(chip);
-            }
-            for (const p of rows) {
-                const row = document.createElement('div');
-                row.className = 'vp-junk-row vp-vers-row';
-                row.innerHTML = '<div class="vp-junk-top"><a target="_blank" rel="noopener"></a><span class="vp-vers-st"></span><b class="vp-vers-v"></b><span class="vp-junk-meta"></span></div>';
-                const link = row.querySelector('a');
-                link.textContent = p.a.displayName || p.a.username || '?';
-                if (p.a.username) link.href = '/@' + p.a.username;
-                const st = stateOf(p.a.id);
-                row.querySelector('.vp-vers-st').textContent = st === 'approved' ? '' : st === 'quarantine' ? 'ждёт галочку' : 'без галочки';
-                const v = row.querySelector('.vp-vers-v');
-                v.textContent = p.ver || 'старше 3.4.4';
-                v.className = 'vp-vers-v ' + (!p.ver ? 'vp-unk' : p.ver === newest ? 'vp-new' : 'vp-old');
-                row.querySelector('.vp-junk-meta').textContent = p.at ? 'с ' + new Date(p.at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
-                list.appendChild(row);
-            }
-            if (!rows.length) { const d = document.createElement('div'); d.className = 'vp-verify-empty'; d.textContent = 'Пока никого'; list.appendChild(d); }
-        }
-        async function adminRecords() {
-            vpVerifyEnsureStyle();
-            document.querySelectorAll('.vp-lbadm').forEach(x => x.remove());
-            const box = document.createElement('div');
-            box.className = 'vp-admin-panel vp-junk-panel vp-lbadm';
-            box.innerHTML = `<div class="vp-admin-head"><b>Рекорды и повторы</b><span>загрузка…</span><button type="button" aria-label="Закрыть">×</button></div><div class="vp-junk-list"></div>`;
-            box.querySelector('.vp-admin-head button').onclick = () => box.remove();
-            document.body.appendChild(box);
-            const head = box.querySelector('.vp-admin-head span'), list = box.querySelector('.vp-junk-list');
-            const draw = async fresh => {
-                let all;
-                try { all = await lbComments(fresh); } catch (e) { head.textContent = 'не загрузилось'; return; }
-                loadApprovedIds();
-                const voids = lbVoids(all), reps = lbReplays(all);
-                list.textContent = '';
-                let total = 0, noRep = 0;
-                for (const g of GAMES) {
-                    const k = LB_KEYS[g.id], rows = new Map();
-                    for (const c of all) {
-                        const a = c.author, o = a && parseLB(c.content, true);
-                        if (!o || !o[k] || !isApprovedAuthor(a)) continue;
-                        const cur = rows.get(a.id);
-                        if (!cur || lbBetter(k, cur.v, o[k]) !== cur.v) rows.set(a.id, { v: o[k], a });
-                    }
-                    const sorted = [...rows.values()].sort((x, y) => k === 'm' ? x.v - y.v : y.v - x.v);
-                    const col = document.createElement('div');
-                    col.className = 'vp-lbadm-col';
-                    list.appendChild(col);
-                    const t = document.createElement('div');
-                    t.className = 'vp-lbadm-t';
-                    t.textContent = g.name;
-                    col.appendChild(t);
-                    const fmt = v => k === 'm' ? `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}` : String(v);
-                    sorted.forEach((r, i) => {
-                        total++;
-                        const uid = r.a.id, rp = reps.get(uid) && reps.get(uid)[k], tag = repTag(rp, r.v), off = lbIsVoid(voids, uid, k, r.v, tag);
-                        const whole = !!rp && rp.parts.filter(Boolean).length === rp.n;
-                        if (!whole) noRep++;
-                        const warn = k === 's' && r.v > 253 ? 'выше возможного (поле 16×16)' : k === 'm' && r.v < 5 ? 'слишком быстро для человека' : '';
-                        const row = document.createElement('div');
-                        row.className = 'vp-junk-row vp-lbadm-row' + (off ? ' vp-off' : '');
-                        row.innerHTML = `<div class="vp-junk-top"><span class="vp-lbadm-n"></span><a target="_blank" rel="noopener"></a><b class="vp-lbadm-v"></b><span class="vp-junk-meta"></span></div>
-                            <div class="vp-junk-why"></div><div class="vp-junk-acts"></div>`;
-                        row.querySelector('.vp-lbadm-n').textContent = i + 1;
-                        const link = row.querySelector('a');
-                        link.textContent = r.a.displayName || r.a.username || '?';
-                        if (r.a.username) link.href = '/@' + r.a.username;
-                        row.querySelector('.vp-lbadm-v').textContent = fmt(r.v);
-                        row.querySelector('.vp-junk-meta').textContent = off ? 'убран из топа' : whole ? 'есть повтор' : rp ? 'повтор неполный' : 'повтора нет';
-                        const why = row.querySelector('.vp-junk-why');
-                        if (warn) why.textContent = warn; else why.remove();
-                        const acts = row.querySelector('.vp-junk-acts'), btn = (txt, fn, cls) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; if (cls) b.dataset.a = cls; b.onclick = fn; acts.appendChild(b); return b; };
-                        if (whole) btn('Смотреть повтор', () => repView(g.id, r, rp));
-                        const token = `${String(uid).toLowerCase()}:${k}:${r.v}:${tag}`;
-                        if (off) btn('Вернуть в топ', async () => { try { await lbVoidPush(token, false); } catch (e) { alert(e.message || e); } draw(true); });
-                        else btn('Убрать из топа', async () => {
-                            if (!confirm(`Убрать ${fmt(r.v)} (${link.textContent}) из «${g.name}»? У него на устройстве этот рекорд тоже обнулится.`)) return;
-                            try { await lbVoidPush(token, true); } catch (e) { alert(e.message || e); }
-                            draw(true);
-                        }, 'del');
-                        col.appendChild(row);
-                    });
-                    if (!sorted.length) { const d = document.createElement('div'); d.className = 'vp-verify-empty'; d.textContent = 'Пусто'; col.appendChild(d); }
-                }
-                head.textContent = `рекордов ${total}, без повтора ${noRep}`;
-            };
-            draw(true);
-        }
-        async function repView(id, r, rp) {
-            let d;
-            try { d = await repDecode(rp.parts.join('')); } catch (e) { alert('Повтор не читается: ' + (e.message || e)); return; }
-            const k = LB_KEYS[id], fmt = v => k === 'm' ? `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}` : String(v);
-            let res;
-            try { const chk = GAME_MAKERS[id](() => { }, { seed: d.seed, ev: d.ev, instant: true }); chk.repTo(Infinity); res = chk.repRes(); chk.destroy(); }
-            catch (e) { res = { score: -1 }; logErr('повтор', e); }
-            const same = res.score === r.v && d.score === r.v;
-            const gaps = [];
-            for (let i = 1; i < d.ev.length; i++) gaps.push(d.ev[i][0] - d.ev[i - 1][0]);
-            const w = document.createElement('div');
-            w.className = 'vp-rep';
-            w.innerHTML = `<div class="vp-rep-win"><div class="vp-admin-head"><b></b><span></span><button type="button" aria-label="Закрыть">×</button></div>
-                <div class="vp-rep-verdict"></div><div class="vp-rep-info"></div><div class="vp-rep-body"></div>
-                <div class="vp-rep-bar"><button type="button" data-s="1">×1</button><button type="button" data-s="4">×4</button><button type="button" data-s="16">×16</button><button type="button" data-s="0">С начала</button><span class="vp-rep-t"></span></div></div>`;
-            w.querySelector('b').textContent = `${GAMES.find(g => g.id === id).name} · ${r.a.displayName || r.a.username || '?'}`;
-            w.querySelector('.vp-admin-head span').textContent = `в топе ${fmt(r.v)}`;
-            const v = w.querySelector('.vp-rep-verdict');
-            v.classList.toggle('vp-bad', !same);
-            v.textContent = same ? `Совпадает: партия по повтору даёт ${fmt(res.score)}`
-                : `Не сходится: в топе ${fmt(r.v)}, повтор записан для ${fmt(d.score)}, партия по повтору даёт ${res.score > 0 ? fmt(res.score) : (k === 'm' ? 'не разминировано' : '0')}`;
-            const info = [`ходов: ${d.ev.length}`];
-            if (k !== 's' && gaps.length) info.push(`самая короткая пауза между ходами: ${Math.min(...gaps)} мс`, `пауз короче 50 мс: ${gaps.filter(x => x < 50).length}`);
-            w.querySelector('.vp-rep-info').textContent = info.join(' · ');
-            const body = w.querySelector('.vp-rep-body'), tEl = w.querySelector('.vp-rep-t');
-            let inst = null, vt = 0, sp = 1, raf = 0, prev = 0;
-            const tick = now => {
-                raf = 0;
-                if (!w.isConnected || !inst) return;
-                vt += (now - prev) * sp; prev = now;
-                inst.repTo(vt);
-                if (!inst.repRes().done) raf = requestAnimationFrame(tick);
-            };
-            const play = () => {
-                if (inst) inst.destroy();
-                inst = GAME_MAKERS[id](txt => { tEl.textContent = txt; }, { seed: d.seed, ev: d.ev });
-                body.replaceChildren(inst.el);
-                inst.resize();
-                const g = inst.el.querySelector('.vp-mines');
-                if (g) g.style.setProperty('--vp-mc', '28px');
-                vt = 0; prev = performance.now();
-                if (!raf) raf = requestAnimationFrame(tick);
-            };
-            w.querySelector('.vp-rep-bar').onclick = e => {
-                const b = e.target.closest('[data-s]');
-                if (!b) return;
-                if (b.dataset.s === '0') return play();
-                sp = +b.dataset.s;
-                w.querySelectorAll('.vp-rep-bar [data-s]').forEach(x => x.classList.toggle('vp-on', x === b));
-            };
-            const close = () => { cancelAnimationFrame(raf); if (inst) inst.destroy(); w.remove(); };
-            w.querySelector('.vp-admin-head button').onclick = close;
-            w.addEventListener('click', e => { if (e.target === w) close(); });
-            document.body.appendChild(w);
-            w.querySelector('[data-s="1"]').classList.add('vp-on');
-            play();
-        }
-        let fpsBox = null;
-        function toggleFps() {
-            if (fpsBox) { fpsBox.remove(); fpsBox = null; return; }
-            fpsBox = document.createElement('div');
-            fpsBox.className = 'vp-fps';
-            document.body.appendChild(fpsBox);
-            fpsMeter(fpsBox);
-        }
-
-        function fabFace() {
-            const face = GM_getValue('fabFace', '');
-            return face ? `<img src="${face.replace(/"/g, '')}" alt="">` : '<span class="vp-fab-a">A</span>';
-        }
-
-        function adminFab() {
-            if (document.querySelector('.vp-fab') || !meData || meData.id !== OWNER_ID) return;
-            const fab = document.createElement('div');
-            fab.className = 'vp-fab';
-            fab.innerHTML = `<button type="button" class="vp-fab-btn" aria-label="Админка">${fabFace()}</button>
-            <div class="vp-fab-menu"><button type="button" data-act="snap" title="На компьютере — ещё Ctrl+Shift+S">${svgIcon(GLYPH.camera + '<circle cx="12" cy="13" r="3.5"/>', 18)}<span>Снимок для Claude</span></button>
-                <button type="button" data-act="snapLater">${svgIcon(GLYPH.camera + '<path d="M12 10v3l2 1.5"/>', 18)}<span>Снимок через 30 с</span></button>
-                <button type="button" data-act="snapNew" title="Только то, что появилось после прошлого снимка. На компьютере — ещё Ctrl+Shift+E, сразу">${svgIcon(GLYPH.camera + '<path d="M12 10v6M9 13h6"/>', 18)}<span>Только новое через 15 с</span></button>
-                <button type="button" data-act="report">${svgIcon('<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h4"/>', 18)}<span>Скопировать отчёт</span></button>
-                <button type="button" data-act="diag">${svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4M8.5 11l1.8 1.8 3.4-3.6"/>', 18)}<span>Диагностика</span></button>
-                <button type="button" data-act="verify">${svgIcon('<path d="M12 2.5l2.9 6 6.6.6-5 4.4 1.5 6.5L12 16.8 5.9 20 7.4 13.5l-5-4.4 6.6-.6z"/>', 18)}<span>Галочки</span></button>
-                <button type="button" data-act="junk">${svgIcon('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>', 18)}<span>Мусор под постами</span></button>
-                <button type="button" data-act="records">${svgIcon('<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>', 18)}<span>Рекорды и повторы</span></button>
-                <button type="button" data-act="versions">${svgIcon('<path d="M4 7h16M4 12h10M4 17h6"/><path d="m16 15 2.5 2.5L22 13"/>', 18)}<span>Версии у пользователей</span></button>
-                <button type="button" data-act="rare">${svgIcon('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.3 6L12 16.4 6.6 19.4l1.3-6L3.4 9.3l6-.7z"/>', 18)}<span>Редкая заставка</span></button>
-                <button type="button" data-act="assemble">${svgIcon('<path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z"/>', 18)}<span>Заставка «сборка»</span></button>
-                <button type="button" data-act="twist">${svgIcon('<path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/>', 18)}<span>Заставка «обманка»</span></button>
-                <button type="button" data-act="call">${svgIcon(GLYPH.phone, 18)}<span>Звонок-розыгрыш себе</span></button>
-                <button type="button" data-act="callto">${svgIcon(GLYPH.phone + '<path d="M15 3h6v6M21 3l-6 6"/>', 18)}<span>Позвонить человеку…</span></button>
-                <button type="button" data-act="fps">${svgIcon('<path d="M3 17l5-6 4 3 5-7 4 4"/>', 18)}<span>Счётчик FPS</span></button>
-                <button type="button" data-act="face">${svgIcon('<rect x="4" y="4" width="16" height="16" rx="8"/><path d="M8 15l2.5-3 2 2 1.5-2 2 3"/>', 18)}<span>Своя картинка кнопки</span></button>
-                <button type="button" data-act="off">${svgIcon('<path d="M12 3v8"/><path d="M6.3 7a8 8 0 1 0 11.4 0"/>', 18)}<span>Мод выкл (до закрытия вкладки)</span></button></div>`;
-            document.body.appendChild(fab);
-            const btn = fab.firstElementChild, SIZE = 48, M = 8;
-            const pos = GM_getValue('adminFabPos', { side: 'right', y: 0.6 });
-            const place = (x, y) => { fab.style.left = x + 'px'; fab.style.top = y + 'px'; };
-            const snap = () => {
-                const y = Math.max(M, Math.min(innerHeight - SIZE - M, pos.y * innerHeight));
-                fab.classList.toggle('vp-left', pos.side === 'left');
-                fab.classList.add('vp-snap');
-                place(pos.side === 'left' ? M : innerWidth - SIZE - M, y);
-            };
-            snap();
-            addEventListener('resize', snap);
-            let start = null, moved = false, idleT = 0;
-            const wake = () => { fab.classList.remove('vp-idle'); clearTimeout(idleT); idleT = setTimeout(() => fab.classList.add('vp-idle'), 2500); };
-            wake();
-            btn.addEventListener('pointerdown', e => {
-                start = { x: e.clientX, y: e.clientY, l: fab.offsetLeft, t: fab.offsetTop };
-                moved = false;
-                btn.setPointerCapture(e.pointerId);
-                wake();
-            });
-            btn.addEventListener('pointermove', e => {
-                if (!start) return;
-                const dx = e.clientX - start.x, dy = e.clientY - start.y;
-                if (!moved && Math.hypot(dx, dy) < 6) return;
-                if (!moved) { moved = true; fab.classList.remove('vp-snap', 'vp-open'); }
-                place(Math.max(0, Math.min(innerWidth - SIZE, start.l + dx)), Math.max(0, Math.min(innerHeight - SIZE, start.t + dy)));
-            });
-            const up = () => {
-                if (!start) return;
-                start = null;
-                if (moved) {
-                    pos.side = fab.offsetLeft + SIZE / 2 < innerWidth / 2 ? 'left' : 'right';
-                    pos.y = fab.offsetTop / innerHeight;
-                    GM_setValue('adminFabPos', { side: pos.side, y: pos.y });
-                    snap();
-                } else {
-                    fab.classList.toggle('vp-open');
-                    const menu = fab.querySelector('.vp-fab-menu'), h = menu.offsetHeight, c = fab.offsetTop + SIZE / 2;
-                    const shift = Math.max(8 - (c - h / 2), Math.min(0, innerHeight - 8 - (c + h / 2)));
-                    menu.style.marginTop = shift + 'px';
-                }
-                wake();
-            };
-            btn.addEventListener('pointerup', up);
-            btn.addEventListener('pointercancel', up);
-            btn.addEventListener('click', e => e.stopPropagation());
-            const act = (name, fn) => fab.querySelector(`[data-act="${name}"]`).addEventListener('click', e => { e.stopPropagation(); fab.classList.remove('vp-open'); fn(); });
-            const later = (sec, fn) => {
-                if (fab.dataset.count) return;
-                let n = sec;
-                fab.dataset.count = n;
-                const t = setInterval(() => {
-                    if (--n > 0) { fab.dataset.count = n; return; }
-                    clearInterval(t);
-                    delete fab.dataset.count;
-                    fn();
-                }, 1000);
-            };
-            const fullSnap = () => pageSnapshot().then(() => adminToast('Снимок сохранён'));
-            const newSnap = () => newSnapshot().then(n => { if (n) adminToast(`Новое сохранено: ${n} шт.`); });
-            act('snap', () => setTimeout(fullSnap, 200));
-            act('snapLater', () => later(30, fullSnap));
-            act('snapNew', () => later(15, newSnap));
-            if (!IS_PHONE) addEventListener('keydown', e => {
-                if (!e.ctrlKey || !e.shiftKey || e.altKey || (e.code !== 'KeyS' && e.code !== 'KeyE')) return;
-                e.preventDefault(); e.stopPropagation();
-                (e.code === 'KeyS' ? fullSnap : newSnap)();
-            }, true);
-            act('report', () => copyText(adminReport()).then(ok => adminToast(ok ? 'Отчёт скопирован — вставь его Claude' : 'Не вышло скопировать')));
-            act('diag', adminDiag);
-            act('verify', () => adminVerify());
-            act('junk', () => adminJunk());
-            act('records', () => adminRecords());
-            act('versions', () => adminVersions());
-            act('fps', toggleFps);
-            act('rare', () => playIntro(IS_PHONE ? 'silent' : 'desk', true));
-            act('assemble', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'assemble'));
-            act('twist', () => playIntro(IS_PHONE ? 'silent' : 'desk', 'twist'));
-            act('call', fakeCall);
-            act('callto', adminCallPick);
-            act('face', () => {
-                if (GM_getValue('fabFace', '') && confirm('Вернуть обычную «A»? (Отмена — выбрать другую картинку)')) {
-                    GM_setValue('fabFace', ''); btn.innerHTML = fabFace(); return;
-                }
-                const f = document.createElement('input');
-                f.type = 'file'; f.accept = 'image/*';
-                f.onchange = () => {
-                    const file = f.files && f.files[0];
-                    if (!file) return;
-                    const url = URL.createObjectURL(file), img = new Image();
-                    img.onload = () => {
-                        const sd = Math.min(img.naturalWidth, img.naturalHeight), c = document.createElement('canvas');
-                        c.width = c.height = 96;
-                        c.getContext('2d').drawImage(img, (img.naturalWidth - sd) / 2, (img.naturalHeight - sd) / 2, sd, sd, 0, 0, 96, 96);
-                        URL.revokeObjectURL(url);
-                        GM_setValue('fabFace', c.toDataURL('image/png'));
-                        btn.innerHTML = fabFace();
-                    };
-                    img.src = url;
-                };
-                f.click();
-            });
-            act('off', () => { if (!confirm('Выключить ИТД X до закрытия вкладки? Вернуть — кнопкой внизу страницы.')) return; try { sessionStorage.setItem('vp-off', '1'); } catch (e) { } location.reload(); });
-            document.addEventListener('pointerdown', e => { if (!fab.contains(e.target)) fab.classList.remove('vp-open'); }, true);
-        }
-        onDom(adminFab);
-
-        function blobToData(url, max) {
-            return fetch(url).then(r => r.blob()).then(b => b.size > max ? '' : new Promise(res => {
-                const fr = new FileReader();
-                fr.onload = () => res(fr.result);
-                fr.onerror = () => res('');
-                fr.readAsDataURL(b);
-            })).catch(() => '');
-        }
-        const snapPrev = { seen: null, css: null, name: '' };
-        function snapCss(onlyNew) {
-            const css = [], lens = new WeakMap();
-            for (const sh of document.styleSheets) {
-                let text = null;
-                try { text = [...sh.cssRules].map(r => r.cssText).join('\n'); } catch (e) { }
-                const key = sh.ownerNode || sh, len = text == null ? -1 : text.length;
-                lens.set(key, len);
-                if (onlyNew && snapPrev.css && snapPrev.css.get(key) === len) continue;
-                css.push(text == null ? `/* ${sh.href} — чужой домен, не читается */` : `/* ${sh.href || (sh.ownerNode && sh.ownerNode.id) || 'inline'} */\n` + text);
-            }
-            return { css: css.join('\n\n'), lens };
-        }
-        function snapFields(live, copy) {
-            const a = live.querySelectorAll('input, textarea, select'), b = copy.querySelectorAll('input, textarea, select');
-            a.forEach((el, i) => {
-                const c = b[i];
-                if (!c || el.type === 'password' || el.type === 'file') return;
-                if (el.tagName === 'SELECT') [...c.options].forEach((o, j) => o.toggleAttribute('selected', j === el.selectedIndex));
-                else if (/^(checkbox|radio)$/.test(el.type)) c.toggleAttribute('checked', el.checked);
-                else if (el.tagName === 'TEXTAREA') c.textContent = el.value;
-                else c.setAttribute('value', el.value);
-            });
-        }
-        async function snapBlobs(root) {
-            const blobs = new Map();
-            let budget = 25e6;
-            for (const el of root.querySelectorAll('[src^="blob:"], [poster^="blob:"]')) {
-                for (const a of ['src', 'poster']) {
-                    const u = el.getAttribute(a);
-                    if (!u || !u.startsWith('blob:')) continue;
-                    if (!blobs.has(u)) {
-                        const d = /^(VIDEO|SOURCE|AUDIO)$/.test(el.tagName) ? '' : await blobToData(u, Math.min(4e6, budget));
-                        budget -= d.length;
-                        blobs.set(u, d);
-                    }
-                    if (blobs.get(u)) el.setAttribute(a, blobs.get(u));
-                    else el.setAttribute('data-vp-blob', u);
-                }
-            }
-        }
-        function snapRemember(lens, name) {
-            const seen = new WeakSet();
-            for (const el of document.getElementsByTagName('*')) seen.add(el);
-            Object.assign(snapPrev, { seen, css: lens, name });
-        }
-        function snapName(kind) {
-            const d = new Date(), p = n => String(n).padStart(2, '0');
-            return `itd-${kind}-${(location.pathname.replace(/\W+/g, '-').replace(/^-|-$/g, '') || 'feed')}-${innerWidth}px-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.html`;
-        }
-        function snapWrite(doc, css, extra, name) {
-            const info = Object.assign({
-                url: location.href, width: innerWidth, height: innerHeight, dpr: devicePixelRatio, scrollX, scrollY,
-                ua: navigator.userAgent, version: GM_info.script.version, theme: document.documentElement.getAttribute('data-theme'), at: new Date().toISOString(), file: name
-            }, extra);
-            const head = doc.querySelector('head') || doc.insertBefore(document.createElement('head'), doc.firstChild);
-            const meta = document.createElement('script');
-            meta.type = 'application/json'; meta.id = 'vp-snapshot-info';
-            meta.textContent = JSON.stringify(info, null, 1);
-            const style = document.createElement('style');
-            style.textContent = css;
-            head.prepend(meta, style);
-            const blob = new Blob(['<!doctype html>\n' + doc.outerHTML], { type: 'text/html' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = name;
-            a.className = 'vp-snap-dl';
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
-        }
-        async function pageSnapshot() {
-            const { css, lens } = snapCss(false);
-            const doc = document.documentElement.cloneNode(true), name = snapName('snapshot');
-            snapFields(document.documentElement, doc);
-            snapRemember(lens, name);
-            doc.querySelectorAll('script, style, link[rel="stylesheet"], canvas, .vp-fab').forEach(el => el.remove());
-            await snapBlobs(doc);
-            snapWrite(doc, css, { kind: 'full' }, name);
-        }
-        function snapPath(el) {
-            const parts = [];
-            for (let e = el; e && e !== document.documentElement && parts.length < 7; e = e.parentElement) {
-                parts.unshift(e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (e.classList[0] ? '.' + e.classList[0] : ''));
-            }
-            return parts.join(' > ');
-        }
-        async function newSnapshot() {
-            if (!snapPrev.seen) { adminToast('Сначала «Снимок для Claude» — новое считается от него'); return 0; }
-            const seen = snapPrev.seen, skip = 'script, style, link, noscript, .vp-fab, .vp-admin-toast, .vp-snap-dl';
-            const tops = [...document.body.getElementsByTagName('*')].filter(el => !seen.has(el) && seen.has(el.parentElement) && !el.closest(skip));
-            const { css, lens } = snapCss(true);
-            const prev = snapPrev.name, name = snapName('new');
-            if (!tops.length) { snapRemember(lens, prev); adminToast('Нового с прошлого снимка нет'); return 0; }
-            const doc = document.documentElement.cloneNode(false);
-            doc.appendChild(document.createElement('head'));
-            const copies = new Map([[document.documentElement, doc]]);
-            const shell = el => {
-                if (copies.has(el)) return copies.get(el);
-                const c = el.cloneNode(false);
-                shell(el.parentElement).appendChild(c);
-                copies.set(el, c);
-                return c;
-            };
-            for (const el of tops) {
-                const c = el.cloneNode(true);
-                snapFields(el, c);
-                c.setAttribute('data-vp-new', '');
-                shell(el.parentElement).appendChild(c);
-            }
-            const paths = tops.map(snapPath);
-            snapRemember(lens, name);
-            doc.querySelectorAll('script, style, link[rel="stylesheet"], canvas').forEach(el => el.remove());
-            await snapBlobs(doc);
-            snapWrite(doc, css, { kind: 'new', prev, parts: paths }, name);
-            return tops.length;
-        }
 
         function pillButton(cls, title, icon, open) {
             const b = document.createElement('span');
@@ -4916,6 +4153,9 @@
         }
 
         const CHANGELOG = [
+            ['3.5.0', '1 октября 2026', [
+                'Мику и Тето: в настройках новая вкладка «Мику» — Мику держится за экран справа, Тето слева. Можно оставить одну и поменять размер',
+                'Оптимизация и исправление багов']],
             ['3.4.4.3', '1 октября 2026', [
                 'Оптимизация и исправление багов']],
             ['3.4.4.2', '1 октября 2026', [
@@ -12905,31 +12145,21 @@
             }
             return new Uint8Array(out);
         }
-        function repUnpack(b) {
-            let i = 0;
-            const vi = () => { let n = 0, m = 1, x; do { if (i >= b.length) throw new Error('обрыв повтора'); x = b[i++]; n += (x & 127) * m; m *= 128; } while (x & 128); return n; };
-            if (b[i++] !== 1) throw new Error('незнакомый повтор');
-            const g = 'smt'[b[i++]];
-            if (!g) throw new Error('незнакомая игра');
-            const score = vi(), seed = vi() >>> 0, n = vi(), ev = [];
-            let p = 0;
-            for (let j = 0; j < n; j++) {
-                if (g === 's') { const v = vi(); p += Math.floor(v / 4); ev.push([p, v % 4]); }
-                else if (g === 'm') { p += vi(); const x = b[i++]; ev.push([p, x >> 7, x & 127]); }
-                else { const v = vi(); p += Math.floor(v / 8); ev.push([p, v % 8]); }
-            }
-            return { g, score, seed, ev };
+        async function ownerSeal(u8) {
+            const S = crypto.subtle, pub = await S.importKey('raw', openB64(OWNER_PUB), { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+            const eph = await S.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+            const bits = await S.deriveBits({ name: 'ECDH', public: pub }, eph.privateKey, 256);
+            const hk = await S.importKey('raw', bits, 'HKDF', false, ['deriveKey']);
+            const aes = await S.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: new TextEncoder().encode('ITDX owner') }, hk, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+            const iv = crypto.getRandomValues(new Uint8Array(12)), ct = new Uint8Array(await S.encrypt({ name: 'AES-GCM', iv }, aes, u8));
+            const raw = new Uint8Array(await S.exportKey('raw', eph.publicKey)), out = new Uint8Array(raw.length + 12 + ct.length);
+            out.set(raw); out.set(iv, raw.length); out.set(ct, raw.length + 12);
+            return sealB64(out);
         }
         async function repEncode(g, r) {
-            const z = await repZip(repPack(g, r)), salt = (Math.random() * 256) | 0, body = new Uint8Array(z.length + 1);
-            body[0] = salt; body.set(obfBytes(z, salt), 1);
-            return sealB64(body);
+            return ownerSeal(await repZip(repPack(g, r)));
         }
-        async function repDecode(b64) {
-            const b = openB64(b64);
-            return repUnpack(await repZip(obfBytes(b.slice(1), b[0]), true));
-        }
-        const REP_RE = /^ITDXP1 ([smt]) (\d+)\/(\d+) (?:(\d+) )?(\S+)$/;
+        const REP_RE = /^ITDXP[12] ([smt]) (\d+)\/(\d+) (?:(\d+) )?(\S+)$/;
         function lbReplays(all) {
             const out = new Map();
             for (const c of all || []) {
@@ -12937,7 +12167,7 @@
                 if (!x || !c.author || !+x[3]) continue;
                 const u = out.get(c.author.id) || {};
                 out.set(c.author.id, u);
-                const r = u[x[1]] || (u[x[1]] = { n: +x[3], parts: [], score: x[4] ? +x[4] : null });
+                const r = u[x[1]] || (u[x[1]] = { n: +x[3], parts: [], score: x[4] ? +x[4] : null, p: +String(c.content).trim()[5] });
                 if (r.n === +x[3]) r.parts[+x[2] - 1] = x[5];
             }
             return out;
@@ -12949,9 +12179,9 @@
                 const b64 = await repEncode(g, r), parts = [];
                 for (let i = 0; i < b64.length; i += 900) parts.push(b64.slice(i, i + 900));
                 if (parts.length <= 12) {
-                    const mine = all.filter(c => lbIsMe(c.author) && String(c.content || '').trim().startsWith(`ITDXP1 ${g} `));
+                    const mine = all.filter(c => lbIsMe(c.author) && new RegExp(`^ITDXP[12] ${g} `).test(String(c.content || '').trim()));
                     for (let i = 0; i < Math.max(parts.length, mine.length); i++) {
-                        const text = i < parts.length ? `ITDXP1 ${g} ${i + 1}/${parts.length} ${r.score} ${parts[i]}` : `ITDXP1 ${g} 0/0 -`, c = mine[i];
+                        const text = i < parts.length ? `ITDXP2 ${g} ${i + 1}/${parts.length} ${r.score} ${parts[i]}` : `ITDXP2 ${g} 0/0 -`, c = mine[i];
                         if (c && String(c.content).trim() === text) continue;
                         const res = c ? await editComment(c.id, text) : await sendComment(GAMES_POST_ID, text);
                         if (!res.ok) throw new Error('повтор: ' + res.status);
@@ -12961,19 +12191,6 @@
                 if (parts.length <= 12) r.tag = parts[0].slice(0, 10);
                 GM_setValue(acctKey('vp_rep_' + g), r);
             }
-        }
-        async function lbVoidPush(token, add) {
-            const all = await lbComments(true);
-            const mine = all.find(c => c.author && c.author.id === OWNER_ID && openText(c.content).startsWith(LB_VOID + ' '));
-            let toks = mine ? openText(mine.content).slice(LB_VOID.length + 1).split(/\s+/).filter(Boolean) : [];
-            toks = toks.filter(t => t !== token);
-            if (add) toks.push(token);
-            while (toks.length && sealText(LB_VOID + ' ' + toks.join(' ')).length > 990) toks.shift();
-            const text = sealText(LB_VOID + ' ' + toks.join(' '));
-            const res = mine ? await editComment(mine.id, text) : await sendComment(GAMES_POST_ID, text);
-            lbLoad = null;
-            if (!res.ok) throw new Error('метка рекорда: ' + res.status);
-            if (gw.el) lbRender();
         }
         const lbBetter = (k, a, b) => !a ? b : !b ? a : k === 'm' ? Math.min(a, b) : Math.max(a, b);
         const lbLocal = () => ({ s: +GM_getValue(acctKey('vp_snake_best'), 0) || 0, m: +GM_getValue(acctKey('vp_mines_best'), 0) || 0, t: +GM_getValue(acctKey('vp_tetris_best'), 0) || 0 });
@@ -13132,6 +12349,26 @@
         renderGamesMenu();
 
         placeRail();
+        if (palsOn) palsApply();
+
+        let admLinked = false;
+        onDom(function admLink() {
+            if (admLinked || !meData || meData.id !== OWNER_ID) return;
+            admLinked = true;
+            const w = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+            w.__itdx = {
+                OWNER_ID, VERIFICATION_POST_ID, MSG_POST_ID, STICKER_POST_ID, GAMES_POST_ID, SERVICE_POSTS, LOOK_RE, REP_RE, LB_VOID, LB_KEYS, GAMES, GAME_MAKERS,
+                COOLDOWN_MS, QUARANTINE_MS, MOD_VER, IS_PHONE, GLYPH, ROLE_ORDER, SETTINGS, roleCount, vpErrors, msgNet,
+                svgIcon, addCss, logErr, copyText, openText, sealText, openB64, obfBytes, api, editComment, sendComment, srvNow, allComments,
+                loadVerificationComments, checkAllComments, parseAllOwnerLists, readVerified, verifyTimeline, parseCode, isAuthorCode,
+                isApprovedAuthor, loadApprovedIds, parseLook, verCmp, lbComments, lbVoids, lbReplays, parseLB, lbBetter, repTag, lbIsVoid,
+                playIntro, fakeCall, callCss, msgSync, msgMyId, msgSend, verifiedNames, verifiedInfo, fpsMeter, tagAll, onDom,
+                lbReload: () => { lbLoad = null; if (gw.el) lbRender(); },
+                look: () => ({ currentStyle, backgroundStyle, appIcon }),
+                legacy: () => ({ adminFabPos: GM_getValue('adminFabPos', null), fabFace: GM_getValue('fabFace', ''), junkOk: GM_getValue('junkOk', []) })
+            };
+            document.dispatchEvent(new Event('itdx-ready'));
+        });
 
         console.log('🟢 ИТД X');
     };
