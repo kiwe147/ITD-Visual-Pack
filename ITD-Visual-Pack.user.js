@@ -2151,6 +2151,7 @@
                 const f = input.files[0];
                 if (!f) return;
                 if (f.size > 150 * 1024 * 1024) { alert('Файл больше 150 МБ — возьми поменьше'); return; }
+                if (/^video\//.test(f.type) && f.size > VIDEO_UP_MAX) alert('Видео больше 30 МБ: у тебя оно будет играть, а другие увидят только первый кадр. Чтобы видели видео — сожми его до 30 МБ');
                 try { await bgFile(f); } catch (e) { alert('Не вышло сохранить файл: ' + (e && e.message || e)); return; }
                 backgroundStyle = 'custom';
                 GM_setValue('backgroundStyle', 'custom');
@@ -2168,8 +2169,8 @@
             const gv = showLooks && look && look.v || '';
             if (gv !== bannerVideoGuest) { bannerVideoGuest = gv; bannerVideoSync(); }
             const g = showLooks && look && look.b && look.b !== '-' && (look.b !== 'custom' || look.i)
-                ? { b: look.b, n: look.n, img: look.b === 'custom' ? lookImgUrl(look.i) : '' } : null;
-            const key = g ? g.b + '|' + g.n + '|' + g.img : '';
+                ? { b: look.b, n: look.n, img: look.b === 'custom' ? lookImgUrl(look.i) : '', vid: look.b === 'custom' && look.bv ? 'https://cdn.xn--d1ah4a.com/' + look.bv : '' } : null;
+            const key = g ? g.b + '|' + g.n + '|' + g.img + '|' + g.vid : '';
             if (key === (bgGuest ? bgGuest.key : '')) return;
             bgGuest = g && Object.assign(g, { key });
             bgName = '';
@@ -2177,6 +2178,14 @@
                 const im = document.createElement('img');
                 im.src = bgGuest.img; im.alt = '';
                 bgMedia.replaceChildren(im);
+                if (bgGuest.vid) {
+                    const v = document.createElement('video');
+                    Object.assign(v, { muted: true, loop: true, autoplay: true, playsInline: true, poster: bgGuest.img });
+                    v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+                    v.addEventListener('error', () => { if (v.isConnected) v.replaceWith(im); }, { once: true });
+                    v.src = bgGuest.vid;
+                    bgMedia.replaceChildren(v);
+                }
                 bgMedia._guest = true;
             } else if (bgMedia._guest) { bgMedia._guest = false; bgMedia.replaceChildren(); }
             updateBackgroundVisibility();
@@ -2694,6 +2703,7 @@
             const look = { n: o.n, b: '-', g: /^[01]{2}$/.test(o.g || '') ? o.g : '11' };
             if (o.b === 'custom' ? /^[0-4][0-9a-f]{32}$/.test(o.i || '') : BACKGROUNDS[o.b]) look.b = o.b;
             if (look.b === 'custom') look.i = o.i;
+            if (look.b === 'custom' && BANNER_VIDEO_RE.test(o.bv || '')) look.bv = o.bv;
             if (BANNER_VIDEO_RE.test(o.v || '')) look.v = o.v;
             if (VER_RE.test(o.ver || '')) look.ver = o.ver;
             if (/^\d{5,6}$/.test(o.t || '')) look.t = +o.t;
@@ -2723,12 +2733,29 @@
             if (!blob) return '';
             const sig = blob.size + ':' + blob.type;
             const saved = GM_getValue(acctKey('vp_bg_cdn'), null);
-            if (saved && saved.sig === sig && saved.ref) return saved.ref;
-            const file = /^video\//.test(blob.type) ? await videoFrame(blob) : new File([blob], 'bg', { type: blob.type });
-            const img = await msgUploadImage(file);
-            const ref = img.ext + img.id.replace(/-/g, '');
-            GM_setValue(acctKey('vp_bg_cdn'), { sig, ref });
-            return ref;
+            const video = /^video\//.test(blob.type);
+            if (saved && saved.sig === sig && saved.ref && (!video || 'vid' in saved || Date.now() - (saved.vidFail || 0) < 36e5)) return saved;
+            let ref = saved && saved.sig === sig && saved.ref;
+            if (!ref) {
+                const img = await msgUploadImage(video ? await videoFrame(blob) : new File([blob], 'bg', { type: blob.type }));
+                ref = img.ext + img.id.replace(/-/g, '');
+            }
+            let vid = '';
+            if (video && blob.size <= VIDEO_UP_MAX) vid = await uploadVideo(new File([blob], 'bg.' + (blob.type.split('/')[1] || 'mp4').replace('quicktime', 'mov'), { type: blob.type })).catch(e => { logErr('видео фона на сервер', e); return null; });
+            const out = vid === null ? { sig, ref, vidFail: Date.now() } : { sig, ref, vid };
+            GM_setValue(acctKey('vp_bg_cdn'), out);
+            return out;
+        }
+        const VIDEO_UP_MAX = 30 * 1024 * 1024;
+        async function uploadVideo(f) {
+            const fd = new FormData();
+            fd.append('file', f, f.name || 'video.mp4');
+            const res = await api('/api/files/upload', { method: 'POST', body: fd });
+            const j = await res.json().catch(() => null), d = j && (j.data || j);
+            if (!res.ok) throw new Error((d && (d.error && d.error.message || d.message)) || 'сайт ответил ' + res.status);
+            const m = String(d && d.url || '').match(/^https:\/\/cdn\.xn--d1ah4a\.com\/(.+)$/);
+            if (!m || !BANNER_VIDEO_RE.test(m[1])) throw new Error('сайт вернул не видео: ' + String(d && d.url || '—').slice(0, 90));
+            return m[1];
         }
         let lookBusy = false, lookSent = '';
         async function lookVer() {
@@ -2745,9 +2772,9 @@
             try {
                 const b = backgroundEnabled ? backgroundStyle : '-';
                 const today = Math.floor(srvNow() / 864e5), was = GM_getValue(acctKey('vp_look_day'), 0), day = today - was < 7 && today >= was ? was : today;
-                let img = '';
-                if (b === 'custom') img = await customBgCdn().catch(e => { logErr('свой фон на сервер', e); return ''; });
-                const text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (bannerVideoOwn() ? ' v=' + bannerVideoOwn() : '') + await lookVer().then(x => x ? ' vx=' + x : '') + ' t=' + day;
+                let img = '', bv = '';
+                if (b === 'custom') ({ ref: img = '', vid: bv = '' } = await customBgCdn().then(x => x || {}).catch(e => { logErr('свой фон на сервер', e); return {}; }));
+                const text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (img && bv ? ' bv=' + bv : '') + (bannerVideoOwn() ? ' v=' + bannerVideoOwn() : '') + await lookVer().then(x => x ? ' vx=' + x : '') + ' t=' + day;
                 if (text === lookSent) return;
                 const all = await loadVerificationComments();
                 const mine = all.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
@@ -4266,7 +4293,8 @@
                 'Профили за шторами больше не затемняются и не размываются',
                 'Мод шлёт на сайт намного меньше запросов: реже проверяет сообщения и кто в сети, запоминает это между перезагрузками, а если открыто несколько вкладок, фоном работает только одна',
                 'Автолайк заглядывает к каждому раз в 15–30 минут и ставит лайки не пачкой, а вразброс, через 3–10 минут после просмотра',
-                'Если сайт ответил «слишком много запросов», мод сам затихает и ждёт']],
+                'Если сайт ответил «слишком много запросов», мод сам затихает и ждёт',
+                'Видео на фоне теперь видят и другие: раньше им показывался только первый кадр']],
             ['3.5.0 – 3.5.0.8', '1 октября 2026', [
                 'Мику и Тето: новая вкладка «Мику» в настройках — Мику держится за экран справа, Тето слева. Прыгают вместе и в такт, можно оставить одну, поменять размер и вид: как есть, неоновый контур или приглушённые под тёмный сайт. Пока только на компьютере. Без потери качества, а весят всего по 2–3 МБ',
                 'Оптимизация и исправление багов']],
@@ -10918,18 +10946,12 @@
                 const f = input.files && input.files[0];
                 if (!f) return;
                 if (!/^video\//.test(f.type)) { alert('Нужен видеофайл: mp4, webm или mov'); return; }
-                if (f.size > 30 * 1024 * 1024) { alert('Видео больше 30 МБ — возьми покороче или сожми'); return; }
+                if (f.size > VIDEO_UP_MAX) { alert('Видео больше 30 МБ — возьми покороче или сожми'); return; }
                 bannerVideoBusy = true;
                 bannerFx();
                 try {
-                    const fd = new FormData();
-                    fd.append('file', f, f.name || 'banner.mp4');
-                    const res = await api('/api/files/upload', { method: 'POST', body: fd });
-                    const j = await res.json().catch(() => null), d = j && (j.data || j);
-                    if (!res.ok) throw new Error((d && (d.error && d.error.message || d.message)) || 'сайт ответил ' + res.status);
-                    const m = String(d && d.url || '').match(/^https:\/\/cdn\.xn--d1ah4a\.com\/(.+)$/);
-                    if (!m || !BANNER_VIDEO_RE.test(m[1])) throw new Error('сайт вернул не видео: ' + String(d && d.url || '—').slice(0, 90));
-                    GM_setValue(acctKey('vp_banner_video'), m[1]);
+                    const path = await uploadVideo(new File([f], f.name || 'banner.mp4', { type: f.type }));
+                    GM_setValue(acctKey('vp_banner_video'), path);
                     publishLook();
                     bannerVideoSync();
                 } catch (e) { logErr('видео в баннер', e); alert('Не вышло загрузить видео: ' + (e && e.message || e)); }
