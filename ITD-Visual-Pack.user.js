@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.1.7
+// @version      3.5.1.8
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -200,6 +200,7 @@
                 try {
                     const url = typeof input === 'string' ? input : input && input.url;
                     if (url && /\/notifications\/stream(?:[?#]|$)/.test(url)) res = quietServiceStream(res);
+                    if (url && /\/api\//.test(url)) res.then(apiPause).catch(() => { });
                     const method = (init && init.method) || (input && input.method) || 'GET';
                     if (url && /^get$/i.test(method) && USER_URL.test(url)) {
                         res.then(r => r.ok && r.clone().text().then(t => keepSiteUser(url, t))).catch(() => { });
@@ -245,6 +246,20 @@
         } catch (e) { console.warn('[ITD VP] не вышло подсмотреть запросы сайта', e); }
     })();
 
+    const TAB_ID = Math.random().toString(36).slice(2);
+    const apiPaused = () => Date.now() < (+GM_getValue('vp_api_pause', 0) || 0);
+    function apiPause(res) {
+        if (!res || res.status !== 429) return;
+        const s = Math.max(60, +(res.headers && res.headers.get('Retry-After')) || 0);
+        GM_setValue('vp_api_pause', Math.max(+GM_getValue('vp_api_pause', 0) || 0, Date.now() + s * 1000));
+    }
+    function leadTab() {
+        const l = GM_getValue('vp_lead_tab', null), now = Date.now();
+        if (l && l.id !== TAB_ID && now - l.at < 20000 && (document.hidden || !l.hidden)) return false;
+        GM_setValue('vp_lead_tab', { id: TAB_ID, at: now, hidden: document.hidden });
+        return true;
+    }
+    setInterval(() => { const l = GM_getValue('vp_lead_tab', null); if (l && l.id === TAB_ID) GM_setValue('vp_lead_tab', { id: TAB_ID, at: Date.now(), hidden: document.hidden }); }, 5000);
     const soundVolume = () => Math.max(0, Math.min(100, +GM_getValue('soundVolume', 100))) / 100;
     const INTRO = {
         LOCK: [620, 1020, 1420],
@@ -1518,8 +1533,10 @@
         }
         const AUTO_LIKE_CACHE_KEY = 'itd_auto_like_full_cache';
         const AUTO_LIKE_CACHE_TTL = 10 * 60 * 1000;
-        const LIKE_INTERVAL_MIN = 2 * 60 * 1000;
-        const LIKE_INTERVAL_MAX = 5 * 60 * 1000;
+        const LIKE_INTERVAL_MIN = 15 * 60 * 1000;
+        const LIKE_INTERVAL_MAX = 30 * 60 * 1000;
+        const LIKE_DELAY_MIN = 3 * 60 * 1000;
+        const LIKE_DELAY_MAX = 10 * 60 * 1000;
         const DAY = 24 * 60 * 60 * 1000;
 
         function saveAutoLikeUsers() {
@@ -1554,40 +1571,51 @@
             GM_setValue(acctKey(AUTO_LIKE_KEY), JSON.stringify(autoLikeIds));
             return now;
         }
-        async function likePostsForUser(username) {
-            if (autoLikeGone.has(username)) return;
+        async function autoLikeLook(username) {
+            if (autoLikeGone.has(username)) return [];
             rememberAutoLikeId(username);
-            try {
-                const res = await api(`/api/posts/user/${username}?limit=7`);
-                if (res.status === 404) {
-                    const now = renamedAutoLike(username);
-                    if (now) return likePostsForUser(now);
-                    autoLikeGone.add(username);
-                    return;
-                }
-                if (!res.ok) return;
-                const data = await res.json();
-                const posts = (data.data?.posts || data.posts || [])
-                    .filter(p => p.isLiked === false && Date.now() - new Date(p.createdAt).getTime() <= DAY);
-                for (const post of posts) {
-                    const like = await api(`/api/posts/${post.id}/like`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: '{}'
-                    });
-                    if (like.ok) await new Promise(r => setTimeout(r, 300));
-                }
-            } catch (e) { console.warn('[ITD VP] автолайк', e); logErr('автолайк', e); }
+            const res = await api(`/api/posts/user/${username}?limit=7`);
+            if (res.status === 404) {
+                const now = renamedAutoLike(username);
+                if (now) return autoLikeLook(now);
+                autoLikeGone.add(username);
+                return [];
+            }
+            if (!res.ok) return [];
+            const data = await res.json();
+            return (data.data?.posts || data.posts || [])
+                .filter(p => p.isLiked === false && Date.now() - new Date(p.createdAt).getTime() <= DAY);
         }
 
+        let autoLikeBusy = false;
+        const rndBetween = (a, b) => a + Math.random() * (b - a);
+        async function autoLikeTick() {
+            if (!autoLikeEnabled || autoLikeBusy || apiPaused() || !leadTab()) return;
+            const users = Object.keys(autoLikeUsers).filter(u => autoLikeUsers[u] === true);
+            const now = Date.now(), next = GM_getValue('vp_like_next', {}) || {};
+            let queue = (GM_getValue('vp_like_queue', []) || []).filter(q => autoLikeUsers[q.u] === true && now - q.at < DAY);
+            autoLikeBusy = true;
+            try {
+                const due = queue.filter(q => q.at <= now).sort((x, y) => x.at - y.at)[0];
+                if (due) {
+                    const like = await api(`/api/posts/${due.id}/like`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                    if (like.status !== 429) queue = queue.filter(q => q !== due);
+                } else {
+                    users.forEach(u => { if (!next[u]) next[u] = now + rndBetween(30e3, 5 * 60e3); });
+                    const u = users.filter(x => next[x] <= now).sort((x, y) => next[x] - next[y])[0];
+                    if (u) next[u] = now + rndBetween(LIKE_INTERVAL_MIN, LIKE_INTERVAL_MAX);
+                    GM_setValue('vp_like_next', Object.fromEntries(users.map(x => [x, next[x]])));
+                    if (u) {
+                        for (const p of await autoLikeLook(u)) if (!queue.some(q => q.id === p.id)) queue.push({ id: p.id, u, at: Date.now() + rndBetween(LIKE_DELAY_MIN, LIKE_DELAY_MAX) });
+                    }
+                }
+            } catch (e) { console.warn('[ITD VP] автолайк', e); logErr('автолайк', e); } finally {
+                GM_setValue('vp_like_queue', queue);
+                autoLikeBusy = false;
+            }
+        }
         function scheduleAutoLike() {
-            const delay = LIKE_INTERVAL_MIN + Math.floor(Math.random() * (LIKE_INTERVAL_MAX - LIKE_INTERVAL_MIN + 1));
-            setTimeout(async () => {
-                try {
-                    const users = Object.keys(autoLikeUsers).filter(u => autoLikeUsers[u] === true);
-                    if (autoLikeEnabled && users.length) await Promise.all(users.map(likePostsForUser));
-                } finally { scheduleAutoLike(); }
-            }, delay);
+            setInterval(autoLikeTick, 20000);
         }
 
         async function fetchAutoLikeUsers() {
@@ -4232,10 +4260,13 @@
         }
 
         const CHANGELOG = [
-            ['3.5.1 – 3.5.1.7', '2 октября 2026', [
+            ['3.5.1 – 3.5.1.8', '2 октября 2026', [
                 'Мику и Тето теперь и на телефоне: выглядывают из-за нижней панели вкладок и ничего не закрывают',
                 'Кто не заходил с модом больше трёх месяцев, теряет галочку и место в клубе ИТД X, его стиль больше не показывается. Зайдёт снова — всё вернётся само',
-                'Профили за шторами больше не затемняются и не размываются']],
+                'Профили за шторами больше не затемняются и не размываются',
+                'Мод шлёт на сайт намного меньше запросов: реже проверяет сообщения и кто в сети, запоминает это между перезагрузками, а если открыто несколько вкладок, фоном работает только одна',
+                'Автолайк заглядывает к каждому раз в 15–30 минут и ставит лайки не пачкой, а вразброс, через 3–10 минут после просмотра',
+                'Если сайт ответил «слишком много запросов», мод сам затихает и ждёт']],
             ['3.5.0 – 3.5.0.8', '1 октября 2026', [
                 'Мику и Тето: новая вкладка «Мику» в настройках — Мику держится за экран справа, Тето слева. Прыгают вместе и в такт, можно оставить одну, поменять размер и вид: как есть, неоновый контур или приглушённые под тёмный сайт. Пока только на компьютере. Без потери качества, а весят всего по 2–3 МБ',
                 'Оптимизация и исправление багов']],
@@ -4545,6 +4576,7 @@
             const call = async t => { const t0 = Date.now(), r = await fetch(path, { credentials: 'include', ...opts, headers: { ...opts.headers, Authorization: `Bearer ${t}` } }); noteServerTime(r, t0, Date.now()); return r; };
             let res = await call(await getAccessToken());
             if (res.status === 401) res = await call(await getAccessToken(true));
+            apiPause(res);
             return res;
         }
 
@@ -4859,7 +4891,7 @@
 
                 checkAllComments().then(() => { markVerifiedUsers(); return verifyMyself(); }).then(verifyRequestAgain).then(publishLook);
                 setInterval(publishLook, 60000);
-                setInterval(checkAllComments, 10 * 60 * 1000);
+                setInterval(() => { if (!document.hidden && !apiPaused()) checkAllComments(); }, 10 * 60 * 1000);
 
                 lbSyncFromServer();
 
@@ -5494,7 +5526,7 @@
                 if (!STICKER_POST_ID) return;
                 const tick = () => myUsername && myAccountId() && verifiedInfo(myUsername) ? syncPacks(false) : setTimeout(tick, 3000);
                 setTimeout(tick, 6000);
-                setInterval(() => syncPacks(false), 10 * 60 * 1000);
+                setInterval(() => { if (!document.hidden && !apiPaused()) syncPacks(false); }, 10 * 60 * 1000);
             })();
 
             const ZIP_IMG = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
@@ -6819,7 +6851,9 @@
             setTimeout(() => el.remove(), 7000);
         }
         async function msgBackground() {
-            if (!myUsername || (document.hidden && !msgNet.me)) return;
+            if (!myUsername || apiPaused() || (document.hidden && (!msgNet.me || !leadTab()))) return;
+            if (Date.now() - (msgBackground.at || 0) < 20000) return;
+            msgBackground.at = Date.now();
             try { await msgSync(); } catch (e) { return; }
             const myId = msgMyId(), plainCalls = ((msgNet.callNote && msgNet.callNote.list) || []).filter(x => x.u === myId).map(x => x.ts);
             const callAt = Math.max(0, ...(msgNet.me ? msgNet.calls || [] : []), ...plainCalls), callSeen = +GM_getValue(acctKey('vp_call_seen'), 0) || 0;
@@ -6842,8 +6876,8 @@
         setInterval(msgBackground, 60000);
         setInterval(() => {
             const c = callNet.cur, open = messagesOverlay && messagesOverlay.classList.contains('vp-open');
-            const every = c && /^(calling|ringing|connecting)$/.test(c.state) ? 2000 : document.hidden ? 0 : open ? 8000 : 20000;
-            if (!every || Date.now() - callNet.lastSync < every || msgNet.syncing || !msgNet.me) return;
+            const every = c && /^(calling|ringing|connecting)$/.test(c.state) ? 4000 : document.hidden ? 0 : open ? 15000 : 0;
+            if (!every || Date.now() - callNet.lastSync < every || msgNet.syncing || !msgNet.me || apiPaused()) return;
             callNet.lastSync = Date.now();
             msgSync().catch(() => { });
         }, 1000);
@@ -7552,8 +7586,8 @@
             }
             const msgPoll = setInterval(async () => {
                 if (!root.isConnected) return clearInterval(msgPoll);
-                if (!msgsOpen || !msgNet.me) return;
-                try { await msgSync(); } catch (e) { return; }
+                if (!msgsOpen || !msgNet.me || apiPaused()) return;
+                if (Date.now() - callNet.lastSync > 12000) { callNet.lastSync = Date.now(); try { await msgSync(); } catch (e) { return; } }
                 msgFillDialogs();
                 if (!current) return renderList();
                 if (current.bot) return;
@@ -11594,7 +11628,13 @@
             paintClub();
             paintOnline();
         }
+        const CLUB_TTL = 10 * 60 * 1000;
         const clubOnline = new Map();
+        function clubOnlineLoad() {
+            const s = GM_getValue('vp_club_online', {}) || {};
+            for (const n in s) if (s[n] && (!clubOnline.has(n) || clubOnline.get(n).at < s[n].at)) clubOnline.set(n, s[n]);
+        }
+        clubOnlineLoad();
         const clubSeenText = t => {
             const d = new Date(t);
             if (!t || isNaN(d)) return '';
@@ -11607,7 +11647,7 @@
             let on = 0;
             rows.forEach(row => {
                 const n = row.dataset.login, st = n === myUsername ? { on: true } : clubOnline.get(n);
-                const live = !!(st && st.on), tip = st ? (live ? 'в сети' : clubSeenText(st.seen)) : '';
+                const live = !!(st && st.on && (n === myUsername || Date.now() - (st.at || 0) < 20 * 60e3)), tip = st ? (live ? 'в сети' : clubSeenText(st.seen)) : '';
                 if (live) on++;
                 if (live !== row.hasAttribute('data-online')) row.toggleAttribute('data-online', live);
                 if (row.title !== tip) row.title = tip;
@@ -11622,17 +11662,17 @@
             if (cnt.title !== tip) cnt.title = tip;
         }
         let clubPolling = false, clubPolledAt = 0;
-        async function clubPollOnline(fresh) {
-            if (clubPolling || document.hidden || !railClub.isConnected || !railClub.getClientRects().length) return;
+        async function clubPollOnline() {
+            if (clubPolling || document.hidden || apiPaused() || !railClub.isConnected || !railClub.getClientRects().length) return;
+            clubOnlineLoad();
             clubPolling = true; clubPolledAt = Date.now();
             try {
                 const box = railClub.getBoundingClientRect(), now = Date.now();
                 const seen = r => { const q = r.getBoundingClientRect(); return q.bottom > box.top && q.top < box.bottom; };
                 const names = [...railClub.querySelectorAll('.vp-club-row')].filter(r => r.dataset.login !== myUsername)
-                    .map(r => ({ n: r.dataset.login, v: seen(r) })).filter(x => now - ((clubOnline.get(x.n) || {}).at || 0) > (x.v ? (+fresh || 55e3) : 290e3))
-                    .sort((a, b) => b.v - a.v).map(x => x.n);
+                    .filter(r => seen(r) && now - ((clubOnline.get(r.dataset.login) || {}).at || 0) > CLUB_TTL).map(r => r.dataset.login);
                 for (let i = 0; i < names.length; i += 4) {
-                    if (i) { paintOnline(); await new Promise(r => setTimeout(r, 2000)); if (document.hidden) break; }
+                    if (i) { paintOnline(); await new Promise(r => setTimeout(r, 2000)); if (document.hidden || apiPaused()) break; }
                     await Promise.all(names.slice(i, i + 4).map(async n => {
                         const r = await api('/api/users/' + encodeURIComponent(n)).catch(() => null);
                         if (!r || !r.ok) return;
@@ -11641,7 +11681,12 @@
                     }));
                 }
                 paintOnline();
-            } finally { clubPolling = false; }
+            } finally {
+                clubPolling = false;
+                const keep = {};
+                for (const [n, v] of clubOnline) if (Date.now() - v.at < 24 * 3600e3) keep[n] = v;
+                GM_setValue('vp_club_online', keep);
+            }
         }
         const clubTick = () => Promise.resolve(renderClub()).then(() => clubPollOnline()).catch(e => logErr('клуб: в сети', e));
         setTimeout(() => Promise.resolve(renderClub()).catch(e => logErr('клуб', e)), 2500);
@@ -11649,7 +11694,7 @@
         setInterval(clubTick, 60 * 1000);
         let clubScrollT = 0;
         railClub.addEventListener('scroll', () => { clearTimeout(clubScrollT); clubScrollT = setTimeout(() => clubPollOnline(), 400); }, { passive: true });
-        document.addEventListener('visibilitychange', () => { if (!document.hidden) clubPollOnline(15e3); });
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) clubPollOnline(); });
         new IntersectionObserver(es => { if (es.some(e => e.isIntersecting) && Date.now() - clubPolledAt > 30e3) clubPollOnline(); }).observe(railClub);
 
         const gamesList = rail.querySelector('.vp-games-list');
