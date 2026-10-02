@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.1.10
+// @version      3.5.1.11
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4287,7 +4287,7 @@
         }
 
         const CHANGELOG = [
-            ['3.5.1 – 3.5.1.10', '2 октября 2026', [
+            ['3.5.1 – 3.5.1.11', '2 октября 2026', [
                 'Мику и Тето теперь и на телефоне: выглядывают из-за нижней панели вкладок и ничего не закрывают',
                 'Кто не заходил с модом больше трёх месяцев, теряет галочку и место в клубе ИТД X, его стиль больше не показывается. Зайдёт снова — всё вернётся само',
                 'Профили за шторами больше не затемняются и не размываются',
@@ -4295,7 +4295,7 @@
                 'Автолайк заглядывает к каждому раз в 15–30 минут и ставит лайки не пачкой, а вразброс, через 3–10 минут после просмотра',
                 'Если сайт ответил «слишком много запросов», мод сам затихает и ждёт',
                 'Видео на фоне теперь видят и другие: раньше им показывался только первый кадр',
-                'Клуб ИТД X: если с прошлого захода прошло больше 5 минут, кто в сети, видно сразу, а дальше мод спокойно обновляет каждого раз в 5 минут, по одному человеку']],
+                'Клуб ИТД X: если с прошлого захода прошло больше 5 минут, кто в сети, видно сразу, а дальше мод спокойно обновляет по одному человеку: кто в сети — раз в 5 минут, кто нет — раз в 20 минут']],
             ['3.5.0 – 3.5.0.8', '1 октября 2026', [
                 'Мику и Тето: новая вкладка «Мику» в настройках — Мику держится за экран справа, Тето слева. Прыгают вместе и в такт, можно оставить одну, поменять размер и вид: как есть, неоновый контур или приглушённые под тёмный сайт. Пока только на компьютере. Без потери качества, а весят всего по 2–3 МБ',
                 'Оптимизация и исправление багов']],
@@ -11651,7 +11651,7 @@
             paintClub();
             paintOnline();
         }
-        const CLUB_TTL = 5 * 60 * 1000, CLUB_GAP = 30e3, CLUB_LIVE = 30 * 60e3;
+        const CLUB_TTL = 5 * 60 * 1000, CLUB_OFF_TTL = 20 * 60 * 1000, CLUB_GAP = 30e3, CLUB_LIVE = 30 * 60e3;
         const clubOnline = new Map();
         function clubOnlineLoad() {
             const s = GM_getValue('vp_club_online', {}) || {};
@@ -11696,9 +11696,9 @@
             clubOnlineLoad();
             const box = railClub.getBoundingClientRect(), now = Date.now();
             const seen = r => { const q = r.getBoundingClientRect(); return q.bottom > box.top && q.top < box.bottom; };
-            const age = n => now - ((clubOnline.get(n) || {}).at || 0);
+            const age = n => now - ((clubOnline.get(n) || {}).at || 0), late = n => age(n) - ((clubOnline.get(n) || {}).on === false ? CLUB_OFF_TTL : CLUB_TTL);
             const due = [...railClub.querySelectorAll('.vp-club-row')].filter(r => r.dataset.login !== myUsername)
-                .map(r => ({ n: r.dataset.login, v: seen(r) })).filter(x => age(x.n) > CLUB_TTL).sort((a, b) => b.v - a.v || age(b.n) - age(a.n));
+                .map(r => ({ n: r.dataset.login, v: seen(r) })).filter(x => late(x.n) > 0).sort((a, b) => b.v - a.v || late(b.n) - late(a.n));
             if (!due.length) return;
             const fast = clubFirst ? due.map(x => x.n) : [];
             if (!fast.length && now < (+GM_getValue('vp_club_next', 0) || 0)) return;
