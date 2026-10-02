@@ -3047,7 +3047,7 @@
             const key = `pal-${id}@${PAL_VER}`;
             const have = await palStore(key).catch(() => null);
             if (have) return have;
-            for (const branch of ['main', 'claude/github-script-access-ihd9ne']) {
+            for (const branch of ['claude/github-script-access-ihd9ne', 'main']) {
                 const b = await palFetch(`https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/${branch}/assets/${PALS[id].file}`).catch(() => null);
                 if (b) { await palStore(key, b).catch(() => { }); return b; }
             }
