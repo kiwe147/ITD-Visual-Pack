@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.1.11
+// @version      3.5.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3022,7 +3022,7 @@
         }
         let palsOn = GM_getValue('palsEnabled', false);
         const PALS = { miku: { key: 'palMiku', file: 'miku.webp', r: 800 / 790 }, teto: { key: 'palTeto', file: 'teto.webp', r: 776 / 734 } };
-        const PAL_VER = 7;
+        const PAL_VER = 8;
         const PAL_LOOKS = [
             ['plain', 'Как есть', '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="12" cy="11" r="3"/><path d="M7 20c.8-2.6 2.8-4 5-4s4.2 1.4 5 4"/>'],
             ['neon', 'Неон', '<circle cx="12" cy="10" r="3.5"/><path d="M5.5 20c1-3.3 3.5-5 6.5-5s5.5 1.7 6.5 5"/><path d="M12 2.5v2M4.6 5.6l1.4 1.4M19.4 5.6 18 7"/>'],
@@ -3047,7 +3047,7 @@
             const key = `pal-${id}@${PAL_VER}`;
             const have = await palStore(key).catch(() => null);
             if (have) return have;
-            for (const branch of ['main', 'claude/github-script-access-ihd9ne']) {
+            for (const branch of ['claude/github-script-access-ihd9ne', 'main']) {
                 const b = await palFetch(`https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/${branch}/assets/${PALS[id].file}`).catch(() => null);
                 if (b) { await palStore(key, b).catch(() => { }); return b; }
             }
@@ -4287,6 +4287,8 @@
         }
 
         const CHANGELOG = [
+            ['3.5.2', '2 октября 2026', [
+                'Мику и Тето двигаются втрое плавнее: в каждом прыжке 45 кадров вместо 13']],
             ['3.5.1 – 3.5.1.11', '2 октября 2026', [
                 'Мику и Тето теперь и на телефоне: выглядывают из-за нижней панели вкладок и ничего не закрывают',
                 'Кто не заходил с модом больше трёх месяцев, теряет галочку и место в клубе ИТД X, его стиль больше не показывается. Зайдёт снова — всё вернётся само',
