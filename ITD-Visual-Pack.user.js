@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.2
+// @version      3.5.2.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1861,7 +1861,8 @@
         .nick-style-option.vp-like-row { justify-content: space-between !important; }
         .nick-style-option.vp-like-row:hover { transform: none !important; }
         .vp-like-user { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
-        .vp-like-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; background: rgba(0, 0, 0, 0.2); flex-shrink: 0; }
+        .vp-like-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; background: rgba(0, 0, 0, 0.2); flex-shrink: 0; overflow: hidden; }
+        .vp-like-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
         .vp-like-names { display: flex; flex-direction: column; min-width: 0; }
         .vp-like-name { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .vp-like-login { font-size: 11px; color: var(--text-secondary); }
@@ -2993,7 +2994,8 @@
                 const row = document.createElement('div');
                 row.className = 'nick-style-option vp-like-row';
                 row.innerHTML = `<div class="vp-like-user"><div class="vp-like-avatar"></div><div class="vp-like-names"><span class="vp-like-name"></span><span class="vp-like-login"></span></div></div><div class="toggle-switch"></div>`;
-                row.querySelector('.vp-like-avatar').textContent = data.avatar || '👤';
+                const av = row.querySelector('.vp-like-avatar'), ava = (data.avatar && (data.avatar.url || data.avatar)) || '👤';
+                if (/^https?:|^\//.test(ava)) { const img = document.createElement('img'); img.alt = ''; img.onerror = () => { av.textContent = '👤'; }; img.src = ava; av.appendChild(img); } else av.textContent = ava;
                 row.querySelector('.vp-like-name').textContent = (data.displayName || username).slice(0, 20);
                 row.querySelector('.vp-like-login').textContent = '@' + username;
                 const toggle = row.querySelector('.toggle-switch');
@@ -4287,8 +4289,9 @@
         }
 
         const CHANGELOG = [
-            ['3.5.2', '2 октября 2026', [
-                'Мику и Тето двигаются втрое плавнее: в каждом прыжке 45 кадров вместо 13']],
+            ['3.5.2 – 3.5.2.1', '4 октября 2026', [
+                'Мику и Тето двигаются втрое плавнее: в каждом прыжке 45 кадров вместо 13',
+                'В списке автолайка настоящие аватарки показываются картинкой, а не ссылкой']],
             ['3.5.1 – 3.5.1.11', '2 октября 2026', [
                 'Мику и Тето теперь и на телефоне: выглядывают из-за нижней панели вкладок и ничего не закрывают',
                 'Кто не заходил с модом больше трёх месяцев, теряет галочку и место в клубе ИТД X, его стиль больше не показывается. Зайдёт снова — всё вернётся само',
