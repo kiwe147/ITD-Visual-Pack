@@ -1,6 +1,7 @@
 // Уведомление от сайта без ссылки на профиль (ивент: «Кто напердел?», аватар 🔔) красится как остальные (3.5.2.2).
 // Раньше уведомлением считалась только карточка со ссылкой на профиль, у ивента её нет — фона не было.
-// Запуск:  node test/eventnotif.js снимок-уведомлений.html [файл скрипта]
+// У кого аватарка-картинка, фон — размытая аватарка (как у постов с картинкой).
+// Запуск:  node test/eventnotif.js снимок-уведомлений.html [файл скрипта] [скрин.png]
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -30,8 +31,9 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   }, src.slice(0, src.indexOf('==/UserScript==')));
   await p.goto(ORIGIN + '/notifications');
   await p.evaluate(() => {
-    document.querySelectorAll('.vp-notif, .vp-emoji-tint, [data-colored]').forEach(e => {
-      e.classList.remove('vp-notif', 'vp-emoji-tint'); e.removeAttribute('data-colored'); e.style.removeProperty('--vp-emoji');
+    document.querySelectorAll('.vp-ava-tint-bg').forEach(e => e.remove());
+    document.querySelectorAll('.vp-notif, .vp-emoji-tint, .vp-ava-tint, [data-colored]').forEach(e => {
+      e.classList.remove('vp-notif', 'vp-emoji-tint', 'vp-ava-tint'); e.removeAttribute('data-colored'); e.style.removeProperty('--vp-emoji');
     });
     document.querySelectorAll('.vp-rail, .vp-fab, .vp-nav-blob').forEach(e => e.remove());
   });
@@ -46,14 +48,20 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
       color: ev && ev.style.getPropertyValue('--vp-emoji'), total: notifs.length,
       stray: notifs.filter(n => n.closest('nav, aside, article') || n.parentElement !== notifs[0].parentElement).length,
       tinted: notifs.filter(n => n.classList.contains('vp-emoji-tint')).length,
+      imgs: notifs.filter(n => n.querySelector('.vp-avatar img[src]')).length,
+      imgTinted: notifs.filter(n => n.querySelector('.vp-avatar img[src]') && n.classList.contains('vp-ava-tint') && n.querySelector(':scope > .vp-ava-tint-bg > div').style.backgroundImage.includes(n.querySelector('.vp-avatar img').src)).length,
+      none: notifs.filter(n => !n.classList.contains('vp-emoji-tint') && !n.classList.contains('vp-ava-tint')).length,
     };
   });
-  console.log('  уведомлений: ' + r.total + ', с фоном: ' + r.tinted + ', цвет ивента: ' + (r.color || '—'));
+  console.log('  уведомлений: ' + r.total + ', фон по эмодзи: ' + r.tinted + ', по аватарке-картинке: ' + r.imgTinted + ' из ' + r.imgs + ', цвет ивента: ' + (r.color || '—'));
   check(r.found, 'карточка ивента есть в снимке');
   check(r.notif, 'карточка ивента считается уведомлением');
   check(r.tint, 'у карточки ивента цветной фон');
+  check(r.imgs > 0 && r.imgTinted === r.imgs, 'у аватарок-картинок фон из самой аватарки');
+  check(r.none === 0, 'без фона не осталось ни одного уведомления');
   check(r.stray === 0, 'уведомлениями помечены только карточки из списка');
   check(!errors.length, 'без ошибок на странице' + (errors.length ? ': ' + errors[0] : ''));
+  if (process.argv[4]) { await p.mouse.move(0, 0); await p.screenshot({ path: process.argv[4] }); }
   await b.close();
   process.exit(fails.length ? 1 : 0);
 })();
