@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.2.1
+// @version      3.5.2.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1069,10 +1069,12 @@
             stickerSendBtn: () => F('stickerContainer').map(r => siteButtons(r).pop()).filter(Boolean),
             commentBox: () => commentInputs().map(i => i.closest('form') || (commentRow(i) || i).parentElement).filter(Boolean),
             modal: () => $$('[role="dialog"], [aria-modal="true"], dialog[open]').filter(e => !e.closest('.vp-call')),
-            notification: () => location.pathname.startsWith('/notifications')
-                ? $$('[role="button"]').filter(b => b.querySelector(PROFILE_LINK) && !b.closest('article')
-                    && !b.parentElement.closest('[role="button"]'))
-                : [],
+            notification: () => {
+                if (!location.pathname.startsWith('/notifications')) return [];
+                const top = b => !b.closest('article') && !b.parentElement.closest('[role="button"]');
+                const lists = new Set($$('[role="button"]').filter(b => b.querySelector(PROFILE_LINK) && top(b)).map(b => b.parentElement));
+                return [...lists].flatMap(l => [...l.children].filter(c => c.matches('[role="button"]') && top(c)));
+            },
             notificationText: () => F('notification').map(n => {
                 const nickLink = $$(PROFILE_LINK, n).filter(a => a.textContent.trim() && !a.querySelector('.' + SELECTORS.avatar)).pop();
                 const el = nickLink && nickLink.nextElementSibling;
@@ -4289,9 +4291,10 @@
         }
 
         const CHANGELOG = [
-            ['3.5.2 – 3.5.2.1', '4 октября 2026', [
+            ['3.5.2 – 3.5.2.2', '4 октября 2026', [
                 'Мику и Тето двигаются втрое плавнее: в каждом прыжке 45 кадров вместо 13',
-                'В списке автолайка настоящие аватарки показываются картинкой, а не ссылкой']],
+                'В списке автолайка настоящие аватарки показываются картинкой, а не ссылкой',
+                'Уведомления от сайта, например про ивент, тоже получают цветной фон, как остальные']],
             ['3.5.1 – 3.5.1.11', '2 октября 2026', [
                 'Мику и Тето теперь и на телефоне: выглядывают из-за нижней панели вкладок и ничего не закрывают',
                 'Кто не заходил с модом больше трёх месяцев, теряет галочку и место в клубе ИТД X, его стиль больше не показывается. Зайдёт снова — всё вернётся само',
