@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.2.1
+// @version      3.5.2.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1069,10 +1069,12 @@
             stickerSendBtn: () => F('stickerContainer').map(r => siteButtons(r).pop()).filter(Boolean),
             commentBox: () => commentInputs().map(i => i.closest('form') || (commentRow(i) || i).parentElement).filter(Boolean),
             modal: () => $$('[role="dialog"], [aria-modal="true"], dialog[open]').filter(e => !e.closest('.vp-call')),
-            notification: () => location.pathname.startsWith('/notifications')
-                ? $$('[role="button"]').filter(b => b.querySelector(PROFILE_LINK) && !b.closest('article')
-                    && !b.parentElement.closest('[role="button"]'))
-                : [],
+            notification: () => {
+                if (!location.pathname.startsWith('/notifications')) return [];
+                const top = b => !b.closest('article') && !b.parentElement.closest('[role="button"]');
+                const lists = new Set($$('[role="button"]').filter(b => b.querySelector(PROFILE_LINK) && top(b)).map(b => b.parentElement));
+                return [...lists].flatMap(l => [...l.children].filter(c => c.matches('[role="button"]') && top(c)));
+            },
             notificationText: () => F('notification').map(n => {
                 const nickLink = $$(PROFILE_LINK, n).filter(a => a.textContent.trim() && !a.querySelector('.' + SELECTORS.avatar)).pop();
                 const el = nickLink && nickLink.nextElementSibling;
@@ -4289,9 +4291,11 @@
         }
 
         const CHANGELOG = [
-            ['3.5.2 – 3.5.2.1', '4 октября 2026', [
+            ['3.5.2 – 3.5.2.2', '4 октября 2026', [
                 'Мику и Тето двигаются втрое плавнее: в каждом прыжке 45 кадров вместо 13',
-                'В списке автолайка настоящие аватарки показываются картинкой, а не ссылкой']],
+                'В списке автолайка настоящие аватарки показываются картинкой, а не ссылкой',
+                'Уведомления от сайта, например про ивент, тоже получают цветной фон, как остальные',
+                'Уведомления от людей с аватаркой-картинкой тоже с цветным фоном: он берётся из самой аватарки, как у постов с картинкой']],
             ['3.5.1 – 3.5.1.11', '2 октября 2026', [
                 'Мику и Тето теперь и на телефоне: выглядывают из-за нижней панели вкладок и ничего не закрывают',
                 'Кто не заходил с модом больше трёх месяцев, теряет галочку и место в клубе ИТД X, его стиль больше не показывается. Зайдёт снова — всё вернётся само',
@@ -8805,13 +8809,33 @@
             return leaf ? leaf.textContent.trim() : null;
         }
 
+        function avaTint(el, src) {
+            let box = el.querySelector(':scope > .vp-ava-tint-bg');
+            if (!box) {
+                box = document.createElement('div');
+                box.className = 'vp-ava-tint-bg';
+                box.appendChild(document.createElement('div'));
+                el.insertBefore(box, el.firstChild);
+            }
+            box.firstChild.style.backgroundImage = `url("${src}")`;
+            el.classList.add('vp-ava-tint');
+        }
+        function untintAva(el) {
+            el.classList.remove('vp-ava-tint');
+            const box = el.querySelector(':scope > .vp-ava-tint-bg');
+            if (box) box.remove();
+        }
         function colorizeNotifications() {
             document.querySelectorAll('.' + SELECTORS.notification).forEach(el => {
                 const emoji = emojiAvatarOf(el) || '';
-                if ((el.getAttribute('data-colored') || '') === emoji && (!emoji || el.classList.contains('vp-emoji-tint'))) return;
+                const img = emoji ? null : el.querySelector('.' + SELECTORS.avatar + ' img[src]');
+                const key = emoji || (img ? img.src : '');
+                if ((el.getAttribute('data-colored') || '') === key && (!key || el.classList.contains(emoji ? 'vp-emoji-tint' : 'vp-ava-tint'))) return;
                 untintCard(el);
-                if (emoji) el.setAttribute('data-colored', emoji); else el.removeAttribute('data-colored');
+                untintAva(el);
+                if (key) el.setAttribute('data-colored', key); else el.removeAttribute('data-colored');
                 if (emoji) tintCard(el, emoji);
+                else if (img) avaTint(el, img.src);
             });
         }
 
@@ -8832,9 +8856,18 @@
             transition: --vp-tint 0.25s ease !important;
         }
         .vp-emoji-tint:not(article) { border: 1px solid rgba(var(--vp-emoji), 0.22) !important; }
+        .vp-ava-tint { position: relative; isolation: isolate; }
+        .vp-ava-tint-bg { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; z-index: -1; pointer-events: none; }
+        .vp-ava-tint-bg > div {
+            position: absolute; inset: -30%; background: left center / cover no-repeat; filter: blur(40px) saturate(1.8) brightness(.75);
+            opacity: .35; transition: opacity 0.25s ease;
+            -webkit-mask-image: linear-gradient(105deg, #000 20%, rgba(0, 0, 0, .4) 50%, rgba(0, 0, 0, .1) 80%);
+            mask-image: linear-gradient(105deg, #000 20%, rgba(0, 0, 0, .4) 50%, rgba(0, 0, 0, .1) 80%);
+        }
         @media (hover: hover) {
             .vp-emoji-tint:hover { --vp-tint: 0.42; }
             .vp-emoji-tint:not(article):hover { border-color: rgba(var(--vp-emoji), 0.4) !important; }
+            .vp-ava-tint:hover .vp-ava-tint-bg > div { opacity: .5; }
             html.vp-post-hl article.vp-emoji-tint:hover { --vp-edge-a: rgba(var(--vp-emoji), .55); --vp-edge-b: rgba(var(--vp-emoji), .22); }
         }
         @media (max-width: ${PHONE_MAX}px) {
