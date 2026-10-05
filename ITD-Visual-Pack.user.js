@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.2.2
+// @version      3.5.2.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4291,11 +4291,13 @@
         }
 
         const CHANGELOG = [
-            ['3.5.2 – 3.5.2.2', '4 октября 2026', [
+            ['3.5.2 – 3.5.2.3', '4 октября 2026', [
                 'Мику и Тето двигаются втрое плавнее: в каждом прыжке 45 кадров вместо 13',
                 'В списке автолайка настоящие аватарки показываются картинкой, а не ссылкой',
                 'Уведомления от сайта, например про ивент, тоже получают цветной фон, как остальные',
-                'Уведомления от людей с аватаркой-картинкой тоже с цветным фоном: он берётся из самой аватарки, как у постов с картинкой']],
+                'Уведомления от людей с аватаркой-картинкой тоже с цветным фоном: он берётся из самой аватарки, как у постов с картинкой',
+                'Кнопка «Убрать стекло с баннера» работает и на ивенте, когда стекло разбитое',
+                'Видео в баннере больше не больше картинки — та же маска и тот же сдвиг']],
             ['3.5.1 – 3.5.1.11', '2 октября 2026', [
                 'Мику и Тето теперь и на телефоне: выглядывают из-за нижней панели вкладок и ничего не закрывают',
                 'Кто не заходил с модом больше трёх месяцев, теряет галочку и место в клубе ИТД X, его стиль больше не показывается. Зайдёт снова — всё вернётся само',
@@ -9054,7 +9056,7 @@
 
         .vp-banner.vp-depth { background: transparent !important; }
         .vp-banner { isolation: isolate; }
-        .vp-banner.vp-depth > img[alt="Banner"], .vp-banner.vp-depth > [aria-label="Стекло"] { will-change: transform; transform-origin: 50% 50%;
+        .vp-banner.vp-depth > img[alt="Banner"], .vp-banner.vp-depth > .vp-banner-video, .vp-banner.vp-depth > [aria-label*="стекло" i] { will-change: transform; transform-origin: 50% 50%;
             -webkit-mask-image: linear-gradient(to bottom, #000 58%, transparent); mask-image: linear-gradient(to bottom, #000 58%, transparent); }
 
         @property --vp-n { syntax: '<integer>'; inherits: false; initial-value: 0; }
@@ -10869,12 +10871,13 @@
             const banner = siteEl('banner');
             const img = banner && banner.querySelector(':scope > img[alt="Banner"]');
             if (!img || bannerEdit.img) return;
+            bannerVideoSync();
             banner.classList.add('vp-depth');
             const r = banner.getBoundingClientRect();
             if (r.bottom < -40 || r.top > innerHeight) return;
             const past = Math.max(0, -r.top);
             const y = Math.round(past * .35);
-            const glassEl = banner.querySelector(':scope > [aria-label="Стекло"]'), glass = !bannerNoGlass && glassEl;
+            const glassEl = bannerGlassEl(banner), glass = !bannerNoGlass && glassEl;
             const tf = calm ? '' : `translateY(${y}px)` + (glassEl ? '' : ' scale(1.15)'), op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
             for (const el of [img, banner.querySelector(':scope > .vp-banner-video'), glass].filter(Boolean)) {
                 if (el.style.transform !== tf) el.style.transform = tf;
@@ -10891,11 +10894,14 @@
         addEventListener('scroll', () => { if (!bannerQueued) { bannerQueued = true; requestAnimationFrame(bannerDepth); } }, { capture: true, passive: true });
         onDom(function bannerDepthDom() { bannerDepth(); });
 
+        const BANNER_GLASS_SEL = ':scope > [aria-label*="стекло" i]';
+        const bannerGlassEls = b => [...b.querySelectorAll(BANNER_GLASS_SEL)];
+        const bannerGlassEl = b => bannerGlassEls(b).find(e => e.getBoundingClientRect().width > 0) || bannerGlassEls(b)[0] || null;
         let bannerNoGlass = GM_getValue('bannerGlassOff', false), bannerNoStickers = GM_getValue('bannerStickersOff', false);
         document.documentElement.classList.toggle('vp-no-glass', bannerNoGlass);
         document.documentElement.classList.toggle('vp-no-banner-stickers', bannerNoStickers);
         const BANNER_FX = [
-            { cls: 'vp-banner-glass', find: b => b.querySelector(':scope > [aria-label="Стекло"]'), key: 'bannerGlassOff', html: 'vp-no-glass',
+            { cls: 'vp-banner-glass', find: b => bannerGlassEls(b).length > 0, key: 'bannerGlassOff', html: 'vp-no-glass',
                 get: () => bannerNoGlass, set: v => { bannerNoGlass = v; }, titles: ['Убрать стекло с баннера', 'Вернуть стекло на баннер'],
                 icon: svgIcon('<rect x="3" y="5" width="18" height="14" rx="4"/><path d="M7.5 12.5l4-4M7.5 16l7.5-7.5"/>', 20) },
             { cls: 'vp-banner-stickers', find: b => { const d = b.querySelector(':scope > [aria-label^="Оформление профиля"]'); return d && (d.firstElementChild || bannerNoStickers) ? d : null; },
@@ -10999,7 +11005,7 @@
             input.click();
         }
         addCss(`
-        html.vp-no-glass .vp-banner > [aria-label="Стекло"] { display: none !important; }
+        html.vp-no-glass .vp-banner > [aria-label*="стекло" i] { display: none !important; }
         html.vp-no-banner-stickers .vp-banner > [aria-label^="Оформление профиля"] { display: none !important; }
         .vp-banner-fx { position: relative; }
         .vp-banner-vid.vp-on { color: var(--vp-accent); }
