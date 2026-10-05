@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.2.3
+// @version      3.5.2.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4291,13 +4291,14 @@
         }
 
         const CHANGELOG = [
-            ['3.5.2 – 3.5.2.3', '4 октября 2026', [
+            ['3.5.2 – 3.5.2.4', '4 октября 2026', [
                 'Мику и Тето двигаются втрое плавнее: в каждом прыжке 45 кадров вместо 13',
                 'В списке автолайка настоящие аватарки показываются картинкой, а не ссылкой',
                 'Уведомления от сайта, например про ивент, тоже получают цветной фон, как остальные',
                 'Уведомления от людей с аватаркой-картинкой тоже с цветным фоном: он берётся из самой аватарки, как у постов с картинкой',
                 'Кнопка «Убрать стекло с баннера» работает и на ивенте, когда стекло разбитое',
-                'Видео в баннере больше не больше картинки — та же маска и тот же сдвиг']],
+                'Видео в баннере больше не больше картинки — та же маска и тот же сдвиг',
+                'У ника больше не появляется вторая галочка ИТД X']],
             ['3.5.1 – 3.5.1.11', '2 октября 2026', [
                 'Мику и Тето теперь и на телефоне: выглядывают из-за нижней панели вкладок и ничего не закрывают',
                 'Кто не заходил с модом больше трёх месяцев, теряет галочку и место в клубе ИТД X, его стиль больше не показывается. Зайдёт снова — всё вернётся само',
@@ -5001,7 +5002,7 @@
                     }) || null;
                 }
                 function addVerifyBadge(nick, size, state) {
-                    if (!nick || !nick.parentElement || nick.parentElement.querySelector('.' + SELECTORS.badgeVerify)) return;
+                    if (!nick) return; const vpR = nick.closest('.' + SELECTORS.nickContainer); const vpN = nick.nextElementSibling; const vpOk = vpN && vpN.classList.contains(SELECTORS.badgeVerify) ? vpN : null; if (vpR) vpR.querySelectorAll('.' + SELECTORS.badgeVerify).forEach(function (x) { if (x !== vpOk) x.remove(); }); if (vpOk) return;
                     const badge = document.createElement('span');
                     badge.className = SELECTORS.badgeVerify + (state === 'quarantine' ? ' vp-badge-quarantine' : '');
                     badge.innerHTML = ICONS.badge(size);
