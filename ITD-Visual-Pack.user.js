@@ -9056,7 +9056,7 @@
 
         .vp-banner.vp-depth { background: transparent !important; }
         .vp-banner { isolation: isolate; }
-        .vp-banner.vp-depth > img[alt="Banner"], .vp-banner.vp-depth > .vp-banner-video, .vp-banner.vp-depth > [aria-label*="стекло" i] { will-change: transform; transform-origin: 50% 50%;
+        .vp-banner.vp-depth > img[alt="Banner"], .vp-banner.vp-depth > .vp-banner-video, .vp-banner.vp-depth > [aria-label="Стекло"], .vp-banner.vp-depth > [aria-label="Разбитое стекло"] { will-change: transform; transform-origin: 50% 50%;
             -webkit-mask-image: linear-gradient(to bottom, #000 58%, transparent); mask-image: linear-gradient(to bottom, #000 58%, transparent); }
 
         @property --vp-n { syntax: '<integer>'; inherits: false; initial-value: 0; }
@@ -10894,7 +10894,7 @@
         addEventListener('scroll', () => { if (!bannerQueued) { bannerQueued = true; requestAnimationFrame(bannerDepth); } }, { capture: true, passive: true });
         onDom(function bannerDepthDom() { bannerDepth(); });
 
-        const BANNER_GLASS_SEL = ':scope > [aria-label*="стекло" i]';
+        const BANNER_GLASS_SEL = ':scope > [aria-label="Стекло"], :scope > [aria-label="Разбитое стекло"]';
         const bannerGlassEls = b => [...b.querySelectorAll(BANNER_GLASS_SEL)];
         const bannerGlassEl = b => bannerGlassEls(b).find(e => e.getBoundingClientRect().width > 0) || bannerGlassEls(b)[0] || null;
         let bannerNoGlass = GM_getValue('bannerGlassOff', false), bannerNoStickers = GM_getValue('bannerStickersOff', false);
@@ -11005,7 +11005,7 @@
             input.click();
         }
         addCss(`
-        html.vp-no-glass .vp-banner > [aria-label*="стекло" i] { display: none !important; }
+        html.vp-no-glass .vp-banner > [aria-label="Стекло"], html.vp-no-glass .vp-banner > [aria-label="Разбитое стекло"] { display: none !important; }
         html.vp-no-banner-stickers .vp-banner > [aria-label^="Оформление профиля"] { display: none !important; }
         .vp-banner-fx { position: relative; }
         .vp-banner-vid.vp-on { color: var(--vp-accent); }
