@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.2.5
+// @version      3.5.2.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1994,9 +1994,10 @@
         article .vp-nick-row time { flex-shrink: 0; }
         .vp-clamp::after { display: none !important; }
         .vp-clamp { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); }
-        .vp-banner-buttons { position: static !important; width: auto !important; height: auto !important; margin: 0 !important; }
-        .vp-banner-ours { position: absolute !important; inset: var(--vp-bar-top, 0px) auto auto 50% !important; width: auto !important; height: auto !important; margin: 0 !important; translate: none !important; scale: none !important; rotate: none !important;
-            transform: translateX(-50%); z-index: 3; display: flex !important; gap: 2px !important; padding: 4px 12px 7px !important; align-items: center !important;
+        .vp-banner-buttons { inset: var(--vp-bar-top, 0px) auto auto 50% !important; width: auto !important; height: auto !important; margin: 0 !important; translate: none !important; scale: none !important; rotate: none !important;
+            transform: translateX(-50%); display: flex !important; gap: 2px !important; align-items: center !important;
+            z-index: 3; }
+        .vp-banner-ours { display: flex !important; gap: 2px !important; padding: 4px 12px 7px !important; align-items: center !important;
             border-radius: 0 0 22px 22px; background: rgba(12, 12, 16, .6); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s; }
         html.vp-light .vp-banner-ours { background: rgba(255, 255, 255, .65); }
         .vp-banner-ours > button { background: transparent !important; box-shadow: none !important; }
@@ -4301,7 +4302,7 @@
         }
 
         const CHANGELOG = [
-            ['3.5.2 – 3.5.2.5', '4 октября 2026', [
+            ['3.5.2 – 3.5.2.6', '4 октября 2026', [
                 'Мику и Тето двигаются втрое плавнее: в каждом прыжке 45 кадров вместо 13',
                 'В списке автолайка настоящие аватарки показываются картинкой, а не ссылкой',
                 'Уведомления от сайта, например про ивент, тоже получают цветной фон, как остальные',
@@ -4309,7 +4310,8 @@
                 'Кнопка «Убрать стекло с баннера» работает и на ивенте, когда стекло разбитое',
                 'Видео в баннере больше не больше картинки — та же маска и тот же сдвиг',
                 'У ника больше не появляется вторая галочка ИТД X',
-                'Секция ауры на баннере осталась ванильной — наши кнопки и стили её не касаются']],
+                'Секция ауры на баннере осталась ванильной — наши кнопки и стили её не касаются',
+                'Кнопки на баннере больше не съезжают: строка с ауры снова по центру']],
             ['3.5.1 – 3.5.1.11', '2 октября 2026', [
                 'Мику и Тето теперь и на телефоне: выглядывают из-за нижней панели вкладок и ничего не закрывают',
                 'Кто не заходил с модом больше трёх месяцев, теряет галочку и место в клубе ИТД X, его стиль больше не показывается. Зайдёт снова — всё вернётся само',
