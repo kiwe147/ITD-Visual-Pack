@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.2.6
+// @version      3.5.2.7
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1995,17 +1995,16 @@
         .vp-clamp::after { display: none !important; }
         .vp-clamp { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); }
         .vp-banner-buttons { inset: var(--vp-bar-top, 0px) auto auto 50% !important; width: auto !important; height: auto !important; margin: 0 !important; translate: none !important; scale: none !important; rotate: none !important;
-            transform: translateX(-50%); display: flex !important; gap: 2px !important; align-items: center !important;
-            z-index: 3; }
-        .vp-banner-ours { display: flex !important; gap: 2px !important; padding: 4px 12px 7px !important; align-items: center !important;
-            border-radius: 0 0 22px 22px; background: rgba(12, 12, 16, .6); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s; }
-        html.vp-light .vp-banner-ours { background: rgba(255, 255, 255, .65); }
-        .vp-banner-ours > button { background: transparent !important; box-shadow: none !important; }
-        .vp-banner-ours > button:hover { background: rgba(128, 128, 128, .22) !important; }
+            transform: translateX(-50%); display: flex !important; gap: 2px !important; padding: 4px 12px 7px !important;
+            border-radius: 0 0 22px 22px; background: rgba(12, 12, 16, .6); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            z-index: 3; transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s; }
+        html.vp-light .vp-banner-buttons { background: rgba(255, 255, 255, .65); }
+        .vp-banner-buttons > button { background: transparent !important; box-shadow: none !important; }
+        .vp-banner-buttons > button:hover { background: rgba(128, 128, 128, .22) !important; }
         @media (hover: hover) and (pointer: fine) {
-            .vp-banner-ours:not(.vp-banner-editing) { opacity: 0; clip-path: inset(0 0 100% 0); visibility: hidden;
+            .vp-banner-buttons:not(.vp-banner-editing) { opacity: 0; clip-path: inset(0 0 100% 0); visibility: hidden;
                 transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s, visibility 0s linear .25s; }
-            .vp-banner:hover .vp-banner-ours, .vp-banner-ours:has(:focus-visible) { opacity: 1; clip-path: inset(0 0 0 0); visibility: visible;
+            .vp-banner:hover .vp-banner-buttons, .vp-banner-buttons:has(:focus-visible) { opacity: 1; clip-path: inset(0 0 0 0); visibility: visible;
                 transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s, visibility 0s; }
         }
         .toggle-switch.vp-tri { width: 58px !important; }
@@ -4092,11 +4091,11 @@
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
-        .vp-banner-ours:not(.vp-banner-editing) :is(.custom-change-btn, .custom-cancel-btn, .custom-apply-btn),
-        .vp-banner-ours.vp-banner-editing > :not(.custom-change-btn, .custom-cancel-btn, .custom-apply-btn) { display: none !important; }
+        .vp-banner-buttons:not(.vp-banner-editing) :is(.custom-change-btn, .custom-cancel-btn, .custom-apply-btn),
+        .vp-banner-buttons.vp-banner-editing > :not(.custom-change-btn, .custom-cancel-btn, .custom-apply-btn) { display: none !important; }
         .vp-banner.vp-banner-editing { position: relative; overflow: hidden; z-index: 0; }
-        .vp-banner-ours.vp-banner-editing { pointer-events: none; }
-        .vp-banner-ours.vp-banner-editing > button { pointer-events: auto; }
+        .vp-banner-buttons.vp-banner-editing { pointer-events: none; }
+        .vp-banner-buttons.vp-banner-editing > button { pointer-events: auto; }
         .vp-banner.vp-banner-editing > img:not(.vp-banner-drag) { position: relative; z-index: -3; }
         .vp-banner > img.vp-banner-drag {
             position: absolute; left: 0; top: 0; width: 100%; height: auto; z-index: -1;
@@ -4113,29 +4112,19 @@
             b.innerHTML = icon;
             return b;
         }
-        function bannerOurs(row) {
-            if (!row) return null;
-            let ours = row.querySelector(':scope > .vp-banner-ours');
-            if (!ours) {
-                ours = document.createElement('div');
-                ours.className = 'vp-banner-ours';
-                row.appendChild(ours);
-            }
-            return ours;
-        }
         function createAllButtons() {
             const row = siteEl('bannerButtons');
             if (!row || row.querySelector('.custom-image-btn')) return;
             const B = bannerBtns;
             B.row = row;
-            B.ours = bannerOurs(row);
             B.draw = row.querySelector('button:not(.' + SELECTORS.bannerDelete + ')');
             B.del = row.querySelector('.' + SELECTORS.bannerDelete);
             B.image = bannerButton('custom-image-btn', 'Добавить картинку', ICONS.BANNER_IMAGE);
             B.change = bannerButton('custom-change-btn', 'Сменить картинку', ICONS.BANNER_CHANGE);
             B.cancel = bannerButton('custom-cancel-btn', 'Отмена', ICONS.BANNER_CANCEL);
             B.apply = bannerButton('custom-apply-btn', 'Применить', ICONS.BANNER_APPLY);
-            B.ours.append(B.image, B.change, B.cancel, B.apply);
+            row.insertBefore(B.image, B.del);
+            row.append(B.change, B.cancel, B.apply);
             B.image.onclick = B.change.onclick = pickBannerFile;
             B.cancel.onclick = () => setBannerEditing(false);
             B.apply.onclick = applyBanner;
@@ -4302,16 +4291,14 @@
         }
 
         const CHANGELOG = [
-            ['3.5.2 – 3.5.2.6', '4 октября 2026', [
+            ['3.5.2 – 3.5.2.4', '4 октября 2026', [
                 'Мику и Тето двигаются втрое плавнее: в каждом прыжке 45 кадров вместо 13',
                 'В списке автолайка настоящие аватарки показываются картинкой, а не ссылкой',
                 'Уведомления от сайта, например про ивент, тоже получают цветной фон, как остальные',
                 'Уведомления от людей с аватаркой-картинкой тоже с цветным фоном: он берётся из самой аватарки, как у постов с картинкой',
                 'Кнопка «Убрать стекло с баннера» работает и на ивенте, когда стекло разбитое',
                 'Видео в баннере больше не больше картинки — та же маска и тот же сдвиг',
-                'У ника больше не появляется вторая галочка ИТД X',
-                'Секция ауры на баннере осталась ванильной — наши кнопки и стили её не касаются',
-                'Кнопки на баннере больше не съезжают: строка с ауры снова по центру']],
+                'У ника больше не появляется вторая галочка ИТД X']],
             ['3.5.1 – 3.5.1.11', '2 октября 2026', [
                 'Мику и Тето теперь и на телефоне: выглядывают из-за нижней панели вкладок и ничего не закрывают',
                 'Кто не заходил с модом больше трёх месяцев, теряет галочку и место в клубе ИТД X, его стиль больше не показывается. Зайдёт снова — всё вернётся само',
@@ -10929,7 +10916,7 @@
                 let btn = document.querySelector('.' + fx.cls);
                 const want = row && banner && bannerBtns.draw && fx.find(banner);
                 if (!want) { if (btn) btn.remove(); continue; }
-                if (!btn || btn.parentElement !== (bannerBtns.ours || row)) {
+                if (!btn || btn.parentElement !== row) {
                     if (btn) btn.remove();
                     btn = bannerButton('vp-banner-fx ' + fx.cls, '', fx.icon);
                     btn.onclick = e => {
@@ -10941,7 +10928,7 @@
                         bannerFx();
                         bannerDepth();
                     };
-                    (bannerBtns.ours || row).appendChild(btn);
+                    row.insertBefore(btn, row.querySelector('.' + SELECTORS.bannerDelete));
                 }
                 const off = fx.get();
                 btn.classList.toggle('vp-off', off);
@@ -10950,11 +10937,11 @@
             let vb = document.querySelector('.vp-banner-vid');
             const mine = myUsername && (location.pathname.match(/^\/@([\w.]+)\/?$/) || [])[1];
             if (!(row && banner && bannerBtns.draw && mine && mine.toLowerCase() === myUsername.toLowerCase())) { if (vb) vb.remove(); return; }
-            if (!vb || vb.parentElement !== (bannerBtns.ours || row)) {
+            if (!vb || vb.parentElement !== row) {
                 if (vb) vb.remove();
                 vb = bannerButton('vp-banner-fx vp-banner-vid', '', svgIcon('<rect x="3" y="6" width="13" height="12" rx="3"/><path d="m16 10 5-3v10l-5-3z"/>', 20));
                 vb.onclick = e => { e.stopPropagation(); bannerVideoPick(); };
-                (bannerBtns.ours || row).appendChild(vb);
+                row.insertBefore(vb, row.querySelector('.' + SELECTORS.bannerDelete));
             }
             const has = !!bannerVideoOwn(), t = bannerVideoBusy ? 'Видео загружается…' : has ? 'Убрать видео с баннера' : 'Видео в баннер — его видят те, у кого стоит ИТД X';
             vb.classList.toggle('vp-on', has);
