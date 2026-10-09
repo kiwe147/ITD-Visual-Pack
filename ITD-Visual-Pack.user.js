@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.2.7
+// @version      3.5.2.8
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1046,7 +1046,7 @@
             nickRow: () => F('nickContainer').map(c => (c.closest(PROFILE_LINK) || c).parentElement).filter(Boolean),
             nickLarge: () => F('nickContainer').filter(c => !c.closest('a, article, .' + SELECTORS.post) && atLoginOf(c) && isProfileHeader(c)),
             banner: () => $$('img[alt="Banner"]').map(i => i.parentElement).filter(Boolean),
-            bannerButtons: () => F('banner').map(b => [...b.children].find(c => c.querySelector('button'))).filter(Boolean),
+            bannerButtons: () => F('banner').map(b => [...b.children].find(c => c.querySelector('button') && !c.querySelector('section'))).filter(Boolean),
             bannerDelete: () => F('bannerButtons').flatMap(c => $$('button', c))
                 .filter(b => /удал/i.test(b.title || '') || b.innerHTML.includes('points="3 6 5 6 21 6"')),
             bannerDraw: () => F('bannerButtons').map(c => $$('button', c)
@@ -4291,14 +4291,15 @@
         }
 
         const CHANGELOG = [
-            ['3.5.2 – 3.5.2.4', '4 октября 2026', [
+            ['3.5.2 – 3.5.2.8', '4 октября 2026', [
                 'Мику и Тето двигаются втрое плавнее: в каждом прыжке 45 кадров вместо 13',
                 'В списке автолайка настоящие аватарки показываются картинкой, а не ссылкой',
                 'Уведомления от сайта, например про ивент, тоже получают цветной фон, как остальные',
                 'Уведомления от людей с аватаркой-картинкой тоже с цветным фоном: он берётся из самой аватарки, как у постов с картинкой',
                 'Кнопка «Убрать стекло с баннера» работает и на ивенте, когда стекло разбитое',
                 'Видео в баннере больше не больше картинки — та же маска и тот же сдвиг',
-                'У ника больше не появляется вторая галочка ИТД X']],
+                'У ника больше не появляется вторая галочка ИТД X',
+                'Блок «Аура аккаунта» на баннере остаётся таким, как на сайте: наши стили и кнопки в него больше не попадают']],
             ['3.5.1 – 3.5.1.11', '2 октября 2026', [
                 'Мику и Тето теперь и на телефоне: выглядывают из-за нижней панели вкладок и ничего не закрывают',
                 'Кто не заходил с модом больше трёх месяцев, теряет галочку и место в клубе ИТД X, его стиль больше не показывается. Зайдёт снова — всё вернётся само',
