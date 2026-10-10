@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.2.8
+// @version      3.5.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1353,6 +1353,28 @@
             `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
         const I_BG = '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M12 8.2l1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1z"/><path d="M17.5 6.8v1.6M16.7 7.6h1.6"/>';
 
+        const UI_GLYPH = {
+            lock: '<rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+            ban: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>',
+            phone: GLYPH.phone,
+            image: '<rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.5"/><path d="m20 15-4-4-8 8"/>',
+            copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6A2.5 2.5 0 0 0 13 3.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/>',
+            flag: '<path d="M6 21V4"/><path d="M6 5h11l-2.5 4 2.5 4H6"/>',
+            bomb: '<circle cx="11" cy="14" r="6.5"/><path d="m15.6 9.4 2.4-2.4"/><path d="M18.5 3.5v2.4M17.3 4.7h2.4"/>',
+            help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8M12 16.8h.01"/>',
+            trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H4.5v1a3.5 3.5 0 0 0 3.5 3.5M16 6h3.5v1a3.5 3.5 0 0 1-3.5 3.5M12 13v4M8.5 20h7"/>',
+            play: '<path d="m9 6.5 8 5.5-8 5.5z"/>',
+            pause: '<path d="M9 6v12M15 6v12"/>',
+            left: '<path d="m14.5 6-6 6 6 6"/>',
+            right: '<path d="m9.5 6 6 6-6 6"/>',
+            down: '<path d="m6 9.5 6 6 6-6"/>',
+            rotate: '<path d="M20 12a8 8 0 1 1-2.5-5.8"/><path d="M20 4v4.5h-4.5"/>',
+            drop: '<path d="m6 6 6 6 6-6M6 13l6 6 6-6"/>',
+            out: '<path d="M8 16 16 8M9.5 8H16v6.5"/>',
+            close: GLYPH.close
+        };
+        const uiIcon = (name, size = 18, cls = '') => svgIcon(UI_GLYPH[name], size).replace('<svg ', `<svg class="vp-ico${cls ? ' ' + cls : ''}" `);
+
         const ICONS = {
             settings: {
                 'Фон': svgIcon(I_BG),
@@ -1994,6 +2016,8 @@
         article .vp-nick-row time { flex-shrink: 0; }
         .vp-clamp::after { display: none !important; }
         .vp-clamp { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); }
+        .vp-ico { display: inline-block !important; width: 1.15em; height: 1.15em; flex: none; vertical-align: -.2em; margin-right: .4em; }
+        .vp-ico.vp-solo { margin: 0; vertical-align: -.15em; }
         .vp-banner-buttons { inset: var(--vp-bar-top, 0px) auto auto 50% !important; width: auto !important; height: auto !important; margin: 0 !important; translate: none !important; scale: none !important; rotate: none !important;
             transform: translateX(-50%); display: flex !important; gap: 2px !important; padding: 4px 12px 7px !important;
             border-radius: 0 0 22px 22px; background: rgba(12, 12, 16, .6); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
@@ -4270,16 +4294,16 @@
                 const site = E.banner.querySelector('img:not(.vp-banner-drag)');
                 setBannerEditing(false);
                 if (site) site.src = file.url;
-                alert('✅ Баннер успешно обновлён!');
+                alert('Баннер успешно обновлён!');
             } catch (error) {
                 console.error('Ошибка:', error);
                 const message = error.message || 'Неизвестная ошибка';
                 if (message.includes('запрещённый контент') || message.includes('CONTENT_MODERATION')) {
-                    alert('❌ Изображение не прошло модерацию.\nПожалуйста, выберите другое изображение.');
+                    alert('Изображение не прошло модерацию.\nПожалуйста, выберите другое изображение.');
                 } else if (message.includes('сети') || message.includes('network')) {
-                    alert('❌ Ошибка сети. Проверьте подключение к интернету.');
+                    alert('Ошибка сети. Проверьте подключение к интернету.');
                 } else {
-                    alert(`❌ Ошибка: ${message}`);
+                    alert(`Ошибка: ${message}`);
                 }
                 apply.innerHTML = ICONS.BANNER_APPLY;
                 apply.disabled = false;
@@ -4291,6 +4315,8 @@
         }
 
         const CHANGELOG = [
+            ['3.5.3', '10 октября 2026', [
+                'Вместо эмодзи в кнопках, подсказках, меню сообщений и играх теперь линейные иконки одной толщины, как у сайта. Аватарки и сами эмодзи в сообщениях остались как были']],
             ['3.5.2 – 3.5.2.8', '4 октября 2026', [
                 'Мику и Тето двигаются втрое плавнее: в каждом прыжке 45 кадров вместо 13',
                 'В списке автолайка настоящие аватарки показываются картинкой, а не ссылкой',
@@ -6503,7 +6529,7 @@
         const msgUuidBytes = u => Uint8Array.from(u.replace(/-/g, '').match(/../g), h => parseInt(h, 16));
         const msgBytesUuid = b => [...b].map(x => x.toString(16).padStart(2, '0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
         const MSG_ALBUM_MAX = 10;
-        const msgPreview = m => m.imgs && m.imgs.length > 1 ? `🖼 ${m.imgs.length} фото` + (m.text ? ' · ' + m.text : '') : m.img ? '🖼 ' + (m.text || 'Фото') : m.text;
+        const msgPreview = m => m.imgs && m.imgs.length > 1 ? `${m.imgs.length} фото` + (m.text ? ' · ' + m.text : '') : m.img ? (m.text || 'Фото') : m.text;
         const msgNet = { keys: new Map(), vols: [], me: null, pairs: new Map(), conv: new Map(), syncing: null, blocks: {} };
         const msgBlocks = () => GM_getValue(acctKey('msgBlocked'), {});
         function msgIsBlocked(uid) { const p = msgNet.blocks[uid] || msgBlocks()[uid]; return !!(p && p.length && !p[p.length - 1][1]); }
@@ -6840,8 +6866,8 @@
                 d.lastTs = last.at || last.ts;
                 d.time = msgTime(last.at || last.ts);
                 d.unread = list.filter(m => m.dir === 'in' && m.ts > seenAt(seen, t.uid, t.sup)).length;
-                if (!t.sup && msgIsBlocked(t.uid)) d.last = '🚫 Заблокирован(а)';
-                else if (!t.sup && msgBlockedMe(t.uid)) d.last = '🚫 Тебя заблокировали';
+                if (!t.sup && msgIsBlocked(t.uid)) d.last = 'Заблокирован(а)';
+                else if (!t.sup && msgBlockedMe(t.uid)) d.last = 'Тебя заблокировали';
             }
         }
         function msgUnread() {
@@ -7527,28 +7553,28 @@
                     : '@' + d.login + ' · ' + (d.online ? 'в сети' : d.lastSeen && seenAgo(d.lastSeen) ? 'был(а) в сети ' + seenAgo(d.lastSeen) : 'с ИТД X');
                 $('.vp-msgs-call').hidden = !d.login || !!d.support || !!d.supUid || !!d.bot;
                 if (d.login || d.support || d.supUid) { home.hidden = true; chat.hidden = false; input.value = ''; send.disabled = true; msgCount(); msgOpenPerson(d); return; }
-                feed.innerHTML = '<div class="vp-msgs-note">🤖 Бот-шутник: сообщения ему никуда не уходят и не сохраняются</div>'
+                feed.innerHTML = `<div class="vp-msgs-note">🤖 Бот-шутник: сообщения ему никуда не уходят и не сохраняются</div>`
                     + (d.msgs.length ? '<div class="vp-msgs-note">Сегодня</div>' : `<div class="vp-msgs-note">Это начало переписки с ${esc(d.name)}</div>`);
                 d.msgs.forEach(([dir, text]) => bubble(dir, text, dir === 'out' ? now() + ' ✓✓' : now()));
                 home.hidden = true; chat.hidden = false;
                 input.value = ''; send.disabled = true; msgCount();
             }
-            const note = t => { const n = document.createElement('div'); n.className = 'vp-msgs-note'; n.textContent = t; feed.appendChild(n); return n; };
+            const note = (t, ico) => { const n = document.createElement('div'); n.className = 'vp-msgs-note'; if (ico) n.insertAdjacentHTML('afterbegin', uiIcon(ico, 14)); n.appendChild(document.createTextNode(t)); feed.appendChild(n); return n; };
             let renderN = 0;
             async function msgOpenPerson(d) {
                 const my = ++renderN;
                 feed.textContent = ''; input.disabled = true; input.maxLength = MSG_TEXT_MAX;
-                const wait = note('🔒 Загрузка переписки…');
+                const wait = note('Загрузка переписки…', 'lock');
                 try { await msgSync(); } catch (e) { if (my === renderN) wait.textContent = 'Не загрузилось — открой чат ещё раз'; logErr('сообщения', e); return; }
                 if (current !== d || my !== renderN) return;
                 if (d.login && !d.support && !isApprovedId(msgMyId())) {
                     feed.textContent = '';
-                    note('🔒 Переписка с людьми откроется, когда разработчик подтвердит твою галочку ИТД X. Поддержка работает уже сейчас.');
+                    note('Переписка с людьми откроется, когда разработчик подтвердит твою галочку ИТД X. Поддержка работает уже сейчас.', 'lock');
                     return;
                 }
                 if (!msgNet.me) return msgKeyForm(d);
                 feed.textContent = '';
-                note('🔒 Сквозное шифрование: переписку можете прочитать только вы двое');
+                note('Сквозное шифрование: переписку можете прочитать только вы двое', 'lock');
                 const t = msgTarget(d);
                 if (!t.uid) { note(t.missing); return; }
                 const list = msgThread(t);
@@ -7612,8 +7638,9 @@
                 feed.innerHTML = `<form class="vp-msgs-key"><div class="vp-msgs-note"></div><input type="password" minlength="8" required>`
                     + (has ? '' : '<input type="password" minlength="8" required>') + `<button type="submit"></button><div class="vp-msgs-keyerr"></div></form>`;
                 const f = feed.firstChild, [p1, p2] = f.querySelectorAll('input'), err = f.querySelector('.vp-msgs-keyerr'), btn = f.querySelector('button');
-                f.firstChild.textContent = has ? '🔒 Введи пароль сообщений — он откроет твой ключ на этом устройстве'
-                    : '🔒 Придумай пароль для сообщений: им шифруется твой ключ, с ним переписка откроется на любом устройстве. Лучше несколько слов или 10+ символов — простой пароль можно подобрать. Забудешь — старые сообщения не прочитать';
+                f.firstChild.insertAdjacentHTML('afterbegin', uiIcon('lock', 14));
+                f.firstChild.appendChild(document.createTextNode(has ? 'Введи пароль сообщений — он откроет твой ключ на этом устройстве'
+                    : 'Придумай пароль для сообщений: им шифруется твой ключ, с ним переписка откроется на любом устройстве. Лучше несколько слов или 10+ символов — простой пароль можно подобрать. Забудешь — старые сообщения не прочитать'));
                 p1.placeholder = 'Пароль'; p1.autocomplete = has ? 'current-password' : 'new-password';
                 if (p2) { p2.placeholder = 'Ещё раз'; p2.autocomplete = 'new-password'; }
                 btn.textContent = has ? 'Открыть' : 'Создать ключ';
@@ -7696,7 +7723,7 @@
                 botTimer = setTimeout(() => {
                     typing.remove();
                     supportTicket = supportTicket || 1000 + (Math.random() * 9000 | 0);
-                    bubble('in', `🎫 Приняли, обращение №${supportTicket++}. Ответим, как только личка заработает — а по-настоящему сейчас быстрее в тг @NeuroSFW`);
+                    bubble('in', `Приняли, обращение №${supportTicket++}. Ответим, как только личка заработает — а по-настоящему сейчас быстрее в тг @NeuroSFW`);
                 }, 900 + Math.random() * 700);
             }
 
@@ -7765,8 +7792,8 @@
                     if (input.dataset.vpBlocked) { delete input.dataset.vpBlocked; input.placeholder = input.dataset.vpPh || ''; input.disabled = false; }
                     return;
                 }
-                const n = note(mine ? `🚫 Ты заблокировал(а) ${d.name}: новые сообщения и звонки от этого человека к тебе не приходят`
-                    : `🚫 ${d.name} заблокировал(а) тебя: твои сообщения и звонки сюда не доходят`);
+                const n = note(mine ? `Ты заблокировал(а) ${d.name}: новые сообщения и звонки от этого человека к тебе не приходят`
+                    : `${d.name} заблокировал(а) тебя: твои сообщения и звонки сюда не доходят`, 'ban');
                 n.classList.add('vp-msgs-blocked');
                 n.dataset.kind = kind;
                 if (mine) {
@@ -7813,7 +7840,7 @@
             $('.vp-msgs-call').onclick = () => {
                 if (!current || !current.login || current.support || current.bot) return;
                 const t = msgTarget(current);
-                if (!msgNet.me || !isApprovedId(msgMyId())) return note('📞 Звонки откроются вместе с перепиской');
+                if (!msgNet.me || !isApprovedId(msgMyId())) return note('Звонки откроются вместе с перепиской', 'phone');
                 if (!t.uid) return note(t.missing);
                 callStart(t.uid, current.name, current.ava);
             };
@@ -7914,14 +7941,16 @@
                     });
                     menu.appendChild(row);
                 }
-                const item = (label, fn) => {
+                const item = (label, fn, ico) => {
                     const btn = document.createElement('button');
-                    btn.type = 'button'; btn.className = 'vp-msgs-menu-i'; btn.textContent = label;
+                    btn.type = 'button'; btn.className = 'vp-msgs-menu-i';
+                    if (ico) btn.insertAdjacentHTML('afterbegin', uiIcon(ico, 16));
+                    btn.appendChild(document.createTextNode(label));
                     btn.addEventListener('click', () => { closeMenu(); fn(); });
                     menu.appendChild(btn);
                 };
-                if (text) item('📋 Копировать текст', () => { navigator.clipboard && navigator.clipboard.writeText(text).catch(() => { }); });
-                if (imgs.length) item(imgs.length > 1 ? '🖼 Открыть альбом' : '🖼 Открыть картинку', () => openImg(imgs, 0, text));
+                if (text) item('Копировать текст', () => { navigator.clipboard && navigator.clipboard.writeText(text).catch(() => { }); }, 'copy');
+                if (imgs.length) item(imgs.length > 1 ? 'Открыть альбом' : 'Открыть картинку', () => openImg(imgs, 0, text), 'image');
                 if (!menu.childNodes.length) { menu = null; return; }
                 document.body.appendChild(menu);
                 const w = menu.offsetWidth, h = menu.offsetHeight;
@@ -7954,7 +7983,7 @@
                 lb = document.createElement('div');
                 lb.className = 'vp-msgs-lb';
                 lb.innerHTML = `<div class="vp-msgs-lb-top"><button type="button" class="vp-msgs-ib" title="Назад">${MSG_ICON.back}</button><span class="vp-msgs-lb-cap"></span>`
-                    + `<b class="vp-msgs-lb-n"></b><a target="_blank" rel="noopener">Открыть оригинал ↗</a></div>`
+                    + `<b class="vp-msgs-lb-n"></b><a target="_blank" rel="noopener">Открыть оригинал ${uiIcon('out', 14, 'vp-solo')}</a></div>`
                     + `<div class="vp-msgs-lb-body"><button type="button" class="vp-msgs-lb-nav vp-prev" title="Назад">‹</button><img alt="" draggable="false"><button type="button" class="vp-msgs-lb-nav vp-next" title="Дальше">›</button></div>`;
                 const orig = lb.querySelector('a'), img = lb.querySelector('img'), num = lb.querySelector('.vp-msgs-lb-n');
                 const prev = lb.querySelector('.vp-prev'), next = lb.querySelector('.vp-next');
@@ -7997,14 +8026,14 @@
             const pendEl = document.createElement('div');
             pendEl.className = 'vp-msgs-pend';
             pendEl.hidden = true;
-            pendEl.innerHTML = '<div class="vp-msgs-pend-list"></div><span></span><button type="button" class="vp-msgs-pend-all" title="Убрать все">✕</button>';
+            pendEl.innerHTML = '<div class="vp-msgs-pend-list"></div><span></span><button type="button" class="vp-msgs-pend-all" title="Убрать все">' + uiIcon('close', 14, 'vp-solo') + '</button>';
             const pendList = pendEl.querySelector('.vp-msgs-pend-list');
             function renderPending() {
                 pendList.textContent = '';
                 (pendingImg || []).forEach((p, i) => {
                     const t = document.createElement('span');
                     t.className = 'vp-msgs-pend-t';
-                    t.innerHTML = '<img alt=""><button type="button" title="Убрать">✕</button>';
+                    t.innerHTML = '<img alt=""><button type="button" title="Убрать">' + uiIcon('close', 12, 'vp-solo') + '</button>';
                     t.firstChild.src = p.url;
                     t.lastChild.addEventListener('click', () => removePending(i));
                     pendList.appendChild(t);
@@ -10133,7 +10162,8 @@
                 const badge = document.createElement('span');
                 badge.className = 'vp-gal-badge';
                 const sec = Math.round(+vid.duration || 0);
-                badge.textContent = sec ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}` : '▶';
+                badge.textContent = sec ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}` : '';
+                if (!sec) badge.innerHTML = uiIcon('play', 14, 'vp-solo');
                 tile.appendChild(badge);
             }
             if (media.length > 1) {
@@ -12010,13 +12040,13 @@
         function minesGame(setScore, rp) {
             const W = 10, H = 10, M = 15;
             const el = document.createElement('div');
-            el.innerHTML = `<div class="vp-mines-bar"><button type="button" data-a="new">Новая игра</button><button type="button" data-a="flag">🚩 флажки</button><button type="button" data-a="help">❓ Как играть</button></div>
+            el.innerHTML = `<div class="vp-mines-bar"><button type="button" data-a="new">Новая игра</button><button type="button" data-a="flag">${uiIcon('flag', 15)}Флажки</button><button type="button" data-a="help">${uiIcon('help', 15)}Как играть</button></div>
             <div class="vp-mines-wrap"><div class="vp-mines"></div><div class="vp-mines-help" hidden><b>Как играть в сапёра</b><ul>
             <li>На поле 10×10 спрятано 15 мин. Цель — открыть все клетки без мин.</li>
             <li>Нажми на клетку, чтобы открыть её. Первый ход всегда безопасный.</li>
             <li>Цифра — сколько мин в 8 клетках вокруг неё. Щёлкни по клетке колёсиком мыши — вокруг неё останется рамка 3×3, так видно зону цифры (ещё щелчок колёсиком — убрать). Например, <span class="vp-n">1</span> — ровно одна мина где-то рядом.</li>
             <li>Пустая клетка — мин вокруг нет, соседи откроются сами.</li>
-            <li>Уверен, что тут мина, — поставь флажок: правая кнопка мыши, долгое нажатие на телефоне или режим «🚩 флажки».</li>
+            <li>Уверен, что тут мина, — поставь флажок: правая кнопка мыши, долгое нажатие на телефоне или режим «Флажки».</li>
             <li>Вокруг цифры уже столько флажков, сколько она показывает, — нажми на цифру, и откроются остальные соседи.</li>
             <li>Открыл мину — проигрыш. Открыл всё без мин — победа, время уходит в «Топ задротов». Чем быстрее, тем выше.</li>
             <li>Новая игра — кнопка сверху или клавиша R.</li></ul></div></div><div class="vp-mines-msg"></div>`;
@@ -12026,7 +12056,7 @@
             const nb = i => { const x = i % W, y = i / W | 0, out = []; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nx = x + dx, ny = y + dy; if ((dx || dy) && nx >= 0 && ny >= 0 && nx < W && ny < H) out.push(ny * W + nx); } return out; };
             const secs = () => rp ? Math.floor(repNow / 1000) : nowT !== null ? Math.floor(nowT / 1000) : t0 ? Math.floor((performance.now() - t0) / 1000) : 0;
             const fmt = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-            const show = () => { const b = rp ? 0 : GM_getValue(acctKey('vp_mines_best'), 0); setScore(`💣 ${M - flags} · ${fmt(secs())}` + (b ? ` · лучшее ${fmt(b)}` : '')); };
+            const show = () => { const b = rp ? 0 : GM_getValue(acctKey('vp_mines_best'), 0); setScore(`Мин ${M - flags} · ${fmt(secs())}` + (b ? ` · лучшее ${fmt(b)}` : '')); };
             function userAct(i, fl) {
                 if (rp || over) return;
                 const t = t0 ? Math.round(performance.now() - t0) : 0;
@@ -12058,7 +12088,7 @@
             function paint(c) {
                 const b = c.b;
                 b.classList.toggle('vp-open', c.open);
-                b.textContent = c.open ? (c.mine ? '💣' : c.n || '') : c.flag ? '🚩' : '';
+                b.innerHTML = c.open ? (c.mine ? uiIcon('bomb', 24, 'vp-solo') : c.n || '') : c.flag ? uiIcon('flag', 24, 'vp-solo') : '';
                 if (c.open && !c.mine && c.n) b.dataset.n = c.n; else delete b.dataset.n;
             }
             function plant(safe) {
@@ -12158,7 +12188,7 @@
             side.innerHTML = `<div>Следующая</div><canvas class="vp-g-canvas" style="width:88px;height:88px"></canvas>
             <div>Очки<br><b data-v="score">0</b></div><div>Линии<br><b data-v="lines">0</b></div><div>Уровень<br><b data-v="level">1</b></div>`;
             const pad = document.createElement('div'); pad.className = 'vp-g-pad';
-            pad.innerHTML = ['◀:left', '⟳:rot', '▶:right', '▼:down', '⤓:drop', 'Ⅱ:pause'].map(s => { const [t, a] = s.split(':'); return `<button type="button" data-a="${a}">${t}</button>`; }).join('');
+            pad.innerHTML = [['left', 'left'], ['rotate', 'rot'], ['right', 'right'], ['down', 'down'], ['drop', 'drop'], ['pause', 'pause']].map(([t, a]) => `<button type="button" data-a="${a}" aria-label="${ {left:'Влево',rot:'Повернуть',right:'Вправо',down:'Вниз',drop:'Сбросить',pause:'Пауза'}[a] }">${uiIcon(t, 20, 'vp-solo')}</button>`).join('');
             const hint = document.createElement('div'); hint.className = 'vp-games-hint';
             hint.textContent = '← → — двигать · ↑ или X — поворот · ↓ — быстрее · пробел — сбросить · P — пауза';
             if (IS_PHONE) hint.hidden = true;
@@ -12520,7 +12550,7 @@
             if (gw.el) return showGame(id);
             const el = document.createElement('div');
             el.className = 'vp-games';
-            el.innerHTML = `<div class="vp-games-win" role="dialog" aria-label="Игры"><div class="vp-games-head"><div class="vp-games-tabs">${GAMES.map(g => `<button type="button" class="vp-games-tab" data-g="${g.id}">${g.name}</button>`).join('')}<button type="button" class="vp-games-tab" data-g="lead">🏆 Топ задротов</button></div>
+            el.innerHTML = `<div class="vp-games-win" role="dialog" aria-label="Игры"><div class="vp-games-head"><div class="vp-games-tabs">${GAMES.map(g => `<button type="button" class="vp-games-tab" data-g="${g.id}">${g.name}</button>`).join('')}<button type="button" class="vp-games-tab" data-g="lead">${uiIcon('trophy', 15)}Топ задротов</button></div>
             <span class="vp-games-score"></span><button type="button" class="vp-games-x" aria-label="Закрыть">${svgIcon('<path d="M6 6l12 12M18 6 6 18"/>', 18)}</button></div><div class="vp-games-body"></div></div>`;
             el.addEventListener('click', e => { if (e.target === el) closeGames(); });
             const still = e => {

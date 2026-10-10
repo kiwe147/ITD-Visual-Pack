@@ -194,7 +194,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   await A.p.$eval('.vp-msgs-back', b => b.click()).catch(() => { }); await A.p.waitForTimeout(3000);
   await A.p.$eval('.vp-msgs-row[data-id="@back"]', b => b.click()).catch(() => { });
   const preview = await A.p.$eval('.vp-msgs-row[data-id="u:bob"] .vp-msgs-last', e => e.textContent).catch(() => '');
-  check(preview === '🖼 котик', `в списке у NeuroSFW: «${preview}»`);
+  check(preview === 'котик', `в списке у NeuroSFW: ${JSON.stringify(preview)}`);
   await chatWith(A.p, 'u:bob', 1);
   await A.p.waitForTimeout(800);
   const gotImg = await A.p.evaluate(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); const im = b && b.querySelector('img'); return { src: im && im.src, text: b && b.firstChild && b.childNodes[1] && b.childNodes[1].textContent, loaded: !!(im && im.complete && im.naturalWidth) }; });
@@ -237,7 +237,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   check(uploads - up0 === 3 && aSent.cells === 3 && /✓/.test(aSent.meta), `альбом отправлен одним сообщением: загрузок ${uploads - up0}, ${JSON.stringify(aSent)}`);
   await A.p.$eval('.vp-msgs-back', b => b.click()).catch(() => { }); await A.p.waitForTimeout(3000);
   const aPrev = await A.p.$eval('.vp-msgs-row[data-id="u:bob"] .vp-msgs-last', e => e.textContent).catch(() => '');
-  check(aPrev === '🖼 3 фото', `в списке у NeuroSFW: «${aPrev}»`);
+  check(aPrev === '3 фото', `в списке у NeuroSFW: «${aPrev}»`);
   await chatWith(A.p, 'u:bob', 1); await A.p.waitForTimeout(800);
   const aGot = await A.p.evaluate(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return [...b.querySelectorAll('.vp-msgs-album img')].map(i => i.src.slice(-8)); });
   check(aGot.length === 3 && new Set(aGot).size === 3, `NeuroSFW видит альбом из 3 разных картинок ${JSON.stringify(aGot)}`);
@@ -260,7 +260,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   await B2.p.waitForFunction(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); return b && /✓|не отправлено/.test(metaOf(b.lastChild)); }, null, { timeout: 20000 }).catch(() => { });
   await A.p.$eval('.vp-msgs-back', b => b.click()).catch(() => { }); await A.p.waitForTimeout(3000);
   const a5prev = await A.p.$eval('.vp-msgs-row[data-id="u:bob"] .vp-msgs-last', e => e.textContent).catch(() => '');
-  check(a5prev === '🖼 5 фото · Хуй 5', `альбом 5 с подписью в списке: «${a5prev}»`);
+  check(a5prev === '5 фото · Хуй 5', `альбом 5 с подписью в списке: «${a5prev}»`);
   await chatWith(A.p, 'u:bob', 1); await A.p.waitForTimeout(800);
   const a5 = await A.p.evaluate(() => { const b = [...document.querySelectorAll('.vp-msgs-feed .vp-msgs-b')].pop(); const c = b.querySelector('.vp-msgs-cap'); return { cap: c ? c.textContent : '', junk: /�/.test(b.textContent), n: new Set([...b.querySelectorAll('.vp-msgs-album img')].map(i => i.src)).size }; });
   check(uploads - up5 === 5 && a5.n === 5 && a5.cap === 'Хуй 5' && !a5.junk, `получатель видит 5 картинок и подпись без мусора ${JSON.stringify(a5)}`);

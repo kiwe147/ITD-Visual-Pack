@@ -81,8 +81,8 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(opened >= 9 && !boom, `первый ход безопасный и открыл область (${opened} клеток)`);
   const closed = await p.$$('.vp-mine:not(.vp-open)');
   await closed[0].click({ button: 'right' });
-  check(await closed[0].evaluate(b => b.textContent === '🚩'), 'правая кнопка — флажок');
-  check(/💣 14/.test(await p.$eval('.vp-games-score', e => e.textContent)), 'счётчик мин уменьшился');
+  check(await closed[0].evaluate(b => b.querySelector('svg.vp-ico') !== null && b.textContent === ''), 'правая кнопка — флажок');
+  check(/Мин 14/.test(await p.$eval('.vp-games-score', e => e.textContent)), 'счётчик мин уменьшился');
 
   // тетрис: вкладка в окне, пробел — фигура упала
   await p.click('.vp-games-tab[data-g="tetris"]');

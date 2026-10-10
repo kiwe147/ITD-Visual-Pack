@@ -38,7 +38,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   await p.click('.vp-game-row >> nth=0'); await p.waitForTimeout(500);
   await p.click('.vp-games-tab[data-g="mines"]'); await p.waitForTimeout(400);
   const lead = await p.$eval('.vp-games-tab[data-g="lead"]', e => e.textContent.trim());
-  check(lead === '🏆 Топ задротов', `вкладка лидеров: «${lead}»`);
+  check(lead === 'Топ задротов', `вкладка лидеров: «${lead}»`);
   await p.hover('.vp-mine[data-i="44"]'); await p.waitForTimeout(150);
   check(!(await p.$('.vp-mine.vp-near')), 'просто наведение — без подсветки');
   await p.mouse.down({ button: 'middle' }); await p.mouse.up({ button: 'middle' }); await p.waitForTimeout(150);
@@ -53,7 +53,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(!(await p.$('.vp-mine.vp-near')), 'ещё щелчок колёсиком по той же — рамка убрана');
   await p.click('.vp-mines-bar [data-a="help"]'); await p.waitForTimeout(200);
   const help = await p.$eval('.vp-mines-help', e => ({ shown: getComputedStyle(e).display !== 'none', text: e.textContent }));
-  check(help.shown && /15 мин/.test(help.text) && /флажок/.test(help.text), '«❓ Как играть» — правила открылись');
+  check(help.shown && /15 мин/.test(help.text) && /флажок/.test(help.text), '«Как играть» — правила открылись');
   await p.screenshot({ path: path.join(__dirname, 'out', 'mines-help.png'), clip: await p.$eval('.vp-games-win', e => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; }) });
   await p.click('.vp-mines-help'); await p.waitForTimeout(150);
   check(await p.$eval('.vp-mines-help', e => getComputedStyle(e).display === 'none'), 'нажатие по правилам — закрылись');
