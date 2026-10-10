@@ -1360,7 +1360,7 @@
             image: '<rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.5"/><path d="m20 15-4-4-8 8"/>',
             copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6A2.5 2.5 0 0 0 13 3.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/>',
             flag: '<path d="M6.5 21V3.5M4 21h5.5"/><path d="M6.5 4.5h11.5l-3.2 4.2 3.2 4.2H6.5z" fill="#ef4444" stroke="#ef4444" stroke-width="1.2"/>',
-            bomb: '<circle cx="10.5" cy="14.5" r="7.2" fill="currentColor" stroke="none"/><path d="M6.4 12.6a4.6 4.6 0 0 1 3.2-2.6" stroke="rgba(127,127,127,.75)" stroke-width="1.6"/><rect x="14.2" y="5.6" width="3.6" height="3.2" rx="1" transform="rotate(42 16 7.2)" fill="currentColor" stroke="none"/><path d="M17.6 6.2c1.3-1.6 2.6-1.8 3.5-.8"/><path d="M21.4 1.6v3.2M19.8 3.2H23M20.3 2.1l2.2 2.2M22.5 2.1l-2.2 2.2" stroke="#ffb020" stroke-width="1.3"/>',
+            bomb: '<circle cx="12" cy="12" r="5.2" fill="currentColor" stroke="none"/><path d="M12 2.8v4M12 17.2v4M2.8 12h4M17.2 12h4M5.5 5.5l2.8 2.8M15.7 15.7l2.8 2.8M18.5 5.5l-2.8 2.8M8.3 15.7l-2.8 2.8" stroke-width="2.3"/><circle cx="10.2" cy="10.2" r="1.5" fill="rgba(127,127,127,.85)" stroke="none"/>',
             help: '<circle cx="12" cy="12" r="9" fill="currentColor" fill-opacity=".14"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8M12 16.8h.01" stroke-width="2.1"/>',
             trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H4.5v1a3.5 3.5 0 0 0 3.5 3.5M16 6h3.5v1a3.5 3.5 0 0 1-3.5 3.5M12 13v4M8.5 20h7"/>',
             play: '<path d="m9 6.5 8 5.5-8 5.5z"/>',
@@ -4316,7 +4316,8 @@
 
         const CHANGELOG = [
             ['3.5.3', '10 октября 2026', [
-                'Вместо эмодзи в кнопках, подсказках, меню сообщений и играх теперь линейные иконки одной толщины, как у сайта. Аватарки и сами эмодзи в сообщениях остались как были']],
+                'Вместо эмодзи в кнопках, подсказках, меню сообщений и играх теперь линейные иконки одной толщины, как у сайта. Аватарки и сами эмодзи в сообщениях остались как были',
+                'Сапёр: когда игра проиграна, флажки подсвечиваются — зелёным те, что стояли на мине, красным те, что поставлены зря']],
             ['3.5.2 – 3.5.2.8', '4 октября 2026', [
                 'Мику и Тето двигаются втрое плавнее: в каждом прыжке 45 кадров вместо 13',
                 'В списке автолайка настоящие аватарки показываются картинкой, а не ссылкой',
@@ -11868,6 +11869,8 @@
         .vp-mine.vp-near { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent) 35%, transparent); }
         .vp-mine.vp-open.vp-near { background-color: color-mix(in srgb, var(--vp-accent) 5%, rgba(255, 255, 255, .04)); }
         .vp-mine.vp-boom { background: #c0392b; }
+        .vp-mine.vp-flag-ok { background: rgba(46, 204, 113, .55); }
+        .vp-mine.vp-flag-bad { background: rgba(231, 76, 60, .5); }
         .vp-mine[data-n="1"] { color: #5dade2; } .vp-mine[data-n="2"] { color: #58d68d; } .vp-mine[data-n="3"] { color: #ec7063; }
         .vp-mine[data-n="4"] { color: #af7ac5; } .vp-mine[data-n="5"] { color: #f5b041; } .vp-mine[data-n="6"] { color: #48c9b0; }
         .vp-mine[data-n="7"] { color: #fff; } .vp-mine[data-n="8"] { color: #aab7b8; }
@@ -12103,6 +12106,7 @@
                 over = true; clearInterval(timer);
                 cells.forEach(c => { if (c.mine && !c.flag) { c.open = !win; if (win) c.flag = true; } paint(c); });
                 if (boom != null) cells[boom].b.classList.add('vp-boom');
+                if (!win) cells.forEach(c => { if (c.flag) c.b.classList.add(c.mine ? 'vp-flag-ok' : 'vp-flag-bad'); });
                 const s = secs();
                 if (win) {
                     won = true;
