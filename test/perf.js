@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const snap = fs.readFileSync(process.argv[2], 'utf8');
 const mode = process.argv[3] || 'desktop';
-let src = fs.readFileSync(path.join(__dirname, '..', 'ITD-Visual-Pack.user.js'), 'utf8');
+let src = fs.readFileSync(path.join(__dirname, '..', 'ITD-Visual-Pack.user.js'), 'utf8').replace(/\r\n/g, '\n');
 // замер каждого обработчика и всего прохода — только в копии для теста
 const a = 'for (const fn of domHandlers) { try { fn(); }';
 if (!src.includes(a)) { console.log('ОШИБКА: не нашёл цикл обработчиков'); process.exit(1); }

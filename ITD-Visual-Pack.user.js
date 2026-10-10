@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.2.8
+// @version      3.5.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -34,6 +34,7 @@
     const TG_URL = 'https://t.me/NeuroSFW';
     const TG_CHAT_URL = 'https://t.me/+P7NeR_AEc35lYjEy';
     const AUTO_LIKE_KEY = 'itd_auto_like_ids';
+    const isUrl = a => /^https?:|^\//.test(a);
     const addCss = css => {
         const st = document.createElement('style');
         st.textContent = css;
@@ -1353,6 +1354,18 @@
             `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
         const I_BG = '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M12 8.2l1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1z"/><path d="M17.5 6.8v1.6M16.7 7.6h1.6"/>';
 
+        const UI_GLYPH = {
+            lock: '<rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+            ban: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>',
+            phone: GLYPH.phone,
+            image: '<rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.5"/><path d="m20 15-4-4-8 8"/>',
+            copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6A2.5 2.5 0 0 0 13 3.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/>',
+            play: '<path d="m9 6.5 8 5.5-8 5.5z"/>',
+            out: '<path d="M8 16 16 8M9.5 8H16v6.5"/>',
+            close: GLYPH.close
+        };
+        const uiIcon = (name, size = 18, cls = '') => svgIcon(UI_GLYPH[name], size).replace('<svg ', `<svg class="vp-ico${cls ? ' ' + cls : ''}" `);
+
         const ICONS = {
             settings: {
                 'Фон': svgIcon(I_BG),
@@ -1994,6 +2007,8 @@
         article .vp-nick-row time { flex-shrink: 0; }
         .vp-clamp::after { display: none !important; }
         .vp-clamp { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); }
+        .vp-ico { display: inline-block !important; width: 1.15em; height: 1.15em; flex: none; vertical-align: -.2em; margin-right: .4em; }
+        .vp-ico.vp-solo { margin: 0; vertical-align: -.15em; }
         .vp-banner-buttons { inset: var(--vp-bar-top, 0px) auto auto 50% !important; width: auto !important; height: auto !important; margin: 0 !important; translate: none !important; scale: none !important; rotate: none !important;
             transform: translateX(-50%); display: flex !important; gap: 2px !important; padding: 4px 12px 7px !important;
             border-radius: 0 0 22px 22px; background: rgba(12, 12, 16, .6); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
@@ -2997,7 +3012,7 @@
                 row.className = 'nick-style-option vp-like-row';
                 row.innerHTML = `<div class="vp-like-user"><div class="vp-like-avatar"></div><div class="vp-like-names"><span class="vp-like-name"></span><span class="vp-like-login"></span></div></div><div class="toggle-switch"></div>`;
                 const av = row.querySelector('.vp-like-avatar'), ava = (data.avatar && (data.avatar.url || data.avatar)) || '👤';
-                if (/^https?:|^\//.test(ava)) { const img = document.createElement('img'); img.alt = ''; img.onerror = () => { av.textContent = '👤'; }; img.src = ava; av.appendChild(img); } else av.textContent = ava;
+                if (isUrl(ava)) { const img = document.createElement('img'); img.alt = ''; img.onerror = () => { av.textContent = '👤'; }; img.src = ava; av.appendChild(img); } else av.textContent = ava;
                 row.querySelector('.vp-like-name').textContent = (data.displayName || username).slice(0, 20);
                 row.querySelector('.vp-like-login').textContent = '@' + username;
                 const toggle = row.querySelector('.toggle-switch');
@@ -3803,7 +3818,7 @@
                 catch (er) { b.textContent = 'Не скопировалось'; }
             };
             const ava = el.querySelector('.vp-call-ava');
-            if (/^https?:|^\//.test(c.ava)) { const im = document.createElement('img'); im.src = c.ava; im.alt = ''; ava.appendChild(im); }
+            if (isUrl(c.ava)) { const im = document.createElement('img'); im.src = c.ava; im.alt = ''; ava.appendChild(im); }
             else { const sp = document.createElement('span'); sp.className = 'vp-call-emoji'; sp.textContent = c.ava; ava.appendChild(sp); }
             el.querySelector('.vp-call-name').textContent = c.name;
             el.querySelector('.vp-call-min').onclick = e => { e.stopPropagation(); el.classList.add('vp-call-mini'); };
@@ -4270,16 +4285,16 @@
                 const site = E.banner.querySelector('img:not(.vp-banner-drag)');
                 setBannerEditing(false);
                 if (site) site.src = file.url;
-                alert('✅ Баннер успешно обновлён!');
+                alert('Баннер успешно обновлён!');
             } catch (error) {
                 console.error('Ошибка:', error);
                 const message = error.message || 'Неизвестная ошибка';
                 if (message.includes('запрещённый контент') || message.includes('CONTENT_MODERATION')) {
-                    alert('❌ Изображение не прошло модерацию.\nПожалуйста, выберите другое изображение.');
+                    alert('Изображение не прошло модерацию.\nПожалуйста, выберите другое изображение.');
                 } else if (message.includes('сети') || message.includes('network')) {
-                    alert('❌ Ошибка сети. Проверьте подключение к интернету.');
+                    alert('Ошибка сети. Проверьте подключение к интернету.');
                 } else {
-                    alert(`❌ Ошибка: ${message}`);
+                    alert(`Ошибка: ${message}`);
                 }
                 apply.innerHTML = ICONS.BANNER_APPLY;
                 apply.disabled = false;
@@ -4291,6 +4306,10 @@
         }
 
         const CHANGELOG = [
+            ['3.5.3', '10 октября 2026', [
+                'Вместо эмодзи в кнопках, подсказках и меню сообщений теперь линейные иконки одной толщины, как у сайта. Аватарки, сами эмодзи и значки в играх остались как были',
+                'Сапёр: когда игра проиграна, флажки подсвечиваются — зелёным те, что стояли на мине, красным те, что поставлены зря',
+                'Оптимизация: когда открыты сообщения или галерея, страница меньше тормозит, особенно на длинной ленте']],
             ['3.5.2 – 3.5.2.8', '4 октября 2026', [
                 'Мику и Тето двигаются втрое плавнее: в каждом прыжке 45 кадров вместо 13',
                 'В списке автолайка настоящие аватарки показываются картинкой, а не ссылкой',
@@ -4727,12 +4746,6 @@
             } catch (e) { return []; }
         }
 
-        function verifiedPending() {
-            try {
-                const all = readVerified();
-                return Object.keys(all).filter(n => all[n] && all[n].state === 'quarantine');
-            } catch (e) { return []; }
-        }
 
         let verifyLoad = null, verifyLoadAt = 0;
         async function allComments(postId, maxPages = 30) {
@@ -6503,7 +6516,7 @@
         const msgUuidBytes = u => Uint8Array.from(u.replace(/-/g, '').match(/../g), h => parseInt(h, 16));
         const msgBytesUuid = b => [...b].map(x => x.toString(16).padStart(2, '0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
         const MSG_ALBUM_MAX = 10;
-        const msgPreview = m => m.imgs && m.imgs.length > 1 ? `🖼 ${m.imgs.length} фото` + (m.text ? ' · ' + m.text : '') : m.img ? '🖼 ' + (m.text || 'Фото') : m.text;
+        const msgPreview = m => m.imgs && m.imgs.length > 1 ? `${m.imgs.length} фото` + (m.text ? ' · ' + m.text : '') : m.img ? (m.text || 'Фото') : m.text;
         const msgNet = { keys: new Map(), vols: [], me: null, pairs: new Map(), conv: new Map(), syncing: null, blocks: {} };
         const msgBlocks = () => GM_getValue(acctKey('msgBlocked'), {});
         function msgIsBlocked(uid) { const p = msgNet.blocks[uid] || msgBlocks()[uid]; return !!(p && p.length && !p[p.length - 1][1]); }
@@ -6840,8 +6853,8 @@
                 d.lastTs = last.at || last.ts;
                 d.time = msgTime(last.at || last.ts);
                 d.unread = list.filter(m => m.dir === 'in' && m.ts > seenAt(seen, t.uid, t.sup)).length;
-                if (!t.sup && msgIsBlocked(t.uid)) d.last = '🚫 Заблокирован(а)';
-                else if (!t.sup && msgBlockedMe(t.uid)) d.last = '🚫 Тебя заблокировали';
+                if (!t.sup && msgIsBlocked(t.uid)) d.last = 'Заблокирован(а)';
+                else if (!t.sup && msgBlockedMe(t.uid)) d.last = 'Тебя заблокировали';
             }
         }
         function msgUnread() {
@@ -6883,7 +6896,7 @@
             el.innerHTML = '<span class="vp-msg-toast-ava"></span><span class="vp-msg-toast-body"><b></b><span></span></span>';
             const ava = m.sup && !msgIsSupport() ? '🛟' : ((msgPeople.get(k.login) || {}).ava || '👤');
             const avaEl = el.firstChild;
-            if (/^https?:|^\//.test(ava)) { const im = document.createElement('img'); im.src = ava; im.alt = ''; avaEl.appendChild(im); }
+            if (isUrl(ava)) { const im = document.createElement('img'); im.src = ava; im.alt = ''; avaEl.appendChild(im); }
             else { avaEl.textContent = ava; tintCard(el, ava); }
             el.querySelector('b').textContent = m.sup ? (msgIsSupport() ? '🛟 ' + who : 'Поддержка ИТД X') : who;
             el.querySelector('.vp-msg-toast-body span').textContent = msgPreview(m);
@@ -7393,7 +7406,6 @@
                 countEl.classList.toggle('vp-warn', n >= max * 0.9);
             };
             let current = null, botTimer = 0, lastJoke = -1;
-            const isUrl = a => /^https?:|^\//.test(a);
             const avaHtml = a => isUrl(a) ? `<img src="${esc(a)}" alt="">` : esc(a);
 
             let supDir = false;
@@ -7527,28 +7539,28 @@
                     : '@' + d.login + ' · ' + (d.online ? 'в сети' : d.lastSeen && seenAgo(d.lastSeen) ? 'был(а) в сети ' + seenAgo(d.lastSeen) : 'с ИТД X');
                 $('.vp-msgs-call').hidden = !d.login || !!d.support || !!d.supUid || !!d.bot;
                 if (d.login || d.support || d.supUid) { home.hidden = true; chat.hidden = false; input.value = ''; send.disabled = true; msgCount(); msgOpenPerson(d); return; }
-                feed.innerHTML = '<div class="vp-msgs-note">🤖 Бот-шутник: сообщения ему никуда не уходят и не сохраняются</div>'
+                feed.innerHTML = `<div class="vp-msgs-note">🤖 Бот-шутник: сообщения ему никуда не уходят и не сохраняются</div>`
                     + (d.msgs.length ? '<div class="vp-msgs-note">Сегодня</div>' : `<div class="vp-msgs-note">Это начало переписки с ${esc(d.name)}</div>`);
                 d.msgs.forEach(([dir, text]) => bubble(dir, text, dir === 'out' ? now() + ' ✓✓' : now()));
                 home.hidden = true; chat.hidden = false;
                 input.value = ''; send.disabled = true; msgCount();
             }
-            const note = t => { const n = document.createElement('div'); n.className = 'vp-msgs-note'; n.textContent = t; feed.appendChild(n); return n; };
+            const note = (t, ico) => { const n = document.createElement('div'); n.className = 'vp-msgs-note'; if (ico) n.insertAdjacentHTML('afterbegin', uiIcon(ico, 14)); n.appendChild(document.createTextNode(t)); feed.appendChild(n); return n; };
             let renderN = 0;
             async function msgOpenPerson(d) {
                 const my = ++renderN;
                 feed.textContent = ''; input.disabled = true; input.maxLength = MSG_TEXT_MAX;
-                const wait = note('🔒 Загрузка переписки…');
+                const wait = note('Загрузка переписки…', 'lock');
                 try { await msgSync(); } catch (e) { if (my === renderN) wait.textContent = 'Не загрузилось — открой чат ещё раз'; logErr('сообщения', e); return; }
                 if (current !== d || my !== renderN) return;
                 if (d.login && !d.support && !isApprovedId(msgMyId())) {
                     feed.textContent = '';
-                    note('🔒 Переписка с людьми откроется, когда разработчик подтвердит твою галочку ИТД X. Поддержка работает уже сейчас.');
+                    note('Переписка с людьми откроется, когда разработчик подтвердит твою галочку ИТД X. Поддержка работает уже сейчас.', 'lock');
                     return;
                 }
                 if (!msgNet.me) return msgKeyForm(d);
                 feed.textContent = '';
-                note('🔒 Сквозное шифрование: переписку можете прочитать только вы двое');
+                note('Сквозное шифрование: переписку можете прочитать только вы двое', 'lock');
                 const t = msgTarget(d);
                 if (!t.uid) { note(t.missing); return; }
                 const list = msgThread(t);
@@ -7612,8 +7624,9 @@
                 feed.innerHTML = `<form class="vp-msgs-key"><div class="vp-msgs-note"></div><input type="password" minlength="8" required>`
                     + (has ? '' : '<input type="password" minlength="8" required>') + `<button type="submit"></button><div class="vp-msgs-keyerr"></div></form>`;
                 const f = feed.firstChild, [p1, p2] = f.querySelectorAll('input'), err = f.querySelector('.vp-msgs-keyerr'), btn = f.querySelector('button');
-                f.firstChild.textContent = has ? '🔒 Введи пароль сообщений — он откроет твой ключ на этом устройстве'
-                    : '🔒 Придумай пароль для сообщений: им шифруется твой ключ, с ним переписка откроется на любом устройстве. Лучше несколько слов или 10+ символов — простой пароль можно подобрать. Забудешь — старые сообщения не прочитать';
+                f.firstChild.insertAdjacentHTML('afterbegin', uiIcon('lock', 14));
+                f.firstChild.appendChild(document.createTextNode(has ? 'Введи пароль сообщений — он откроет твой ключ на этом устройстве'
+                    : 'Придумай пароль для сообщений: им шифруется твой ключ, с ним переписка откроется на любом устройстве. Лучше несколько слов или 10+ символов — простой пароль можно подобрать. Забудешь — старые сообщения не прочитать'));
                 p1.placeholder = 'Пароль'; p1.autocomplete = has ? 'current-password' : 'new-password';
                 if (p2) { p2.placeholder = 'Ещё раз'; p2.autocomplete = 'new-password'; }
                 btn.textContent = has ? 'Открыть' : 'Создать ключ';
@@ -7696,7 +7709,7 @@
                 botTimer = setTimeout(() => {
                     typing.remove();
                     supportTicket = supportTicket || 1000 + (Math.random() * 9000 | 0);
-                    bubble('in', `🎫 Приняли, обращение №${supportTicket++}. Ответим, как только личка заработает — а по-настоящему сейчас быстрее в тг @NeuroSFW`);
+                    bubble('in', `Приняли, обращение №${supportTicket++}. Ответим, как только личка заработает — а по-настоящему сейчас быстрее в тг @NeuroSFW`);
                 }, 900 + Math.random() * 700);
             }
 
@@ -7765,8 +7778,8 @@
                     if (input.dataset.vpBlocked) { delete input.dataset.vpBlocked; input.placeholder = input.dataset.vpPh || ''; input.disabled = false; }
                     return;
                 }
-                const n = note(mine ? `🚫 Ты заблокировал(а) ${d.name}: новые сообщения и звонки от этого человека к тебе не приходят`
-                    : `🚫 ${d.name} заблокировал(а) тебя: твои сообщения и звонки сюда не доходят`);
+                const n = note(mine ? `Ты заблокировал(а) ${d.name}: новые сообщения и звонки от этого человека к тебе не приходят`
+                    : `${d.name} заблокировал(а) тебя: твои сообщения и звонки сюда не доходят`, 'ban');
                 n.classList.add('vp-msgs-blocked');
                 n.dataset.kind = kind;
                 if (mine) {
@@ -7813,7 +7826,7 @@
             $('.vp-msgs-call').onclick = () => {
                 if (!current || !current.login || current.support || current.bot) return;
                 const t = msgTarget(current);
-                if (!msgNet.me || !isApprovedId(msgMyId())) return note('📞 Звонки откроются вместе с перепиской');
+                if (!msgNet.me || !isApprovedId(msgMyId())) return note('Звонки откроются вместе с перепиской', 'phone');
                 if (!t.uid) return note(t.missing);
                 callStart(t.uid, current.name, current.ava);
             };
@@ -7914,14 +7927,16 @@
                     });
                     menu.appendChild(row);
                 }
-                const item = (label, fn) => {
+                const item = (label, fn, ico) => {
                     const btn = document.createElement('button');
-                    btn.type = 'button'; btn.className = 'vp-msgs-menu-i'; btn.textContent = label;
+                    btn.type = 'button'; btn.className = 'vp-msgs-menu-i';
+                    if (ico) btn.insertAdjacentHTML('afterbegin', uiIcon(ico, 16));
+                    btn.appendChild(document.createTextNode(label));
                     btn.addEventListener('click', () => { closeMenu(); fn(); });
                     menu.appendChild(btn);
                 };
-                if (text) item('📋 Копировать текст', () => { navigator.clipboard && navigator.clipboard.writeText(text).catch(() => { }); });
-                if (imgs.length) item(imgs.length > 1 ? '🖼 Открыть альбом' : '🖼 Открыть картинку', () => openImg(imgs, 0, text));
+                if (text) item('Копировать текст', () => { navigator.clipboard && navigator.clipboard.writeText(text).catch(() => { }); }, 'copy');
+                if (imgs.length) item(imgs.length > 1 ? 'Открыть альбом' : 'Открыть картинку', () => openImg(imgs, 0, text), 'image');
                 if (!menu.childNodes.length) { menu = null; return; }
                 document.body.appendChild(menu);
                 const w = menu.offsetWidth, h = menu.offsetHeight;
@@ -7954,7 +7969,7 @@
                 lb = document.createElement('div');
                 lb.className = 'vp-msgs-lb';
                 lb.innerHTML = `<div class="vp-msgs-lb-top"><button type="button" class="vp-msgs-ib" title="Назад">${MSG_ICON.back}</button><span class="vp-msgs-lb-cap"></span>`
-                    + `<b class="vp-msgs-lb-n"></b><a target="_blank" rel="noopener">Открыть оригинал ↗</a></div>`
+                    + `<b class="vp-msgs-lb-n"></b><a target="_blank" rel="noopener">Открыть оригинал ${uiIcon('out', 14, 'vp-solo')}</a></div>`
                     + `<div class="vp-msgs-lb-body"><button type="button" class="vp-msgs-lb-nav vp-prev" title="Назад">‹</button><img alt="" draggable="false"><button type="button" class="vp-msgs-lb-nav vp-next" title="Дальше">›</button></div>`;
                 const orig = lb.querySelector('a'), img = lb.querySelector('img'), num = lb.querySelector('.vp-msgs-lb-n');
                 const prev = lb.querySelector('.vp-prev'), next = lb.querySelector('.vp-next');
@@ -7997,14 +8012,14 @@
             const pendEl = document.createElement('div');
             pendEl.className = 'vp-msgs-pend';
             pendEl.hidden = true;
-            pendEl.innerHTML = '<div class="vp-msgs-pend-list"></div><span></span><button type="button" class="vp-msgs-pend-all" title="Убрать все">✕</button>';
+            pendEl.innerHTML = '<div class="vp-msgs-pend-list"></div><span></span><button type="button" class="vp-msgs-pend-all" title="Убрать все">' + uiIcon('close', 14, 'vp-solo') + '</button>';
             const pendList = pendEl.querySelector('.vp-msgs-pend-list');
             function renderPending() {
                 pendList.textContent = '';
                 (pendingImg || []).forEach((p, i) => {
                     const t = document.createElement('span');
                     t.className = 'vp-msgs-pend-t';
-                    t.innerHTML = '<img alt=""><button type="button" title="Убрать">✕</button>';
+                    t.innerHTML = '<img alt=""><button type="button" title="Убрать">' + uiIcon('close', 12, 'vp-solo') + '</button>';
                     t.firstChild.src = p.url;
                     t.lastChild.addEventListener('click', () => removePending(i));
                     pendList.appendChild(t);
@@ -8963,7 +8978,7 @@
         }
         function msgsNavLook() {
             const links = [...document.querySelectorAll('.' + SELECTORS.navLink)];
-            if (!msgsOpen && !galOpen) { links.forEach(a => a.classList.remove('vp-site-cur')); return; }
+            if (!msgsOpen && !galOpen) { links.forEach(a => { if (a.classList.contains('vp-site-cur')) a.classList.remove('vp-site-cur'); }); return; }
             const path = location.pathname;
             const cur = links.find(a => { const h = a.getAttribute('href') || ''; return h.startsWith('/') && (h === path || (h !== '/' && path.startsWith(h + '/'))); });
             const other = links.find(a => a !== cur && !/^#/.test(a.getAttribute('href') || '') && a.getAttribute('href') !== path);
@@ -9629,7 +9644,7 @@
             try { a.g.drawImage(v, 0, 0, 48, 27); a.cv.classList.add('vp-on'); } catch (e) { }
         }
         setInterval(() => {
-            if (!ambientEnabled) return;
+            if (!ambientEnabled || document.hidden) return;
             for (const v of ambientSeen) if (!v.paused || !ambient.get(v)?.cv.classList.contains('vp-on')) ambientDraw(v);
             for (const [v, a] of ambient) if (!v.isConnected) { a.cv.remove(); ambient.delete(v); ambientSeen.delete(v); }
         }, 150);
@@ -9694,14 +9709,14 @@
             const followers = pick(d.followersCount, d.followers_count, d.stats && d.stats.followers, typeof d.followers === 'number' ? d.followers : undefined);
             const following = pick(d.followingCount, d.following_count, d.stats && d.stats.following, typeof d.following === 'number' ? d.following : undefined);
             const bio = pick(d.bio, d.description, d.about, '');
-            const tint = typeof ava === 'string' && !/^https?:|^\//.test(ava) ? emojiTint(ava) : null;
+            const tint = typeof ava === 'string' && !isUrl(ava) ? emojiTint(ava) : null;
             el.innerHTML = `<div class="vp-hc-banner"></div><div class="vp-hc-body"><div class="vp-hc-ava"></div>
             <div class="vp-hc-name"></div><div class="vp-hc-login"></div><div class="vp-hc-bio"></div><div class="vp-hc-stats"></div></div>`;
             const bn = el.querySelector('.vp-hc-banner');
             if (typeof banner === 'string' && banner) bn.style.backgroundImage = `url("${banner.replace(/"/g, '')}")`;
             else bn.style.background = tint ? `linear-gradient(120deg, rgb(${tint}), rgba(${tint}, .25))` : 'linear-gradient(120deg, var(--vp-accent), transparent)';
             const av = el.querySelector('.vp-hc-ava');
-            if (/^https?:|^\//.test(ava)) { const img = document.createElement('img'); img.src = ava; av.appendChild(img); } else av.textContent = ava;
+            if (isUrl(ava)) { const img = document.createElement('img'); img.src = ava; av.appendChild(img); } else av.textContent = ava;
             el.querySelector('.vp-hc-name').textContent = pick(d.displayName, d.display_name, d.name, user);
             el.querySelector('.vp-hc-login').textContent = '@' + pick(d.username, user);
             el.querySelector('.vp-hc-bio').textContent = bio;
@@ -10133,7 +10148,8 @@
                 const badge = document.createElement('span');
                 badge.className = 'vp-gal-badge';
                 const sec = Math.round(+vid.duration || 0);
-                badge.textContent = sec ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}` : '▶';
+                badge.textContent = sec ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}` : '';
+                if (!sec) badge.innerHTML = uiIcon('play', 14, 'vp-solo');
                 tile.appendChild(badge);
             }
             if (media.length > 1) {
@@ -10347,20 +10363,23 @@
             if ((galOpen || msgsOpen) && m && m.pause && !m.closest(OWN_MEDIA)) m.pause();
         }, true);
         function galHideFeed(on) {
-            document.querySelectorAll('.vp-gal-hidden').forEach(e => { if (!on) e.classList.remove('vp-gal-hidden'); });
-            if (!on) return;
+            if (!on) { document.querySelectorAll('.vp-gal-hidden').forEach(e => e.classList.remove('vp-gal-hidden')); return; }
             pauseSiteMedia();
             const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail, nav, .vp-gal, .vp-msgs';
+            const stop = new Map();
             const up = el => {
                 let top = el;
                 for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
-                    if (p.querySelector(side) || p.getBoundingClientRect().width >= innerWidth * 0.72) break;
+                    let s = stop.get(p);
+                    if (s === undefined) stop.set(p, s = !!(p.querySelector(side) || p.getBoundingClientRect().width >= innerWidth * 0.72));
+                    if (s) break;
                     top = p;
                 }
                 return top;
             };
+            const hide = t => { if (!t.classList.contains('vp-gal-hidden')) t.classList.add('vp-gal-hidden'); };
             document.querySelectorAll('.' + [SELECTORS.tabs, SELECTORS.feedBar, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .'))
-                .forEach(e => { const t = up(e); if (!t.closest('.vp-gal, .vp-msgs, nav')) t.classList.add('vp-gal-hidden'); });
+                .forEach(e => { const t = up(e); if (!t.closest('.vp-gal, .vp-msgs, nav')) hide(t); });
             const win = gal.el || document.querySelector('.vp-msgs.vp-open');
             const root = document.getElementById('root');
             const r = win && win.getBoundingClientRect();
@@ -10372,7 +10391,7 @@
                     if (e.querySelector(side)) break;
                     if (getComputedStyle(e).position === 'fixed') continue;
                     const t = up(e);
-                    if (t !== root && !t.closest('.vp-gal, .vp-msgs, nav')) t.classList.add('vp-gal-hidden');
+                    if (t !== root && !t.closest('.vp-gal, .vp-msgs, nav')) hide(t);
                     break;
                 }
             }
@@ -10874,7 +10893,7 @@
             const img = banner && banner.querySelector(':scope > img[alt="Banner"]');
             if (!img || bannerEdit.img) return;
             bannerVideoSync();
-            banner.classList.add('vp-depth');
+            if (!banner.classList.contains('vp-depth')) banner.classList.add('vp-depth');
             const r = banner.getBoundingClientRect();
             if (r.bottom < -40 || r.top > innerHeight) return;
             const past = Math.max(0, -r.top);
@@ -11688,7 +11707,7 @@
                 row.innerHTML = '<div class="vp-club-ava"></div><div class="vp-club-names"><span class="vp-club-name"></span><span class="vp-club-login"></span></div>';
                 const ava = pick(d && d.avatar && (d.avatar.url || d.avatar), d && d.avatarUrl, '👤');
                 const av = row.firstChild;
-                if (/^https?:|^\//.test(ava)) { const img = document.createElement('img'); img.src = ava; av.appendChild(img); } else av.textContent = ava;
+                if (isUrl(ava)) { const img = document.createElement('img'); img.src = ava; av.appendChild(img); } else av.textContent = ava;
                 row.querySelector('.vp-club-name').textContent = pick(d && d.displayName, d && d.display_name, n) + (n === myUsername ? ' (ты)' : '');
                 row.querySelector('.vp-club-login').textContent = '@' + n;
                 row.onclick = () => openProfile(n);
@@ -11838,6 +11857,8 @@
         .vp-mine.vp-near { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent) 35%, transparent); }
         .vp-mine.vp-open.vp-near { background-color: color-mix(in srgb, var(--vp-accent) 5%, rgba(255, 255, 255, .04)); }
         .vp-mine.vp-boom { background: #c0392b; }
+        .vp-mine.vp-flag-ok { background: rgba(46, 204, 113, .55); }
+        .vp-mine.vp-flag-bad { background: rgba(231, 76, 60, .5); }
         .vp-mine[data-n="1"] { color: #5dade2; } .vp-mine[data-n="2"] { color: #58d68d; } .vp-mine[data-n="3"] { color: #ec7063; }
         .vp-mine[data-n="4"] { color: #af7ac5; } .vp-mine[data-n="5"] { color: #f5b041; } .vp-mine[data-n="6"] { color: #48c9b0; }
         .vp-mine[data-n="7"] { color: #fff; } .vp-mine[data-n="8"] { color: #aab7b8; }
@@ -12073,6 +12094,7 @@
                 over = true; clearInterval(timer);
                 cells.forEach(c => { if (c.mine && !c.flag) { c.open = !win; if (win) c.flag = true; } paint(c); });
                 if (boom != null) cells[boom].b.classList.add('vp-boom');
+                if (!win) cells.forEach(c => { if (c.flag) c.b.classList.add(c.mine ? 'vp-flag-ok' : 'vp-flag-bad'); });
                 const s = secs();
                 if (win) {
                     won = true;
