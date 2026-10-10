@@ -41,24 +41,24 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   await p.click('.vp-mine[data-i="44"]'); await p.waitForTimeout(300);
   for (let k = 0; k < 120; k++) {
     if (await p.$eval('.vp-mines-msg', e => e.textContent.trim())) break;
-    const cell = await p.$('.vp-mine:not(.vp-open):not(:has(svg))');
-    if (!cell) break;
-    await cell.click().catch(() => { });
+    const cell = await p.evaluateHandle(() => [...document.querySelectorAll('.vp-mine:not(.vp-open)')].find(x => x.textContent === ''));
+    if (!cell || !cell.asElement()) break;
+    await cell.asElement().click().catch(() => { });
     await p.waitForTimeout(40);
   }
   await p.waitForTimeout(400);
   const r = await p.evaluate(() => {
     const all = [...document.querySelectorAll('.vp-mine')];
-    const flagged = all.filter(b => b.querySelector('svg') && !b.classList.contains('vp-open'));
+    const flagged = all.filter(b => b.textContent === '🚩');
     return {
       msg: document.querySelector('.vp-mines-msg').textContent.trim(),
-      bombs: all.filter(b => b.classList.contains('vp-open') && b.querySelector('svg')).length,
+      bombs: all.filter(b => b.classList.contains('vp-open') && b.textContent === '💣').length,
       ok: all.filter(b => b.classList.contains('vp-flag-ok')).length,
       bad: all.filter(b => b.classList.contains('vp-flag-bad')).length,
       flagged: flagged.length,
       okBg: all.filter(b => b.classList.contains('vp-flag-ok')).every(b => getComputedStyle(b).backgroundColor.startsWith('rgba(46, 204, 113')),
       badBg: all.filter(b => b.classList.contains('vp-flag-bad')).every(b => getComputedStyle(b).backgroundColor.startsWith('rgba(231, 76, 60')),
-      stray: all.filter(b => (b.classList.contains('vp-flag-ok') || b.classList.contains('vp-flag-bad')) && !b.querySelector('svg')).length,
+      stray: all.filter(b => (b.classList.contains('vp-flag-ok') || b.classList.contains('vp-flag-bad')) && b.textContent !== '🚩').length,
     };
   });
   console.log(JSON.stringify(r));

@@ -1359,17 +1359,7 @@
             phone: GLYPH.phone,
             image: '<rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.5"/><path d="m20 15-4-4-8 8"/>',
             copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6A2.5 2.5 0 0 0 13 3.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/>',
-            flag: '<path d="M6.5 21V3.5M4 21h5.5"/><path d="M6.5 4.5h11.5l-3.2 4.2 3.2 4.2H6.5z" fill="#ef4444" stroke="#ef4444" stroke-width="1.2"/>',
-            bomb: '<circle cx="12" cy="12" r="5.2" fill="currentColor" stroke="none"/><path d="M12 2.8v4M12 17.2v4M2.8 12h4M17.2 12h4M5.5 5.5l2.8 2.8M15.7 15.7l2.8 2.8M18.5 5.5l-2.8 2.8M8.3 15.7l-2.8 2.8" stroke-width="2.3"/><circle cx="10.2" cy="10.2" r="1.5" fill="rgba(127,127,127,.85)" stroke="none"/>',
-            help: '<circle cx="12" cy="12" r="9" fill="currentColor" fill-opacity=".14"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8M12 16.8h.01" stroke-width="2.1"/>',
-            trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H4.5v1a3.5 3.5 0 0 0 3.5 3.5M16 6h3.5v1a3.5 3.5 0 0 1-3.5 3.5M12 13v4M8.5 20h7"/>',
             play: '<path d="m9 6.5 8 5.5-8 5.5z"/>',
-            pause: '<path d="M9 6v12M15 6v12"/>',
-            left: '<path d="m14.5 6-6 6 6 6"/>',
-            right: '<path d="m9.5 6 6 6-6 6"/>',
-            down: '<path d="m6 9.5 6 6 6-6"/>',
-            rotate: '<path d="M20 12a8 8 0 1 1-2.5-5.8"/><path d="M20 4v4.5h-4.5"/>',
-            drop: '<path d="m6 6 6 6 6-6M6 13l6 6 6-6"/>',
             out: '<path d="M8 16 16 8M9.5 8H16v6.5"/>',
             close: GLYPH.close
         };
@@ -4316,7 +4306,7 @@
 
         const CHANGELOG = [
             ['3.5.3', '10 октября 2026', [
-                'Вместо эмодзи в кнопках, подсказках, меню сообщений и играх теперь линейные иконки одной толщины, как у сайта. Аватарки и сами эмодзи в сообщениях остались как были',
+                'Вместо эмодзи в кнопках, подсказках и меню сообщений теперь линейные иконки одной толщины, как у сайта. Аватарки, сами эмодзи и значки в играх остались как были',
                 'Сапёр: когда игра проиграна, флажки подсвечиваются — зелёным те, что стояли на мине, красным те, что поставлены зря']],
             ['3.5.2 – 3.5.2.8', '4 октября 2026', [
                 'Мику и Тето двигаются втрое плавнее: в каждом прыжке 45 кадров вместо 13',
@@ -12043,13 +12033,13 @@
         function minesGame(setScore, rp) {
             const W = 10, H = 10, M = 15;
             const el = document.createElement('div');
-            el.innerHTML = `<div class="vp-mines-bar"><button type="button" data-a="new">Новая игра</button><button type="button" data-a="flag">${uiIcon('flag', 15)}Флажки</button><button type="button" data-a="help">${uiIcon('help', 15)}Как играть</button></div>
+            el.innerHTML = `<div class="vp-mines-bar"><button type="button" data-a="new">Новая игра</button><button type="button" data-a="flag">🚩 флажки</button><button type="button" data-a="help">❓ Как играть</button></div>
             <div class="vp-mines-wrap"><div class="vp-mines"></div><div class="vp-mines-help" hidden><b>Как играть в сапёра</b><ul>
             <li>На поле 10×10 спрятано 15 мин. Цель — открыть все клетки без мин.</li>
             <li>Нажми на клетку, чтобы открыть её. Первый ход всегда безопасный.</li>
             <li>Цифра — сколько мин в 8 клетках вокруг неё. Щёлкни по клетке колёсиком мыши — вокруг неё останется рамка 3×3, так видно зону цифры (ещё щелчок колёсиком — убрать). Например, <span class="vp-n">1</span> — ровно одна мина где-то рядом.</li>
             <li>Пустая клетка — мин вокруг нет, соседи откроются сами.</li>
-            <li>Уверен, что тут мина, — поставь флажок: правая кнопка мыши, долгое нажатие на телефоне или режим «Флажки».</li>
+            <li>Уверен, что тут мина, — поставь флажок: правая кнопка мыши, долгое нажатие на телефоне или режим «🚩 флажки».</li>
             <li>Вокруг цифры уже столько флажков, сколько она показывает, — нажми на цифру, и откроются остальные соседи.</li>
             <li>Открыл мину — проигрыш. Открыл всё без мин — победа, время уходит в «Топ задротов». Чем быстрее, тем выше.</li>
             <li>Новая игра — кнопка сверху или клавиша R.</li></ul></div></div><div class="vp-mines-msg"></div>`;
@@ -12059,7 +12049,7 @@
             const nb = i => { const x = i % W, y = i / W | 0, out = []; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nx = x + dx, ny = y + dy; if ((dx || dy) && nx >= 0 && ny >= 0 && nx < W && ny < H) out.push(ny * W + nx); } return out; };
             const secs = () => rp ? Math.floor(repNow / 1000) : nowT !== null ? Math.floor(nowT / 1000) : t0 ? Math.floor((performance.now() - t0) / 1000) : 0;
             const fmt = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-            const show = () => { const b = rp ? 0 : GM_getValue(acctKey('vp_mines_best'), 0); setScore(`Мин ${M - flags} · ${fmt(secs())}` + (b ? ` · лучшее ${fmt(b)}` : '')); };
+            const show = () => { const b = rp ? 0 : GM_getValue(acctKey('vp_mines_best'), 0); setScore(`💣 ${M - flags} · ${fmt(secs())}` + (b ? ` · лучшее ${fmt(b)}` : '')); };
             function userAct(i, fl) {
                 if (rp || over) return;
                 const t = t0 ? Math.round(performance.now() - t0) : 0;
@@ -12091,7 +12081,7 @@
             function paint(c) {
                 const b = c.b;
                 b.classList.toggle('vp-open', c.open);
-                b.innerHTML = c.open ? (c.mine ? uiIcon('bomb', 24, 'vp-solo') : c.n || '') : c.flag ? uiIcon('flag', 24, 'vp-solo') : '';
+                b.textContent = c.open ? (c.mine ? '💣' : c.n || '') : c.flag ? '🚩' : '';
                 if (c.open && !c.mine && c.n) b.dataset.n = c.n; else delete b.dataset.n;
             }
             function plant(safe) {
@@ -12192,7 +12182,7 @@
             side.innerHTML = `<div>Следующая</div><canvas class="vp-g-canvas" style="width:88px;height:88px"></canvas>
             <div>Очки<br><b data-v="score">0</b></div><div>Линии<br><b data-v="lines">0</b></div><div>Уровень<br><b data-v="level">1</b></div>`;
             const pad = document.createElement('div'); pad.className = 'vp-g-pad';
-            pad.innerHTML = [['left', 'left'], ['rotate', 'rot'], ['right', 'right'], ['down', 'down'], ['drop', 'drop'], ['pause', 'pause']].map(([t, a]) => `<button type="button" data-a="${a}" aria-label="${ {left:'Влево',rot:'Повернуть',right:'Вправо',down:'Вниз',drop:'Сбросить',pause:'Пауза'}[a] }">${uiIcon(t, 20, 'vp-solo')}</button>`).join('');
+            pad.innerHTML = ['◀:left', '⟳:rot', '▶:right', '▼:down', '⤓:drop', 'Ⅱ:pause'].map(s => { const [t, a] = s.split(':'); return `<button type="button" data-a="${a}">${t}</button>`; }).join('');
             const hint = document.createElement('div'); hint.className = 'vp-games-hint';
             hint.textContent = '← → — двигать · ↑ или X — поворот · ↓ — быстрее · пробел — сбросить · P — пауза';
             if (IS_PHONE) hint.hidden = true;
@@ -12554,7 +12544,7 @@
             if (gw.el) return showGame(id);
             const el = document.createElement('div');
             el.className = 'vp-games';
-            el.innerHTML = `<div class="vp-games-win" role="dialog" aria-label="Игры"><div class="vp-games-head"><div class="vp-games-tabs">${GAMES.map(g => `<button type="button" class="vp-games-tab" data-g="${g.id}">${g.name}</button>`).join('')}<button type="button" class="vp-games-tab" data-g="lead">${uiIcon('trophy', 15)}Топ задротов</button></div>
+            el.innerHTML = `<div class="vp-games-win" role="dialog" aria-label="Игры"><div class="vp-games-head"><div class="vp-games-tabs">${GAMES.map(g => `<button type="button" class="vp-games-tab" data-g="${g.id}">${g.name}</button>`).join('')}<button type="button" class="vp-games-tab" data-g="lead">🏆 Топ задротов</button></div>
             <span class="vp-games-score"></span><button type="button" class="vp-games-x" aria-label="Закрыть">${svgIcon('<path d="M6 6l12 12M18 6 6 18"/>', 18)}</button></div><div class="vp-games-body"></div></div>`;
             el.addEventListener('click', e => { if (e.target === el) closeGames(); });
             const still = e => {
