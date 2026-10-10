@@ -34,6 +34,7 @@
     const TG_URL = 'https://t.me/NeuroSFW';
     const TG_CHAT_URL = 'https://t.me/+P7NeR_AEc35lYjEy';
     const AUTO_LIKE_KEY = 'itd_auto_like_ids';
+    const isUrl = a => /^https?:|^\//.test(a);
     const addCss = css => {
         const st = document.createElement('style');
         st.textContent = css;
@@ -3011,7 +3012,7 @@
                 row.className = 'nick-style-option vp-like-row';
                 row.innerHTML = `<div class="vp-like-user"><div class="vp-like-avatar"></div><div class="vp-like-names"><span class="vp-like-name"></span><span class="vp-like-login"></span></div></div><div class="toggle-switch"></div>`;
                 const av = row.querySelector('.vp-like-avatar'), ava = (data.avatar && (data.avatar.url || data.avatar)) || '👤';
-                if (/^https?:|^\//.test(ava)) { const img = document.createElement('img'); img.alt = ''; img.onerror = () => { av.textContent = '👤'; }; img.src = ava; av.appendChild(img); } else av.textContent = ava;
+                if (isUrl(ava)) { const img = document.createElement('img'); img.alt = ''; img.onerror = () => { av.textContent = '👤'; }; img.src = ava; av.appendChild(img); } else av.textContent = ava;
                 row.querySelector('.vp-like-name').textContent = (data.displayName || username).slice(0, 20);
                 row.querySelector('.vp-like-login').textContent = '@' + username;
                 const toggle = row.querySelector('.toggle-switch');
@@ -3817,7 +3818,7 @@
                 catch (er) { b.textContent = 'Не скопировалось'; }
             };
             const ava = el.querySelector('.vp-call-ava');
-            if (/^https?:|^\//.test(c.ava)) { const im = document.createElement('img'); im.src = c.ava; im.alt = ''; ava.appendChild(im); }
+            if (isUrl(c.ava)) { const im = document.createElement('img'); im.src = c.ava; im.alt = ''; ava.appendChild(im); }
             else { const sp = document.createElement('span'); sp.className = 'vp-call-emoji'; sp.textContent = c.ava; ava.appendChild(sp); }
             el.querySelector('.vp-call-name').textContent = c.name;
             el.querySelector('.vp-call-min').onclick = e => { e.stopPropagation(); el.classList.add('vp-call-mini'); };
@@ -4307,7 +4308,8 @@
         const CHANGELOG = [
             ['3.5.3', '10 октября 2026', [
                 'Вместо эмодзи в кнопках, подсказках и меню сообщений теперь линейные иконки одной толщины, как у сайта. Аватарки, сами эмодзи и значки в играх остались как были',
-                'Сапёр: когда игра проиграна, флажки подсвечиваются — зелёным те, что стояли на мине, красным те, что поставлены зря']],
+                'Сапёр: когда игра проиграна, флажки подсвечиваются — зелёным те, что стояли на мине, красным те, что поставлены зря',
+                'Оптимизация: когда открыты сообщения или галерея, страница меньше тормозит, особенно на длинной ленте']],
             ['3.5.2 – 3.5.2.8', '4 октября 2026', [
                 'Мику и Тето двигаются втрое плавнее: в каждом прыжке 45 кадров вместо 13',
                 'В списке автолайка настоящие аватарки показываются картинкой, а не ссылкой',
@@ -4744,12 +4746,6 @@
             } catch (e) { return []; }
         }
 
-        function verifiedPending() {
-            try {
-                const all = readVerified();
-                return Object.keys(all).filter(n => all[n] && all[n].state === 'quarantine');
-            } catch (e) { return []; }
-        }
 
         let verifyLoad = null, verifyLoadAt = 0;
         async function allComments(postId, maxPages = 30) {
@@ -6900,7 +6896,7 @@
             el.innerHTML = '<span class="vp-msg-toast-ava"></span><span class="vp-msg-toast-body"><b></b><span></span></span>';
             const ava = m.sup && !msgIsSupport() ? '🛟' : ((msgPeople.get(k.login) || {}).ava || '👤');
             const avaEl = el.firstChild;
-            if (/^https?:|^\//.test(ava)) { const im = document.createElement('img'); im.src = ava; im.alt = ''; avaEl.appendChild(im); }
+            if (isUrl(ava)) { const im = document.createElement('img'); im.src = ava; im.alt = ''; avaEl.appendChild(im); }
             else { avaEl.textContent = ava; tintCard(el, ava); }
             el.querySelector('b').textContent = m.sup ? (msgIsSupport() ? '🛟 ' + who : 'Поддержка ИТД X') : who;
             el.querySelector('.vp-msg-toast-body span').textContent = msgPreview(m);
@@ -7410,7 +7406,6 @@
                 countEl.classList.toggle('vp-warn', n >= max * 0.9);
             };
             let current = null, botTimer = 0, lastJoke = -1;
-            const isUrl = a => /^https?:|^\//.test(a);
             const avaHtml = a => isUrl(a) ? `<img src="${esc(a)}" alt="">` : esc(a);
 
             let supDir = false;
@@ -8983,7 +8978,7 @@
         }
         function msgsNavLook() {
             const links = [...document.querySelectorAll('.' + SELECTORS.navLink)];
-            if (!msgsOpen && !galOpen) { links.forEach(a => a.classList.remove('vp-site-cur')); return; }
+            if (!msgsOpen && !galOpen) { links.forEach(a => { if (a.classList.contains('vp-site-cur')) a.classList.remove('vp-site-cur'); }); return; }
             const path = location.pathname;
             const cur = links.find(a => { const h = a.getAttribute('href') || ''; return h.startsWith('/') && (h === path || (h !== '/' && path.startsWith(h + '/'))); });
             const other = links.find(a => a !== cur && !/^#/.test(a.getAttribute('href') || '') && a.getAttribute('href') !== path);
@@ -9649,7 +9644,7 @@
             try { a.g.drawImage(v, 0, 0, 48, 27); a.cv.classList.add('vp-on'); } catch (e) { }
         }
         setInterval(() => {
-            if (!ambientEnabled) return;
+            if (!ambientEnabled || document.hidden) return;
             for (const v of ambientSeen) if (!v.paused || !ambient.get(v)?.cv.classList.contains('vp-on')) ambientDraw(v);
             for (const [v, a] of ambient) if (!v.isConnected) { a.cv.remove(); ambient.delete(v); ambientSeen.delete(v); }
         }, 150);
@@ -9714,14 +9709,14 @@
             const followers = pick(d.followersCount, d.followers_count, d.stats && d.stats.followers, typeof d.followers === 'number' ? d.followers : undefined);
             const following = pick(d.followingCount, d.following_count, d.stats && d.stats.following, typeof d.following === 'number' ? d.following : undefined);
             const bio = pick(d.bio, d.description, d.about, '');
-            const tint = typeof ava === 'string' && !/^https?:|^\//.test(ava) ? emojiTint(ava) : null;
+            const tint = typeof ava === 'string' && !isUrl(ava) ? emojiTint(ava) : null;
             el.innerHTML = `<div class="vp-hc-banner"></div><div class="vp-hc-body"><div class="vp-hc-ava"></div>
             <div class="vp-hc-name"></div><div class="vp-hc-login"></div><div class="vp-hc-bio"></div><div class="vp-hc-stats"></div></div>`;
             const bn = el.querySelector('.vp-hc-banner');
             if (typeof banner === 'string' && banner) bn.style.backgroundImage = `url("${banner.replace(/"/g, '')}")`;
             else bn.style.background = tint ? `linear-gradient(120deg, rgb(${tint}), rgba(${tint}, .25))` : 'linear-gradient(120deg, var(--vp-accent), transparent)';
             const av = el.querySelector('.vp-hc-ava');
-            if (/^https?:|^\//.test(ava)) { const img = document.createElement('img'); img.src = ava; av.appendChild(img); } else av.textContent = ava;
+            if (isUrl(ava)) { const img = document.createElement('img'); img.src = ava; av.appendChild(img); } else av.textContent = ava;
             el.querySelector('.vp-hc-name').textContent = pick(d.displayName, d.display_name, d.name, user);
             el.querySelector('.vp-hc-login').textContent = '@' + pick(d.username, user);
             el.querySelector('.vp-hc-bio').textContent = bio;
@@ -10368,20 +10363,23 @@
             if ((galOpen || msgsOpen) && m && m.pause && !m.closest(OWN_MEDIA)) m.pause();
         }, true);
         function galHideFeed(on) {
-            document.querySelectorAll('.vp-gal-hidden').forEach(e => { if (!on) e.classList.remove('vp-gal-hidden'); });
-            if (!on) return;
+            if (!on) { document.querySelectorAll('.vp-gal-hidden').forEach(e => e.classList.remove('vp-gal-hidden')); return; }
             pauseSiteMedia();
             const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail, nav, .vp-gal, .vp-msgs';
+            const stop = new Map();
             const up = el => {
                 let top = el;
                 for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
-                    if (p.querySelector(side) || p.getBoundingClientRect().width >= innerWidth * 0.72) break;
+                    let s = stop.get(p);
+                    if (s === undefined) stop.set(p, s = !!(p.querySelector(side) || p.getBoundingClientRect().width >= innerWidth * 0.72));
+                    if (s) break;
                     top = p;
                 }
                 return top;
             };
+            const hide = t => { if (!t.classList.contains('vp-gal-hidden')) t.classList.add('vp-gal-hidden'); };
             document.querySelectorAll('.' + [SELECTORS.tabs, SELECTORS.feedBar, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .'))
-                .forEach(e => { const t = up(e); if (!t.closest('.vp-gal, .vp-msgs, nav')) t.classList.add('vp-gal-hidden'); });
+                .forEach(e => { const t = up(e); if (!t.closest('.vp-gal, .vp-msgs, nav')) hide(t); });
             const win = gal.el || document.querySelector('.vp-msgs.vp-open');
             const root = document.getElementById('root');
             const r = win && win.getBoundingClientRect();
@@ -10393,7 +10391,7 @@
                     if (e.querySelector(side)) break;
                     if (getComputedStyle(e).position === 'fixed') continue;
                     const t = up(e);
-                    if (t !== root && !t.closest('.vp-gal, .vp-msgs, nav')) t.classList.add('vp-gal-hidden');
+                    if (t !== root && !t.closest('.vp-gal, .vp-msgs, nav')) hide(t);
                     break;
                 }
             }
@@ -10895,7 +10893,7 @@
             const img = banner && banner.querySelector(':scope > img[alt="Banner"]');
             if (!img || bannerEdit.img) return;
             bannerVideoSync();
-            banner.classList.add('vp-depth');
+            if (!banner.classList.contains('vp-depth')) banner.classList.add('vp-depth');
             const r = banner.getBoundingClientRect();
             if (r.bottom < -40 || r.top > innerHeight) return;
             const past = Math.max(0, -r.top);
@@ -11709,7 +11707,7 @@
                 row.innerHTML = '<div class="vp-club-ava"></div><div class="vp-club-names"><span class="vp-club-name"></span><span class="vp-club-login"></span></div>';
                 const ava = pick(d && d.avatar && (d.avatar.url || d.avatar), d && d.avatarUrl, '👤');
                 const av = row.firstChild;
-                if (/^https?:|^\//.test(ava)) { const img = document.createElement('img'); img.src = ava; av.appendChild(img); } else av.textContent = ava;
+                if (isUrl(ava)) { const img = document.createElement('img'); img.src = ava; av.appendChild(img); } else av.textContent = ava;
                 row.querySelector('.vp-club-name').textContent = pick(d && d.displayName, d && d.display_name, n) + (n === myUsername ? ' (ты)' : '');
                 row.querySelector('.vp-club-login').textContent = '@' + n;
                 row.onclick = () => openProfile(n);
