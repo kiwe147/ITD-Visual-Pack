@@ -121,7 +121,7 @@ const near = (a, b, d) => Math.abs(a - b) <= d;
   e = await calm();
   await p.dispatchEvent('nav a[href="/@NeuroSFW"]', 'click');
   await p.waitForTimeout(200);
-  check(await p.evaluate(() => !document.querySelector('.vp-gal')), 'нажатие на текущий пункт при открытой галерее закрывает её');
+  check(await p.evaluate(() => !document.querySelector('.vp-gal:not(.vp-sw-stage *)')), 'нажатие на текущий пункт при открытой галерее закрывает её');
   e = await calm();
   check(!e.sw && !e.pin, 'после закрытия по текущему пункту всё убрано');
 

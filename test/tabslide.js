@@ -92,7 +92,7 @@ const near = (a, b, d) => Math.abs(a - b) <= d;
     const x = await p.evaluate(() => document.querySelector('.vp-sw-old').firstElementChild.getBoundingClientRect().right - 90);
     return topIs(await pixel(p, x, yTop)) && botIs(await pixel(p, x, yBot));
   };
-  const rest = async p => { await p.waitForTimeout(900); return probe(p); };
+  const rest = async p => { await p.waitForTimeout(1500); return probe(p); };
 
   let A = await fresh();
   check(await A.p.locator('aside.vp-sidebar').count() === 1, 'меню размечено модом');

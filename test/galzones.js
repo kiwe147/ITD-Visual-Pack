@@ -1,4 +1,4 @@
-// Стрелки галереи и просмотра картинок в сообщениях на ПК — зоны по краям на всю высоту, на телефоне — круглые кнопки как были.
+// Стрелки галереи и просмотра картинок в сообщениях заменены зонами по краям на всю высоту (на ПК и на телефоне).
 // Плитка и окно просмотра собираются руками с теми же классами, что делает мод (само окно галереи в стенде не открывается).
 // Запуск:  node test/galzones.js снимок-ленты.html
 const { chromium } = require('playwright');
@@ -101,8 +101,8 @@ const LB = `<div id="zl" class="vp-msgs-lb"><div class="vp-msgs-lb-top"></div>
 
   A = await open(true);
   const mp = await R(A.p, '#zt .vp-next'), mt = await R(A.p, '#zt');
-  check(near(mp.w, 44, 1) && near(mp.h, 44, 1) && mp.rad !== '0px', `телефон: стрелка как была, круглая ${Math.round(mp.w)}x${Math.round(mp.h)}`);
-  check(near(mp.y + mp.h / 2, mt.y + mt.h / 2, 2), 'телефон: стрелка по центру высоты');
+  check(near(mp.h, mt.h, 1) && near(mp.w, Math.min(96, mt.w * 0.22), 1.5) && mp.rad === '0px' && mp.svg === 'none', `телефон: зона на всю высоту карточки без значка ${Math.round(mp.w)}x${Math.round(mp.h)}`);
+  check(await A.p.$eval('#zt .vp-next', e => getComputedStyle(e).pointerEvents) === 'none', 'телефон: зона нажатий сама не ловит, нажатие обрабатывает лента картинок');
   await A.ctx.close();
 
   await b.close();
