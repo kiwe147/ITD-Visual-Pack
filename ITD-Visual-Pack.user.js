@@ -1176,6 +1176,7 @@
         function domRecords(muts) {
             let any = false;
             for (const m of muts) {
+                if (m.type === 'childList' && m.target === document.body && ![...m.addedNodes, ...m.removedNodes].some(n => !(n.classList && n.classList.contains('vp-sw-stage')))) continue;
                 if (m.type === 'attributes' && !lostVp(m)) continue;
                 if (m.type === 'characterData' && !/\p{Extended_Pictographic}/u.test(m.target.nodeValue || '')) continue;
                 any = true;
@@ -9011,7 +9012,7 @@
             addCss(`
             html.vp-sw .${SELECTORS.sidebar} ~ :not(aside) { visibility: hidden !important; }
             .vp-sw-stage { position: fixed; z-index: 3; overflow: hidden; pointer-events: none; contain: layout paint; }
-            .vp-sw-ghost { will-change: transform; }`);
+            .vp-sw-ghost { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; }`);
             const enabled = () => GM_getValue('tabSlide', true) && !matchMedia('(prefers-reduced-motion: reduce)').matches
                 && matchMedia('(hover: hover) and (pointer: fine)').matches && innerWidth > PHONE_MAX;
             const hrefOf = a => a.getAttribute('href') || '';
@@ -9024,6 +9025,19 @@
                 const side = document.querySelector('aside.' + SELECTORS.sidebar);
                 const box = side && side.parentElement;
                 return box && [...box.children].find(c => c.tagName !== 'ASIDE' && c.getBoundingClientRect().width > 300) || null;
+            };
+            const trim = (src, dst, hi) => {
+                const s = src.children, d = dst.children;
+                for (let i = 0; i < s.length; i++) {
+                    const r = s[i].getBoundingClientRect();
+                    if (r.bottom >= -80 && r.top <= hi + 80) {
+                        if (r.height > 500) trim(s[i], d[i], hi);
+                        continue;
+                    }
+                    if (r.height < 120 || ['fixed', 'absolute'].includes(getComputedStyle(s[i]).position)) continue;
+                    d[i].replaceChildren();
+                    d[i].style.cssText += `;height:${r.height}px;min-height:${r.height}px;box-sizing:border-box;overflow:hidden;visibility:hidden`;
+                }
             };
             const freeze = el => {
                 const g = el.cloneNode(true);
@@ -9042,8 +9056,14 @@
                 });
                 const cs = el.querySelectorAll('canvas'), gc = g.querySelectorAll('canvas');
                 cs.forEach((c, i) => { try { gc[i].getContext('2d').drawImage(c, 0, 0); } catch (e) { } });
+                trim(el, g, innerHeight);
                 g.setAttribute('inert', '');
                 return g;
+            };
+            const sliceOf = el => {
+                const ty = new DOMMatrix(getComputedStyle(el).transform).m42;
+                const a = Math.max(0, ty - el.getBoundingClientRect().top);
+                return `inset(${a}px 0px calc(100% - ${a + innerHeight}px) 0px)`;
             };
             let cur = null;
             const end = () => {
@@ -9053,16 +9073,12 @@
                 clearTimeout(c.guard);
                 cancelAnimationFrame(c.raf);
                 c.mo.disconnect();
+                removeEventListener('scroll', c.onScroll);
                 c.anims.forEach(a => { try { a.cancel(); } catch (e) { } });
                 c.stage.remove();
                 document.documentElement.classList.remove('vp-sw');
                 c.clips.forEach(([el, v]) => { el.style.overflowY = v; });
                 if (c.fresh) c.fresh.style.clipPath = c.freshClip;
-            };
-            const sliceOf = el => {
-                const ty = new DOMMatrix(getComputedStyle(el).transform).m42;
-                const a = Math.max(0, ty - el.getBoundingClientRect().top);
-                return `inset(${a}px 0px calc(100% - ${a + innerHeight}px) 0px)`;
             };
             const safe = fn => { try { fn(); } catch (e) { end(); } };
             const go = c => {
@@ -9074,19 +9090,16 @@
                     c.clips.push([p, p.style.overflowY]);
                     p.style.overflowY = 'clip';
                 }
+                c.fresh = fresh;
+                c.freshClip = fresh.style.clipPath;
+                fresh.style.clipPath = sliceOf(fresh);
+                c.onScroll = () => { if (cur === c) fresh.style.clipPath = sliceOf(fresh); };
+                addEventListener('scroll', c.onScroll, { passive: true });
                 document.documentElement.classList.remove('vp-sw');
                 c.anims.push(
                     c.ghost.animate([{ transform: 'translateY(0)' }, { transform: `translateY(${sign * H}px)` }], { duration: MS, easing: EASE, fill: 'forwards' }),
                     fresh.animate([{ transform: `translateY(${-sign * H}px)` }, { transform: 'translateY(0)' }], { duration: MS, easing: EASE })
                 );
-                c.fresh = fresh;
-                c.freshClip = fresh.style.clipPath;
-                const paint = () => {
-                    if (cur !== c) return;
-                    fresh.style.clipPath = sliceOf(fresh);
-                    c.raf = requestAnimationFrame(paint);
-                };
-                paint();
                 Promise.all(c.anims.map(x => x.finished)).then(() => { if (cur === c) end(); }, () => { if (cur === c) end(); });
             };
             const start = down => {
@@ -9097,10 +9110,11 @@
                 const stage = document.createElement('div');
                 stage.className = 'vp-sw-stage';
                 stage.style.cssText = `left:${r.left}px;top:0;width:${r.width}px;height:${innerHeight}px`;
-                const ghost = freeze(main);
-                ghost.classList.add('vp-sw-ghost');
-                const cut = Math.max(0, -r.top);
-                ghost.style.cssText += `;position:absolute;left:0;top:${r.top}px;width:${r.width}px;margin:0;transform:none;clip-path:inset(${cut}px 0px calc(100% - ${cut + innerHeight}px) 0px)`;
+                const ghost = document.createElement('div');
+                ghost.className = 'vp-sw-ghost';
+                const copy = freeze(main);
+                copy.style.cssText += `;position:absolute;left:0;top:${r.top}px;width:${r.width}px;margin:0;transform:none`;
+                ghost.appendChild(copy);
                 stage.appendChild(ghost);
                 document.body.appendChild(stage);
                 document.documentElement.classList.add('vp-sw');
