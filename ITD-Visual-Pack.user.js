@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.5.1
+// @version      3.5.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4309,6 +4309,8 @@
         }
 
         const CHANGELOG = [
+            ['3.5.6', '17 октября 2026', [
+                'На телефоне в галерее и в просмотре картинок в сообщениях вместо стрелок теперь зоны по краям: нажми у левого края, чтобы вернуться, или у правого, чтобы идти дальше. Листание пальцем работает как раньше']],
             ['3.5.5 – 3.5.5.1', '16 октября 2026', [
                 'Листание вкладок пока в разработке (WIP): возможны шероховатости и подлагивания. По умолчанию выключено: включить можно в настройках на вкладке «Вид», пункт помечен WIP',
                 'Листание вкладок теперь и для «Сообщений» и «Галереи»: окно выезжает так же плавно, как обычные страницы, а левое меню и правая колонка не прыгают, а аккуратно съезжают на новое место',
@@ -7345,10 +7347,12 @@
             background: rgba(255, 255, 255, .14); color: #fff; font-size: 26px; line-height: 40px; padding: 0; }
         .vp-msgs-lb-nav[hidden] { display: none; }
         .vp-msgs-lb-nav.vp-prev { left: 12px; } .vp-msgs-lb-nav.vp-next { right: 12px; }
+        .vp-msgs-lb-nav { top: 0; bottom: 0; width: 20%; max-width: 180px; height: auto; margin: 0; border-radius: 0; background: none; font-size: 0; transition: background .2s; -webkit-tap-highlight-color: transparent; }
+        .vp-msgs-lb-nav.vp-prev { left: 0; }
+        .vp-msgs-lb-nav.vp-next { right: 0; }
+        .vp-msgs-lb-nav.vp-prev:active { background: linear-gradient(90deg, rgba(255, 255, 255, .16), transparent); }
+        .vp-msgs-lb-nav.vp-next:active { background: linear-gradient(270deg, rgba(255, 255, 255, .16), transparent); }
         @media (hover: hover) and (pointer: fine) {
-            .vp-msgs-lb-nav { top: 0; bottom: 0; width: 20%; max-width: 180px; height: auto; margin: 0; border-radius: 0; background: none; font-size: 0; transition: background .2s; }
-            .vp-msgs-lb-nav.vp-prev { left: 0; }
-            .vp-msgs-lb-nav.vp-next { right: 0; }
             .vp-msgs-lb-nav.vp-prev:hover { background: linear-gradient(90deg, rgba(255, 255, 255, .12), transparent); }
             .vp-msgs-lb-nav.vp-next:hover { background: linear-gradient(270deg, rgba(255, 255, 255, .12), transparent); }
         }
@@ -8006,8 +8010,8 @@
                     num.textContent = list.length > 1 ? `${idx + 1} / ${list.length}` : '';
                 };
                 prev.hidden = next.hidden = list.length < 2;
-                prev.addEventListener('click', e => { e.stopPropagation(); show(idx - 1); });
-                next.addEventListener('click', e => { e.stopPropagation(); show(idx + 1); });
+                prev.addEventListener('click', e => { if (downX != null && Math.abs(e.clientX - downX) > 40) return; e.stopPropagation(); show(idx - 1); });
+                next.addEventListener('click', e => { if (downX != null && Math.abs(e.clientX - downX) > 40) return; e.stopPropagation(); show(idx + 1); });
                 lb.querySelector('.vp-msgs-lb-cap').textContent = cap || '';
                 show(idx);
                 lb.querySelector('.vp-msgs-ib').addEventListener('click', () => closeImg());
@@ -10121,15 +10125,21 @@
         @media (hover: hover) and (pointer: fine) { .vp-gal-tile:hover .vp-gal-arrow { opacity: 1; } }
         .vp-gal-tile .vp-gal-arrow.vp-edge { opacity: 0; cursor: default; }
         @media not ((hover: hover) and (pointer: fine)) { .vp-gal-arrow { opacity: 1; } }
+        .vp-gal-tile .vp-gal-arrow { top: 0; bottom: 0; width: 22%; max-width: 96px; height: auto; margin: 0; border-radius: 0; background: none; box-shadow: none;
+            backdrop-filter: none; -webkit-backdrop-filter: none; opacity: 1; transition: background .2s; }
+        .vp-gal-tile .vp-gal-arrow svg { display: none; }
+        .vp-gal-tile .vp-gal-arrow:active { transform: none; }
+        .vp-gal-tile .vp-gal-arrow.vp-prev { left: 0; }
+        .vp-gal-tile .vp-gal-arrow.vp-next { right: 0; }
+        .vp-gal-tile .vp-gal-arrow.vp-edge { opacity: 0; }
         @media (hover: hover) and (pointer: fine) {
-            .vp-gal-tile .vp-gal-arrow { top: 0; bottom: 0; width: 22%; max-width: 96px; height: auto; margin: 0; border-radius: 0; background: none; box-shadow: none;
-                backdrop-filter: none; -webkit-backdrop-filter: none; opacity: 1; transition: background .2s; }
-            .vp-gal-tile .vp-gal-arrow svg { display: none; }
-            .vp-gal-tile .vp-gal-arrow:active { transform: none; }
-            .vp-gal-tile .vp-gal-arrow.vp-prev { left: 0; }
-            .vp-gal-tile .vp-gal-arrow.vp-next { right: 0; }
             .vp-gal-tile .vp-gal-arrow.vp-prev:hover { background: linear-gradient(90deg, rgba(255, 255, 255, .16), transparent); }
             .vp-gal-tile .vp-gal-arrow.vp-next:hover { background: linear-gradient(270deg, rgba(255, 255, 255, .16), transparent); }
+        }
+        @media not ((hover: hover) and (pointer: fine)) {
+            .vp-gal-tile .vp-gal-arrow { pointer-events: none; }
+            .vp-gal-tile .vp-gal-arrow.vp-prev.vp-tap { background: linear-gradient(90deg, rgba(255, 255, 255, .22), transparent); }
+            .vp-gal-tile .vp-gal-arrow.vp-next.vp-tap { background: linear-gradient(270deg, rgba(255, 255, 255, .22), transparent); }
         }
         .vp-gal-slide > img { pointer-events: none; -webkit-user-drag: none; user-select: none; }
         .vp-gal-tile.vp-ctx .vp-gal-slide > img { pointer-events: auto; }
@@ -10466,6 +10476,18 @@
                 });
                 prev.addEventListener('click', go(-1));
                 next.addEventListener('click', go(1));
+                strip.addEventListener('click', e => {
+                    if (matchMedia('(hover: hover) and (pointer: fine)').matches || e.target.closest('.vp-gal-slide.vp-fail')) return;
+                    const r = strip.getBoundingClientRect(), zone = Math.min(96, r.width * 0.22), x = e.clientX - r.left;
+                    const dir = x < zone ? -1 : x > r.width - zone ? 1 : 0;
+                    if (!dir) return;
+                    e.stopPropagation(); e.preventDefault();
+                    const b = dir < 0 ? prev : next;
+                    if (b.classList.contains('vp-edge')) return;
+                    b.classList.add('vp-tap');
+                    setTimeout(() => b.classList.remove('vp-tap'), 220);
+                    go(dir)(e);
+                }, true);
                 show();
             }
             tile.addEventListener('mousedown', e => { if (e.button === 2) tile.classList.add('vp-ctx'); });
