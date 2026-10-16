@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.4.1
+// @version      3.5.5
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4309,6 +4309,9 @@
         }
 
         const CHANGELOG = [
+            ['3.5.5', '16 октября 2026', [
+                'Листание вкладок теперь и для «Сообщений» и «Галереи»: окно выезжает так же плавно, как обычные страницы, а левое меню и правая колонка не прыгают, а аккуратно съезжают на новое место',
+                'Магазин: левое меню и правая колонка теперь встают рядом с содержимым магазина, а не прижаты к краям экрана']],
             ['3.5.4 – 3.5.4.1', '16 октября 2026', [
                 'Листание вкладок на ПК: переходы по пунктам левого меню больше не рывком. Старая страница уезжает, а новая выезжает следом, с той стороны, где пункт стоит в меню. Убрать можно в настройках, на вкладке «Вид». Переход стал плавнее, даже на длинной ленте',
                 'В галерее и в просмотре картинок в сообщениях на ПК вместо стрелок листание по краям: нажми у левого или правого края карточки, зона на всю высоту',
@@ -8196,6 +8199,11 @@
             document.addEventListener('vp-loc', msgsLeft);
             root.open = fromHistory => {
                 if (root.classList.contains('vp-open')) { if (current) closeChat(); return; }
+                const lead = fromHistory === true ? null : tabSlide.lead('msg');
+                openNow(fromHistory);
+                tabSlide.arrive(lead, root);
+            };
+            const openNow = fromHistory => {
                 if (galOpen) closeGallery(true);
                 openPath = location.pathname;
                 msgsOpen = true;
@@ -9019,6 +9027,10 @@
             const MS = 560, EASE = 'cubic-bezier(.25, .8, .25, 1)', MAX_WAIT = 900, SETTLE = 90;
             addCss(`
             html.vp-sw .${SELECTORS.sidebar} ~ :not(aside) { visibility: hidden !important; }
+            html.vp-sw .vp-msgs.vp-open, html.vp-sw .vp-gal { animation-duration: 1ms !important; }
+            html.vp-sw .vp-msgs, html.vp-sw .vp-gal-card { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+            html.vp-sw-pin aside.${SELECTORS.sidebar} { left: var(--vp-pin-side) !important; }
+            html.vp-sw-pin .vp-rail { left: var(--vp-pin-rail) !important; width: var(--vp-pin-railw) !important; }
             .vp-sw-stage { position: fixed; z-index: 3; overflow: hidden; pointer-events: none; contain: layout paint; }
             .vp-sw-ghost { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; will-change: transform; }`);
             const enabled = () => GM_getValue('tabSlide', true) && !matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -9034,6 +9046,21 @@
                 const box = side && side.parentElement;
                 return box && [...box.children].find(c => c.tagName !== 'ASIDE' && c.getBoundingClientRect().width > 300) || null;
             };
+            const modalUp = () => F('modal').some(m => { const r = m.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(m).visibility !== 'hidden'; });
+            const sceneNow = () => {
+                const g = document.querySelector('.vp-gal:not(.vp-sw-stage *)'), m = document.querySelector('.vp-msgs.vp-open:not(.vp-sw-stage *)');
+                if (g) return { el: g, kind: 'gal' };
+                if (m) return { el: m, kind: 'msg' };
+                const c = centerOf();
+                return c && { el: c, kind: 'route' };
+            };
+            const linkOf = kind => kind === 'gal' ? F('navLink').find(a => a.classList.contains('vp-gal-nav'))
+                : kind === 'msg' ? F('navLink').find(a => hrefOf(a) === '#') : curLink();
+            const panels = () => {
+                const side = document.querySelector('aside.' + SELECTORS.sidebar), rail = document.querySelector('.vp-rail.vp-on');
+                const sr = side && side.getBoundingClientRect(), rr = rail && rail.getBoundingClientRect();
+                return { side: sr && sr.width ? side : null, sl: sr ? sr.left : 0, rail: rr && rr.width ? rail : null, rl: rr ? rr.left : 0, rw: rr ? rr.width : 0 };
+            };
             const trim = (src, dst, hi) => {
                 const s = src.children, d = dst.children;
                 for (let i = 0; i < s.length; i++) {
@@ -9047,7 +9074,7 @@
                     d[i].style.cssText += `;height:${r.height}px;min-height:${r.height}px;box-sizing:border-box;overflow:hidden;visibility:hidden`;
                 }
             };
-            const freeze = el => {
+            const freeze = (el, scrolls) => {
                 const g = el.cloneNode(true);
                 const vs = el.querySelectorAll('video'), gs = g.querySelectorAll('video');
                 vs.forEach((v, i) => {
@@ -9064,6 +9091,17 @@
                 });
                 const cs = el.querySelectorAll('canvas'), gc = g.querySelectorAll('canvas');
                 cs.forEach((c, i) => { try { gc[i].getContext('2d').drawImage(c, 0, 0); } catch (e) { } });
+                const fr = el.querySelectorAll('iframe'), gf = g.querySelectorAll('iframe');
+                fr.forEach((f, i) => {
+                    const r = f.getBoundingClientRect(), s = document.createElement('div');
+                    s.className = f.className;
+                    s.style.cssText = `display:block;width:${r.width}px;height:${r.height}px`;
+                    gf[i].replaceWith(s);
+                });
+                if (scrolls) {
+                    const a = el.querySelectorAll('.vp-gal-body, .vp-msgs-list, .vp-msgs-feed'), b = g.querySelectorAll('.vp-gal-body, .vp-msgs-list, .vp-msgs-feed');
+                    g._sc = [...a].map((n, i) => [b[i], n.scrollTop]).filter(p => p[1] > 0);
+                }
                 trim(el, g, innerHeight);
                 g.querySelectorAll('img').forEach(i => { i.loading = 'eager'; i.decoding = 'sync'; });
                 g.setAttribute('inert', '');
@@ -9071,13 +9109,18 @@
             };
             const layer = (el, cls) => {
                 const r = el.getBoundingClientRect();
-                const copy = freeze(el);
-                copy.style.cssText += `;position:absolute;left:0;top:${r.top}px;width:${r.width}px;margin:0;transform:none`;
+                const fixed = getComputedStyle(el).position === 'fixed';
+                const copy = freeze(el, fixed);
+                copy.style.cssText += fixed
+                    ? `;position:absolute;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;right:auto;bottom:auto;margin:0;transform:none;animation:none;z-index:auto`
+                    : `;position:absolute;left:${r.left}px;top:${r.top}px;width:${r.width}px;margin:0;transform:none`;
                 const wrap = document.createElement('div');
                 wrap.className = 'vp-sw-ghost ' + cls;
                 wrap.appendChild(copy);
+                wrap._sc = copy._sc;
                 return wrap;
             };
+            const unpin = () => document.documentElement.classList.remove('vp-sw-pin');
             let cur = null;
             const end = () => {
                 if (!cur) return;
@@ -9085,19 +9128,34 @@
                 cur = null;
                 clearTimeout(c.guard);
                 cancelAnimationFrame(c.raf);
-                c.mo.disconnect();
+                if (c.mo) c.mo.disconnect();
                 c.anims.forEach(a => { try { a.cancel(); } catch (e) { } });
+                (c.moves || []).forEach(([e, , t]) => { e.style.transform = t; });
+                if (c.hold) c.hold.el.style.opacity = c.hold.opacity;
                 c.stage.remove();
+                unpin();
                 document.documentElement.classList.remove('vp-sw');
             };
             const safe = fn => { try { fn(); } catch (e) { end(); } };
             const frames = (n, fn) => { const step = k => { cur && (k ? requestAnimationFrame(() => step(k - 1)) : fn()); }; step(n); };
-            const run = (c, wrap) => {
+            const prepare = c => {
+                unpin();
+                const now = panels();
+                c.moves = [];
+                if (c.pre.side && now.side && Math.abs(c.pre.sl - now.sl) > 1) c.moves.push([now.side, c.pre.sl - now.sl, now.side.style.transform]);
+                if (c.pre.rail && now.rail && Math.abs(c.pre.rl - now.rl) > 1) c.moves.push([now.rail, c.pre.rl - now.rl, now.rail.style.transform]);
+                c.moves.forEach(([e, d]) => { e.style.transform = `translateX(${d}px)`; });
+            };
+            const run = (c, incoming) => {
                 const H = innerHeight, sign = c.down ? 1 : -1;
-                wrap.style.opacity = '';
+                c.moves.forEach(([e, d, t]) => {
+                    e.style.transform = t;
+                    c.anims.push(e.animate([{ transform: `translateX(${d}px)` }, { transform: 'translateX(0)' }], { duration: MS, easing: EASE }));
+                });
+                incoming.style.opacity = c.hold ? c.hold.opacity : '';
                 c.anims.push(
                     c.ghost.animate([{ transform: 'translateY(0)' }, { transform: `translateY(${sign * H}px)` }], { duration: MS, easing: EASE, fill: 'forwards' }),
-                    wrap.animate([{ transform: `translateY(${-sign * H}px)` }, { transform: 'translateY(0)' }], { duration: MS, easing: EASE, fill: 'forwards' })
+                    incoming.animate([{ transform: `translateY(${-sign * H}px)` }, { transform: 'translateY(0)' }], { duration: MS, easing: EASE, fill: c.hold ? 'none' : 'forwards' })
                 );
                 Promise.all(c.anims.map(x => x.finished)).then(() => {
                     if (cur !== c) return;
@@ -9107,52 +9165,81 @@
             };
             const go = c => {
                 const fresh = centerOf();
-                c.mo.disconnect();
+                if (c.mo) c.mo.disconnect();
                 if (!fresh) return end();
+                prepare(c);
                 const wrap = layer(fresh, 'vp-sw-new');
                 wrap.style.opacity = '.01';
                 c.stage.insertBefore(wrap, c.ghost);
                 const imgs = [...wrap.querySelectorAll('img')].map(i => i.decode ? i.decode().catch(() => { }) : null);
                 Promise.race([Promise.all(imgs), new Promise(r => setTimeout(r, 300))]).then(() => frames(2, () => safe(() => run(c, wrap))));
             };
-            const start = down => {
+            const arrive = (c, el) => {
+                if (!c || cur !== c) return;
+                safe(() => {
+                    if (!el || !el.isConnected) return end();
+                    prepare(c);
+                    c.hold = { el, opacity: el.style.opacity };
+                    el.style.opacity = '.01';
+                    frames(2, () => safe(() => run(c, el)));
+                });
+            };
+            const start = (down, scene, mode) => {
                 end();
-                const main = centerOf();
-                if (!main) return;
-                const r = main.getBoundingClientRect();
                 const stage = document.createElement('div');
                 stage.className = 'vp-sw-stage';
-                stage.style.cssText = `left:${r.left}px;top:0;width:${r.width}px;height:${innerHeight}px`;
-                const ghost = layer(main, 'vp-sw-old');
+                stage.style.cssText = `left:0;right:0;top:0;height:${innerHeight}px`;
+                const ghost = layer(scene.el, 'vp-sw-old');
                 stage.appendChild(ghost);
                 document.body.appendChild(stage);
+                (ghost._sc || []).forEach(([n, v]) => { n.scrollTop = v; });
+                const pre = panels();
+                if (mode !== 'lead') {
+                    const root = document.documentElement;
+                    if (pre.side) root.style.setProperty('--vp-pin-side', pre.sl + 'px');
+                    if (pre.rail) { root.style.setProperty('--vp-pin-rail', pre.rl + 'px'); root.style.setProperty('--vp-pin-railw', pre.rw + 'px'); }
+                    root.classList.add('vp-sw-pin');
+                }
                 document.documentElement.classList.add('vp-sw');
                 const t0 = performance.now(), path = location.pathname + location.search;
                 let last = t0;
+                const c = cur = { stage, ghost, down, pre, anims: [], raf: 0, guard: setTimeout(end, 4000) };
+                if (mode === 'lead') return c;
                 const mo = new MutationObserver(() => { last = performance.now(); });
                 mo.observe(document.getElementById('root') || document.body, { childList: true, subtree: true });
-                const c = cur = { stage, ghost, mo, down, anims: [], raf: 0, guard: setTimeout(end, 4000) };
+                c.mo = mo;
                 const tick = () => {
                     if (cur !== c) return;
                     const now = performance.now(), moved = location.pathname + location.search !== path;
                     if (moved && now - last > SETTLE && now - t0 > 160) return safe(() => go(c));
+                    if (mode === 'now' && now - last > SETTLE && now - t0 > 120) return safe(() => go(c));
                     if (now - t0 > MAX_WAIT) return moved ? safe(() => go(c)) : end();
                     c.raf = requestAnimationFrame(tick);
                 };
                 c.raf = requestAnimationFrame(tick);
+                return c;
+            };
+            const lead = kind => {
+                if (!enabled() || modalUp()) return null;
+                const s = sceneNow();
+                if (!s || s.kind === kind) return null;
+                const links = F('navLink'), to = links.indexOf(linkOf(kind)), from = links.indexOf(linkOf(s.kind));
+                if (to < 0 || from < 0 || to === from) return null;
+                return start(to < from, s, 'lead');
             };
             document.addEventListener('click', e => {
                 if (e.defaultPrevented || e.button || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || !enabled()) return;
                 const a = e.target.closest && e.target.closest('a[href]');
-                if (!a || a.target === '_blank' || !isRoute(a) || !a.closest('nav')) return;
-                if (document.querySelector('.vp-gal, .vp-msgs.vp-open') || F('modal').some(m => { const r = m.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(m).visibility !== 'hidden'; })) return;
-                const links = F('navLink'), to = links.indexOf(a), from = links.indexOf(curLink());
+                if (!a || a.target === '_blank' || !isRoute(a) || !a.closest('nav') || modalUp()) return;
+                const s = sceneNow();
+                if (!s) return;
+                const links = F('navLink'), to = links.indexOf(a), from = links.indexOf(linkOf(s.kind));
                 if (to < 0 || from < 0 || to === from) return;
-                start(to < from);
+                start(to < from, s, s.kind !== 'route' && hrefOf(a) === location.pathname ? 'now' : 'wait');
             }, true);
             addEventListener('popstate', end);
             addEventListener('resize', end);
-            return { end };
+            return { end, lead, arrive };
         })();
 
         const fx = addCss(`
@@ -10552,7 +10639,7 @@
             const hide = t => { if (!t.classList.contains('vp-gal-hidden')) t.classList.add('vp-gal-hidden'); };
             document.querySelectorAll('.' + [SELECTORS.tabs, SELECTORS.feedBar, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .'))
                 .forEach(e => { const t = up(e); if (!t.closest('.vp-gal, .vp-msgs, nav')) hide(t); });
-            const win = gal.el || document.querySelector('.vp-msgs.vp-open');
+            const win = gal.el || document.querySelector('.vp-msgs.vp-open:not(.vp-sw-stage *)');
             const root = document.getElementById('root');
             const r = win && win.getBoundingClientRect();
             if (!r || !r.width || !root || performance.now() - (galHideFeed.at || 0) < 400) return;
@@ -10571,7 +10658,12 @@
         onDom(function galFeedHidden() { if (gal.el || msgsOpen) galHideFeed(true); });
         function openGallery(fromHistory) {
             if (gal.el) return;
-            const msgs = document.querySelector('.vp-msgs.vp-open');
+            const lead = fromHistory === true ? null : tabSlide.lead('gal');
+            openGalleryNow(fromHistory);
+            tabSlide.arrive(lead, gal.el);
+        }
+        function openGalleryNow(fromHistory) {
+            const msgs = document.querySelector('.vp-msgs.vp-open:not(.vp-sw-stage *)');
             if (msgs && msgs.close) msgs.close(true);
             const kept = gal.kept;
             const el = kept || document.createElement('div');
@@ -10698,6 +10790,15 @@
                         st.textContent = 'html, body { background: transparent !important; }';
                         d.head.appendChild(st);
                         f._vpClear = true;
+                    } catch (e) { }
+                    try {
+                        const d = f.contentDocument;
+                        if (d && d.documentElement && f._vpWatch !== d) {
+                            f._vpWatch = d;
+                            let t;
+                            new MutationObserver(() => { clearTimeout(t); t = setTimeout(glidePlace, 250); }).observe(d.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+                            t = setTimeout(glidePlace, 250);
+                        }
                     } catch (e) { }
                 };
                 if (!f._vpHooked) { f._vpHooked = true; f.addEventListener('load', () => { f._vpClear = false; clear(); }); }
@@ -11566,7 +11667,7 @@
                     const r = f.getBoundingClientRect();
                     return r.width >= innerWidth * 0.72 && r.height >= innerHeight * 0.6;
                 });
-                if (frame) return msgsOpen ? frameColumn() : { left: 0, right: 0 };
+                if (frame) return msgsOpen ? frameColumn() : frameInner(frame) || { left: 0, right: 0 };
                 const skip = side + ', nav, .vp-hc, .vp-msgs, .vpi-overlay';
                 for (const y of [0.35, 0.6]) {
                     const hit = document.elementsFromPoint(innerWidth / 2, innerHeight * y).find(e => e !== document.body
@@ -11579,6 +11680,32 @@
                 }
             }
             return right ? { left, right } : null;
+        }
+        function frameInner(f) {
+            let d;
+            try { d = f.contentDocument; } catch (e) { return null; }
+            if (!d || !d.body || !d.documentElement.clientWidth) return null;
+            const r = f.getBoundingClientRect(), W = d.documentElement.clientWidth, Hh = d.documentElement.clientHeight;
+            let left = Infinity, right = 0;
+            for (const y of [0.3, 0.5, 0.7]) {
+                let el = d.elementsFromPoint(W / 2, Math.min(Hh * y, Hh - 1)).find(e => e !== d.body && e !== d.documentElement);
+                while (el && el.parentElement && el.parentElement !== d.body && el.parentElement !== d.documentElement
+                    && el.parentElement.getBoundingClientRect().width < W * 0.95) el = el.parentElement;
+                const b = el && el.getBoundingClientRect();
+                if (b && b.width > 300 && b.width < W * 0.95) { left = Math.min(left, r.left + b.left); right = Math.max(right, r.left + b.right); }
+            }
+            return right ? { left, right } : null;
+        }
+        function glidePlace() {
+            if (document.querySelector('.vp-sw-stage')) { placeSidebar(); placeRail(); return; }
+            const side = siteEl('sidebar'), on = rail.classList.contains('vp-on');
+            const a = side && side.getBoundingClientRect().left, b = on && rail.getBoundingClientRect().left;
+            placeSidebar(); placeRail();
+            [[side, a], [on && rail.classList.contains('vp-on') && rail, b]].forEach(([el, was]) => {
+                if (!el || typeof was !== 'number') return;
+                const d = was - el.getBoundingClientRect().left;
+                if (Math.abs(d) > 1) el.animate([{ transform: `translateX(${d}px)` }, { transform: 'translateX(0)' }], { duration: 360, easing: 'cubic-bezier(.25, .8, .25, 1)' });
+            });
         }
         let lastCb = null;
         let feedCb = null;
