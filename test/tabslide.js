@@ -29,7 +29,7 @@ const near = (a, b, d) => Math.abs(a - b) <= d;
     });
     await p.addInitScript(([m, off]) => {
       const s = { introEnabled: false, introMobile: 'off', backgroundEnabled: false };
-      if (off) s.tabSlide = false;
+      s.tabSlide = !off;
       window.GM_getValue = (k, d) => k in s ? s[k] : d; window.GM_setValue = (k, v) => { s[k] = v; };
       window.GM_xmlhttpRequest = o => setTimeout(() => o.onerror && o.onerror('x'), 0);
       window.GM_info = { script: { version: 't' }, scriptMetaStr: m }; window.unsafeWindow = window;

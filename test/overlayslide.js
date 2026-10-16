@@ -27,7 +27,7 @@ const near = (a, b, d) => Math.abs(a - b) <= d;
     return r.fulfill({ status: 404, body: '' });
   });
   await p.addInitScript(m => {
-    const s = { introEnabled: false, introMobile: 'off', backgroundEnabled: false };
+    const s = { tabSlide: true, introEnabled: false, introMobile: 'off', backgroundEnabled: false };
     window.GM_getValue = (k, d) => k in s ? s[k] : d; window.GM_setValue = (k, v) => { s[k] = v; };
     window.GM_xmlhttpRequest = o => setTimeout(() => o.onerror && o.onerror('x'), 0);
     window.GM_info = { script: { version: 't' }, scriptMetaStr: m }; window.unsafeWindow = window;
