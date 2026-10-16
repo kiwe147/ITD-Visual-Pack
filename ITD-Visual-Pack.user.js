@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.6
+// @version      3.5.6.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1099,7 +1099,7 @@
         }
 
         function commentInputs() {
-            return $$('[contenteditable="true"][data-placeholder]').filter(i => /коммент/i.test(i.getAttribute('data-placeholder')));
+            return $$('[contenteditable="true"][data-placeholder]').filter(i => /коммент/i.test(i.getAttribute('data-placeholder')) && !i.closest('.vp-sw-stage'));
         }
         function commentRow(input) {
             let el = input.parentElement;
@@ -1176,7 +1176,7 @@
         function domRecords(muts) {
             let any = false;
             for (const m of muts) {
-                if (m.type === 'childList' && m.target === document.body && ![...m.addedNodes, ...m.removedNodes].some(n => !(n.classList && n.classList.contains('vp-sw-stage')))) continue;
+                if (m.type === 'childList' && ![...m.addedNodes, ...m.removedNodes].some(n => !(n.classList && n.classList.contains('vp-sw-stage')))) continue;
                 if (m.type === 'attributes' && !lostVp(m)) continue;
                 if (m.type === 'characterData' && !/\p{Extended_Pictographic}/u.test(m.target.nodeValue || '')) continue;
                 any = true;
@@ -4309,7 +4309,8 @@
         }
 
         const CHANGELOG = [
-            ['3.5.6', '17 октября 2026', [
+            ['3.5.6 – 3.5.6.1', '17 октября 2026', [
+                'Листание вкладок (WIP) доработано по кадрам: при переходе в «Сообщения» и «Галерею» уходящая страница больше не пропадает чёрным пятном, у приходящей страницы ссылки и карточки выглядят так же, как после остановки, левое меню и правая колонка едут в нужную сторону, магазин листается вместе с содержимым, а переход из окон без смены адреса больше не обрывается',
                 'На телефоне в галерее и в просмотре картинок в сообщениях вместо стрелок теперь зоны по краям: нажми у левого края, чтобы вернуться, или у правого, чтобы идти дальше. Листание пальцем работает как раньше']],
             ['3.5.5 – 3.5.5.1', '16 октября 2026', [
                 'Листание вкладок пока в разработке (WIP): возможны шероховатости и подлагивания. По умолчанию выключено: включить можно в настройках на вкладке «Вид», пункт помечен WIP',
@@ -9031,7 +9032,7 @@
         const tabSlide = (() => {
             const MS = 560, EASE = 'cubic-bezier(.25, .8, .25, 1)', MAX_WAIT = 900, SETTLE = 90;
             addCss(`
-            html.vp-sw .${SELECTORS.sidebar} ~ :not(aside) { visibility: hidden !important; }
+            html.vp-sw .${SELECTORS.sidebar} ~ :not(aside):not(.vp-sw-stage) { visibility: hidden !important; }
             html.vp-sw .vp-msgs.vp-open, html.vp-sw .vp-gal { animation-duration: 1ms !important; }
             html.vp-sw .vp-msgs, html.vp-sw .vp-gal-card { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
             html.vp-sw-pin aside.${SELECTORS.sidebar} { left: var(--vp-pin-side) !important; }
@@ -9049,7 +9050,7 @@
             const centerOf = () => {
                 const side = document.querySelector('aside.' + SELECTORS.sidebar);
                 const box = side && side.parentElement;
-                return box && [...box.children].find(c => c.tagName !== 'ASIDE' && c.getBoundingClientRect().width > 300) || null;
+                return box && [...box.children].find(c => c.tagName !== 'ASIDE' && !c.classList.contains('vp-sw-stage') && c.getBoundingClientRect().width > 300) || null;
             };
             const modalUp = () => F('modal').some(m => { const r = m.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(m).visibility !== 'hidden'; });
             const sceneNow = () => {
@@ -9096,11 +9097,45 @@
                 });
                 const cs = el.querySelectorAll('canvas'), gc = g.querySelectorAll('canvas');
                 cs.forEach((c, i) => { try { gc[i].getContext('2d').drawImage(c, 0, 0); } catch (e) { } });
+                const run = el.getAnimations ? el.getAnimations({ subtree: true }).filter(a => a.animationName && a.effect && a.effect.target && !a.effect.pseudoElement) : [];
+                if (run.length) {
+                    const targets = new Set(run.map(a => a.effect.target)), found = new Map(), B = g.querySelectorAll('*');
+                    el.querySelectorAll('*').forEach((n, i) => { if (targets.has(n)) found.set(n, B[i]); });
+                    found.set(el, g);
+                    const per = new Map();
+                    run.forEach(a => { const n = a.effect.target; per.set(n, (per.get(n) || []).concat(a)); });
+                    per.forEach((list, n) => {
+                        const c = found.get(n);
+                        if (!c) return;
+                        const names = getComputedStyle(n).animationName.split(',').map(s => s.trim());
+                        const delays = names.map(() => '0s');
+                        list.forEach(a => { const k = names.indexOf(a.animationName); if (k >= 0) delays[k] = (a.effect.getTiming().delay - (a.currentTime || 0)) + 'ms'; });
+                        c.style.animationDelay = delays.join(', ');
+                        c.style.animationPlayState = 'paused';
+                    });
+                }
                 const fr = el.querySelectorAll('iframe'), gf = g.querySelectorAll('iframe');
                 fr.forEach((f, i) => {
                     const r = f.getBoundingClientRect(), s = document.createElement('div');
                     s.className = f.className;
-                    s.style.cssText = `display:block;width:${r.width}px;height:${r.height}px`;
+                    s.style.cssText = `display:block;overflow:hidden;width:${r.width}px;height:${r.height}px`;
+                    try {
+                        const d = f.contentDocument;
+                        if (d && d.body && d.body.innerText.trim().length > 20) {
+                            const sh = s.attachShadow({ mode: 'open' }), css = document.createElement('style');
+                            const bs = getComputedStyle(d.body);
+                            css.textContent = [...d.styleSheets].map(sheet => { try { return [...sheet.cssRules].map(x => x.cssText).join(' '); } catch (e) { return ''; } }).join(' ');
+                            const box = document.createElement('div');
+                            box.className = d.body.className;
+                            box.style.cssText = `width:100%;color:${bs.color};font:${bs.font};background:transparent`;
+                            const inner = document.createElement('div');
+                            inner.style.transform = `translateY(${-d.documentElement.scrollTop}px)`;
+                            inner.innerHTML = d.body.innerHTML;
+                            inner.querySelectorAll('script').forEach(x => x.remove());
+                            box.appendChild(inner);
+                            sh.append(css, box);
+                        }
+                    } catch (e) { }
                     gf[i].replaceWith(s);
                 });
                 if (scrolls) {
@@ -9145,6 +9180,7 @@
             const frames = (n, fn) => { const step = k => { cur && (k ? requestAnimationFrame(() => step(k - 1)) : fn()); }; step(n); };
             const prepare = c => {
                 unpin();
+                (c.moves || []).forEach(([e, , t]) => { e.style.transform = t; });
                 const now = panels();
                 c.moves = [];
                 if (c.pre.side && now.side && Math.abs(c.pre.sl - now.sl) > 1) c.moves.push([now.side, c.pre.sl - now.sl, now.side.style.transform]);
@@ -9165,13 +9201,28 @@
                 Promise.all(c.anims.map(x => x.finished)).then(() => {
                     if (cur !== c) return;
                     document.documentElement.classList.remove('vp-sw');
-                    frames(2, () => end());
+                    if (c.hold) return frames(2, () => end());
+                    frames(2, () => {
+                        const fade = c.stage.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, easing: 'ease-out', fill: 'forwards' });
+                        c.anims.push(fade);
+                        fade.finished.then(() => { if (cur === c) end(); }, () => { if (cur === c) end(); });
+                    });
                 }, () => { if (cur === c) end(); });
             };
             const go = c => {
                 const fresh = centerOf();
                 if (c.mo) c.mo.disconnect();
                 if (!fresh) return end();
+                const t1 = performance.now();
+                const framesReady = () => [...fresh.querySelectorAll('iframe')].filter(f => { const r = f.getBoundingClientRect(); return r.width > 300 && r.height > 200; }).every(f => { try { return f.contentDocument && f.contentDocument.body && f.contentDocument.body.innerText.trim().length > 20; } catch (e) { return true; } });
+                const build = () => {
+                    if (cur !== c) return;
+                    if (!framesReady() && performance.now() - t1 < 1200) { c.raf = requestAnimationFrame(() => safe(build)); return; }
+                    place(c, fresh);
+                };
+                build();
+            };
+            const place = (c, fresh) => {
                 prepare(c);
                 const wrap = layer(fresh, 'vp-sw-new');
                 wrap.style.opacity = '.01';
@@ -9183,10 +9234,16 @@
                 if (!c || cur !== c) return;
                 safe(() => {
                     if (!el || !el.isConnected) return end();
-                    prepare(c);
                     c.hold = { el, opacity: el.style.opacity };
                     el.style.opacity = '.01';
-                    frames(2, () => safe(() => run(c, el)));
+                    const settle = (k, last) => {
+                        if (cur !== c) return;
+                        prepare(c);
+                        const key = c.moves.map(m => Math.round(m[1])).join(',') + '|' + panels().sl;
+                        if (key === last || k >= 8) return frames(2, () => safe(() => run(c, el)));
+                        c.raf = requestAnimationFrame(() => safe(() => settle(k + 1, key)));
+                    };
+                    settle(0, null);
                 });
             };
             const start = (down, scene, mode) => {
@@ -9196,7 +9253,8 @@
                 stage.style.cssText = `left:0;right:0;top:0;height:${innerHeight}px`;
                 const ghost = layer(scene.el, 'vp-sw-old');
                 stage.appendChild(ghost);
-                document.body.appendChild(stage);
+                const host = document.querySelector('aside.' + SELECTORS.sidebar);
+                (host && host.parentElement || document.body).appendChild(stage);
                 (ghost._sc || []).forEach(([n, v]) => { n.scrollTop = v; });
                 const pre = panels();
                 if (mode !== 'lead') {
@@ -9208,15 +9266,19 @@
                 document.documentElement.classList.add('vp-sw');
                 const t0 = performance.now(), path = location.pathname + location.search;
                 let last = t0;
-                const c = cur = { stage, ghost, down, pre, anims: [], raf: 0, guard: setTimeout(end, 4000) };
+                const c = cur = { stage, ghost, down, pre, anims: [], raf: 0, guard: setTimeout(end, 4000), ov: scene.kind !== 'route', t0 };
                 if (mode === 'lead') return c;
-                const mo = new MutationObserver(() => { last = performance.now(); });
+                const mo = new MutationObserver(ms => {
+                    if (ms.every(m => [...m.addedNodes, ...m.removedNodes].every(n => n.classList && n.classList.contains('vp-sw-stage')))) return;
+                    last = performance.now();
+                    if (location.pathname + location.search !== path) c.mut = true;
+                });
                 mo.observe(document.getElementById('root') || document.body, { childList: true, subtree: true });
                 c.mo = mo;
                 const tick = () => {
                     if (cur !== c) return;
                     const now = performance.now(), moved = location.pathname + location.search !== path;
-                    if (moved && now - last > SETTLE && now - t0 > 160) return safe(() => go(c));
+                    if (moved && c.mut && now - last > SETTLE && now - t0 > 160) return safe(() => go(c));
                     if (mode === 'now' && now - last > SETTLE && now - t0 > 120) return safe(() => go(c));
                     if (now - t0 > MAX_WAIT) return moved ? safe(() => go(c)) : end();
                     c.raf = requestAnimationFrame(tick);
@@ -9242,7 +9304,7 @@
                 if (to < 0 || from < 0 || to === from) return;
                 start(to < from, s, s.kind !== 'route' && hrefOf(a) === location.pathname ? 'now' : 'wait');
             }, true);
-            addEventListener('popstate', end);
+            addEventListener('popstate', () => { if (cur && cur.ov && performance.now() - cur.t0 < 500) return; end(); });
             addEventListener('resize', end);
             return { end, lead, arrive };
         })();
@@ -9426,7 +9488,7 @@
             document.querySelectorAll(`:is(${glassSel}), [style*="--block-bg"], [style*="--modal-bg"], [style*="--glass-bg"]`).forEach(el => {
                 if (floatSeen.has(el)) return;
                 floatSeen.add(el);
-                if (el.matches('article, .' + SELECTORS.post + ', .' + SELECTORS.avatar) || el.closest('nav, aside, .vp-rail, .vp-msgs, .vp-comments-sheet')) return;
+                if (el.matches('article, .' + SELECTORS.post + ', .' + SELECTORS.avatar) || el.closest('nav, aside, .vp-rail, .vp-msgs, .vp-comments-sheet, .vp-sw-stage')) return;
                 for (let n = el, i = 0; n && n !== document.body && i < 6; n = n.parentElement, i++) {
                     const cs = getComputedStyle(n);
                     if (cs.position === 'fixed' || (cs.position === 'absolute' && +cs.zIndex >= 5)) { el.classList.add('vp-float'); return; }
@@ -10626,9 +10688,9 @@
             } else {
                 placeSidebar(); placeRail();
                 const side = siteEl('sidebar') || (nav && nav.closest('aside')) || nav;
-                const sr = side && side.getBoundingClientRect();
-                const margin = sr ? Math.max(12, Math.round(sr.left)) : 20;
-                const left = sr ? Math.round(sr.right + 24) : 20;
+                const sr = side && side.getBoundingClientRect(), sl = side ? baseLeft(side) : 0;
+                const margin = sr ? Math.max(12, Math.round(sl)) : 20;
+                const left = sr ? Math.round(sl + sr.width + 24) : 20;
                 const railEl = document.querySelector('.vp-rail.vp-on');
                 const rightEdge = railEl ? parseFloat(railEl.style.left) - 24 : innerWidth - margin;
                 Object.assign(gal.el.style, { left: left + 'px', right: Math.max(12, Math.round(innerWidth - rightEdge)) + 'px', top: '36px', bottom: '12px', width: '', paddingBottom: '0px' });
@@ -10661,7 +10723,7 @@
             };
             const hide = t => { if (!t.classList.contains('vp-gal-hidden')) t.classList.add('vp-gal-hidden'); };
             document.querySelectorAll('.' + [SELECTORS.tabs, SELECTORS.feedBar, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .'))
-                .forEach(e => { const t = up(e); if (!t.closest('.vp-gal, .vp-msgs, nav')) hide(t); });
+                .forEach(e => { if (e.closest('.vp-sw-stage')) return; const t = up(e); if (!t.closest('.vp-gal, .vp-msgs, nav')) hide(t); });
             const win = gal.el || document.querySelector('.vp-msgs.vp-open:not(.vp-sw-stage *)');
             const root = document.getElementById('root');
             const r = win && win.getBoundingClientRect();
@@ -11661,6 +11723,7 @@
         html.vp-menu-open .itd-scroll-top-btn { opacity: 0 !important; visibility: hidden !important; }`);
 
         const RAIL_TOP = 36;
+        const baseLeft = el => el.getBoundingClientRect().left - new DOMMatrix(getComputedStyle(el).transform).m41;
         let cbCached;
         function contentBox() {
             if (cbCached === undefined) {
@@ -11800,7 +11863,7 @@
             const on = railEnabled && !!myUsername && !!rail.querySelector(':scope > .vp-rail-card:not([hidden])');
             const sideEl = siteEl('sidebar');
             if (on && galOpen && sideEl && innerWidth > PHONE_MAX) {
-                const margin = Math.max(12, Math.round(sideEl.getBoundingClientRect().left)), width = 300;
+                const margin = Math.max(12, Math.round(baseLeft(sideEl))), width = 300;
                 box = { left: innerWidth - margin - width, width, maxH: innerHeight - RAIL_TOP - 24 };
             } else if (on && edge > 0 && gap >= 240) {
                 const width = Math.min(300, gap - 48);
