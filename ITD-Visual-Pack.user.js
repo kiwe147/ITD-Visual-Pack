@@ -9049,6 +9049,7 @@
                 if (!cur) return;
                 const c = cur;
                 cur = null;
+                clearTimeout(c.guard);
                 cancelAnimationFrame(c.raf);
                 c.mo.disconnect();
                 c.anims.forEach(a => { try { a.cancel(); } catch (e) { } });
@@ -9062,6 +9063,7 @@
                 const a = Math.max(0, ty - el.getBoundingClientRect().top);
                 return `inset(${a}px 0px calc(100% - ${a + innerHeight}px) 0px)`;
             };
+            const safe = fn => { try { fn(); } catch (e) { end(); } };
             const go = c => {
                 const fresh = centerOf();
                 c.mo.disconnect();
@@ -9105,12 +9107,12 @@
                 let last = t0;
                 const mo = new MutationObserver(() => { last = performance.now(); });
                 mo.observe(document.getElementById('root') || document.body, { childList: true, subtree: true });
-                const c = cur = { stage, ghost, mo, down, anims: [], clips: [], raf: 0 };
+                const c = cur = { stage, ghost, mo, down, anims: [], clips: [], raf: 0, guard: setTimeout(end, 3000) };
                 const tick = () => {
                     if (cur !== c) return;
                     const now = performance.now(), moved = location.pathname + location.search !== path;
-                    if (moved && now - last > SETTLE && now - t0 > 160) return go(c);
-                    if (now - t0 > MAX_WAIT) return moved ? go(c) : end();
+                    if (moved && now - last > SETTLE && now - t0 > 160) return safe(() => go(c));
+                    if (now - t0 > MAX_WAIT) return moved ? safe(() => go(c)) : end();
                     c.raf = requestAnimationFrame(tick);
                 };
                 c.raf = requestAnimationFrame(tick);
@@ -9119,12 +9121,13 @@
                 if (e.defaultPrevented || e.button || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || !enabled()) return;
                 const a = e.target.closest && e.target.closest('a[href]');
                 if (!a || a.target === '_blank' || !isRoute(a) || !a.closest('nav')) return;
-                if (document.querySelector('.vp-gal, .vp-msgs.vp-open') || F('modal').length) return;
+                if (document.querySelector('.vp-gal, .vp-msgs.vp-open') || F('modal').some(m => { const r = m.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(m).visibility !== 'hidden'; })) return;
                 const links = F('navLink'), to = links.indexOf(a), from = links.indexOf(curLink());
                 if (to < 0 || from < 0 || to === from) return;
                 start(to < from);
             }, true);
             addEventListener('popstate', end);
+            addEventListener('resize', end);
             return { end };
         })();
 
