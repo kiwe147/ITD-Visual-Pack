@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.6.1
+// @version      3.5.7
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4309,6 +4309,9 @@
         }
 
         const CHANGELOG = [
+            ['3.5.7', '17 октября 2026', [
+                'Магазин: чёрный фон страницы убран, виден твой фон и сцена',
+                'Листание вкладок (WIP): при переходе из «Галереи» и «Сообщений» боковые панели больше не ждут загрузки страницы, а сразу плавно сдвигаются']],
             ['3.5.6 – 3.5.6.1', '17 октября 2026', [
                 'Листание вкладок (WIP) доработано по кадрам: при переходе в «Сообщения» и «Галерею» уходящая страница больше не пропадает чёрным пятном, у приходящей страницы ссылки и карточки выглядят так же, как после остановки, левое меню и правая колонка едут в нужную сторону, магазин листается вместе с содержимым, а переход из окон без смены адреса больше не обрывается',
                 'На телефоне в галерее и в просмотре картинок в сообщениях вместо стрелок теперь зоны по краям: нажми у левого края, чтобы вернуться, или у правого, чтобы идти дальше. Листание пальцем работает как раньше']],
@@ -9187,12 +9190,13 @@
                 if (c.pre.rail && now.rail && Math.abs(c.pre.rl - now.rl) > 1) c.moves.push([now.rail, c.pre.rl - now.rl, now.rail.style.transform]);
                 c.moves.forEach(([e, d]) => { e.style.transform = `translateX(${d}px)`; });
             };
+            const glide = c => c.moves.forEach(([e, d, t]) => {
+                e.style.transform = t;
+                c.anims.push(e.animate([{ transform: `translateX(${d}px)` }, { transform: 'translateX(0)' }], { duration: MS, easing: EASE }));
+            });
             const run = (c, incoming) => {
                 const H = innerHeight, sign = c.down ? 1 : -1;
-                c.moves.forEach(([e, d, t]) => {
-                    e.style.transform = t;
-                    c.anims.push(e.animate([{ transform: `translateX(${d}px)` }, { transform: 'translateX(0)' }], { duration: MS, easing: EASE }));
-                });
+                glide(c);
                 incoming.style.opacity = c.hold ? c.hold.opacity : '';
                 c.anims.push(
                     c.ghost.animate([{ transform: 'translateY(0)' }, { transform: `translateY(${sign * H}px)` }], { duration: MS, easing: EASE, fill: 'forwards' }),
@@ -9257,7 +9261,7 @@
                 (host && host.parentElement || document.body).appendChild(stage);
                 (ghost._sc || []).forEach(([n, v]) => { n.scrollTop = v; });
                 const pre = panels();
-                if (mode !== 'lead') {
+                if (mode !== 'lead' && scene.kind === 'route') {
                     const root = document.documentElement;
                     if (pre.side) root.style.setProperty('--vp-pin-side', pre.sl + 'px');
                     if (pre.rail) { root.style.setProperty('--vp-pin-rail', pre.rl + 'px'); root.style.setProperty('--vp-pin-railw', pre.rw + 'px'); }
@@ -9268,6 +9272,7 @@
                 let last = t0;
                 const c = cur = { stage, ghost, down, pre, anims: [], raf: 0, guard: setTimeout(end, 4000), ov: scene.kind !== 'route', t0 };
                 if (mode === 'lead') return c;
+                c.glide = scene.kind !== 'route';
                 const mo = new MutationObserver(ms => {
                     if (ms.every(m => [...m.addedNodes, ...m.removedNodes].every(n => n.classList && n.classList.contains('vp-sw-stage')))) return;
                     last = performance.now();
@@ -9278,6 +9283,10 @@
                 const tick = () => {
                     if (cur !== c) return;
                     const now = performance.now(), moved = location.pathname + location.search !== path;
+                    if (c.glide && !c.glided && now - t0 > 50 && !document.querySelector('.vp-gal:not(.vp-sw-stage *), .vp-msgs.vp-open:not(.vp-sw-stage *)')) {
+                        c.glided = true;
+                        safe(() => { prepare(c); glide(c); c.pre = panels(); c.moves = []; });
+                    }
                     if (moved && c.mut && now - last > SETTLE && now - t0 > 160) return safe(() => go(c));
                     if (mode === 'now' && now - last > SETTLE && now - t0 > 120) return safe(() => go(c));
                     if (now - t0 > MAX_WAIT) return moved ? safe(() => go(c)) : end();
@@ -10872,7 +10881,7 @@
                         if (!d || !d.head || d.getElementById('vp-frame-clear')) return;
                         const st = d.createElement('style');
                         st.id = 'vp-frame-clear';
-                        st.textContent = 'html, body { background: transparent !important; }';
+                        st.textContent = ':root, html, body, #root, #root > div { --bg-primary: transparent !important; background: transparent !important; }';
                         d.head.appendChild(st);
                         f._vpClear = true;
                     } catch (e) { }
