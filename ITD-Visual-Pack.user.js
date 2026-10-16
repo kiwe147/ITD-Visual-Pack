@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.3
+// @version      3.5.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1380,6 +1380,7 @@
                 'Звуки интерфейса': svgIcon('<path d="M4 9.5h3l4-3.5v12l-4-3.5H4z"/><path d="M15 9a4 4 0 0 1 0 6M17.5 6.5a7.5 7.5 0 0 1 0 11"/>'),
                 'Боковая панель': svgIcon('<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M15 3v18"/><path d="M17.5 7.5h1M17.5 11h1M17.5 14.5h1"/>'),
                 'Версия для ПК на планшете': svgIcon('<rect x="2.5" y="5" width="19" height="13" rx="2"/><path d="M9 21h6"/><path d="M6 9h6M6 12h4"/>'),
+                'Листание вкладок': svgIcon('<rect x="5" y="3" width="14" height="7" rx="2"/><rect x="5" y="14" width="14" height="7" rx="2" stroke-dasharray="2 2.4"/><path d="M12 10.8v2.4M10.3 11.7 12 13.2l1.7-1.5"/>'),
                 'Сцена ленты': svgIcon('<rect x="5" y="3" width="14" height="5" rx="1.5" stroke-dasharray="2 2"/><rect x="4" y="10" width="16" height="5" rx="1.5"/><rect x="3" y="17" width="18" height="5" rx="1.5"/>'),
                 'Свечение видео': svgIcon('<rect x="6" y="7" width="12" height="10" rx="2"/><path d="m11 10 3 2-3 2z"/><path d="M3 5.5 4.5 7M21 5.5 19.5 7M3 18.5 4.5 17M21 18.5 19.5 17M12 2.5v2M12 19.5v2"/>'),
                 'Заставка при входе': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><path d="m10 9 5 3-5 3z"/>'),
@@ -3170,6 +3171,7 @@
             { label: 'Стекло', get: () => glassEnabled, set: v => { glassEnabled = v; applyGlass(); }, key: 'glassEnabled' },
             { label: 'Звуки интерфейса', get: () => uiSoundEnabled, set: v => { uiSoundEnabled = v; if (v) uiSound('toggle'); }, key: 'uiSoundEnabled' },
             { label: 'Стили других', get: () => showLooks, set: v => { showLooks = v; document.documentElement.classList.toggle('vp-looks', v); if (!v) setBgGuest(null); }, key: 'showLooks' },
+            { label: 'Листание вкладок', get: () => GM_getValue('tabSlide', true), set: v => { if (!v) tabSlide.end(); }, key: 'tabSlide' },
             { label: 'Сцена ленты', get: () => sceneEnabled, set: v => { sceneEnabled = v; sceneAutoOff = false; document.documentElement.classList.toggle('vp-scene', v); sceneKick(); }, key: 'sceneEnabled' },
             { label: 'Свечение видео', get: () => ambientEnabled, set: v => { ambientEnabled = v; applyAmbient(); }, key: 'ambientEnabled' },
             { label: 'Боковая панель', get: () => railEnabled, set: v => { railEnabled = v; placeRail(); }, key: 'railEnabled' },
@@ -3181,7 +3183,7 @@
         const SETTINGS_TABS = [
             { id: 'nick', name: 'Ник', items: ['Неоновая подсветка', 'Подсветка ника', 'Подсветка аватарок', 'Подсветка постов'] },
             { id: 'bg', name: 'Фон', items: ['Фон'] },
-            { id: 'look', name: 'Вид', items: ['Стекло', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Карточки панели', 'Версия для ПК на планшете'] },
+            { id: 'look', name: 'Вид', items: ['Стекло', 'Листание вкладок', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Карточки панели', 'Версия для ПК на планшете'] },
             { id: 'likes', name: 'Лайки', items: ['Автолайки'] },
             { id: 'pals', name: 'Мику', items: ['Мику и Тето', 'Мику справа', 'Тето слева', 'Размер персонажей'] },
             { id: 'misc', name: 'Ещё', items: ['Анти цензура', 'Звуки интерфейса', 'Громкость', 'Заставка при входе'] },
@@ -4306,8 +4308,12 @@
         }
 
         const CHANGELOG = [
+            ['3.5.4', '16 октября 2026', [
+                'Листание вкладок на ПК: переходы по пунктам левого меню больше не рывком. Старая страница уезжает, а новая выезжает следом, с той стороны, где пункт стоит в меню. Убрать можно в настройках, на вкладке «Вид»',
+                'В галерее и в просмотре картинок в сообщениях на ПК вместо стрелок листание по краям: нажми у левого или правого края карточки, зона на всю высоту']],
             ['3.5.3', '10 октября 2026', [
-                'Вместо эмодзи в кнопках, подсказках и меню сообщений теперь линейные иконки одной толщины, как у сайта. Аватарки, сами эмодзи и значки в играх остались как были',
+                'В сообщениях замки, запрет, телефон, пункты «Копировать» и «Открыть картинку», крестики у вложений и ссылка «Открыть оригинал» теперь линейные иконки одной толщины вместо эмодзи. Аватарки, эмодзи в самих сообщениях и значки в играх остались как были',
+                'В списке чатов и в окнах ошибки баннера убраны эмодзи-значки: остался чистый текст',
                 'Сапёр: когда игра проиграна, флажки подсвечиваются — зелёным те, что стояли на мине, красным те, что поставлены зря',
                 'Оптимизация: когда открыты сообщения или галерея, страница меньше тормозит, особенно на длинной ленте']],
             ['3.5.2 – 3.5.2.8', '4 октября 2026', [
@@ -7328,6 +7334,13 @@
             background: rgba(255, 255, 255, .14); color: #fff; font-size: 26px; line-height: 40px; padding: 0; }
         .vp-msgs-lb-nav[hidden] { display: none; }
         .vp-msgs-lb-nav.vp-prev { left: 12px; } .vp-msgs-lb-nav.vp-next { right: 12px; }
+        @media (hover: hover) and (pointer: fine) {
+            .vp-msgs-lb-nav { top: 0; bottom: 0; width: 20%; max-width: 180px; height: auto; margin: 0; border-radius: 0; background: none; font-size: 0; transition: background .2s; }
+            .vp-msgs-lb-nav.vp-prev { left: 0; }
+            .vp-msgs-lb-nav.vp-next { right: 0; }
+            .vp-msgs-lb-nav.vp-prev:hover { background: linear-gradient(90deg, rgba(255, 255, 255, .12), transparent); }
+            .vp-msgs-lb-nav.vp-next:hover { background: linear-gradient(270deg, rgba(255, 255, 255, .12), transparent); }
+        }
         .vp-msgs-pend img { width: 52px; height: 52px; object-fit: cover; border-radius: 10px; flex-shrink: 0; }
         .vp-msgs-pend span { flex: 1; min-width: 0; font-size: 13px; color: var(--text-secondary); }
         .vp-msgs-pend button { width: 30px; height: 30px; border: 0; border-radius: 50%; background: rgba(127, 127, 127, .2); color: var(--text-primary, #fff); cursor: pointer; flex-shrink: 0; }
@@ -8993,6 +9006,132 @@
         onDom(markActiveNav);
         addEventListener('popstate', markActiveNav);
 
+        const tabSlide = (() => {
+            const MS = 560, EASE = 'cubic-bezier(.25, .8, .25, 1)', MAX_WAIT = 900, SETTLE = 90;
+            addCss(`
+            html.vp-sw .${SELECTORS.sidebar} ~ :not(aside) { visibility: hidden !important; }
+            .vp-sw-stage { position: fixed; z-index: 3; overflow: hidden; pointer-events: none; contain: layout paint; }
+            .vp-sw-ghost { will-change: transform; }`);
+            const enabled = () => GM_getValue('tabSlide', true) && !matchMedia('(prefers-reduced-motion: reduce)').matches
+                && matchMedia('(hover: hover) and (pointer: fine)').matches && innerWidth > PHONE_MAX;
+            const hrefOf = a => a.getAttribute('href') || '';
+            const isRoute = a => /^\/(?!\/)/.test(hrefOf(a));
+            const curLink = () => F('navLink').find(a => {
+                const h = hrefOf(a);
+                return isRoute(a) && (h === location.pathname || (h !== '/' && location.pathname.startsWith(h + '/')));
+            });
+            const centerOf = () => {
+                const side = document.querySelector('aside.' + SELECTORS.sidebar);
+                const box = side && side.parentElement;
+                return box && [...box.children].find(c => c.tagName !== 'ASIDE' && c.getBoundingClientRect().width > 300) || null;
+            };
+            const freeze = el => {
+                const g = el.cloneNode(true);
+                const vs = el.querySelectorAll('video'), gs = g.querySelectorAll('video');
+                vs.forEach((v, i) => {
+                    gs[i].removeAttribute('autoplay');
+                    if (v.readyState < 2 || !v.videoWidth) return;
+                    try {
+                        const c = document.createElement('canvas');
+                        c.width = v.videoWidth; c.height = v.videoHeight;
+                        c.getContext('2d').drawImage(v, 0, 0);
+                        c.className = v.className; c.style.cssText = v.style.cssText;
+                        c.style.objectFit = getComputedStyle(v).objectFit;
+                        gs[i].replaceWith(c);
+                    } catch (e) { }
+                });
+                const cs = el.querySelectorAll('canvas'), gc = g.querySelectorAll('canvas');
+                cs.forEach((c, i) => { try { gc[i].getContext('2d').drawImage(c, 0, 0); } catch (e) { } });
+                g.setAttribute('inert', '');
+                return g;
+            };
+            let cur = null;
+            const end = () => {
+                if (!cur) return;
+                const c = cur;
+                cur = null;
+                clearTimeout(c.guard);
+                cancelAnimationFrame(c.raf);
+                c.mo.disconnect();
+                c.anims.forEach(a => { try { a.cancel(); } catch (e) { } });
+                c.stage.remove();
+                document.documentElement.classList.remove('vp-sw');
+                c.clips.forEach(([el, v]) => { el.style.overflowY = v; });
+                if (c.fresh) c.fresh.style.clipPath = c.freshClip;
+            };
+            const sliceOf = el => {
+                const ty = new DOMMatrix(getComputedStyle(el).transform).m42;
+                const a = Math.max(0, ty - el.getBoundingClientRect().top);
+                return `inset(${a}px 0px calc(100% - ${a + innerHeight}px) 0px)`;
+            };
+            const safe = fn => { try { fn(); } catch (e) { end(); } };
+            const go = c => {
+                const fresh = centerOf();
+                c.mo.disconnect();
+                if (!fresh) return end();
+                const H = innerHeight, sign = c.down ? 1 : -1;
+                for (let p = fresh.parentElement, i = 0; p && i < 2; p = p.parentElement, i++) {
+                    c.clips.push([p, p.style.overflowY]);
+                    p.style.overflowY = 'clip';
+                }
+                document.documentElement.classList.remove('vp-sw');
+                c.anims.push(
+                    c.ghost.animate([{ transform: 'translateY(0)' }, { transform: `translateY(${sign * H}px)` }], { duration: MS, easing: EASE, fill: 'forwards' }),
+                    fresh.animate([{ transform: `translateY(${-sign * H}px)` }, { transform: 'translateY(0)' }], { duration: MS, easing: EASE })
+                );
+                c.fresh = fresh;
+                c.freshClip = fresh.style.clipPath;
+                const paint = () => {
+                    if (cur !== c) return;
+                    fresh.style.clipPath = sliceOf(fresh);
+                    c.raf = requestAnimationFrame(paint);
+                };
+                paint();
+                Promise.all(c.anims.map(x => x.finished)).then(() => { if (cur === c) end(); }, () => { if (cur === c) end(); });
+            };
+            const start = down => {
+                end();
+                const main = centerOf();
+                if (!main) return;
+                const r = main.getBoundingClientRect();
+                const stage = document.createElement('div');
+                stage.className = 'vp-sw-stage';
+                stage.style.cssText = `left:${r.left}px;top:0;width:${r.width}px;height:${innerHeight}px`;
+                const ghost = freeze(main);
+                ghost.classList.add('vp-sw-ghost');
+                const cut = Math.max(0, -r.top);
+                ghost.style.cssText += `;position:absolute;left:0;top:${r.top}px;width:${r.width}px;margin:0;transform:none;clip-path:inset(${cut}px 0px calc(100% - ${cut + innerHeight}px) 0px)`;
+                stage.appendChild(ghost);
+                document.body.appendChild(stage);
+                document.documentElement.classList.add('vp-sw');
+                const t0 = performance.now(), path = location.pathname + location.search;
+                let last = t0;
+                const mo = new MutationObserver(() => { last = performance.now(); });
+                mo.observe(document.getElementById('root') || document.body, { childList: true, subtree: true });
+                const c = cur = { stage, ghost, mo, down, anims: [], clips: [], raf: 0, guard: setTimeout(end, 3000) };
+                const tick = () => {
+                    if (cur !== c) return;
+                    const now = performance.now(), moved = location.pathname + location.search !== path;
+                    if (moved && now - last > SETTLE && now - t0 > 160) return safe(() => go(c));
+                    if (now - t0 > MAX_WAIT) return moved ? safe(() => go(c)) : end();
+                    c.raf = requestAnimationFrame(tick);
+                };
+                c.raf = requestAnimationFrame(tick);
+            };
+            document.addEventListener('click', e => {
+                if (e.defaultPrevented || e.button || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || !enabled()) return;
+                const a = e.target.closest && e.target.closest('a[href]');
+                if (!a || a.target === '_blank' || !isRoute(a) || !a.closest('nav')) return;
+                if (document.querySelector('.vp-gal, .vp-msgs.vp-open') || F('modal').some(m => { const r = m.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(m).visibility !== 'hidden'; })) return;
+                const links = F('navLink'), to = links.indexOf(a), from = links.indexOf(curLink());
+                if (to < 0 || from < 0 || to === from) return;
+                start(to < from);
+            }, true);
+            addEventListener('popstate', end);
+            addEventListener('resize', end);
+            return { end };
+        })();
+
         const fx = addCss(`
         html.vp-glass { --vp-glass-filter: blur(18px) saturate(1.5); }
         html.vp-glass[data-theme="dark"] {
@@ -9871,6 +10010,16 @@
         @media (hover: hover) and (pointer: fine) { .vp-gal-tile:hover .vp-gal-arrow { opacity: 1; } }
         .vp-gal-tile .vp-gal-arrow.vp-edge { opacity: 0; cursor: default; }
         @media not ((hover: hover) and (pointer: fine)) { .vp-gal-arrow { opacity: 1; } }
+        @media (hover: hover) and (pointer: fine) {
+            .vp-gal-tile .vp-gal-arrow { top: 0; bottom: 0; width: 22%; max-width: 96px; height: auto; margin: 0; border-radius: 0; background: none; box-shadow: none;
+                backdrop-filter: none; -webkit-backdrop-filter: none; opacity: 1; transition: background .2s; }
+            .vp-gal-tile .vp-gal-arrow svg { display: none; }
+            .vp-gal-tile .vp-gal-arrow:active { transform: none; }
+            .vp-gal-tile .vp-gal-arrow.vp-prev { left: 0; }
+            .vp-gal-tile .vp-gal-arrow.vp-next { right: 0; }
+            .vp-gal-tile .vp-gal-arrow.vp-prev:hover { background: linear-gradient(90deg, rgba(255, 255, 255, .16), transparent); }
+            .vp-gal-tile .vp-gal-arrow.vp-next:hover { background: linear-gradient(270deg, rgba(255, 255, 255, .16), transparent); }
+        }
         .vp-gal-slide > img { pointer-events: none; -webkit-user-drag: none; user-select: none; }
         .vp-gal-tile.vp-ctx .vp-gal-slide > img { pointer-events: auto; }
         .vp-gal-acts { position: absolute; left: 8px; bottom: 8px; display: flex; gap: 2px; padding: 2px; border-radius: 999px;
