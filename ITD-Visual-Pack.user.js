@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.4
+// @version      3.5.4.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4309,9 +4309,10 @@
         }
 
         const CHANGELOG = [
-            ['3.5.4', '16 октября 2026', [
-                'Листание вкладок на ПК: переходы по пунктам левого меню больше не рывком. Старая страница уезжает, а новая выезжает следом, с той стороны, где пункт стоит в меню. Убрать можно в настройках, на вкладке «Вид»',
-                'В галерее и в просмотре картинок в сообщениях на ПК вместо стрелок листание по краям: нажми у левого или правого края карточки, зона на всю высоту']],
+            ['3.5.4 – 3.5.4.1', '16 октября 2026', [
+                'Листание вкладок на ПК: переходы по пунктам левого меню больше не рывком. Старая страница уезжает, а новая выезжает следом, с той стороны, где пункт стоит в меню. Убрать можно в настройках, на вкладке «Вид». Переход стал плавнее, даже на длинной ленте',
+                'В галерее и в просмотре картинок в сообщениях на ПК вместо стрелок листание по краям: нажми у левого или правого края карточки, зона на всю высоту',
+                'Поддержка в списке чатов стала заметной: красная аватарка со спасательным кругом и карточка с красноватым фоном']],
             ['3.5.3', '10 октября 2026', [
                 'В сообщениях замки, запрет, телефон, пункты «Копировать» и «Открыть картинку», крестики у вложений и ссылка «Открыть оригинал» теперь линейные иконки одной толщины вместо эмодзи. Аватарки, эмодзи в самих сообщениях и значки в играх остались как были',
                 'В списке чатов и в окнах ошибки баннера убраны эмодзи-значки: остался чистый текст',
@@ -7225,6 +7226,11 @@
         .vp-msgs-ava { position: relative; width: 50px; height: 50px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
             font-size: 26px; background: var(--block-bg); }
         .vp-msgs-ava.vp-sm { width: 38px; height: 38px; font-size: 20px; }
+        .vp-msgs-ava.vp-sup { color: #fff; background: linear-gradient(145deg, #ff5a5f, #d0202a); box-shadow: 0 0 0 2px rgba(255, 90, 95, .28), 0 4px 14px rgba(208, 32, 42, .4); }
+        .vp-msgs-ava.vp-sup svg { width: 58%; height: 58%; stroke-width: 2.1; }
+        .vp-msgs-row.vp-sup { background: linear-gradient(90deg, rgba(255, 70, 76, .2), rgba(255, 70, 76, .06)); box-shadow: inset 0 0 0 1px rgba(255, 90, 95, .32); }
+        .vp-msgs-row.vp-sup:hover, .vp-msgs-row.vp-sup:active { background: linear-gradient(90deg, rgba(255, 70, 76, .3), rgba(255, 70, 76, .1)); }
+        .vp-msgs-row.vp-sup + .vp-msgs-row { margin-top: 6px; }
         .vp-msgs-ava.vp-online::after { content: ""; position: absolute; right: 1px; bottom: 1px; width: 11px; height: 11px; border-radius: 50%;
             background: #22c55e; box-shadow: 0 0 0 2.5px var(--bg-primary, #000); }
         .vp-msgs-mid { flex: 1; min-width: 0; }
@@ -7420,7 +7426,8 @@
                 countEl.classList.toggle('vp-warn', n >= max * 0.9);
             };
             let current = null, botTimer = 0, lastJoke = -1;
-            const avaHtml = a => isUrl(a) ? `<img src="${esc(a)}" alt="">` : esc(a);
+            const SUP_AVA = svgIcon('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.6"/><path d="m5.6 5.6 3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>', 28);
+            const avaHtml = a => a === '🛟' ? SUP_AVA : isUrl(a) ? `<img src="${esc(a)}" alt="">` : esc(a);
 
             let supDir = false;
             function renderList() {
@@ -7444,8 +7451,8 @@
                 if (!sups.length) supDir = false;
                 $('.vp-msgs-sub').textContent = supDir && sups.length && !q ? 'Все, кто писал в поддержку' : people ? `Сервер ИТД, поддержка и ${people} ${plural(people, 'человек', 'человека', 'человек')} с ИТД X` : 'Пока никого с ИТД X — список обновится сам';
                 list.innerHTML = rows.length ? rows.map(d => `
-                <div class="vp-msgs-row${pins.includes(d.id) ? ' vp-pinned' : ''}" data-id="${d.id}">
-                    <div class="vp-msgs-ava${d.online ? ' vp-online' : ''}">${avaHtml(d.ava)}</div>
+                <div class="vp-msgs-row${pins.includes(d.id) ? ' vp-pinned' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}" data-id="${d.id}">
+                    <div class="vp-msgs-ava${d.online ? ' vp-online' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}">${avaHtml(d.ava)}</div>
                     <div class="vp-msgs-mid"><div class="vp-msgs-name"><span>${esc(d.name)}</span></div>
                         <div class="vp-msgs-last">${esc(d.last)}</div></div>
                     <div class="vp-msgs-side"><span>${esc(d.time)}</span>${d.unread ? `<span class="vp-msgs-badge">${d.unread}</span>`
@@ -7544,6 +7551,7 @@
                 msgMarkOpened(d.id);
                 $('.vp-msgs-chead .vp-msgs-ava').innerHTML = avaHtml(d.ava);
                 $('.vp-msgs-chead .vp-msgs-ava').classList.toggle('vp-online', !!d.online);
+                $('.vp-msgs-chead .vp-msgs-ava').classList.toggle('vp-sup', d.ava === '🛟');
                 $('.vp-msgs-who b').textContent = d.name;
                 const seenAgo = t => {
                     const d0 = new Date(t); if (isNaN(d0)) return ''; const h = d0.toTimeString().slice(0, 5);
@@ -9012,7 +9020,7 @@
             addCss(`
             html.vp-sw .${SELECTORS.sidebar} ~ :not(aside) { visibility: hidden !important; }
             .vp-sw-stage { position: fixed; z-index: 3; overflow: hidden; pointer-events: none; contain: layout paint; }
-            .vp-sw-ghost { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; }`);
+            .vp-sw-ghost { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; will-change: transform; }`);
             const enabled = () => GM_getValue('tabSlide', true) && !matchMedia('(prefers-reduced-motion: reduce)').matches
                 && matchMedia('(hover: hover) and (pointer: fine)').matches && innerWidth > PHONE_MAX;
             const hrefOf = a => a.getAttribute('href') || '';
@@ -9057,13 +9065,18 @@
                 const cs = el.querySelectorAll('canvas'), gc = g.querySelectorAll('canvas');
                 cs.forEach((c, i) => { try { gc[i].getContext('2d').drawImage(c, 0, 0); } catch (e) { } });
                 trim(el, g, innerHeight);
+                g.querySelectorAll('img').forEach(i => { i.loading = 'eager'; i.decoding = 'sync'; });
                 g.setAttribute('inert', '');
                 return g;
             };
-            const sliceOf = el => {
-                const ty = new DOMMatrix(getComputedStyle(el).transform).m42;
-                const a = Math.max(0, ty - el.getBoundingClientRect().top);
-                return `inset(${a}px 0px calc(100% - ${a + innerHeight}px) 0px)`;
+            const layer = (el, cls) => {
+                const r = el.getBoundingClientRect();
+                const copy = freeze(el);
+                copy.style.cssText += `;position:absolute;left:0;top:${r.top}px;width:${r.width}px;margin:0;transform:none`;
+                const wrap = document.createElement('div');
+                wrap.className = 'vp-sw-ghost ' + cls;
+                wrap.appendChild(copy);
+                return wrap;
             };
             let cur = null;
             const end = () => {
@@ -9073,34 +9086,34 @@
                 clearTimeout(c.guard);
                 cancelAnimationFrame(c.raf);
                 c.mo.disconnect();
-                removeEventListener('scroll', c.onScroll);
                 c.anims.forEach(a => { try { a.cancel(); } catch (e) { } });
                 c.stage.remove();
                 document.documentElement.classList.remove('vp-sw');
-                c.clips.forEach(([el, v]) => { el.style.overflowY = v; });
-                if (c.fresh) c.fresh.style.clipPath = c.freshClip;
             };
             const safe = fn => { try { fn(); } catch (e) { end(); } };
+            const frames = (n, fn) => { const step = k => { cur && (k ? requestAnimationFrame(() => step(k - 1)) : fn()); }; step(n); };
+            const run = (c, wrap) => {
+                const H = innerHeight, sign = c.down ? 1 : -1;
+                wrap.style.opacity = '';
+                c.anims.push(
+                    c.ghost.animate([{ transform: 'translateY(0)' }, { transform: `translateY(${sign * H}px)` }], { duration: MS, easing: EASE, fill: 'forwards' }),
+                    wrap.animate([{ transform: `translateY(${-sign * H}px)` }, { transform: 'translateY(0)' }], { duration: MS, easing: EASE, fill: 'forwards' })
+                );
+                Promise.all(c.anims.map(x => x.finished)).then(() => {
+                    if (cur !== c) return;
+                    document.documentElement.classList.remove('vp-sw');
+                    frames(2, () => end());
+                }, () => { if (cur === c) end(); });
+            };
             const go = c => {
                 const fresh = centerOf();
                 c.mo.disconnect();
                 if (!fresh) return end();
-                const H = innerHeight, sign = c.down ? 1 : -1;
-                for (let p = fresh.parentElement, i = 0; p && i < 2; p = p.parentElement, i++) {
-                    c.clips.push([p, p.style.overflowY]);
-                    p.style.overflowY = 'clip';
-                }
-                c.fresh = fresh;
-                c.freshClip = fresh.style.clipPath;
-                fresh.style.clipPath = sliceOf(fresh);
-                c.onScroll = () => { if (cur === c) fresh.style.clipPath = sliceOf(fresh); };
-                addEventListener('scroll', c.onScroll, { passive: true });
-                document.documentElement.classList.remove('vp-sw');
-                c.anims.push(
-                    c.ghost.animate([{ transform: 'translateY(0)' }, { transform: `translateY(${sign * H}px)` }], { duration: MS, easing: EASE, fill: 'forwards' }),
-                    fresh.animate([{ transform: `translateY(${-sign * H}px)` }, { transform: 'translateY(0)' }], { duration: MS, easing: EASE })
-                );
-                Promise.all(c.anims.map(x => x.finished)).then(() => { if (cur === c) end(); }, () => { if (cur === c) end(); });
+                const wrap = layer(fresh, 'vp-sw-new');
+                wrap.style.opacity = '.01';
+                c.stage.insertBefore(wrap, c.ghost);
+                const imgs = [...wrap.querySelectorAll('img')].map(i => i.decode ? i.decode().catch(() => { }) : null);
+                Promise.race([Promise.all(imgs), new Promise(r => setTimeout(r, 300))]).then(() => frames(2, () => safe(() => run(c, wrap))));
             };
             const start = down => {
                 end();
@@ -9110,11 +9123,7 @@
                 const stage = document.createElement('div');
                 stage.className = 'vp-sw-stage';
                 stage.style.cssText = `left:${r.left}px;top:0;width:${r.width}px;height:${innerHeight}px`;
-                const ghost = document.createElement('div');
-                ghost.className = 'vp-sw-ghost';
-                const copy = freeze(main);
-                copy.style.cssText += `;position:absolute;left:0;top:${r.top}px;width:${r.width}px;margin:0;transform:none`;
-                ghost.appendChild(copy);
+                const ghost = layer(main, 'vp-sw-old');
                 stage.appendChild(ghost);
                 document.body.appendChild(stage);
                 document.documentElement.classList.add('vp-sw');
@@ -9122,7 +9131,7 @@
                 let last = t0;
                 const mo = new MutationObserver(() => { last = performance.now(); });
                 mo.observe(document.getElementById('root') || document.body, { childList: true, subtree: true });
-                const c = cur = { stage, ghost, mo, down, anims: [], clips: [], raf: 0, guard: setTimeout(end, 3000) };
+                const c = cur = { stage, ghost, mo, down, anims: [], raf: 0, guard: setTimeout(end, 4000) };
                 const tick = () => {
                     if (cur !== c) return;
                     const now = performance.now(), moved = location.pathname + location.search !== path;
