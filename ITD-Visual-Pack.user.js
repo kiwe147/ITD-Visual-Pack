@@ -8617,7 +8617,7 @@
                     item('Ответить', () => setReply(b), 'reply');
                     item(pinned ? 'Открепить' : 'Закрепить', () => togglePin(m, !pinned), 'pin');
                     item('Переслать', () => openFwd([m]), 'fwd');
-                    item('Удалить', () => msgDelete([b]), 'trash', 'vp-danger');
+                    item(m.dir === 'out' ? 'Удалить' : 'Удалить у себя', () => msgDelete([b]), 'trash', 'vp-danger');
                     item('Выбрать', () => selStart(b), 'check');
                     sep();
                 }
