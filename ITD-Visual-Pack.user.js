@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.6.1.1
+// @version      3.6.1.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4315,9 +4315,10 @@
         }
 
         const CHANGELOG = [
-            ['3.6.1 – 3.6.1.1', '18 октября 2026', [
+            ['3.6.1 – 3.6.1.2', '18 октября 2026', [
                 'Выбор сообщений: режим включается и удержанием левой кнопки мыши на сообщении; веди с зажатой кнопкой — выбираются подряд, в том числе от уже выбранного; щелчок по выбранному снимает выбор',
-                'Сообщения: правая кнопка, удержание и выбор работают и на пустом месте рядом с сообщением, не только на самом пузыре'
+                'Сообщения: правая кнопка, удержание и выбор работают и на пустом месте рядом с сообщением, не только на самом пузыре',
+                'Режим выбора: правая кнопка открывает меню «Удалить выбранное / Отменить выбор / Копировать выбранное как текст»; если вести мышь обратно, лишнее выделение снимается'
             ]],
             ['3.6.0.1 – 3.6.0.2', '18 октября 2026', [
                 'Вкладка «Сообщения» в меню больше не тусклая, если чат открыт из профиля',
@@ -8532,10 +8533,10 @@
             const hitBubble = e => { const b = e.target.closest ? e.target.closest('.vp-msgs-b') : null; return b || (e.target === feed ? bubbleAt(e.clientY) : null); };
             function selRange(b) {
                 if (!dsel) return;
-                const all = [...feed.querySelectorAll(':scope > .vp-msgs-b')], i = all.indexOf(b), j = dsel.last ? all.indexOf(dsel.last) : i;
-                if (i < 0) return;
-                for (let k = Math.min(i, j < 0 ? i : j); k <= Math.max(i, j < 0 ? i : j); k++) selSet(all[k], dsel.on);
-                dsel.last = b;
+                const all = [...feed.querySelectorAll(':scope > .vp-msgs-b')], i = all.indexOf(b), a = all.indexOf(dsel.b);
+                if (i < 0 || a < 0) return;
+                const lo = Math.min(i, a), hi = Math.max(i, a);
+                all.forEach((x, k) => { if (!x._m) return; if (k >= lo && k <= hi) selSet(x, true); else if (!dsel.before.has(x)) selSet(x, false); });
             }
             function selScroll() {
                 if (!dsel) return;
@@ -8550,7 +8551,7 @@
                 if (!sel || e.button) return;
                 const b = hitBubble(e);
                 if (!b || !b._m) return;
-                dsel = { on: true, was: sel.has(b), b, moved: false, x0: e.clientX, y0: e.clientY, id: e.pointerId, last: null, v: 0, x: e.clientX, y: e.clientY, raf: 0 };
+                dsel = { was: sel.has(b), b, before: new Set(sel), moved: false, x0: e.clientX, y0: e.clientY, id: e.pointerId, v: 0, x: e.clientX, y: e.clientY, raf: 0 };
                 selRange(b);
                 try { feed.setPointerCapture(e.pointerId); } catch (x) { }
                 e.preventDefault();
@@ -8569,7 +8570,7 @@
                     if (!b.isConnected || sel) return;
                     if (window.getSelection) window.getSelection().removeAllRanges();
                     selStart(b);
-                    dsel = { on: true, was: false, b, moved: false, x0, y0, id, last: b, v: 0, x: x0, y: y0, raf: 0 };
+                    dsel = { was: false, b, before: new Set(sel), moved: false, x0, y0, id, v: 0, x: x0, y: y0, raf: 0 };
                     try { feed.setPointerCapture(id); } catch (x) { }
                 }, 450);
                 feed.addEventListener('pointermove', mv);
@@ -8674,8 +8675,32 @@
                 document.removeEventListener('pointerdown', menuOutside, true);
             }
             const menuOutside = e => { if (menu && !menu.contains(e.target)) closeMenu(); };
+            function openSelMenu(x, y) {
+                closeMenu();
+                menu = document.createElement('div');
+                menu.className = 'vp-msgs-menu';
+                const item = (label, fn, ico, cls) => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button'; btn.className = 'vp-msgs-menu-i' + (cls ? ' ' + cls : '');
+                    btn.insertAdjacentHTML('afterbegin', uiIcon(ico, 18));
+                    btn.appendChild(document.createTextNode(label));
+                    btn.addEventListener('click', () => { closeMenu(); fn(); });
+                    menu.appendChild(btn);
+                };
+                item('Удалить выбранное', () => msgDelete(selList()).then(selEnd), 'trash', 'vp-danger');
+                item('Отменить выбор', selEnd, 'close');
+                const sp = document.createElement('div');
+                sp.className = 'vp-msgs-menu-sep';
+                menu.appendChild(sp);
+                item('Копировать выбранное как текст', () => { copyText(selList().map(b => plainText(b._m.text)).filter(Boolean).join('\n')); selEnd(); }, 'copy');
+                document.body.appendChild(menu);
+                const w = menu.offsetWidth, h = menu.offsetHeight;
+                menu.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px';
+                menu.style.top = Math.max(8, Math.min(y, innerHeight - h - 8)) + 'px';
+                setTimeout(() => document.addEventListener('pointerdown', menuOutside, true), 0);
+            }
             function openMenu(b, x, y) {
-                if (sel) { selToggle(b); return; }
+                if (sel) { openSelMenu(x, y); return; }
                 closeMenu();
                 const m = b._m, real = m && current && !current.bot && msgNet.me && msgTarget(current).uid;
                 const text = m ? plainText(m.text) : (b.querySelector('.vp-msgs-cap') || b.firstChild || {}).textContent || '';
@@ -8730,7 +8755,7 @@
                 const b = bubbleAt(e.clientY);
                 if (!b) return;
                 e.preventDefault();
-                if (sel) { selToggle(b); return; }
+                if (sel) { openSelMenu(e.clientX, e.clientY); return; }
                 openMenu(b, e.clientX, e.clientY);
             });
             feed.addEventListener('pointerdown', e => {
