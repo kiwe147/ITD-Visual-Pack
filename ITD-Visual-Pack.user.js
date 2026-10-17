@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.6.1.2
+// @version      3.6.1.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4315,9 +4315,10 @@
         }
 
         const CHANGELOG = [
-            ['3.6.1 – 3.6.1.2', '18 октября 2026', [
+            ['3.6.1 – 3.6.1.3', '18 октября 2026', [
                 'Выбор сообщений: режим включается и удержанием левой кнопки мыши на сообщении; веди с зажатой кнопкой — выбираются подряд, в том числе от уже выбранного; щелчок по выбранному снимает выбор',
                 'Сообщения: правая кнопка, удержание и выбор работают и на пустом месте рядом с сообщением, не только на самом пузыре',
+                'Картинки в сообщениях открываются плавным увеличением из того места, где лежат, и так же уезжают обратно',
                 'Режим выбора: правая кнопка открывает меню «Удалить выбранное / Отменить выбор / Копировать выбранное как текст»; если вести мышь обратно, лишнее выделение снимается'
             ]],
             ['3.6.0.1 – 3.6.0.2', '18 октября 2026', [
@@ -7992,7 +7993,7 @@
                         im.src = u; im.alt = ''; im.loading = 'lazy'; im.decoding = 'async'; im.draggable = false;
                         im.addEventListener('load', () => { if (feed.scrollHeight - feed.scrollTop - feed.clientHeight < 400) feed.scrollTop = feed.scrollHeight; }, { once: true });
                         wrap.appendChild(im);
-                        wrap.addEventListener('click', () => openImg(urls, i, text));
+                        wrap.addEventListener('click', () => openImg(urls, i, text, [...wrap.closest('.vp-msgs-b').querySelectorAll('.vp-msgs-img')]));
                         return wrap;
                     };
                     let box;
@@ -8200,7 +8201,7 @@
             root.currentTarget = () => current && !current.bot ? msgTarget(current) : null;
             function closeChat(fromHistory) {
                 clearPending();
-                closeImg(true);
+                closeImg(true, true);
                 closeMenu();
                 selEnd(); clearReply(); closeFwd(); pinEl.hidden = true;
                 if (fromHistory !== true && current && overlayAt('vpChat')) { chatBackPending = true; history.back(); }
@@ -8740,7 +8741,7 @@
                 if (text) item('Копировать текст', () => copyText(text), 'copy');
                 if (imgs.length) {
                     item('Сохранить как…', () => saveImage(hit ? hit.src : imgs[0]), 'save');
-                    item(imgs.length > 1 ? 'Открыть альбом' : 'Открыть картинку', () => openImg(imgs, 0, text), 'image');
+                    item(imgs.length > 1 ? 'Открыть альбом' : 'Открыть картинку', () => openImg(imgs, 0, text, [...b.querySelectorAll('.vp-msgs-img')]), 'image');
                 }
                 if (menu.lastChild && menu.lastChild.classList.contains('vp-msgs-menu-sep')) menu.lastChild.remove();
                 if (!menu.querySelector('.vp-msgs-menu-i')) { menu = null; return; }
@@ -8769,12 +8770,14 @@
             feed.addEventListener('pointermove', e => { if (pressT && e.pointerType !== 'mouse') clearTimeout(pressT); });
             feed.addEventListener('scroll', () => closeMenu(), { passive: true });
             let lbKey = null;
-            function openImg(list, idx, cap) {
+            function openImg(list, idx, cap, thumbs) {
                 if (typeof list === 'string') list = [list];
                 idx = idx || 0;
-                if (lb) closeImg(true);
+                if (lb) closeImg(true, true);
                 lb = document.createElement('div');
                 lb.className = 'vp-msgs-lb';
+                lb._thumbs = thumbs || [];
+                lb._idx = () => idx;
                 lb.innerHTML = `<div class="vp-msgs-lb-top"><button type="button" class="vp-msgs-ib" title="Назад">${MSG_ICON.back}</button><span class="vp-msgs-lb-cap"></span>`
                     + `<b class="vp-msgs-lb-n"></b><a target="_blank" rel="noopener">Открыть оригинал ${uiIcon('out', 14, 'vp-solo')}</a></div>`
                     + `<div class="vp-msgs-lb-body"><button type="button" class="vp-msgs-lb-nav vp-prev" title="Назад">‹</button><img alt="" draggable="false"><button type="button" class="vp-msgs-lb-nav vp-next" title="Дальше">›</button></div>`;
@@ -8785,6 +8788,7 @@
                     img.src = list[idx];
                     if (/^https:\/\/cdn\./.test(list[idx])) { orig.href = list[idx]; orig.hidden = false; } else orig.hidden = true;
                     num.textContent = list.length > 1 ? `${idx + 1} / ${list.length}` : '';
+                    if (lb && lb._flown) lb._thumbs.forEach((t, k) => { if (t) t.style.visibility = k === idx ? 'hidden' : ''; });
                 };
                 prev.hidden = next.hidden = list.length < 2;
                 prev.addEventListener('click', e => { if (downX != null && Math.abs(e.clientX - downX) > 40) return; e.stopPropagation(); show(idx - 1); });
@@ -8807,11 +8811,46 @@
                 document.addEventListener('keydown', lbKey, true);
                 root.appendChild(lb);
                 history.pushState(Object.assign({}, history.state, { vpImg: 1 }), '', location.href);
+                const el = lb, from = lb._thumbs[idx];
+                if (from && from.isConnected) {
+                    el.style.animation = 'none';
+                    el.animate([{ backgroundColor: 'rgba(0, 0, 0, 0)' }, { backgroundColor: 'rgba(0, 0, 0, .92)' }], { duration: 260, easing: 'ease-out' });
+                    el.querySelector('.vp-msgs-lb-top').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 240, delay: 90, fill: 'backwards' });
+                    img.style.visibility = 'hidden';
+                    const go = () => {
+                        if (!img.isConnected) return;
+                        const f = from.getBoundingClientRect(), t = img.getBoundingClientRect();
+                        img.style.visibility = '';
+                        if (!f.width || !t.width) return;
+                        el._flown = true;
+                        from.style.visibility = 'hidden';
+                        img.style.transformOrigin = '0 0';
+                        img.animate([{ transform: `translate(${f.left - t.left}px, ${f.top - t.top}px) scale(${f.width / t.width}, ${f.height / t.height})`, borderRadius: '16px' }, { transform: 'none', borderRadius: '10px' }], { duration: 320, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+                    };
+                    (img.decode ? img.decode() : Promise.reject()).then(go, go);
+                }
             }
-            function closeImg(fromHistory) {
+            function closeImg(fromHistory, instant) {
                 if (!lb) return;
+                const el = lb, thumbs = el._thumbs || [], src = thumbs[el._idx()], img = el.querySelector('.vp-msgs-lb-body img');
+                lb = null;
                 if (lbKey) { document.removeEventListener('keydown', lbKey, true); lbKey = null; }
-                lb.remove(); lb = null;
+                const done = () => { thumbs.forEach(t => { if (t) t.style.visibility = ''; }); el.remove(); };
+                let fly = false;
+                if (!instant && el._flown && img && src && src.isConnected) {
+                    const f = src.getBoundingClientRect(), t = img.getBoundingClientRect(), fr = feed.getBoundingClientRect();
+                    if (f.width && t.width && f.bottom > fr.top && f.top < fr.bottom) {
+                        fly = true;
+                        el.style.pointerEvents = 'none';
+                        el.animate([{ backgroundColor: 'rgba(0, 0, 0, .92)' }, { backgroundColor: 'rgba(0, 0, 0, 0)' }], { duration: 260, easing: 'ease-in', fill: 'forwards' });
+                        el.querySelector('.vp-msgs-lb-top').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, fill: 'forwards' });
+                        img.style.transformOrigin = '0 0';
+                        const a = img.animate([{ transform: 'none', borderRadius: '10px' }, { transform: `translate(${f.left - t.left}px, ${f.top - t.top}px) scale(${f.width / t.width}, ${f.height / t.height})`, borderRadius: '16px' }], { duration: 280, easing: 'cubic-bezier(.4, 0, .2, 1)', fill: 'forwards' });
+                        a.onfinish = done;
+                        setTimeout(done, 450);
+                    }
+                }
+                if (!fly) done();
                 if (fromHistory !== true && overlayAt('vpImg')) history.back();
             }
             root.imgOpen = () => !!lb;
