@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.6.1
+// @version      3.6.1.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4315,8 +4315,9 @@
         }
 
         const CHANGELOG = [
-            ['3.6.1', '18 октября 2026', [
-                'Выбор сообщений: режим включается и удержанием левой кнопки мыши на сообщении; веди с зажатой кнопкой — выбираются подряд, в том числе от уже выбранного; щелчок по выбранному снимает выбор'
+            ['3.6.1 – 3.6.1.1', '18 октября 2026', [
+                'Выбор сообщений: режим включается и удержанием левой кнопки мыши на сообщении; веди с зажатой кнопкой — выбираются подряд, в том числе от уже выбранного; щелчок по выбранному снимает выбор',
+                'Сообщения: правая кнопка, удержание и выбор работают и на пустом месте рядом с сообщением, не только на самом пузыре'
             ]],
             ['3.6.0.1 – 3.6.0.2', '18 октября 2026', [
                 'Вкладка «Сообщения» в меню больше не тусклая, если чат открыт из профиля',
@@ -8527,7 +8528,8 @@
                 else if (a === 'del') msgDelete(bs).then(selEnd);
             });
             let dsel = null, selMute = 0;
-            const bubbleUnder = (x, y) => { const el = document.elementFromPoint(x, y), b = el && el.closest ? el.closest('.vp-msgs-b') : null; return b && b._m && feed.contains(b) ? b : null; };
+            const bubbleUnder = (x, y) => { const b = bubbleAt(y); return b && b._m ? b : null; };
+            const hitBubble = e => { const b = e.target.closest ? e.target.closest('.vp-msgs-b') : null; return b || (e.target === feed ? bubbleAt(e.clientY) : null); };
             function selRange(b) {
                 if (!dsel) return;
                 const all = [...feed.querySelectorAll(':scope > .vp-msgs-b')], i = all.indexOf(b), j = dsel.last ? all.indexOf(dsel.last) : i;
@@ -8546,7 +8548,7 @@
             }
             feed.addEventListener('pointerdown', e => {
                 if (!sel || e.button) return;
-                const b = e.target.closest('.vp-msgs-b');
+                const b = hitBubble(e);
                 if (!b || !b._m) return;
                 dsel = { on: true, was: sel.has(b), b, moved: false, x0: e.clientX, y0: e.clientY, id: e.pointerId, last: null, v: 0, x: e.clientX, y: e.clientY, raf: 0 };
                 selRange(b);
@@ -8556,7 +8558,7 @@
             let selHoldT = 0;
             feed.addEventListener('pointerdown', e => {
                 if (sel || e.pointerType !== 'mouse' || e.button) return;
-                const b = e.target.closest('.vp-msgs-b');
+                const b = hitBubble(e);
                 if (!b || !b._m || e.target.closest('a, button')) return;
                 const id = e.pointerId, x0 = e.clientX, y0 = e.clientY;
                 clearTimeout(selHoldT);
@@ -8595,7 +8597,7 @@
             feed.addEventListener('click', e => {
                 if (!sel && Date.now() > selMute) return;
                 if (Date.now() < selMute) { e.preventDefault(); e.stopPropagation(); return; }
-                const b = e.target.closest('.vp-msgs-b');
+                const b = hitBubble(e);
                 e.preventDefault(); e.stopPropagation();
                 if (b) selToggle(b);
             }, true);
