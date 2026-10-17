@@ -1356,6 +1356,12 @@
         const I_BG = '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M12 8.2l1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1z"/><path d="M17.5 6.8v1.6M16.7 7.6h1.6"/>';
 
         const UI_GLYPH = {
+            reply: '<path d="M9 5 3 11l6 6"/><path d="M3 11h9a8 8 0 0 1 8 8v1"/>',
+            pin: '<path d="M9 4h6l-1 6 3 3H7l3-3-1-6Z"/><path d="M12 13v7"/>',
+            fwd: '<path d="M15 5l6 6-6 6"/><path d="M21 11h-9a8 8 0 0 0-8 8"/>',
+            trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/><path d="M10 11v5M14 11v5"/>',
+            check: '<circle cx="12" cy="12" r="8.5"/><path d="m8.5 12.3 2.4 2.4 4.6-4.9"/>',
+            save: '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/>',
             lock: '<rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
             ban: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>',
             phone: GLYPH.phone,
@@ -4314,6 +4320,7 @@
                 'Сообщения: новое сообщение появляется в открытом чате само, не нужно выходить и заходить; значок на «Сообщениях» не зависает',
                 'Сообщения: чат открывается сразу на последних сообщениях, а не на самых старых',
                 'Клуб ИТД X: убраны срезы свечения у аватарок и ников слева и справа',
+                'Меню сообщения (правая кнопка или долгое нажатие) как в Телеграме: Ответить, Закрепить, Переслать, Удалить, Выбрать, Копировать, Сохранить как; ответы показываются цитатой, закреплённое сообщение — полоской вверху чата',
                 'При создании поста картинки можно перетаскивать друг на друга и менять порядок',
                 'Новый плеер видео в ленте: толстая полоса перемотки с подсказкой времени, время, перемотка на 10 секунд, скорость, картинка в картинке, управление с клавиатуры (пробел, стрелки, M, F)'
             ]],
@@ -6756,11 +6763,22 @@
                 delete m._v; delete m._i;
             }));
             conv.forEach(list => list.sort((x, y) => x.at - y.at || x.ts - y.ts));
-            const reacts = new Map(), reads = new Map(), calls = [], sigs = [];
+            const reacts = new Map(), reads = new Map(), calls = [], sigs = [], pins = new Map();
             conv.forEach((list, uid) => {
-                const keep = [];
+                const keep = [], gone = new Set(), pinEv = [];
                 for (const m of list) {
-                    if (!m.svc) { keep.push(m); continue; }
+                    if (!m.svc || m.svc.length < 6) continue;
+                    const mine = !!m.svc[5], dir = m.dir === 'out' ? (mine ? 'out' : 'in') : (mine ? 'in' : 'out');
+                    if (m.svc[0] === 7 && mine) gone.add(reactKey(uid, m.dir, u32(m.svc, 1)));
+                    else if (m.svc[0] === 6 && m.svc.length >= 7) pinEv.push({ key: reactKey(uid, dir, u32(m.svc, 1)), on: !!m.svc[6], at: m.at });
+                }
+                if (pinEv.length) {
+                    const on = new Map();
+                    pinEv.sort((x, y) => x.at - y.at).forEach(e => { if (e.on) on.set(e.key, e.at); else on.delete(e.key); });
+                    pins.set(uid, [...on].sort((x, y) => x[1] - y[1]).map(x => x[0]));
+                }
+                for (const m of list) {
+                    if (!m.svc) { if (!gone.has(reactKey(uid, m.dir, m.ts))) keep.push(m); continue; }
                     const who = m.dir === 'out' ? 'me' : 'them', k = m.svc[0];
                     if (k === 1 && m.svc.length >= 6) {
                         const mine = !!m.svc[5], dir = m.dir === 'out' ? (mine ? 'out' : 'in') : (mine ? 'in' : 'out');
@@ -6786,7 +6804,7 @@
                 e.me = { ts: q.ts, emoji: q.emoji };
                 reacts.set(key, e);
             });
-            msgNet.reacts = reacts; msgNet.reads = reads; msgNet.calls = calls; msgNet.sigs = sigs;
+            msgNet.pins = pins; msgNet.reacts = reacts; msgNet.reads = reads; msgNet.calls = calls; msgNet.sigs = sigs;
             msgNet.conv = conv;
         }
         async function msgPrepImage(file) {
@@ -6859,7 +6877,50 @@
             const k = msgKeyOf(d.login);
             return { uid: k && k.id, sup: false, missing: `У ${d.name} ещё нет ключа сообщений — появится, когда откроет «Сообщения» в ИТД X 3.3.3` };
         }
-        const msgThread = t => t.uid ? (msgNet.conv.get(t.uid) || []).filter(m => m.sup === t.sup) : [];
+        const msgHidden = () => { const o = GM_getValue(acctKey('msgHidden'), {}); return o && typeof o === 'object' ? o : {}; };
+        const hideKey = (uid, m) => uid + '|' + m.dir + '|' + m.ts;
+        function msgHide(uid, m) { const o = msgHidden(); o[hideKey(uid, m)] = 1; GM_setValue(acctKey('msgHidden'), o); }
+        const msgThread = t => {
+            if (!t.uid) return [];
+            const hid = msgHidden();
+            return (msgNet.conv.get(t.uid) || []).filter(m => m.sup === t.sup && !hid[hideKey(t.uid, m)]);
+        };
+        addCss(`
+        .vp-msgs-menu { min-width: 236px; padding: 6px; }
+        .vp-msgs-menu .vp-msgs-menu-i { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 0; background: transparent; color: inherit; font: inherit; font-size: 14px; padding: 9px 12px; border-radius: 10px; cursor: pointer; }
+        .vp-msgs-menu .vp-msgs-menu-i svg { flex: none; opacity: .85; }
+        .vp-msgs-menu .vp-msgs-menu-i.vp-danger { color: #ff5a5f; }
+        .vp-msgs-menu-sep { height: 1px; margin: 5px 6px; background: var(--border-color, rgba(255, 255, 255, .1)); }
+        .vp-msgs-quote { display: block; margin: 0 0 5px; padding: 3px 9px; border-left: 3px solid var(--vp-accent, #f91880); border-radius: 4px 9px 9px 4px; background: rgba(127, 127, 127, .17); font-size: 12.5px; line-height: 1.32; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msgs-quote b { display: block; font-size: 12px; color: var(--vp-accent, #f91880); }
+        .vp-msgs-rest { white-space: pre-wrap; }
+        .vp-msgs-reply, .vp-msgs-pin { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-left: 3px solid var(--vp-accent, #f91880); margin: 0 12px; background: rgba(127, 127, 127, .12); border-radius: 4px 12px 12px 4px; color: var(--text-primary, #fff); }
+        .vp-msgs-pin { margin: 4px 12px 0; cursor: pointer; }
+        .vp-msgs-reply[hidden], .vp-msgs-pin[hidden], .vp-msgs-sel[hidden], .vp-msgs-fwd[hidden] { display: none; }
+        .vp-msgs-reply svg, .vp-msgs-pin > svg { flex: none; color: var(--vp-accent, #f91880); }
+        .vp-msgs-reply-t, .vp-msgs-pin-t { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 13px; line-height: 1.3; }
+        .vp-msgs-reply-t b, .vp-msgs-pin-t b { font-size: 12.5px; color: var(--vp-accent, #f91880); }
+        .vp-msgs-reply-t span, .vp-msgs-pin-t span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .85; }
+        .vp-msgs-sel { position: absolute; left: 0; right: 0; top: 0; bottom: 0; z-index: 3; display: flex; align-items: center; gap: 6px; padding: 0 10px; background: var(--block-bg); border-radius: inherit; }
+        .vp-msgs-sel b { font-size: 15px; margin-left: 4px; }
+        .vp-msgs-sel-gap { flex: 1; }
+        .vp-msgs-sel button:not(.vp-msgs-ib) { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 16px; padding: 8px 12px; background: rgba(127, 127, 127, .16); color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+        .vp-msgs-sel button.vp-danger { color: #ff5a5f; }
+        .vp-msgs-sel button:not(.vp-msgs-ib):hover { background: rgba(127, 127, 127, .28); }
+        .vp-selecting .vp-msgs-b { cursor: pointer; }
+        .vp-msgs-b.vp-sel { outline: 2px solid var(--vp-accent, #f91880); outline-offset: 2px; }
+        .vp-msgs-b.vp-gone { opacity: .35; }
+        .vp-msgs-b.vp-flash { animation: vpMsgFlash 1.4s ease; }
+        @keyframes vpMsgFlash { 0%, 40% { box-shadow: 0 0 0 3px var(--vp-accent, #f91880); } 100% { box-shadow: 0 0 0 3px transparent; } }
+        .vp-msgs-fwd { position: absolute; left: 0; right: 0; top: 0; bottom: 0; z-index: 6; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .5); border-radius: inherit; }
+        .vp-msgs-fwd-card { width: min(380px, calc(100% - 28px)); max-height: 70%; display: flex; flex-direction: column; border-radius: 20px; background: var(--block-bg); box-shadow: 0 16px 48px rgba(0, 0, 0, .55), 0 0 0 1px var(--border-color, rgba(255, 255, 255, .1)); overflow: hidden; }
+        .vp-msgs-fwd-h { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 8px 18px; font-size: 16px; }
+        .vp-msgs-fwd-l { overflow-y: auto; padding: 0 8px 10px; }
+        .vp-msgs-fwd-r { display: flex; align-items: center; gap: 12px; width: 100%; border: 0; background: transparent; color: inherit; font: inherit; font-size: 14.5px; font-weight: 600; text-align: left; padding: 7px 10px; border-radius: 14px; cursor: pointer; }
+        .vp-msgs-fwd-r:hover { background: rgba(127, 127, 127, .16); }
+        .vp-msgs-flash { position: absolute; left: 50%; bottom: 84px; z-index: 7; transform: translateX(-50%); padding: 8px 16px; border-radius: 14px; background: rgba(20, 20, 20, .94); color: #fff; font-size: 13px; pointer-events: none; animation: vpMsgFlashNote 2.4s ease both; }
+        @keyframes vpMsgFlashNote { 0% { opacity: 0; transform: translate(-50%, 8px); } 12%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+        `);
         const msgSeen = () => GM_getValue(acctKey('msgSeen'), {});
         const seenKey = t => (t.sup ? 'sup:' : '') + t.uid;
         const readUpTo = (uid, sup, who) => { const r = msgNet.reads && msgNet.reads.get(uid); return r ? r[(who || 'me') + (sup ? '1' : '0')] || 0 : 0; };
@@ -7886,11 +7947,21 @@
                 if (at < str.length) box.append(str.slice(at));
                 el.appendChild(box);
             }
+            function msgBody(el, text) {
+                const m = String(text || '').match(/^> ([^\n]*)(?:\n([\s\S]*))?$/);
+                if (!m) { msgText(el, text); return; }
+                const q = document.createElement('span');
+                q.className = 'vp-msgs-quote';
+                const i = m[1].indexOf(': ');
+                if (i > 0 && i < 40) { const n = document.createElement('b'); n.textContent = m[1].slice(0, i); q.append(n, m[1].slice(i + 2)); } else q.textContent = m[1];
+                el.appendChild(q);
+                if (m[2]) { const r = document.createElement('span'); r.className = 'vp-msgs-rest'; msgText(r, m[2]); el.appendChild(r); }
+            }
             function bubble(dir, text, meta, imgUrl) {
                 const urls = !imgUrl ? [] : Array.isArray(imgUrl) ? imgUrl : [imgUrl];
                 const b = document.createElement('div');
                 b.className = 'vp-msgs-b vp-' + dir + (urls.length ? ' vp-has-img' : '');
-                if (!urls.length) msgText(b, text);
+                if (!urls.length) msgBody(b, text);
                 if (urls.length) {
                     const cell = (u, i) => {
                         const wrap = document.createElement('span');
@@ -7916,7 +7987,7 @@
                         else if (cols === 3 && n % 3 === 2) { box.lastChild.classList.add('vp-half'); box.lastChild.previousSibling.classList.add('vp-half'); }
                     }
                     b.prepend(box);
-                    if (text) { const cap = document.createElement('span'); cap.className = 'vp-msgs-cap'; msgText(cap, text); box.after(cap); }
+                    if (text) { const cap = document.createElement('span'); cap.className = 'vp-msgs-cap'; msgBody(cap, text); box.after(cap); }
                 }
                 const i = document.createElement('i');
                 setMeta(i, meta || now());
@@ -7937,6 +8008,7 @@
                 $('.vp-msgs-more').hidden = !d.login || !!d.support || !!d.supUid || !!d.bot;
                 current = d;
                 downNew = 0;
+                selEnd(); clearReply(); closeFwd(); pinEl.hidden = true; pinIdx = 0;
                 d.unread = 0;
                 msgMarkOpened(d.id);
                 $('.vp-msgs-chead .vp-msgs-ava').innerHTML = avaHtml(d.ava);
@@ -7991,6 +8063,7 @@
                     paintReacts(b, t.uid);
                 });
                 paintCalls(t);
+                paintPin(t);
                 d.shown = list.length; d.sig = chatSig(t.uid);
                 input.disabled = false; input.focus();
                 stickEnd();
@@ -8022,11 +8095,13 @@
                     if (want !== b) { if (prev) prev.after(b); else feed.insertBefore(b, want); }
                     prev = b;
                 }
+                have.forEach(arr => arr.forEach(x => x.remove()));
                 if (added) feed.querySelectorAll(':scope > .vp-msgs-note.vp-msgs-first').forEach(n => n.remove());
                 feed.scrollTop = nearEnd ? feed.scrollHeight : keep;
                 if (added && !nearEnd && d.shown) downNew += list.slice(-added).filter(m => m.dir === 'in').length;
                 downSync();
                 paintCalls(t);
+                paintPin(t);
                 d.shown = list.length; d.sig = chatSig(t.uid);
                 msgReadNow(d, t, list);
             }
@@ -8095,7 +8170,6 @@
                 const n = feed.querySelectorAll(':scope > .vp-msgs-callrow').length;
                 paintCalls(t);
                 if (near && feed.querySelectorAll(':scope > .vp-msgs-callrow').length !== n) feed.scrollTop = feed.scrollHeight;
-                current.sig = chatSig(t.uid);
             };
             root.openDialog = (id, fromHistory) => {
                 msgFillDialogs();
@@ -8107,6 +8181,7 @@
                 clearPending();
                 closeImg(true);
                 closeMenu();
+                selEnd(); clearReply(); closeFwd(); pinEl.hidden = true;
                 if (fromHistory !== true && current && overlayAt('vpChat')) { chatBackPending = true; history.back(); }
                 clearTimeout(botTimer);
                 if (current && msgNet.me) msgSync().then(() => { msgFillDialogs(); msgBadge(); if (!current) renderList(); }).catch(() => { });
@@ -8281,7 +8356,7 @@
                 let sg = '';
                 if (msgNet.reacts) msgNet.reacts.forEach((v, k) => { if (k.startsWith(uid + '|')) sg += k + (v.me ? v.me.emoji : '') + '/' + (v.them ? v.them.emoji : '') + ';'; });
                 const r = msgNet.reads && msgNet.reads.get(uid);
-                return sg + '|' + (r ? (r.them0 || 0) + '/' + (r.them1 || 0) : 0) + '|' + (msgNet.sigs || []).filter(x => x.uid === uid).length + '|' + (msgIsBlocked(uid) ? 1 : 0) + (msgBlockedMe(uid) ? 1 : 0);
+                return sg + ((msgNet.pins && msgNet.pins.get(uid)) || []).join(',') + '|' + (r ? (r.them0 || 0) + '/' + (r.them1 || 0) : 0) + '|' + (msgNet.sigs || []).filter(x => x.uid === uid).length + '|' + (msgIsBlocked(uid) ? 1 : 0) + (msgBlockedMe(uid) ? 1 : 0);
             };
             function paintCalls(t) {
                 feed.querySelectorAll(':scope > .vp-msgs-callrow').forEach(x => x.remove());
@@ -8337,6 +8412,170 @@
                 msgReact(t.uid, m, next).then(() => { if (current === d) msgRefreshChat(d); })
                     .catch(err => { pend.delete(key); logErr('реакция', err); if (current === d) msgRefreshChat(d); note('Реакция не сохранилась — попробуй ещё раз'); });
             }
+            const plainText = t => String(t || '').replace(/^> [^\n]*\n?/, '');
+            const flashNote = text => {
+                chat.querySelectorAll(':scope > .vp-msgs-flash').forEach(x => x.remove());
+                const n = document.createElement('div');
+                n.className = 'vp-msgs-flash';
+                n.textContent = text;
+                chat.appendChild(n);
+                setTimeout(() => n.remove(), 2400);
+            };
+            const copyText = t => { if (t && navigator.clipboard) navigator.clipboard.writeText(t).catch(() => { }); flashNote('Скопировано'); };
+            let reply = null;
+            const replyEl = document.createElement('div');
+            replyEl.className = 'vp-msgs-reply';
+            replyEl.hidden = true;
+            replyEl.innerHTML = uiIcon('reply', 18) + '<span class="vp-msgs-reply-t"><b></b><span></span></span><button type="button" class="vp-msgs-ib" title="Отмена">' + uiIcon('close', 16) + '</button>';
+            $('.vp-msgs-bar').before(replyEl);
+            function clearReply() { reply = null; replyEl.hidden = true; }
+            function setReply(b) {
+                const m = b._m;
+                if (!m) return;
+                const body = plainText(m.text).replace(/\s+/g, ' ').trim();
+                reply = { name: m.dir === 'out' ? 'Ты' : current.name, text: body ? body.slice(0, 70) : 'Картинка' };
+                replyEl.querySelector('b').textContent = reply.name;
+                replyEl.querySelector('.vp-msgs-reply-t span').textContent = reply.text;
+                replyEl.hidden = false;
+                input.focus();
+            }
+            replyEl.querySelector('button').addEventListener('click', clearReply);
+            function takeReply(text) {
+                if (!reply) return text;
+                const q = '> ' + reply.name + ': ' + reply.text;
+                clearReply();
+                return text ? q + '\n' + text : q;
+            }
+            const pinEl = document.createElement('div');
+            pinEl.className = 'vp-msgs-pin';
+            pinEl.hidden = true;
+            pinEl.innerHTML = uiIcon('pin', 18) + '<span class="vp-msgs-pin-t"><b>Закреплённое сообщение</b><span></span></span><button type="button" class="vp-msgs-ib" title="Открепить">' + uiIcon('close', 16) + '</button>';
+            $('.vp-msgs-chead').after(pinEl);
+            let pinIdx = 0, pinCur = null, pinCount = 0;
+            function paintPin(t) {
+                const keys = (msgNet.pins && t && t.uid && msgNet.pins.get(t.uid)) || [], list = t && t.uid ? msgThread(t) : [];
+                const items = keys.map(k => list.find(m => reactKey(t.uid, m.dir, m.ts) === k)).filter(Boolean);
+                pinCount = items.length;
+                if (!items.length) { pinEl.hidden = true; pinCur = null; return; }
+                pinIdx = pinIdx % items.length;
+                pinCur = items[items.length - 1 - pinIdx];
+                pinEl.querySelector('b').textContent = items.length > 1 ? `Закреплённое сообщение ${items.length - pinIdx} из ${items.length}` : 'Закреплённое сообщение';
+                pinEl.querySelector('.vp-msgs-pin-t span').textContent = plainText(pinCur.text).replace(/\s+/g, ' ').trim().slice(0, 90) || 'Картинка';
+                pinEl.hidden = false;
+            }
+            const bubbleOf = m => feed.querySelector(`:scope > .vp-msgs-b[data-dir="${m.dir}"][data-ts="${m.ts}"]`);
+            pinEl.addEventListener('click', e => {
+                if (!pinCur || e.target.closest('button')) return;
+                const b = bubbleOf(pinCur);
+                if (b) { b.scrollIntoView({ block: 'center', behavior: 'smooth' }); b.classList.remove('vp-flash'); void b.offsetWidth; b.classList.add('vp-flash'); setTimeout(() => b.classList.remove('vp-flash'), 1500); }
+                if (pinCount > 1) { pinIdx++; paintPin(msgTarget(current)); }
+            });
+            pinEl.querySelector('button').addEventListener('click', () => { if (pinCur) togglePin(pinCur, false); });
+            async function togglePin(m, on) {
+                const t = current && msgTarget(current);
+                if (!t || !t.uid) return;
+                const d = current;
+                try { await msgSend(t.uid, '', false, null, cat(new Uint8Array([6]), be32(m.ts), new Uint8Array([m.dir === 'out' ? 1 : 0, on ? 1 : 0]))); }
+                catch (e) { logErr('закрепление', e); flashNote('Не получилось — попробуй ещё раз'); return; }
+                await msgSync().catch(() => { });
+                if (current === d) { msgRefreshChat(d); flashNote(on ? 'Сообщение закреплено' : 'Сообщение откреплено'); }
+            }
+            let sel = null;
+            const selEl = document.createElement('div');
+            selEl.className = 'vp-msgs-sel';
+            selEl.hidden = true;
+            selEl.innerHTML = '<button type="button" class="vp-msgs-ib" title="Отмена">' + uiIcon('close', 18) + '</button><b></b><span class="vp-msgs-sel-gap"></span>'
+                + '<button type="button" data-a="copy">' + uiIcon('copy', 16) + 'Копировать</button><button type="button" data-a="fwd">' + uiIcon('fwd', 16) + 'Переслать</button><button type="button" data-a="del" class="vp-danger">' + uiIcon('trash', 16) + 'Удалить</button>';
+            $('.vp-msgs-chead').appendChild(selEl);
+            function selEnd() { if (sel) sel.forEach(b => b.classList.remove('vp-sel')); sel = null; chat.classList.remove('vp-selecting'); selEl.hidden = true; }
+            function selToggle(b) {
+                if (!sel || !b._m) return;
+                if (sel.has(b)) { sel.delete(b); b.classList.remove('vp-sel'); } else { sel.add(b); b.classList.add('vp-sel'); }
+                if (!sel.size) selEnd(); else selEl.querySelector('b').textContent = sel.size + ' выбрано';
+            }
+            function selStart(b) { selEnd(); sel = new Set(); chat.classList.add('vp-selecting'); selEl.hidden = false; selToggle(b); }
+            const selList = () => sel ? [...feed.querySelectorAll(':scope > .vp-msgs-b')].filter(b => sel.has(b)) : [];
+            selEl.addEventListener('click', e => {
+                const btn = e.target.closest('button');
+                if (!btn) return;
+                const bs = selList(), a = btn.dataset.a;
+                if (!a) selEnd();
+                else if (a === 'copy') { copyText(bs.map(b => plainText(b._m.text)).filter(Boolean).join('\n')); selEnd(); }
+                else if (a === 'fwd') openFwd(bs.map(b => b._m));
+                else if (a === 'del') msgDelete(bs).then(selEnd);
+            });
+            feed.addEventListener('click', e => {
+                if (!sel) return;
+                const b = e.target.closest('.vp-msgs-b');
+                e.preventDefault(); e.stopPropagation();
+                if (b) selToggle(b);
+            }, true);
+            async function msgDelete(bs) {
+                const t = current && msgTarget(current);
+                bs = bs.filter(b => b._m);
+                if (!t || !t.uid || !bs.length) return;
+                const own = bs.filter(b => b._m.dir === 'out'), theirs = bs.filter(b => b._m.dir === 'in');
+                const ask = own.length && !theirs.length ? (own.length === 1 ? 'Удалить сообщение у обоих?' : `Удалить ${own.length} сообщ. у обоих?`)
+                    : !own.length ? (theirs.length === 1 ? 'Удалить сообщение у себя? У собеседника оно останется.' : `Удалить ${theirs.length} сообщ. у себя? У собеседника они останутся.`)
+                        : `Удалить ${bs.length} сообщ.? Свои пропадут у обоих, чужие только у тебя.`;
+                if (!confirm(ask)) return;
+                const d = current;
+                theirs.forEach(b => { msgHide(t.uid, b._m); b.remove(); });
+                for (const b of own) {
+                    b.classList.add('vp-gone');
+                    try { await msgSend(t.uid, '', false, null, cat(new Uint8Array([7]), be32(b._m.ts), new Uint8Array([1]))); b.remove(); }
+                    catch (e) { b.classList.remove('vp-gone'); logErr('удаление', e); flashNote('Не удалилось — попробуй ещё раз'); break; }
+                }
+                await msgSync().catch(() => { });
+                if (current === d) msgRefreshChat(d);
+            }
+            let fwdEl = null;
+            function closeFwd() { if (fwdEl) { fwdEl.remove(); fwdEl = null; } }
+            function openFwd(ms) {
+                closeFwd();
+                msgFillDialogs();
+                const targets = sortDialogs(MSG_DIALOGS.filter(x => !x.bot && !x.supUid && (x.login || x.support)));
+                fwdEl = document.createElement('div');
+                fwdEl.className = 'vp-msgs-fwd';
+                fwdEl.innerHTML = '<div class="vp-msgs-fwd-card"><div class="vp-msgs-fwd-h"><b>Переслать</b><button type="button" class="vp-msgs-ib" title="Закрыть">' + uiIcon('close', 18) + '</button></div><div class="vp-msgs-fwd-l"></div></div>';
+                const box = fwdEl.querySelector('.vp-msgs-fwd-l');
+                targets.forEach(x => {
+                    const row = document.createElement('button');
+                    row.type = 'button';
+                    row.className = 'vp-msgs-fwd-r';
+                    row.innerHTML = '<span class="vp-msgs-ava vp-sm">' + avaHtml(x.ava) + '</span><span></span>';
+                    row.lastChild.textContent = x.name;
+                    row.addEventListener('click', () => forwardTo(x, ms));
+                    box.appendChild(row);
+                });
+                fwdEl.addEventListener('click', e => { if (e.target === fwdEl || e.target.closest('.vp-msgs-fwd-h button')) closeFwd(); });
+                chat.appendChild(fwdEl);
+            }
+            async function forwardTo(x, ms) {
+                const t = msgTarget(x), me = current;
+                if (!t.uid) { flashNote('Этому человеку пока нельзя написать'); return; }
+                closeFwd(); selEnd();
+                try {
+                    for (const m of ms) {
+                        const who = m.dir === 'out' ? (myDisplayName || myUsername || 'меня') : (me && me.name) || '';
+                        const imgs = m.imgs || (m.img ? [m.img] : []), body = plainText(m.text);
+                        await msgSend(t.uid, '> Переслано от ' + who + (body ? '\n' + body : ''), t.sup, imgs.length ? imgs : null);
+                    }
+                    flashNote('Переслано: ' + x.name);
+                } catch (e) { logErr('пересылка', e); flashNote('Не отправилось — попробуй ещё раз'); }
+                await msgSync().catch(() => { });
+                msgFillDialogs();
+                if (current) { const c = msgTarget(current); if (c.uid === t.uid && c.sup === t.sup) msgRefreshChat(current); }
+            }
+            async function saveImage(url) {
+                try {
+                    const bl = await (await fetch(url)).blob(), a = document.createElement('a');
+                    a.href = URL.createObjectURL(bl);
+                    a.download = decodeURIComponent(url.split('?')[0].split('/').pop() || 'image');
+                    document.body.appendChild(a); a.click(); a.remove();
+                    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+                } catch (e) { window.open(url, '_blank', 'noopener'); }
+            }
             let menu = null, pressT = 0;
             function closeMenu() {
                 if (!menu) return;
@@ -8345,10 +8584,12 @@
             }
             const menuOutside = e => { if (menu && !menu.contains(e.target)) closeMenu(); };
             function openMenu(b, x, y) {
+                if (sel) { selToggle(b); return; }
                 closeMenu();
                 const m = b._m, real = m && current && !current.bot && msgNet.me && msgTarget(current).uid;
-                const text = m ? m.text : (b.querySelector('.vp-msgs-cap') || b.firstChild || {}).textContent || '';
+                const text = m ? plainText(m.text) : (b.querySelector('.vp-msgs-cap') || b.firstChild || {}).textContent || '';
                 const imgs = [...b.querySelectorAll('.vp-msgs-img')].map(i => i.src);
+                const under = document.elementFromPoint(x, y), hit = under && under.closest ? under.closest('.vp-msgs-img') : null;
                 menu = document.createElement('div');
                 menu.className = 'vp-msgs-menu';
                 if (real) {
@@ -8362,17 +8603,31 @@
                     });
                     menu.appendChild(row);
                 }
-                const item = (label, fn, ico) => {
+                const item = (label, fn, ico, cls) => {
                     const btn = document.createElement('button');
-                    btn.type = 'button'; btn.className = 'vp-msgs-menu-i';
-                    if (ico) btn.insertAdjacentHTML('afterbegin', uiIcon(ico, 16));
+                    btn.type = 'button'; btn.className = 'vp-msgs-menu-i' + (cls ? ' ' + cls : '');
+                    if (ico) btn.insertAdjacentHTML('afterbegin', uiIcon(ico, 18));
                     btn.appendChild(document.createTextNode(label));
                     btn.addEventListener('click', () => { closeMenu(); fn(); });
                     menu.appendChild(btn);
                 };
-                if (text) item('Копировать текст', () => { navigator.clipboard && navigator.clipboard.writeText(text).catch(() => { }); }, 'copy');
-                if (imgs.length) item(imgs.length > 1 ? 'Открыть альбом' : 'Открыть картинку', () => openImg(imgs, 0, text), 'image');
-                if (!menu.childNodes.length) { menu = null; return; }
+                const sep = () => { const s = document.createElement('div'); s.className = 'vp-msgs-menu-sep'; menu.appendChild(s); };
+                if (real) {
+                    const t = msgTarget(current), pinned = ((msgNet.pins && msgNet.pins.get(t.uid)) || []).includes(reactKey(t.uid, m.dir, m.ts));
+                    item('Ответить', () => setReply(b), 'reply');
+                    item(pinned ? 'Открепить' : 'Закрепить', () => togglePin(m, !pinned), 'pin');
+                    item('Переслать', () => openFwd([m]), 'fwd');
+                    item('Удалить', () => msgDelete([b]), 'trash', 'vp-danger');
+                    item('Выбрать', () => selStart(b), 'check');
+                    sep();
+                }
+                if (text) item('Копировать текст', () => copyText(text), 'copy');
+                if (imgs.length) {
+                    item('Сохранить как…', () => saveImage(hit ? hit.src : imgs[0]), 'save');
+                    item(imgs.length > 1 ? 'Открыть альбом' : 'Открыть картинку', () => openImg(imgs, 0, text), 'image');
+                }
+                if (menu.lastChild && menu.lastChild.classList.contains('vp-msgs-menu-sep')) menu.lastChild.remove();
+                if (!menu.querySelector('.vp-msgs-menu-i')) { menu = null; return; }
                 document.body.appendChild(menu);
                 const w = menu.offsetWidth, h = menu.offsetHeight;
                 menu.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px';
@@ -8384,6 +8639,7 @@
                 const b = bubbleAt(e.clientY);
                 if (!b) return;
                 e.preventDefault();
+                if (sel) { selToggle(b); return; }
                 openMenu(b, e.clientX, e.clientY);
             });
             feed.addEventListener('pointerdown', e => {
@@ -8500,7 +8756,7 @@
                 if (!files.length || !current) return;
                 const t = msgNet.me && !current.bot ? msgTarget(current) : null;
                 if (!t || !t.uid) { note('Картинки можно отправлять в переписке с людьми и поддержкой'); return; }
-                const caption = input.value.trim(), d = current, locals = files.map(f => URL.createObjectURL(f));
+                const caption = takeReply(input.value.trim()), d = current, locals = files.map(f => URL.createObjectURL(f));
                 input.value = ''; send.disabled = true; msgCount();
                 const b = bubble('out', caption, now() + ' · загрузка…', locals);
                 (async () => {
@@ -8534,8 +8790,8 @@
                 if (current.bot) { bubble('out', text, now() + ' ✓'); botReply(); }
                 else if (current.support && !(msgNet.me && msgTarget(current).uid)) { bubble('out', text, now() + ' ✓'); supportReply(); }
                 else if (msgNet.me && msgTarget(current).uid) {
-                    const b = bubble('out', text, now() + ' · отправка…'), d = current, t = msgTarget(d);
-                    msgSend(t.uid, text, t.sup).then(ts => msgSentOk(b, d, ts),
+                    const full = takeReply(text), b = bubble('out', full, now() + ' · отправка…'), d = current, t = msgTarget(d);
+                    msgSend(t.uid, full, t.sup).then(ts => msgSentOk(b, d, ts),
                         e => { setMeta(b.lastChild, now() + ' · не отправлено'); b.classList.add('vp-fail'); logErr('сообщения', e); });
                 }
                 else bubble('out', text, now() + ' · не отправлено').classList.add('vp-fail');
@@ -8564,7 +8820,7 @@
                 if (!row) Object.assign(under.style, { left: root.style.left, width: root.style.width });
             }
             let openPath = '';
-            function onKey(e) { if (e.key === 'Escape' && root.classList.contains('vp-open')) { e.stopPropagation(); lb ? closeImg() : menu ? closeMenu() : current ? closeChat() : close(); } }
+            function onKey(e) { if (e.key === 'Escape' && root.classList.contains('vp-open')) { e.stopPropagation(); lb ? closeImg() : menu ? closeMenu() : fwdEl ? closeFwd() : sel ? selEnd() : reply ? clearReply() : current ? closeChat() : close(); } }
             function close(fromHistory) {
                 if (!root.classList.contains('vp-open')) return;
                 clearTimeout(botTimer);
