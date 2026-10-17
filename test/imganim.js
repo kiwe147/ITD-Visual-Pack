@@ -125,9 +125,9 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   const bb = await A.p.locator('.vp-msgs-feed .vp-msgs-img').last().boundingBox();
   await A.p.mouse.click(bb.x + 30, bb.y + 30, { button: 'right' });
   const dl = A.p.waitForEvent('download', { timeout: 5000 }).catch(() => null);
-  await A.p.locator('.vp-msgs-menu .vp-msgs-menu-i', { hasText: 'Сохранить как' }).click();
+  await A.p.locator('.vp-msgs-menu .vp-msgs-menu-i', { hasText: 'Сохранить' }).click();
   const d = await dl;
-  check(!!d && /.webp$/.test(d.suggestedFilename()) && await A.p.evaluate(() => window.__opened) === 0, 'Сохранить как… скачивает файл, не открывает вкладку: ' + (d ? d.suggestedFilename() : 'нет скачивания'));
+  check(!!d && /.webp$/.test(d.suggestedFilename()) && await A.p.evaluate(() => window.__opened) === 0, 'Сохранить скачивает файл, не открывает вкладку: ' + (d ? d.suggestedFilename() : 'нет скачивания'));
   check(A.p.errors.length === 0, 'нет ошибок страницы ' + A.p.errors.join('|'));
   await b.close();
   console.log(fails.length ? '\nПРОВАЛЕНО: ' + fails.length : '\nвсё ок');
