@@ -93,25 +93,23 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   await A.ctx.close();
 
   A = await open();
-  A.p.on('console', m => { if (process.env.DBG) console.log('CONSOLE', m.text().slice(0, 200)); });
+  await build(A.p, true);
+  await A.p.waitForTimeout(500);
+  await drag(A.p, 2, 0);
+  await A.p.waitForTimeout(300);
+  const got2 = JSON.stringify(await A.p.evaluate(() => window.__got));
+  check(got2 === '["C","A","B"]', 'в другом направлении: третья на первое место: ' + got2);
+  await A.ctx.close();
+
+  A = await open();
   await build(A.p, false);
   await A.p.waitForTimeout(500);
+  await A.p.evaluate(() => { window.__changes = 0; document.querySelector('input[type=file]').addEventListener('change', () => { window.__changes++; }); });
   await drag(A.p, 0, 2);
-  await A.p.waitForFunction(() => [...document.querySelectorAll('#tbox > .tt')].filter(t => /^photo-/.test(t.dataset.n)).length === 3 && !document.querySelector('.vp-thumbs-busy'), null, { timeout: 15000 }).catch(() => { });
-  const order = await A.p.evaluate(() => [...document.querySelectorAll('#tbox > .tt')].map(t => t.dataset.n));
-  check(/^photo-1.(png|jpg),photo-2.(png|jpg),photo-3.(png|jpg)$/.test(order.join(',')), 'запасная ветка: картинки добавлены заново по порядку: ' + order.join(','));
-  const px = await A.p.evaluate(async () => {
-    const out = [];
-    for (const im of document.querySelectorAll('#tbox > .tt img')) {
-      await im.decode();
-      const c = document.createElement('canvas'); c.width = 2; c.height = 2;
-      const g = c.getContext('2d'); g.drawImage(im, 0, 0, 2, 2);
-      const d = g.getImageData(0, 0, 1, 1).data; out.push([d[0], d[1], d[2]].join(','));
-    }
-    return out;
-  });
-  const near = (a, b) => a.split(',').every((v, i) => Math.abs(v - b.split(',')[i]) < 14);
-  check(px.length === 3 && near(px[0], '39,174,96') && near(px[1], '41,128,185') && near(px[2], '192,57,43'), 'порядок картинок B, C, A по цвету: ' + px.join('|'));
+  await A.p.waitForTimeout(500);
+  const none = await A.p.evaluate(() => ({ names: [...document.querySelectorAll('#tbox > .tt')].map(t => t.dataset.n).join(','), changes: window.__changes, note: !!document.querySelector('.vp-note') }));
+  check(none.changes === 0 && none.names === 'A,B,C', 'без доступа к состоянию сайта картинки не загружаются заново: ' + JSON.stringify(none));
+  check(none.note, 'человеку показано сообщение, что порядок не поменялся');
   check(A.p.errors.length === 0, 'нет ошибок страницы ' + A.p.errors.join('|'));
   await A.ctx.close();
   await b.close();
