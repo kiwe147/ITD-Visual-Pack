@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.8
+// @version      3.5.8.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1381,7 +1381,7 @@
                 'Звуки интерфейса': svgIcon('<path d="M4 9.5h3l4-3.5v12l-4-3.5H4z"/><path d="M15 9a4 4 0 0 1 0 6M17.5 6.5a7.5 7.5 0 0 1 0 11"/>'),
                 'Боковая панель': svgIcon('<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M15 3v18"/><path d="M17.5 7.5h1M17.5 11h1M17.5 14.5h1"/>'),
                 'Версия для ПК на планшете': svgIcon('<rect x="2.5" y="5" width="19" height="13" rx="2"/><path d="M9 21h6"/><path d="M6 9h6M6 12h4"/>'),
-                'Листание вкладок (WIP)': svgIcon('<rect x="5" y="3" width="14" height="7" rx="2"/><rect x="5" y="14" width="14" height="7" rx="2" stroke-dasharray="2 2.4"/><path d="M12 10.8v2.4M10.3 11.7 12 13.2l1.7-1.5"/>'),
+                'Листание вкладок': svgIcon('<rect x="5" y="3" width="14" height="7" rx="2"/><rect x="5" y="14" width="14" height="7" rx="2" stroke-dasharray="2 2.4"/><path d="M12 10.8v2.4M10.3 11.7 12 13.2l1.7-1.5"/>'),
                 'Сцена ленты': svgIcon('<rect x="5" y="3" width="14" height="5" rx="1.5" stroke-dasharray="2 2"/><rect x="4" y="10" width="16" height="5" rx="1.5"/><rect x="3" y="17" width="18" height="5" rx="1.5"/>'),
                 'Свечение видео': svgIcon('<rect x="6" y="7" width="12" height="10" rx="2"/><path d="m11 10 3 2-3 2z"/><path d="M3 5.5 4.5 7M21 5.5 19.5 7M3 18.5 4.5 17M21 18.5 19.5 17M12 2.5v2M12 19.5v2"/>'),
                 'Заставка при входе': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><path d="m10 9 5 3-5 3z"/>'),
@@ -3172,7 +3172,7 @@
             { label: 'Стекло', get: () => glassEnabled, set: v => { glassEnabled = v; applyGlass(); }, key: 'glassEnabled' },
             { label: 'Звуки интерфейса', get: () => uiSoundEnabled, set: v => { uiSoundEnabled = v; if (v) uiSound('toggle'); }, key: 'uiSoundEnabled' },
             { label: 'Стили других', get: () => showLooks, set: v => { showLooks = v; document.documentElement.classList.toggle('vp-looks', v); if (!v) setBgGuest(null); }, key: 'showLooks' },
-            { label: 'Листание вкладок (WIP)', get: () => GM_getValue('tabSlide', false), set: v => { if (!v) tabSlide.end(); }, key: 'tabSlide' },
+            { label: 'Листание вкладок', get: () => GM_getValue('tabSlide', true), set: v => { if (!v) tabSlide.end(); }, key: 'tabSlide' },
             { label: 'Сцена ленты', get: () => sceneEnabled, set: v => { sceneEnabled = v; sceneAutoOff = false; document.documentElement.classList.toggle('vp-scene', v); sceneKick(); }, key: 'sceneEnabled' },
             { label: 'Свечение видео', get: () => ambientEnabled, set: v => { ambientEnabled = v; applyAmbient(); }, key: 'ambientEnabled' },
             { label: 'Боковая панель', get: () => railEnabled, set: v => { railEnabled = v; placeRail(); }, key: 'railEnabled' },
@@ -3184,7 +3184,7 @@
         const SETTINGS_TABS = [
             { id: 'nick', name: 'Ник', items: ['Неоновая подсветка', 'Подсветка ника', 'Подсветка аватарок', 'Подсветка постов'] },
             { id: 'bg', name: 'Фон', items: ['Фон'] },
-            { id: 'look', name: 'Вид', items: ['Стекло', 'Листание вкладок (WIP)', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Карточки панели', 'Версия для ПК на планшете'] },
+            { id: 'look', name: 'Вид', items: ['Стекло', 'Листание вкладок', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Карточки панели', 'Версия для ПК на планшете'] },
             { id: 'likes', name: 'Лайки', items: ['Автолайки'] },
             { id: 'pals', name: 'Мику', items: ['Мику и Тето', 'Мику справа', 'Тето слева', 'Размер персонажей'] },
             { id: 'misc', name: 'Ещё', items: ['Анти цензура', 'Звуки интерфейса', 'Громкость', 'Заставка при входе'] },
@@ -4309,17 +4309,18 @@
         }
 
         const CHANGELOG = [
-            ['3.5.8', '17 октября 2026', [
+            ['3.5.8 – 3.5.8.3', '17 октября 2026', [
+                'Правая колонка на средних экранах встаёт вплотную к ленте, как левое меню, а не уезжает к краю с большим пустым промежутком',
+                'Магазин: чёрная вспышка при загрузке и при листании в магазин убрана, страница магазина проявляется уже прозрачной',
                 'Галерея: на телефоне стрелок и зон нет, листание только пальцем. На ПК зоны по краям заметнее: при наведении на карточку края подсвечиваются, а у зоны под курсором появляется стрелка',
-                'Листание вкладок (WIP): боковые панели плавно подстраиваются под ширину страницы при переходе с широкой на узкую и обратно, в том числе когда страница прогрузилась позже']],
+                'Листание вкладок: боковые панели плавно подстраиваются под ширину страницы при переходе с широкой на узкую и обратно, в том числе когда страница прогрузилась позже']],
             ['3.5.7', '17 октября 2026', [
                 'Магазин: чёрный фон страницы убран, виден твой фон и сцена',
-                'Листание вкладок (WIP): при переходе из «Галереи» и «Сообщений» боковые панели больше не ждут загрузки страницы, а сразу плавно сдвигаются']],
+                'Листание вкладок: при переходе из «Галереи» и «Сообщений» боковые панели больше не ждут загрузки страницы, а сразу плавно сдвигаются']],
             ['3.5.6 – 3.5.6.1', '17 октября 2026', [
-                'Листание вкладок (WIP) доработано по кадрам: при переходе в «Сообщения» и «Галерею» уходящая страница больше не пропадает чёрным пятном, у приходящей страницы ссылки и карточки выглядят так же, как после остановки, левое меню и правая колонка едут в нужную сторону, магазин листается вместе с содержимым, а переход из окон без смены адреса больше не обрывается',
+                'Листание вкладок доработано по кадрам: при переходе в «Сообщения» и «Галерею» уходящая страница больше не пропадает чёрным пятном, у приходящей страницы ссылки и карточки выглядят так же, как после остановки, левое меню и правая колонка едут в нужную сторону, магазин листается вместе с содержимым, а переход из окон без смены адреса больше не обрывается',
                 'На телефоне в галерее и в просмотре картинок в сообщениях вместо стрелок теперь зоны по краям: нажми у левого края, чтобы вернуться, или у правого, чтобы идти дальше. Листание пальцем работает как раньше']],
             ['3.5.5 – 3.5.5.1', '16 октября 2026', [
-                'Листание вкладок пока в разработке (WIP): возможны шероховатости и подлагивания. По умолчанию выключено: включить можно в настройках на вкладке «Вид», пункт помечен WIP',
                 'Листание вкладок теперь и для «Сообщений» и «Галереи»: окно выезжает так же плавно, как обычные страницы, а левое меню и правая колонка не прыгают, а аккуратно съезжают на новое место',
                 'Магазин: левое меню и правая колонка теперь встают рядом с содержимым магазина, а не прижаты к краям экрана']],
             ['3.5.4 – 3.5.4.1', '16 октября 2026', [
@@ -9045,7 +9046,7 @@
             html.vp-sw-pin .vp-rail { left: var(--vp-pin-rail) !important; width: var(--vp-pin-railw) !important; }
             .vp-sw-stage { position: fixed; z-index: 3; overflow: hidden; pointer-events: none; contain: layout paint; }
             .vp-sw-ghost { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; will-change: transform; }`);
-            const enabled = () => GM_getValue('tabSlide', false) && !matchMedia('(prefers-reduced-motion: reduce)').matches
+            const enabled = () => GM_getValue('tabSlide', true) && !matchMedia('(prefers-reduced-motion: reduce)').matches
                 && matchMedia('(hover: hover) and (pointer: fine)').matches && innerWidth > PHONE_MAX;
             const hrefOf = a => a.getAttribute('href') || '';
             const isRoute = a => /^\/(?!\/)/.test(hrefOf(a));
@@ -9124,7 +9125,7 @@
                 fr.forEach((f, i) => {
                     const r = f.getBoundingClientRect(), s = document.createElement('div');
                     s.className = f.className;
-                    s.style.cssText = `display:block;overflow:hidden;width:${r.width}px;height:${r.height}px`;
+                    s.style.cssText = `display:block;overflow:hidden;background:transparent !important;width:${r.width}px;height:${r.height}px`;
                     try {
                         const d = f.contentDocument;
                         if (d && d.body && d.body.innerText.trim().length > 20) {
@@ -10134,7 +10135,9 @@
         .vp-gal:not(.vp-card) .vp-gal-top { margin: 9px 12px 0 6px; }
         .vp-gal:not(.vp-card) .vp-gal-card { margin-top: 9px; border-radius: 36px 36px 0 0; }
         html.vp-gal-open .vp-gal-hidden, html.vp-msgs-open .vp-gal-hidden { visibility: hidden !important; }
-        iframe.vp-page-frame { background: transparent !important; color-scheme: normal; }
+        html.vp-rail-adj aside.vp-sidebar-right { visibility: hidden !important; }
+        iframe.vp-page-frame, iframe[src*="/public/shop"] { background: transparent !important; color-scheme: normal; transition: opacity .2s; }
+        iframe.vp-page-frame:not(.vp-frame-ok), iframe[src*="/public/shop"]:not(.vp-frame-ok) { opacity: 0; }
         html.vp-gal-open iframe.vp-page-frame, html.vp-msgs-open iframe.vp-page-frame { visibility: hidden !important; }
         .vp-gal-body { padding: 12px 12px var(--vp-gal-pb, 24px) !important; }
         html.vp-gal-open .vp-gal-navwrap { z-index: 40 !important; }
@@ -10880,6 +10883,7 @@
                         st.textContent = ':root, html, body, #root, #root > div { --bg-primary: transparent !important; background: transparent !important; }';
                         d.head.appendChild(st);
                         f._vpClear = true;
+                        if (d.URL !== 'about:blank') f.classList.add('vp-frame-ok');
                     } catch (e) { }
                     try {
                         const d = f.contentDocument;
@@ -10891,7 +10895,21 @@
                         }
                     } catch (e) { }
                 };
-                if (!f._vpHooked) { f._vpHooked = true; f.addEventListener('load', () => { f._vpClear = false; clear(); }); }
+                if (!f._vpHooked) {
+                    f._vpHooked = true;
+                    f.addEventListener('load', () => { f._vpClear = false; clear(); f.classList.add('vp-frame-ok'); });
+                    const t0 = performance.now();
+                    const early = () => {
+                        try {
+                            const d = f.contentDocument;
+                            if (d && d.head && d.URL !== 'about:blank' && !d.getElementById('vp-frame-clear')) clear();
+                        } catch (e) { }
+                        if (!f.isConnected) return;
+                        if (performance.now() - t0 > 3000) f.classList.add('vp-frame-ok');
+                        else if (!f.classList.contains('vp-frame-ok')) requestAnimationFrame(early);
+                    };
+                    early();
+                }
                 clear();
             });
         }
@@ -11864,7 +11882,7 @@
             const side = siteEl('sidebarRight');
             const right = side ? side.getBoundingClientRect().left : innerWidth;
             const gap = right - edge;
-            let box = null;
+            let box = null, adj = false;
             const on = railEnabled && !!myUsername && !!rail.querySelector(':scope > .vp-rail-card:not([hidden])');
             const sideEl = siteEl('sidebar');
             if (on && galOpen && sideEl && innerWidth > PHONE_MAX) {
@@ -11873,14 +11891,18 @@
             } else if (on && edge > 0 && gap >= 240) {
                 const width = Math.min(300, gap - 48);
                 box = { left: Math.round(edge + 24), width, maxH: innerHeight - 48 };
+            } else if (on && edge > 0 && innerWidth - edge - 48 >= 240 && innerWidth > PHONE_MAX) {
+                box = { left: Math.round(edge + 24), width: Math.min(300, innerWidth - edge - 48), maxH: innerHeight - 48 };
+                adj = true;
             } else if (on && side) {
                 const sr = side.getBoundingClientRect(), links = side.lastElementChild;
                 const maxH = (links ? links.getBoundingClientRect().top : sr.bottom) - 24 - 24;
                 if (sr.width >= 180 && maxH >= 220) box = { left: Math.round(sr.left), width: Math.round(sr.width), maxH };
             }
             rail.style.top = RAIL_TOP + 'px';
-            if (box && edge > 0 && gap >= 240 && !galOpen) box.maxH = innerHeight - RAIL_TOP - 24;
+            if (box && edge > 0 && (gap >= 240 || adj) && !galOpen) box.maxH = innerHeight - RAIL_TOP - 24;
             rail.classList.toggle('vp-on', !!box);
+            document.documentElement.classList.toggle('vp-rail-adj', adj && !!box);
             if (!box) return;
             rail.style.width = box.width + 'px';
             rail.style.left = box.left + 'px';

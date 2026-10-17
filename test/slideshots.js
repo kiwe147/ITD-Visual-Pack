@@ -135,6 +135,8 @@ const gposts = Array.from({ length: 24 }, (_, i) => ({ id: 'g' + i, author: { us
       window.__pa.forEach(a => a.pause());
       return window.__pa.length;
     });
+    const blackFrames = await p.evaluate(() => [...document.querySelectorAll('.vp-sw-stage .vp-page-frame')].map(e => getComputedStyle(e).backgroundColor).filter(c => c !== 'rgba(0, 0, 0, 0)'));
+    check(!blackFrames.length, `${name}: в копиях рамки магазина нет чёрной заливки ${JSON.stringify(blackFrames)}`);
     const frames = [], pos = [];
     const where = () => p.evaluate(() => { const s = document.querySelector('aside.vp-sidebar'), r = document.querySelector('.vp-rail.vp-on'); return [Math.round(s.getBoundingClientRect().left), r ? Math.round(r.getBoundingClientRect().left) : null]; });
     const pre = await (async () => { const s = await where(); return s; })();

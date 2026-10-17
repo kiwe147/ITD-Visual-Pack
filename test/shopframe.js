@@ -55,6 +55,8 @@ const near = (a, b, d) => Math.abs(a - b) <= d;
     const a = document.querySelector('aside.vp-sidebar').getBoundingClientRect();
     return { frame: f.classList.contains('vp-page-frame'), colL: r.left + col.left, colR: r.left + col.right, sideR: a.right, moved: document.documentElement.classList.contains('vp-side-moved') };
   });
+  const fo = await p.evaluate(() => { const f = document.getElementById('fr'); return { ok: f.classList.contains('vp-frame-ok'), op: getComputedStyle(f).opacity, bg: getComputedStyle(f.contentDocument.body).backgroundColor }; });
+  check(fo.ok && fo.op === '1' && /rgba[(]0, 0, 0, 0[)]|transparent/.test(fo.bg), 'рамка магазина проявилась прозрачной: ' + JSON.stringify(fo));
   const g = await geo();
   check(g.frame, 'рамка помечена как страница');
   check(g.moved && near(g.sideR, g.colL - 24, 3), 'левое меню встало у левого края колонки внутри рамки (колонка с ' + Math.round(g.colL) + ', меню до ' + Math.round(g.sideR) + ')');
