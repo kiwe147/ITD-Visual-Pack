@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.8
+// @version      3.5.8.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4309,7 +4309,8 @@
         }
 
         const CHANGELOG = [
-            ['3.5.8', '17 октября 2026', [
+            ['3.5.8 – 3.5.8.1', '17 октября 2026', [
+                'Магазин: чёрная вспышка при загрузке убрана, страница магазина проявляется уже прозрачной',
                 'Галерея: на телефоне стрелок и зон нет, листание только пальцем. На ПК зоны по краям заметнее: при наведении на карточку края подсвечиваются, а у зоны под курсором появляется стрелка',
                 'Листание вкладок (WIP): боковые панели плавно подстраиваются под ширину страницы при переходе с широкой на узкую и обратно, в том числе когда страница прогрузилась позже']],
             ['3.5.7', '17 октября 2026', [
@@ -10134,7 +10135,8 @@
         .vp-gal:not(.vp-card) .vp-gal-top { margin: 9px 12px 0 6px; }
         .vp-gal:not(.vp-card) .vp-gal-card { margin-top: 9px; border-radius: 36px 36px 0 0; }
         html.vp-gal-open .vp-gal-hidden, html.vp-msgs-open .vp-gal-hidden { visibility: hidden !important; }
-        iframe.vp-page-frame { background: transparent !important; color-scheme: normal; }
+        iframe.vp-page-frame { background: transparent !important; color-scheme: normal; transition: opacity .2s; }
+        iframe.vp-page-frame:not(.vp-frame-ok) { opacity: 0; }
         html.vp-gal-open iframe.vp-page-frame, html.vp-msgs-open iframe.vp-page-frame { visibility: hidden !important; }
         .vp-gal-body { padding: 12px 12px var(--vp-gal-pb, 24px) !important; }
         html.vp-gal-open .vp-gal-navwrap { z-index: 40 !important; }
@@ -10880,6 +10882,7 @@
                         st.textContent = ':root, html, body, #root, #root > div { --bg-primary: transparent !important; background: transparent !important; }';
                         d.head.appendChild(st);
                         f._vpClear = true;
+                        if (d.URL !== 'about:blank') f.classList.add('vp-frame-ok');
                     } catch (e) { }
                     try {
                         const d = f.contentDocument;
@@ -10891,7 +10894,21 @@
                         }
                     } catch (e) { }
                 };
-                if (!f._vpHooked) { f._vpHooked = true; f.addEventListener('load', () => { f._vpClear = false; clear(); }); }
+                if (!f._vpHooked) {
+                    f._vpHooked = true;
+                    f.addEventListener('load', () => { f._vpClear = false; clear(); f.classList.add('vp-frame-ok'); });
+                    const t0 = performance.now();
+                    const early = () => {
+                        try {
+                            const d = f.contentDocument;
+                            if (d && d.head && d.URL !== 'about:blank' && !d.getElementById('vp-frame-clear')) clear();
+                        } catch (e) { }
+                        if (!f.isConnected) return;
+                        if (performance.now() - t0 > 3000) f.classList.add('vp-frame-ok');
+                        else if (!f.classList.contains('vp-frame-ok')) requestAnimationFrame(early);
+                    };
+                    early();
+                }
                 clear();
             });
         }
