@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.6.1.5
+// @version      3.6.1.7
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4315,10 +4315,12 @@
         }
 
         const CHANGELOG = [
-            ['3.6.1 – 3.6.1.5', '18 октября 2026', [
+            ['3.6.1 – 3.6.1.7', '18 октября 2026', [
                 'Выбор сообщений: режим включается и удержанием левой кнопки мыши на сообщении; веди с зажатой кнопкой — выбираются подряд, в том числе от уже выбранного; щелчок по выбранному снимает выбор',
                 'Сообщения: правая кнопка, удержание и выбор работают и на пустом месте рядом с сообщением, не только на самом пузыре',
                 'Картинки в сообщениях открываются плавным увеличением из того места, где лежат, и так же уезжают обратно',
+                'Кнопка «Обновить» на странице поста обновляет заодно и список комментариев',
+                'Создание поста: перестановка картинок больше не загружает их заново — порядок меняется мгновенно, без лишних запросов к сайту',
                 'Сообщения: у картинки кнопка «Сохранить» сразу скачивает файл, а не открывает его в новой вкладке',
                 'Режим выбора: правая кнопка открывает меню «Удалить выбранное / Отменить выбор / Копировать выбранное как текст»; если вести мышь обратно, лишнее выделение снимается'
             ]],
@@ -7055,36 +7057,41 @@
             }
             return null;
         }
-        async function thumbsRefill(box, order) {
-            const items = [...box.querySelectorAll(':scope > .vp-thumb')];
-            const input = (() => { for (let e = box; e; e = e.parentElement) { const i = e.querySelector('input[type="file"]'); if (i) return i; } return null; })();
-            if (!input) return;
-            const grab = async img => {
-                try { return await (await fetch(img.src)).blob(); } catch (e) { }
-                if (!img.naturalWidth) throw new Error('картинка не загрузилась');
-                const c = document.createElement('canvas');
-                c.width = img.naturalWidth; c.height = img.naturalHeight;
-                c.getContext('2d').drawImage(img, 0, 0);
-                return new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.92));
-            };
-            const files = await Promise.all(order.map(async (i, n) => {
-                const blob = await grab(items[i].querySelector('img'));
-                return new File([blob], 'photo-' + (n + 1) + '.' + ((blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')), { type: blob.type });
-            }));
-            box.classList.add('vp-thumbs-busy');
-            try {
-                const count = () => box.querySelectorAll(':scope > .vp-thumb').length;
-                const until = async (ok, ms) => { const t0 = Date.now(); while (!ok() && Date.now() - t0 < ms) await new Promise(r => setTimeout(r, 80)); return ok(); };
-                items.forEach(t => { const b = t.querySelector(':scope > button'); if (b) b.click(); });
-                await until(() => count() === 0, 4000);
-                for (let n = 0; n < files.length; n++) {
-                    const dt = new DataTransfer();
-                    dt.items.add(files[n]);
-                    input.files = dt.files;
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
-                    if (!(await until(() => count() > n, 40000))) break;
-                }
-            } finally { box.classList.remove('vp-thumbs-busy'); }
+        function thumbBridge() {
+            if (document.documentElement.dataset.vpThumbBridge) return;
+            document.documentElement.dataset.vpThumbBridge = '1';
+            const s = document.createElement('script');
+            s.textContent = '(' + function () {
+                addEventListener('vp-thumbs', function () {
+                    var box = document.querySelector('[data-vp-box="1"]');
+                    if (!box) return;
+                    var order = (box.getAttribute('data-vp-order') || '').split(',').map(Number), res = 'nofiber';
+                    var key = Object.keys(box).filter(function (k) { return k.indexOf('__reactFiber$') === 0; })[0];
+                    if (key) {
+                        for (var f = box[key]; f && res !== 'ok'; f = f.return) {
+                            for (var h = f.memoizedState; h && typeof h === 'object'; h = h.next) {
+                                var v = h.memoizedState;
+                                if (Array.isArray(v) && v.length === order.length && v[0] && typeof v[0] === 'object' && 'mediaId' in v[0] && h.queue && typeof h.queue.dispatch === 'function') {
+                                    h.queue.dispatch(order.map(function (i) { return v[i]; }));
+                                    res = 'ok';
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    box.setAttribute('data-vp-res', res);
+                });
+            } + ')();';
+            document.documentElement.appendChild(s);
+            s.remove();
+        }
+        function vpNote(text) {
+            document.querySelectorAll('.vp-note').forEach(n => n.remove());
+            const n = document.createElement('div');
+            n.className = 'vp-note';
+            n.textContent = text;
+            document.body.appendChild(n);
+            setTimeout(() => n.remove(), 3400);
         }
         function thumbsReorder(box, from, to) {
             const items = [...box.querySelectorAll(':scope > .vp-thumb')], a = items.indexOf(from), b = items.indexOf(to);
@@ -7098,7 +7105,15 @@
                 hook.queue.dispatch(next);
                 return;
             }
-            thumbsRefill(box, order).catch(e => logErr('порядок картинок', e));
+            thumbBridge();
+            document.querySelectorAll('[data-vp-box]').forEach(x => x.removeAttribute('data-vp-box'));
+            box.setAttribute('data-vp-box', '1');
+            box.setAttribute('data-vp-order', order.join(','));
+            box.removeAttribute('data-vp-res');
+            dispatchEvent(new Event('vp-thumbs'));
+            const res = box.getAttribute('data-vp-res');
+            box.removeAttribute('data-vp-box'); box.removeAttribute('data-vp-order'); box.removeAttribute('data-vp-res');
+            if (res !== 'ok') vpNote('Не получилось поменять порядок картинок. Подожди, пока всё загрузится, и попробуй ещё раз');
         }
         const thumbDrag = { cur: null, mute: 0 };
         function thumbAt(d, x, y) {
@@ -7154,7 +7169,8 @@
         .vp-thumbs > .vp-thumb img { -webkit-user-drag: none; user-select: none; }
         .vp-thumbs > .vp-thumb-lift { position: relative; z-index: 6; cursor: grabbing; transition: none; box-shadow: 0 14px 34px rgba(0, 0, 0, .5); }
         .vp-thumbs > .vp-thumb-over { outline: 2px solid var(--vp-accent, #f91880); outline-offset: 2px; }
-        .vp-thumbs.vp-thumbs-busy { opacity: .5; pointer-events: none; transition: opacity .15s ease; }
+        .vp-note { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 2147483000; max-width: min(460px, calc(100vw - 32px)); padding: 10px 18px; border-radius: 14px; background: rgba(20, 20, 20, .95); color: #fff; font-size: 14px; line-height: 1.35; text-align: center; box-shadow: 0 10px 30px rgba(0, 0, 0, .5); animation: vpNoteIn .22s ease-out both; }
+        @keyframes vpNoteIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
         `);
         const VP_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
         const vpSvg = (body, w = 20) => `<svg viewBox="0 0 24 24" width="${w}" height="${w}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
@@ -11850,6 +11866,14 @@
                 put(foots.own, st);
                 const ost = orig && pick(orig, 1);
                 if (ost) put(foots.repost, ost);
+                const sort = card.matches('article') ? null : document.querySelector('[data-comments-section] select');
+                if (sort) {
+                    const setSort = v => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sort, v); sort.dispatchEvent(new Event('change', { bubbles: true })); };
+                    const cur = sort.value;
+                    setSort(cur === 'new' ? 'old' : 'new');
+                    setTimeout(() => setSort(cur), 150);
+                    changed++;
+                }
                 btn.title = changed ? 'Обновлено' : 'Ничего нового';
             } catch (e) {
                 logErr('обновить пост', e);
