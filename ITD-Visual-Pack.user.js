@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.8.1
+// @version      3.5.8.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4309,8 +4309,8 @@
         }
 
         const CHANGELOG = [
-            ['3.5.8 – 3.5.8.1', '17 октября 2026', [
-                'Магазин: чёрная вспышка при загрузке убрана, страница магазина проявляется уже прозрачной',
+            ['3.5.8 – 3.5.8.2', '17 октября 2026', [
+                'Магазин: чёрная вспышка при загрузке и при листании в магазин убрана, страница магазина проявляется уже прозрачной',
                 'Галерея: на телефоне стрелок и зон нет, листание только пальцем. На ПК зоны по краям заметнее: при наведении на карточку края подсвечиваются, а у зоны под курсором появляется стрелка',
                 'Листание вкладок (WIP): боковые панели плавно подстраиваются под ширину страницы при переходе с широкой на узкую и обратно, в том числе когда страница прогрузилась позже']],
             ['3.5.7', '17 октября 2026', [
@@ -9125,7 +9125,7 @@
                 fr.forEach((f, i) => {
                     const r = f.getBoundingClientRect(), s = document.createElement('div');
                     s.className = f.className;
-                    s.style.cssText = `display:block;overflow:hidden;width:${r.width}px;height:${r.height}px`;
+                    s.style.cssText = `display:block;overflow:hidden;background:transparent !important;width:${r.width}px;height:${r.height}px`;
                     try {
                         const d = f.contentDocument;
                         if (d && d.body && d.body.innerText.trim().length > 20) {
@@ -10135,8 +10135,8 @@
         .vp-gal:not(.vp-card) .vp-gal-top { margin: 9px 12px 0 6px; }
         .vp-gal:not(.vp-card) .vp-gal-card { margin-top: 9px; border-radius: 36px 36px 0 0; }
         html.vp-gal-open .vp-gal-hidden, html.vp-msgs-open .vp-gal-hidden { visibility: hidden !important; }
-        iframe.vp-page-frame { background: transparent !important; color-scheme: normal; transition: opacity .2s; }
-        iframe.vp-page-frame:not(.vp-frame-ok) { opacity: 0; }
+        iframe.vp-page-frame, iframe[src*="/public/shop"] { background: transparent !important; color-scheme: normal; transition: opacity .2s; }
+        iframe.vp-page-frame:not(.vp-frame-ok), iframe[src*="/public/shop"]:not(.vp-frame-ok) { opacity: 0; }
         html.vp-gal-open iframe.vp-page-frame, html.vp-msgs-open iframe.vp-page-frame { visibility: hidden !important; }
         .vp-gal-body { padding: 12px 12px var(--vp-gal-pb, 24px) !important; }
         html.vp-gal-open .vp-gal-navwrap { z-index: 40 !important; }
