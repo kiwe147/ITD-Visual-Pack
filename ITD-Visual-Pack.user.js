@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.8.3
+// @version      3.5.9
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4309,6 +4309,8 @@
         }
 
         const CHANGELOG = [
+            ['3.5.9', '18 октября 2026', [
+                'Узкие телефоны: вкладки «Для вас / Кланы / Подписки» в шапке ленты стали иконками и больше не слипаются']],
             ['3.5.8 – 3.5.8.3', '17 октября 2026', [
                 'Правая колонка на средних экранах встаёт вплотную к ленте, как левое меню, а не уезжает к краю с большим пустым промежутком',
                 'Магазин: чёрная вспышка при загрузке и при листании в магазин убрана, страница магазина проявляется уже прозрачной',
@@ -8952,6 +8954,13 @@
         .vp-logo-col > a { height: 36px; }
         .vp-logo-col .vp-version-row { position: relative; }
         .vp-logo-col .itd-update-sidebar-btn { position: absolute; left: calc(100% + 6px); top: 50%; translate: 0 -50%; }
+        .vp-tab-ico { display: none; }
+        @media (max-width: 430px) {
+            .vp-feed-bar .vp-tabs { min-width: 0; }
+            .vp-feed-bar .vp-tabs > button { font-size: 0 !important; display: inline-flex; align-items: center; justify-content: center; }
+            .vp-feed-bar .vp-tabs > button .vp-tab-ico { display: inline-flex; }
+            .vp-feed-bar .vp-tabs > button .vp-tab-ico svg { width: 22px; height: 22px; }
+        }
         .vp-logo-top > :not(.vp-logo-col) { height: 36px; display: inline-flex; align-items: center; }
 
         .vp-news-back { position: fixed; inset: 0; z-index: 10050; background: rgba(0, 0, 0, .5); display: flex;
@@ -10914,6 +10923,21 @@
             });
         }
         onDom(framePages);
+
+        const TAB_ICONS = [
+            [/для вас/i, '<path d="M12 3l2.4 5.6L20 11l-5.6 2.4L12 19l-2.4-5.6L4 11l5.6-2.4z"/>'],
+            [/клан/i, '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.5 0 4.5 2 4.5 4.5"/>'],
+            [/подпис/i, '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>']
+        ];
+        onDom(function feedTabIcons() {
+            document.querySelectorAll('.vp-feed-bar .vp-tabs > button').forEach(b => {
+                if (b.querySelector('.vp-tab-ico')) return;
+                const t = b.textContent.trim(), hit = TAB_ICONS.find(([re]) => re.test(t));
+                if (!hit) return;
+                b.title = t;
+                b.insertAdjacentHTML('afterbegin', '<span class="vp-tab-ico">' + svgIcon(hit[1], 22) + '</span>');
+            });
+        });
 
         function postMediaWait() {
             document.querySelectorAll('img[data-post-media-image]:not([data-vp-wait])').forEach(img => {
