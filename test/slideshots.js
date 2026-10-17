@@ -135,12 +135,16 @@ const gposts = Array.from({ length: 24 }, (_, i) => ({ id: 'g' + i, author: { us
       window.__pa.forEach(a => a.pause());
       return window.__pa.length;
     });
-    const frames = [];
+    const frames = [], pos = [];
+    const where = () => p.evaluate(() => { const s = document.querySelector('aside.vp-sidebar'), r = document.querySelector('.vp-rail.vp-on'); return [Math.round(s.getBoundingClientRect().left), r ? Math.round(r.getBoundingClientRect().left) : null]; });
+    const pre = await (async () => { const s = await where(); return s; })();
     for (const f of FR) {
       await p.evaluate(([t]) => window.__pa.forEach(a => { a.currentTime = t; }), [Math.min(f * MS, MS - 4)]);
       await p.waitForTimeout(60);
       frames.push(await shot());
+      pos.push(await where());
     }
+    console.log(`—    ${name}: панели (меню/колонка) по кадрам ${JSON.stringify(pos)}`);
     await p.evaluate(() => window.__pa.forEach(a => { a.currentTime = 560; a.play(); }));
     await p.waitForFunction(() => !document.querySelector('.vp-sw-stage'), null, { timeout: 5000 });
     await p.waitForTimeout(1200);
