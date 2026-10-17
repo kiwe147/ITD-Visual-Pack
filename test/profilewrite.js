@@ -51,6 +51,8 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     await A.p.evaluate(() => document.querySelector('.vp-write-btn').click());
     await A.p.waitForTimeout(900);
     check(await A.p.evaluate(() => document.querySelector('.vp-msgs').classList.contains('vp-open') && !document.querySelector('.vp-msgs-chat').hidden), 'нажатие открывает окно сообщений сразу в чате');
+    const nav = await A.p.$eval('nav a[href="#"]', e => { const g = getComputedStyle(e); return { c: g.color, o: g.opacity, body: getComputedStyle(document.body).color }; });
+    check(nav.o === '1' && nav.c === nav.body, 'вкладка «Сообщения» яркая, как активная: ' + JSON.stringify(nav));
     const who = await A.p.$eval('.vp-msgs-who b', e => e.textContent).catch(() => '');
     check(who.toLowerCase().includes(login.toLowerCase()) || who.length > 0, 'в шапке чата — ' + who);
   }
