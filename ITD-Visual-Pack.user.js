@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.6.0.1
+// @version      3.6.0.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4315,8 +4315,9 @@
         }
 
         const CHANGELOG = [
-            ['3.6.0.1', '18 октября 2026', [
-                'Вкладка «Сообщения» в меню больше не тусклая, если чат открыт из профиля'
+            ['3.6.0.1 – 3.6.0.2', '18 октября 2026', [
+                'Вкладка «Сообщения» в меню больше не тусклая, если чат открыт из профиля',
+                'Выбор сообщений как в Телеграме: зажми и веди по сообщениям — они выбираются подряд, у края лента сама прокручивается; если повести по выбранным — выбор снимается'
             ]],
             ['3.6.0', '18 октября 2026', [
                 'В профиле человека с ИТД X рядом с «Подписаться» появилась кнопка «Написать» — сразу открывает чат с ним',
@@ -6911,6 +6912,7 @@
         .vp-msgs-sel button.vp-danger { color: #ff5a5f; }
         .vp-msgs-sel button:not(.vp-msgs-ib):hover { background: rgba(127, 127, 127, .28); }
         .vp-selecting .vp-msgs-b { cursor: pointer; }
+        .vp-selecting .vp-msgs-feed { user-select: none; -webkit-user-select: none; touch-action: none; }
         .vp-msgs-b.vp-sel { outline: 2px solid var(--vp-accent, #f91880); outline-offset: 2px; }
         .vp-msgs-b.vp-gone { opacity: .35; }
         .vp-msgs-b.vp-flash { animation: vpMsgFlash 1.4s ease; }
@@ -8491,11 +8493,14 @@
                 + '<button type="button" data-a="copy">' + uiIcon('copy', 16) + 'Копировать</button><button type="button" data-a="fwd">' + uiIcon('fwd', 16) + 'Переслать</button><button type="button" data-a="del" class="vp-danger">' + uiIcon('trash', 16) + 'Удалить</button>';
             $('.vp-msgs-chead').appendChild(selEl);
             function selEnd() { if (sel) sel.forEach(b => b.classList.remove('vp-sel')); sel = null; chat.classList.remove('vp-selecting'); selEl.hidden = true; }
-            function selToggle(b) {
+            function selSet(b, on) {
                 if (!sel || !b._m) return;
-                if (sel.has(b)) { sel.delete(b); b.classList.remove('vp-sel'); } else { sel.add(b); b.classList.add('vp-sel'); }
+                const has = sel.has(b);
+                if (on && !has) { sel.add(b); b.classList.add('vp-sel'); }
+                else if (!on && has) { sel.delete(b); b.classList.remove('vp-sel'); }
                 if (!sel.size) selEnd(); else selEl.querySelector('b').textContent = sel.size + ' выбрано';
             }
+            const selToggle = b => { if (sel && b._m) selSet(b, !sel.has(b)); };
             function selStart(b) { selEnd(); sel = new Set(); chat.classList.add('vp-selecting'); selEl.hidden = false; selToggle(b); }
             const selList = () => sel ? [...feed.querySelectorAll(':scope > .vp-msgs-b')].filter(b => sel.has(b)) : [];
             selEl.addEventListener('click', e => {
@@ -8507,8 +8512,48 @@
                 else if (a === 'fwd') openFwd(bs.map(b => b._m));
                 else if (a === 'del') msgDelete(bs).then(selEnd);
             });
+            let dsel = null, selMute = 0;
+            const bubbleUnder = (x, y) => { const el = document.elementFromPoint(x, y), b = el && el.closest ? el.closest('.vp-msgs-b') : null; return b && b._m && feed.contains(b) ? b : null; };
+            function selRange(b) {
+                if (!dsel) return;
+                const all = [...feed.querySelectorAll(':scope > .vp-msgs-b')], i = all.indexOf(b), j = dsel.last ? all.indexOf(dsel.last) : i;
+                if (i < 0) return;
+                for (let k = Math.min(i, j < 0 ? i : j); k <= Math.max(i, j < 0 ? i : j); k++) selSet(all[k], dsel.on);
+                dsel.last = b;
+            }
+            function selScroll() {
+                if (!dsel) return;
+                dsel.raf = 0;
+                if (!dsel.v) return;
+                feed.scrollTop += Math.max(-26, Math.min(26, dsel.v));
+                const b = bubbleUnder(dsel.x, dsel.y);
+                if (b) selRange(b);
+                dsel.raf = requestAnimationFrame(selScroll);
+            }
+            feed.addEventListener('pointerdown', e => {
+                if (!sel || e.button) return;
+                const b = e.target.closest('.vp-msgs-b');
+                if (!b || !b._m) return;
+                dsel = { on: !sel.has(b), id: e.pointerId, last: null, v: 0, x: e.clientX, y: e.clientY, raf: 0 };
+                selRange(b);
+                try { feed.setPointerCapture(e.pointerId); } catch (x) { }
+                e.preventDefault();
+            }, true);
+            feed.addEventListener('pointermove', e => {
+                if (!dsel || e.pointerId !== dsel.id) return;
+                dsel.x = e.clientX; dsel.y = e.clientY;
+                const b = bubbleUnder(e.clientX, e.clientY);
+                if (b) selRange(b);
+                const r = feed.getBoundingClientRect(), edge = 54;
+                dsel.v = e.clientY < r.top + edge ? -(r.top + edge - e.clientY) / 3 : e.clientY > r.bottom - edge ? (e.clientY - (r.bottom - edge)) / 3 : 0;
+                if (dsel.v && !dsel.raf) dsel.raf = requestAnimationFrame(selScroll);
+            });
+            const selDragEnd = e => { if (!dsel || e.pointerId !== dsel.id) return; if (dsel.raf) cancelAnimationFrame(dsel.raf); dsel = null; selMute = Date.now() + 350; };
+            feed.addEventListener('pointerup', selDragEnd);
+            feed.addEventListener('pointercancel', selDragEnd);
             feed.addEventListener('click', e => {
-                if (!sel) return;
+                if (!sel && Date.now() > selMute) return;
+                if (Date.now() < selMute) { e.preventDefault(); e.stopPropagation(); return; }
                 const b = e.target.closest('.vp-msgs-b');
                 e.preventDefault(); e.stopPropagation();
                 if (b) selToggle(b);
@@ -8646,7 +8691,7 @@
                 openMenu(b, e.clientX, e.clientY);
             });
             feed.addEventListener('pointerdown', e => {
-                if (e.pointerType === 'mouse') return;
+                if (e.pointerType === 'mouse' || sel) return;
                 const b = bubbleAt(e.clientY), x = e.clientX, y = e.clientY;
                 if (!b) return;
                 clearTimeout(pressT);
