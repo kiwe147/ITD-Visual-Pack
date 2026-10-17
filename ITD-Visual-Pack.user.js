@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.10
+// @version      3.6.0
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4309,6 +4309,14 @@
         }
 
         const CHANGELOG = [
+            ['3.6.0', '18 октября 2026', [
+                'В профиле человека с ИТД X рядом с «Подписаться» появилась кнопка «Написать» — сразу открывает чат с ним',
+                'Сообщения: новое сообщение появляется в открытом чате само, не нужно выходить и заходить; значок на «Сообщениях» не зависает',
+                'Сообщения: чат открывается сразу на последних сообщениях, а не на самых старых',
+                'Клуб ИТД X: убраны срезы свечения у аватарок и ников слева и справа',
+                'При создании поста картинки можно перетаскивать друг на друга и менять порядок',
+                'Новый плеер видео в ленте: толстая полоса перемотки с подсказкой времени, время, перемотка на 10 секунд, скорость, картинка в картинке, управление с клавиатуры (пробел, стрелки, M, F)'
+            ]],
             ['3.5.10', '18 октября 2026', [
                 '«Анти цензура» снова работает: картинки уходят как GIF и при обычной загрузке, и при вставке из буфера'
             ]],
@@ -6667,6 +6675,7 @@
                 if (!msgNet.me) await msgLoadMe();
                 await msgDecryptAll();
                 try { callCheck(); } catch (e) { logErr('звонок', e); }
+                document.dispatchEvent(new Event('vp-msg-synced'));
             })().finally(() => { msgNet.syncing = null; });
             return msgNet.syncing;
         }
@@ -6911,6 +6920,366 @@
             const id = m.sup ? (msgIsSupport() ? 'sup:' + m.uid : 'support') : 'u:' + (k ? k.login : '');
             setTimeout(() => messagesOverlay.openDialog && messagesOverlay.openDialog(id), 60);
         }
+        function msgOpenLogin(login) {
+            if (!messagesOverlay) messagesOverlay = buildMessagesOverlay();
+            if (!messagesOverlay.classList.contains('vp-open')) messagesOverlay.open();
+            setTimeout(() => messagesOverlay.openDialog && messagesOverlay.openDialog('u:' + login), 60);
+        }
+        onDom(function profileWriteBtn() {
+            const m = location.pathname.match(/^\/@([^/]+)\/?$/), old = document.querySelector('.vp-write-btn');
+            const login = m && verifiedNames().find(n => n.toLowerCase() === decodeURIComponent(m[1]).toLowerCase());
+            const ok = login && myUsername && login.toLowerCase() !== myUsername.toLowerCase() && isApprovedId(msgMyId());
+            if (!ok) { if (old) old.remove(); return; }
+            if (old && old.dataset.login === login && old.isConnected) return;
+            if (old) old.remove();
+            const follow = [...document.querySelectorAll('button')].find(b => !b.closest('aside, nav, .vp-rail, .vp-msgs, .vp-gal, .vp-sw-stage') &&/^(вы подписаны|подписаться|подписан|отписаться|читаю)$/i.test(b.textContent.trim()));
+            if (!follow) return;
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = follow.className + ' vp-write-btn';
+            b.dataset.login = login;
+            b.title = 'Написать в личку ИТД X';
+            b.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/></svg><span>Написать</span>';
+            b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); msgOpenLogin(login); });
+            follow.before(b);
+        });
+        addCss(`
+        .vp-write-btn { display: inline-flex !important; align-items: center; justify-content: center; gap: 6px; }
+        .vp-write-btn > svg { flex: none; }
+        @media (max-width: ${PHONE_MAX}px) { .vp-write-btn > span { display: none; } }
+        `);
+        function thumbBoxes() {
+            const seen = new Set(), out = [];
+            document.querySelectorAll('img[src^="blob:"]').forEach(img => {
+                const th = img.parentElement, box = th && th.parentElement;
+                if (!box || seen.has(box) || box.closest('.vp-msgs, .vp-gal, .vp-sw-stage, nav, aside')) return;
+                if (!th.querySelector(':scope > button')) return;
+                seen.add(box); out.push(box);
+            });
+            return out;
+        }
+        const isThumb = c => !!c.querySelector(':scope > img[src^="blob:"]') && !!c.querySelector(':scope > button');
+        onDom(function thumbMark() {
+            thumbBoxes().forEach(box => {
+                box.classList.add('vp-thumbs');
+                const kids = [...box.children].filter(isThumb);
+                [...box.children].forEach(c => { const on = kids.includes(c); c.classList.toggle('vp-thumb', on); if (on && kids.length > 1) { if (!c.title) c.title = 'Потяни, чтобы поменять порядок'; } else if (c.title === 'Потяни, чтобы поменять порядок') c.removeAttribute('title'); });
+            });
+        });
+        function thumbHook(box) {
+            const el = box.wrappedJSObject || box, key = Object.keys(el).find(k => k.startsWith('__reactFiber$'));
+            if (!key) return null;
+            for (let f = el[key]; f; f = f.return) {
+                for (let h = f.memoizedState; h && typeof h === 'object'; h = h.next) {
+                    const v = h.memoizedState;
+                    if (Array.isArray(v) && v.length && v[0] && typeof v[0] === 'object' && 'mediaId' in v[0] && h.queue && typeof h.queue.dispatch === 'function') return h;
+                }
+            }
+            return null;
+        }
+        async function thumbsRefill(box, order) {
+            const items = [...box.querySelectorAll(':scope > .vp-thumb')];
+            const input = (() => { for (let e = box; e; e = e.parentElement) { const i = e.querySelector('input[type="file"]'); if (i) return i; } return null; })();
+            if (!input) return;
+            const grab = async img => {
+                try { return await (await fetch(img.src)).blob(); } catch (e) { }
+                if (!img.naturalWidth) throw new Error('картинка не загрузилась');
+                const c = document.createElement('canvas');
+                c.width = img.naturalWidth; c.height = img.naturalHeight;
+                c.getContext('2d').drawImage(img, 0, 0);
+                return new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.92));
+            };
+            const files = await Promise.all(order.map(async (i, n) => {
+                const blob = await grab(items[i].querySelector('img'));
+                return new File([blob], 'photo-' + (n + 1) + '.' + ((blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')), { type: blob.type });
+            }));
+            box.classList.add('vp-thumbs-busy');
+            try {
+                const count = () => box.querySelectorAll(':scope > .vp-thumb').length;
+                const until = async (ok, ms) => { const t0 = Date.now(); while (!ok() && Date.now() - t0 < ms) await new Promise(r => setTimeout(r, 80)); return ok(); };
+                items.forEach(t => { const b = t.querySelector(':scope > button'); if (b) b.click(); });
+                await until(() => count() === 0, 4000);
+                for (let n = 0; n < files.length; n++) {
+                    const dt = new DataTransfer();
+                    dt.items.add(files[n]);
+                    input.files = dt.files;
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    if (!(await until(() => count() > n, 40000))) break;
+                }
+            } finally { box.classList.remove('vp-thumbs-busy'); }
+        }
+        function thumbsReorder(box, from, to) {
+            const items = [...box.querySelectorAll(':scope > .vp-thumb')], a = items.indexOf(from), b = items.indexOf(to);
+            if (a < 0 || b < 0 || a === b) return;
+            const order = items.map((_, i) => i);
+            order.splice(a, 1); order.splice(b, 0, a);
+            const hook = thumbHook(box);
+            if (hook && hook.memoizedState.length === items.length) {
+                const next = new pageWindow.Array();
+                order.forEach(i => next.push(hook.memoizedState[i]));
+                hook.queue.dispatch(next);
+                return;
+            }
+            thumbsRefill(box, order).catch(e => logErr('порядок картинок', e));
+        }
+        const thumbDrag = { cur: null, mute: 0 };
+        function thumbAt(d, x, y) {
+            const list = [...d.box.querySelectorAll(':scope > .vp-thumb')].filter(t => t !== d.th);
+            let best = null, dist = 1e9;
+            for (const t of list) {
+                const r = t.getBoundingClientRect();
+                if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return t;
+                const k = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
+                if (k < dist) { dist = k; best = t; }
+            }
+            return best && dist < 90 ? best : null;
+        }
+        document.addEventListener('pointerdown', e => {
+            if (e.button || !e.target.closest || e.target.closest('button')) return;
+            const th = e.target.closest('.vp-thumbs > .vp-thumb');
+            if (!th || th.parentElement.querySelectorAll(':scope > .vp-thumb').length < 2 || th.parentElement.classList.contains('vp-thumbs-busy')) return;
+            thumbDrag.cur = { th, box: th.parentElement, x: e.clientX, y: e.clientY, on: false, id: e.pointerId };
+        }, true);
+        document.addEventListener('pointermove', e => {
+            const d = thumbDrag.cur;
+            if (!d || e.pointerId !== d.id) return;
+            const dx = e.clientX - d.x, dy = e.clientY - d.y;
+            if (!d.on) {
+                if (Math.hypot(dx, dy) < 6) return;
+                d.on = true;
+                d.th.classList.add('vp-thumb-lift');
+                try { d.th.setPointerCapture(e.pointerId); } catch (x) { }
+            }
+            d.th.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(1.06)';
+            const over = thumbAt(d, e.clientX, e.clientY);
+            d.box.querySelectorAll('.vp-thumb-over').forEach(t => { if (t !== over) t.classList.remove('vp-thumb-over'); });
+            if (over) over.classList.add('vp-thumb-over');
+            e.preventDefault();
+        }, true);
+        const thumbEnd = ok => e => {
+            const d = thumbDrag.cur;
+            if (!d || e.pointerId !== d.id) return;
+            thumbDrag.cur = null;
+            if (!d.on) return;
+            const over = ok ? thumbAt(d, e.clientX, e.clientY) : null;
+            d.th.classList.remove('vp-thumb-lift');
+            d.th.style.transform = '';
+            d.box.querySelectorAll('.vp-thumb-over').forEach(t => t.classList.remove('vp-thumb-over'));
+            thumbDrag.mute = Date.now() + 250;
+            if (over) thumbsReorder(d.box, d.th, over);
+        };
+        document.addEventListener('pointerup', thumbEnd(true), true);
+        document.addEventListener('pointercancel', thumbEnd(false), true);
+        document.addEventListener('click', e => { if (e.isTrusted && Date.now() < thumbDrag.mute && e.target.closest && e.target.closest('.vp-thumbs')) { e.preventDefault(); e.stopPropagation(); } }, true);
+        addCss(`
+        .vp-thumbs > .vp-thumb { touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; transition: box-shadow .18s ease, outline-color .15s ease; }
+        .vp-thumbs > .vp-thumb img { -webkit-user-drag: none; user-select: none; }
+        .vp-thumbs > .vp-thumb-lift { position: relative; z-index: 6; cursor: grabbing; transition: none; box-shadow: 0 14px 34px rgba(0, 0, 0, .5); }
+        .vp-thumbs > .vp-thumb-over { outline: 2px solid var(--vp-accent, #f91880); outline-offset: 2px; }
+        .vp-thumbs.vp-thumbs-busy { opacity: .5; pointer-events: none; transition: opacity .15s ease; }
+        `);
+        const VP_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
+        const vpSvg = (body, w = 20) => `<svg viewBox="0 0 24 24" width="${w}" height="${w}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+        const VP_ICO = {
+            play: vpSvg('<path d="M8 5.6v12.8a.8.8 0 0 0 1.2.7l10.2-6.4a.8.8 0 0 0 0-1.4L9.2 4.9a.8.8 0 0 0-1.2.7Z" fill="currentColor" stroke="none"/>'),
+            pause: vpSvg('<rect x="6.2" y="5" width="4" height="14" rx="1.3" fill="currentColor" stroke="none"/><rect x="13.8" y="5" width="4" height="14" rx="1.3" fill="currentColor" stroke="none"/>'),
+            vol: vpSvg('<path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4Z" fill="currentColor" stroke="none"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/>'),
+            low: vpSvg('<path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4Z" fill="currentColor" stroke="none"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/>'),
+            mute: vpSvg('<path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4Z" fill="currentColor" stroke="none"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>'),
+            full: vpSvg('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'),
+            pip: vpSvg('<rect x="3" y="5" width="18" height="14" rx="3"/><rect x="12" y="11.5" width="7" height="5" rx="1.4" fill="currentColor" stroke="none"/>'),
+            back: vpSvg('<path d="M4 12a8 8 0 1 0 2.6-5.9L4 8.5"/><path d="M4 4v4.5h4.5"/>', 22),
+            fwd: vpSvg('<path d="M20 12a8 8 0 1 1-2.6-5.9L20 8.5"/><path d="M20 4v4.5h-4.5"/>', 22)
+        };
+        const vpTime = s => {
+            if (!Number.isFinite(s) || s < 0) s = 0;
+            const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = String(Math.floor(s % 60)).padStart(2, '0');
+            return h ? `${h}:${String(m).padStart(2, '0')}:${x}` : `${m}:${x}`;
+        };
+        const vpSiteBtn = (box, re) => [...box.querySelectorAll('button[aria-label]')].find(b => !b.closest('.vp-vbar') && re.test(b.getAttribute('aria-label')));
+        let vpActive = null, vpRate = +GM_getValue('vpPlayerRate', 1) || 1;
+        function vpBuild(box, video) {
+            const bar = document.createElement('div');
+            bar.className = 'vp-vbar';
+            bar.innerHTML = '<div class="vp-vprog"><div class="vp-vbuf"></div><div class="vp-vfill"></div><div class="vp-vknob"></div><div class="vp-vtip">0:00</div></div>'
+                + '<div class="vp-vrow"><button type="button" class="vp-vb vp-vplay" title="Пауза / играть (пробел)"></button>'
+                + '<button type="button" class="vp-vb vp-vskip" data-s="-10" title="Назад на 10 секунд">' + VP_ICO.back + '<i>10</i></button>'
+                + '<button type="button" class="vp-vb vp-vskip" data-s="10" title="Вперёд на 10 секунд">' + VP_ICO.fwd + '<i>10</i></button>'
+                + '<span class="vp-vvol"><button type="button" class="vp-vb vp-vmute" title="Звук (M)"></button><input type="range" class="vp-vrange" min="0" max="1" step="0.02" title="Громкость"></span>'
+                + '<span class="vp-vtime"><b>0:00</b><u>/</u><i>0:00</i></span><span class="vp-vgap"></span>'
+                + '<span class="vp-vspd"><button type="button" class="vp-vb vp-vrate" title="Скорость"></button><div class="vp-vmenu"></div></span>'
+                + '<button type="button" class="vp-vb vp-vpip" title="Картинка в картинке"></button>'
+                + '<button type="button" class="vp-vb vp-vfull" title="Во весь экран (F)"></button></div>';
+            const flash = document.createElement('div');
+            flash.className = 'vp-vflash';
+            box.append(bar, flash);
+            const q = s => bar.querySelector(s);
+            const prog = q('.vp-vprog'), fill = q('.vp-vfill'), buf = q('.vp-vbuf'), knob = q('.vp-vknob'), tip = q('.vp-vtip'), playB = q('.vp-vplay'), muteB = q('.vp-vmute'), range = q('.vp-vrange');
+            const timeNow = q('.vp-vtime b'), timeAll = q('.vp-vtime i'), rateB = q('.vp-vrate'), menu = q('.vp-vmenu'), pipB = q('.vp-vpip'), fullB = q('.vp-vfull');
+            let hideT = 0, scrub = false, lastTouch = 0, raf = 0;
+            const dur = () => Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+            const paint = () => {
+                const d = dur(), p = d ? video.currentTime / d : 0;
+                fill.style.width = (p * 100) + '%';
+                knob.style.left = (p * 100) + '%';
+                timeNow.textContent = vpTime(video.currentTime);
+                timeAll.textContent = vpTime(d);
+                if (d && video.buffered.length) { let e = 0; for (let i = 0; i < video.buffered.length; i++) if (video.buffered.start(i) <= video.currentTime + 0.5) e = Math.max(e, video.buffered.end(i)); buf.style.width = Math.min(100, e / d * 100) + '%'; }
+            };
+            const loop = () => { raf = 0; paint(); if (!video.paused && box.classList.contains('vp-vshow') && box.isConnected) raf = requestAnimationFrame(loop); };
+            const tick = () => { if (!raf) raf = requestAnimationFrame(loop); };
+            const state = () => {
+                playB.innerHTML = video.paused ? VP_ICO.play : VP_ICO.pause;
+                playB.setAttribute('aria-label', video.paused ? 'Играть' : 'Пауза');
+                const v = video.muted ? 0 : video.volume;
+                muteB.innerHTML = v === 0 ? VP_ICO.mute : v < 0.5 ? VP_ICO.low : VP_ICO.vol;
+                range.value = v;
+                range.style.setProperty('--vp-v', (v * 100) + '%');
+                rateB.textContent = (video.playbackRate === 1 ? '1' : String(video.playbackRate)) + '×';
+                menu.querySelectorAll('button').forEach(b => b.classList.toggle('vp-on', +b.dataset.r === video.playbackRate));
+                pipB.hidden = !(document.pictureInPictureEnabled && video.requestPictureInPicture);
+                paint();
+            };
+            const reveal = () => {
+                box.classList.add('vp-vshow');
+                clearTimeout(hideT);
+                tick();
+                hideT = setTimeout(() => { if (!video.paused && !scrub && !menu.classList.contains('vp-open') && !bar.matches(':hover')) box.classList.remove('vp-vshow'); }, 2400);
+            };
+            const sync = () => { state(); if (video.paused) { box.classList.add('vp-vshow'); clearTimeout(hideT); } else reveal(); };
+            ['timeupdate', 'durationchange', 'loadedmetadata', 'progress', 'play', 'pause', 'volumechange', 'ratechange', 'seeked', 'emptied'].forEach(t => video.addEventListener(t, t === 'play' || t === 'pause' ? sync : state));
+            video.addEventListener('play', () => { if (Date.now() - lastTouch < 600) { flash.innerHTML = VP_ICO.pause; flash.classList.remove('vp-go'); void flash.offsetWidth; flash.classList.add('vp-go'); } });
+            video.addEventListener('pause', () => { if (Date.now() - lastTouch < 600) { flash.innerHTML = VP_ICO.play; flash.classList.remove('vp-go'); void flash.offsetWidth; flash.classList.add('vp-go'); } });
+            ['click', 'dblclick', 'pointerdown', 'mousedown', 'touchstart', 'contextmenu'].forEach(t => bar.addEventListener(t, e => { e.stopPropagation(); if (t === 'pointerdown') { lastTouch = Date.now(); reveal(); } }));
+            bar.addEventListener('click', e => { const b = e.target.closest('button'); if (b) b.blur(); });
+            box.addEventListener('pointermove', reveal);
+            box.addEventListener('pointerdown', () => { vpActive = video; lastTouch = Date.now(); reveal(); }, true);
+            box.addEventListener('pointerleave', () => { if (!video.paused && !scrub) { clearTimeout(hideT); hideT = setTimeout(() => { if (!bar.matches(':hover')) box.classList.remove('vp-vshow'); }, 600); } });
+            const toggle = () => { lastTouch = Date.now(); const b = vpSiteBtn(box, /^(pause|play)$/i); if (b) b.click(); else if (video.paused) video.play().catch(() => { }); else video.pause(); };
+            video.vpToggle = toggle;
+            playB.addEventListener('click', toggle);
+            bar.querySelectorAll('.vp-vskip').forEach(b => b.addEventListener('click', () => { const d = dur(); video.currentTime = Math.max(0, Math.min(d || 1e9, video.currentTime + +b.dataset.s)); paint(); }));
+            muteB.addEventListener('click', () => { const b = vpSiteBtn(box, /^(mute|unmute)$/i); if (b) b.click(); else video.muted = !video.muted; setTimeout(state, 0); });
+            range.addEventListener('input', () => {
+                const v = +range.value;
+                video.volume = v;
+                try { localStorage.setItem('video-volume', String(v)); } catch (e) { }
+                const b = vpSiteBtn(box, /^(mute|unmute)$/i);
+                if ((v > 0 && video.muted) || (v === 0 && !video.muted)) { if (b) b.click(); else video.muted = v === 0; }
+                state();
+            });
+            fullB.addEventListener('click', () => { const b = vpSiteBtn(box, /^fullscreen$/i); if (b) b.click(); else if (document.fullscreenElement) document.exitFullscreen(); else box.requestFullscreen && box.requestFullscreen(); });
+            pipB.addEventListener('click', () => { if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => { }); else video.requestPictureInPicture().catch(() => { }); });
+            VP_RATES.forEach(r => { const b = document.createElement('button'); b.type = 'button'; b.dataset.r = r; b.textContent = r + '×'; b.addEventListener('click', () => { video.playbackRate = r; vpRate = r; GM_setValue('vpPlayerRate', r); menu.classList.remove('vp-open'); }); menu.appendChild(b); });
+            rateB.addEventListener('click', () => { menu.classList.toggle('vp-open'); reveal(); });
+            document.addEventListener('pointerdown', e => { if (menu.classList.contains('vp-open') && !e.target.closest('.vp-vspd')) menu.classList.remove('vp-open'); }, true);
+            const seekAt = x => { const r = prog.getBoundingClientRect(), d = dur(); if (!d || r.width <= 0) return; const p = Math.max(0, Math.min(1, (x - r.left) / r.width)); video.currentTime = d * p; paint(); };
+            prog.addEventListener('pointerdown', e => {
+                e.stopPropagation();
+                scrub = true; box.classList.add('vp-vscrub');
+                try { prog.setPointerCapture(e.pointerId); } catch (x) { }
+                seekAt(e.clientX);
+                const mv = ev => { seekAt(ev.clientX); tipAt(ev.clientX); };
+                const up = () => { scrub = false; box.classList.remove('vp-vscrub'); prog.removeEventListener('pointermove', mv); prog.removeEventListener('pointerup', up); prog.removeEventListener('pointercancel', up); reveal(); };
+                prog.addEventListener('pointermove', mv); prog.addEventListener('pointerup', up); prog.addEventListener('pointercancel', up);
+            });
+            const tipAt = x => { const r = prog.getBoundingClientRect(), d = dur(); if (!d || r.width <= 0) return; const p = Math.max(0, Math.min(1, (x - r.left) / r.width)); tip.textContent = vpTime(d * p); tip.style.left = Math.max(22, Math.min(r.width - 22, p * r.width)) + 'px'; };
+            prog.addEventListener('pointermove', e => tipAt(e.clientX));
+            video.playbackRate = vpRate;
+            box.classList.add('vp-vp-ready');
+            state();
+            if (video.paused) box.classList.add('vp-vshow');
+            box.vpDestroy = () => { clearTimeout(hideT); if (raf) cancelAnimationFrame(raf); bar.remove(); flash.remove(); box.classList.remove('vp-vp', 'vp-vp-ready', 'vp-vshow', 'vp-vscrub', 'vp-vp-rel'); };
+        }
+        onDom(function videoPlayers() {
+            document.querySelectorAll('.vp-vp').forEach(box => { if (!box.isConnected || !vpSiteBtn(box, /^(pause|play)$/i)) { if (box.vpDestroy) box.vpDestroy(); } });
+            document.querySelectorAll('video').forEach(video => {
+                const box = video.parentElement;
+                if (!box || box.classList.contains('vp-vp') || video.closest('.vp-gal, .vp-msgs, .vp-sw-stage, .vpi-overlay, .vp-bg-media, .vp-call-audio, .vp-msgs-lb')) return;
+                const play = vpSiteBtn(box, /^(pause|play)$/i), full = vpSiteBtn(box, /^fullscreen$/i);
+                if (!play || !full) return;
+                box.classList.add('vp-vp');
+                if (getComputedStyle(box).position === 'static') box.classList.add('vp-vp-rel');
+                play.parentElement.classList.add('vp-site-ctl');
+                vpBuild(box, video);
+            });
+        });
+        document.addEventListener('keydown', e => {
+            if (e.ctrlKey || e.metaKey || e.altKey || !e.target.closest) return;
+            if (e.target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]') && !e.target.closest('.vp-vrange')) return;
+            const box = [...document.querySelectorAll('.vp-vp-ready')].find(b => b.matches(':hover')) || (vpActive && vpActive.parentElement && vpActive.parentElement.classList.contains('vp-vp-ready') && vpActive.isConnected ? vpActive.parentElement : null);
+            if (!box) return;
+            const video = box.querySelector('video');
+            const k = e.key, step = n => { video.currentTime = Math.max(0, Math.min(video.duration || 1e9, video.currentTime + n)); };
+            if (k === ' ' || k === 'k' || k === 'К' || k === 'л') { if (e.target.closest('button, a')) return; e.preventDefault(); video.vpToggle(); }
+            else if (k === 'ArrowLeft') { e.preventDefault(); step(-5); }
+            else if (k === 'ArrowRight') { e.preventDefault(); step(5); }
+            else if (k === 'j' || k === 'о') step(-10);
+            else if (k === 'l' || k === 'д') step(10);
+            else if (k === 'ArrowUp' || k === 'ArrowDown') {
+                if (e.target.closest('.vp-vrange')) return;
+                e.preventDefault();
+                const v = Math.max(0, Math.min(1, (video.muted ? 0 : video.volume) + (k === 'ArrowUp' ? 0.1 : -0.1)));
+                video.volume = v; try { localStorage.setItem('video-volume', String(v)); } catch (x) { }
+                const b = vpSiteBtn(box, /^(mute|unmute)$/i);
+                if ((v > 0 && video.muted) || (v === 0 && !video.muted)) { if (b) b.click(); else video.muted = v === 0; }
+            }
+            else if (k === 'm' || k === 'ь') { const b = vpSiteBtn(box, /^(mute|unmute)$/i); if (b) b.click(); else video.muted = !video.muted; }
+            else if (k === 'f' || k === 'а') { const b = vpSiteBtn(box, /^fullscreen$/i); if (b) b.click(); }
+            else if (k === '<' || k === '>') { const i = VP_RATES.indexOf(video.playbackRate), n = VP_RATES[Math.max(0, Math.min(VP_RATES.length - 1, (i < 0 ? 2 : i) + (k === '>' ? 1 : -1)))]; video.playbackRate = n; vpRate = n; GM_setValue('vpPlayerRate', n); }
+            else return;
+            box.classList.add('vp-vshow');
+        }, true);
+        addCss(`
+        .vp-vp-rel { position: relative; }
+        .vp-site-ctl { display: none !important; }
+        .vp-vbar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; padding: 34px 12px 8px; box-sizing: border-box; color: #fff; user-select: none; -webkit-user-select: none;
+            background: linear-gradient(to top, rgba(0, 0, 0, .78), rgba(0, 0, 0, .42) 55%, transparent); opacity: 0; transform: translateY(6px); pointer-events: none; transition: opacity .2s ease, transform .2s ease; }
+        .vp-vp.vp-vshow .vp-vbar { opacity: 1; transform: none; pointer-events: auto; }
+        .vp-vp.vp-vshow { cursor: default; }
+        .vp-vp:not(.vp-vshow) { cursor: none; }
+        .vp-vprog { position: relative; height: 18px; display: flex; align-items: center; cursor: pointer; touch-action: none; }
+        .vp-vprog::before { content: ""; position: absolute; left: 0; right: 0; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, .26); transition: height .12s ease; }
+        .vp-vprog:hover::before, .vp-vscrub .vp-vprog::before { height: 6px; }
+        .vp-vbuf, .vp-vfill { position: absolute; left: 0; height: 4px; border-radius: 4px; pointer-events: none; transition: height .12s ease; }
+        .vp-vprog:hover .vp-vbuf, .vp-vprog:hover .vp-vfill, .vp-vscrub .vp-vbuf, .vp-vscrub .vp-vfill { height: 6px; }
+        .vp-vbuf { background: rgba(255, 255, 255, .34); width: 0; }
+        .vp-vfill { background: var(--vp-accent, #f91880); width: 0; }
+        .vp-vknob { position: absolute; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, .5); transform: scale(0); transition: transform .12s ease; pointer-events: none; left: 0; }
+        .vp-vprog:hover .vp-vknob, .vp-vscrub .vp-vknob { transform: scale(1); }
+        .vp-vtip { position: absolute; bottom: 22px; transform: translateX(-50%); padding: 3px 8px; border-radius: 8px; font-size: 12px; font-variant-numeric: tabular-nums; background: rgba(20, 20, 20, .92); opacity: 0; pointer-events: none; transition: opacity .1s ease; white-space: nowrap; }
+        .vp-vprog:hover .vp-vtip, .vp-vscrub .vp-vtip { opacity: 1; }
+        .vp-vrow { display: flex; align-items: center; gap: 2px; margin-top: 2px; }
+        .vp-vb { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 36px; padding: 0 6px; border: 0; border-radius: 18px; background: transparent; color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: background-color .15s ease, transform .1s ease; }
+        .vp-vb:hover { background: rgba(255, 255, 255, .18); }
+        .vp-vb:active { transform: scale(.92); }
+        .vp-vb[hidden] { display: none; }
+        .vp-vskip i { position: absolute; font-style: normal; font-size: 8.5px; font-weight: 700; top: 50%; left: 50%; transform: translate(-50%, -42%); pointer-events: none; }
+        .vp-vvol { display: inline-flex; align-items: center; }
+        .vp-vrange { -webkit-appearance: none; appearance: none; width: 0; opacity: 0; height: 4px; margin: 0; border-radius: 4px; outline: none; cursor: pointer; transition: width .18s ease, opacity .18s ease, margin .18s ease;
+            background: linear-gradient(to right, #fff var(--vp-v, 100%), rgba(255, 255, 255, .3) var(--vp-v, 100%)); }
+        .vp-vvol:hover .vp-vrange, .vp-vrange:focus-visible { width: 74px; opacity: 1; margin: 0 8px 0 4px; }
+        .vp-vrange::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
+        .vp-vrange::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 0; }
+        .vp-vtime { font-size: 12.5px; font-variant-numeric: tabular-nums; margin: 0 4px 0 8px; white-space: nowrap; opacity: .92; }
+        .vp-vtime u { text-decoration: none; opacity: .6; margin: 0 4px; }
+        .vp-vtime i { font-style: normal; opacity: .75; }
+        .vp-vtime b { font-weight: 600; }
+        .vp-vgap { flex: 1; min-width: 4px; }
+        .vp-vspd { position: relative; display: inline-flex; }
+        .vp-vrate { min-width: 44px; }
+        .vp-vmenu { position: absolute; right: 0; bottom: 44px; display: none; flex-direction: column; padding: 5px; border-radius: 14px; background: rgba(24, 24, 24, .96); box-shadow: 0 10px 28px rgba(0, 0, 0, .55); border: 1px solid rgba(255, 255, 255, .1); }
+        .vp-vmenu.vp-open { display: flex; }
+        .vp-vmenu button { border: 0; background: transparent; color: #fff; font: inherit; font-size: 13px; padding: 7px 16px; border-radius: 10px; text-align: center; cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .vp-vmenu button:hover { background: rgba(255, 255, 255, .14); }
+        .vp-vmenu button.vp-on { color: var(--vp-accent, #f91880); font-weight: 700; }
+        .vp-vflash { position: absolute; left: 50%; top: 50%; width: 68px; height: 68px; margin: -34px 0 0 -34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .55); color: #fff; opacity: 0; pointer-events: none; z-index: 5; }
+        .vp-vflash svg { width: 30px; height: 30px; }
+        .vp-vflash.vp-go { animation: vpVFlash .5s ease-out; }
+        @keyframes vpVFlash { 0% { opacity: .95; transform: scale(.8); } 100% { opacity: 0; transform: scale(1.35); } }
+        @media (hover: none) { .vp-vvol .vp-vrange, .vp-vskip { display: none; } .vp-vb { min-width: 40px; } }
+        @media (max-width: 480px) { .vp-vtime { margin-left: 2px; } .vp-vpip { display: none; } }
+        `);
         function msgToast(m) {
             const k = msgNet.keys.get(m.uid);
             if (!k) return;
@@ -7589,6 +7958,14 @@
                 input.value = ''; send.disabled = true; msgCount();
             }
             const note = (t, ico) => { const n = document.createElement('div'); n.className = 'vp-msgs-note'; if (ico) n.insertAdjacentHTML('afterbegin', uiIcon(ico, 14)); n.appendChild(document.createTextNode(t)); feed.appendChild(n); return n; };
+            let stickUntil = 0;
+            const stickEnd = () => {
+                stickUntil = Date.now() + 2500;
+                feed.scrollTop = feed.scrollHeight;
+                requestAnimationFrame(() => { if (Date.now() < stickUntil) feed.scrollTop = feed.scrollHeight; });
+            };
+            feed.addEventListener('load', () => { if (Date.now() < stickUntil) feed.scrollTop = feed.scrollHeight; }, true);
+            ['wheel', 'touchstart', 'keydown'].forEach(t => feed.addEventListener(t, () => { stickUntil = 0; }, { passive: true }));
             let renderN = 0;
             async function msgOpenPerson(d) {
                 const my = ++renderN;
@@ -7616,6 +7993,7 @@
                 paintCalls(t);
                 d.shown = list.length; d.sig = chatSig(t.uid);
                 input.disabled = false; input.focus();
+                stickEnd();
                 msgReadNow(d, t, list);
                 blockUi(d, t);
             }
@@ -7693,6 +8071,20 @@
                 if (list.length !== current.shown || chatSig(tt.uid) !== current.sig) msgRefreshChat(current);
             }, 20000);
             root.refreshList = () => { if (!current) { msgFillDialogs(); renderList(); } };
+            const onSynced = () => {
+                if (!root.isConnected) return document.removeEventListener('vp-msg-synced', onSynced);
+                if (!msgsOpen || !current || current.bot || !msgNet.me) return;
+                msgFillDialogs();
+                const tt = msgTarget(current);
+                if (!tt.uid) return;
+                if (msgThread(tt).length !== current.shown || chatSig(tt.uid) !== current.sig) msgRefreshChat(current);
+            };
+            document.addEventListener('vp-msg-synced', onSynced);
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden || !root.isConnected || !msgsOpen || !current || current.bot || !msgNet.me) return;
+                const tt = msgTarget(current);
+                if (tt.uid) msgReadNow(current, tt, msgThread(tt));
+            });
             root.refreshCalls = () => {
                 if (!current || current.bot || current.support || current.supUid || !msgNet.me) return;
                 const t = msgTarget(current);
@@ -11736,7 +12128,7 @@
         .vp-stat-diff { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
         .vp-stat-diff.vp-up { color: #3ddc84; }
         .vp-stat-diff.vp-down { color: #ff5a6a; }
-        .vp-club { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; overflow-x: hidden; padding: 10px 2px;
+        .vp-club { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; overflow-x: hidden; padding: 10px 14px; margin: 0 -12px;
             scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--text-secondary) 45%, transparent) transparent;
             -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
             mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%); }
