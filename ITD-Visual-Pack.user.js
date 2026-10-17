@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.8.3
+// @version      3.5.9
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4309,6 +4309,9 @@
         }
 
         const CHANGELOG = [
+            ['3.5.9', '18 октября 2026', [
+                'Узкие телефоны: в шапке ленты вкладки «Для вас / Кланы / Подписки» уходят отдельной строкой под логотип и кнопки, больше не слипаются',
+                'На телефоне кнопка «Обновить» теперь под плашкой версии, а не прячется под панелью вкладок']],
             ['3.5.8 – 3.5.8.3', '17 октября 2026', [
                 'Правая колонка на средних экранах встаёт вплотную к ленте, как левое меню, а не уезжает к краю с большим пустым промежутком',
                 'Магазин: чёрная вспышка при загрузке и при листании в магазин убрана, страница магазина проявляется уже прозрачной',
@@ -8952,6 +8955,15 @@
         .vp-logo-col > a { height: 36px; }
         .vp-logo-col .vp-version-row { position: relative; }
         .vp-logo-col .itd-update-sidebar-btn { position: absolute; left: calc(100% + 6px); top: 50%; translate: 0 -50%; }
+        @media (max-width: ${PHONE_MAX}px) {
+            .vp-logo-col .vp-version-row { flex-direction: column; gap: 3px; }
+            .vp-logo-col .itd-update-sidebar-btn { position: static; translate: none; margin: 0; }
+        }
+        @media (max-width: 430px) {
+            .vp-feed-bar { flex-wrap: wrap !important; row-gap: 8px !important; }
+            .vp-feed-bar > .vp-tabs { order: 3 !important; flex: 1 1 100% !important; width: 100% !important; min-width: 0 !important; max-width: none !important; }
+            .vp-feed-bar > .vp-gal-btn { margin-left: auto !important; }
+        }
         .vp-logo-top > :not(.vp-logo-col) { height: 36px; display: inline-flex; align-items: center; }
 
         .vp-news-back { position: fixed; inset: 0; z-index: 10050; background: rgba(0, 0, 0, .5); display: flex;
