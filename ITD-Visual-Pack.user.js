@@ -8963,6 +8963,7 @@
             .vp-feed-bar { flex-wrap: wrap !important; row-gap: 8px !important; }
             .vp-feed-bar > .vp-tabs { order: 3 !important; flex: 1 1 100% !important; width: 100% !important; min-width: 0 !important; max-width: none !important; }
             .vp-feed-bar > .vp-gal-btn { margin-left: auto !important; }
+            .vp-feed-bar > .my-nav-block, .vp-feed-bar > .my-nav-block > div { height: auto !important; min-height: 45px; }
         }
         .vp-logo-top > :not(.vp-logo-col) { height: 36px; display: inline-flex; align-items: center; }
 
