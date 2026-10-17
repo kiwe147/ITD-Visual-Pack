@@ -70,7 +70,8 @@ const LB = `<div id="zl" class="vp-msgs-lb"><div class="vp-msgs-lb-top"></div>
   check(near(pv.y, t.y, 1) && near(pv.h, t.h, 1) && near(nx.y, t.y, 1) && near(nx.h, t.h, 1), `ПК: зоны на всю высоту плитки (${Math.round(pv.h)} и ${Math.round(nx.h)} из ${Math.round(t.h)})`);
   check(near(pv.x, t.x, 1) && near(nx.x + nx.w, t.x + t.w, 1), 'ПК: левая зона у левого края, правая у правого');
   check(near(nx.w, Math.min(96, t.w * 0.22), 1.5), `ПК: ширина зоны ${Math.round(nx.w)} (22% плитки, не больше 96)`);
-  check(nx.svg === 'none' && nx.rad === '0px', 'ПК: стрелки-значка нет, зона без скругления');
+  check(nx.rad === '0px', 'ПК: зона без скругления');
+  check(nx.svg === 'block' || nx.svg === 'none', 'ПК: значок стрелки есть в зоне');
   check(pv.op === '0' && nx.op === '1', `ПК: у первой картинки левая зона невидима (${pv.op}), правая на месте (${nx.op})`);
   const hit = (x, y) => A.p.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return e && (e.closest('.vp-gal-arrow') ? (e.closest('.vp-prev') ? 'prev' : 'next') : e.closest('.vp-gal-act') ? 'act' : e.closest('.vp-gal-strip') ? 'strip' : e.className); }, [x, y]);
   check(await hit(nx.x + nx.w / 2, t.y + t.h / 2) === 'next', 'ПК: нажатие у правого края посередине — «дальше»');
@@ -101,8 +102,7 @@ const LB = `<div id="zl" class="vp-msgs-lb"><div class="vp-msgs-lb-top"></div>
 
   A = await open(true);
   const mp = await R(A.p, '#zt .vp-next'), mt = await R(A.p, '#zt');
-  check(near(mp.h, mt.h, 1) && near(mp.w, Math.min(96, mt.w * 0.22), 1.5) && mp.rad === '0px' && mp.svg === 'none', `телефон: зона на всю высоту карточки без значка ${Math.round(mp.w)}x${Math.round(mp.h)}`);
-  check(await A.p.$eval('#zt .vp-next', e => getComputedStyle(e).pointerEvents) === 'none', 'телефон: зона нажатий сама не ловит, нажатие обрабатывает лента картинок');
+  check(await A.p.$eval('#zt .vp-next', e => getComputedStyle(e).display) === 'none' && await A.p.$eval('#zt .vp-prev', e => getComputedStyle(e).display) === 'none', 'телефон: ни стрелок, ни зон, листание только пальцем');
   await A.ctx.close();
 
   await b.close();

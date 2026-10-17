@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.7
+// @version      3.5.8
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4309,6 +4309,9 @@
         }
 
         const CHANGELOG = [
+            ['3.5.8', '17 октября 2026', [
+                'Галерея: на телефоне стрелок и зон нет, листание только пальцем. На ПК зоны по краям заметнее: при наведении на карточку края подсвечиваются, а у зоны под курсором появляется стрелка',
+                'Листание вкладок (WIP): боковые панели плавно подстраиваются под ширину страницы при переходе с широкой на узкую и обратно, в том числе когда страница прогрузилась позже']],
             ['3.5.7', '17 октября 2026', [
                 'Магазин: чёрный фон страницы убран, виден твой фон и сцена',
                 'Листание вкладок (WIP): при переходе из «Галереи» и «Сообщений» боковые панели больше не ждут загрузки страницы, а сразу плавно сдвигаются']],
@@ -9283,7 +9286,7 @@
                 const tick = () => {
                     if (cur !== c) return;
                     const now = performance.now(), moved = location.pathname + location.search !== path;
-                    if (c.glide && !c.glided && now - t0 > 50 && !document.querySelector('.vp-gal:not(.vp-sw-stage *), .vp-msgs.vp-open:not(.vp-sw-stage *)')) {
+                    if (c.glide && !c.glided && !document.querySelector('.vp-gal:not(.vp-sw-stage *), .vp-msgs.vp-open:not(.vp-sw-stage *)')) {
                         c.glided = true;
                         safe(() => { prepare(c); glide(c); c.pre = panels(); c.moves = []; });
                     }
@@ -10204,13 +10207,18 @@
         .vp-gal-tile .vp-gal-arrow.vp-next { right: 0; }
         .vp-gal-tile .vp-gal-arrow.vp-edge { opacity: 0; }
         @media (hover: hover) and (pointer: fine) {
-            .vp-gal-tile .vp-gal-arrow.vp-prev:hover { background: linear-gradient(90deg, rgba(255, 255, 255, .16), transparent); }
-            .vp-gal-tile .vp-gal-arrow.vp-next:hover { background: linear-gradient(270deg, rgba(255, 255, 255, .16), transparent); }
+            .vp-gal-tile:hover .vp-gal-arrow.vp-prev { background: linear-gradient(90deg, rgba(255, 255, 255, .12), transparent); }
+            .vp-gal-tile:hover .vp-gal-arrow.vp-next { background: linear-gradient(270deg, rgba(255, 255, 255, .12), transparent); }
+            .vp-gal-tile .vp-gal-arrow.vp-prev:hover { background: linear-gradient(90deg, rgba(255, 255, 255, .34), transparent); }
+            .vp-gal-tile .vp-gal-arrow.vp-next:hover { background: linear-gradient(270deg, rgba(255, 255, 255, .34), transparent); }
+            .vp-gal-tile .vp-gal-arrow svg { display: block; opacity: 0; transition: opacity .2s; filter: drop-shadow(0 1px 4px rgba(0, 0, 0, .7)); }
+            .vp-gal-tile:hover .vp-gal-arrow svg { opacity: .55; }
+            .vp-gal-tile .vp-gal-arrow:hover svg { opacity: 1; }
+            .vp-gal-tile .vp-gal-arrow.vp-prev { justify-content: flex-start; padding-left: 12px; }
+            .vp-gal-tile .vp-gal-arrow.vp-next { justify-content: flex-end; padding-right: 12px; }
         }
         @media not ((hover: hover) and (pointer: fine)) {
-            .vp-gal-tile .vp-gal-arrow { pointer-events: none; }
-            .vp-gal-tile .vp-gal-arrow.vp-prev.vp-tap { background: linear-gradient(90deg, rgba(255, 255, 255, .22), transparent); }
-            .vp-gal-tile .vp-gal-arrow.vp-next.vp-tap { background: linear-gradient(270deg, rgba(255, 255, 255, .22), transparent); }
+            .vp-gal-tile .vp-gal-arrow { display: none; }
         }
         .vp-gal-slide > img { pointer-events: none; -webkit-user-drag: none; user-select: none; }
         .vp-gal-tile.vp-ctx .vp-gal-slide > img { pointer-events: auto; }
@@ -10547,18 +10555,6 @@
                 });
                 prev.addEventListener('click', go(-1));
                 next.addEventListener('click', go(1));
-                strip.addEventListener('click', e => {
-                    if (matchMedia('(hover: hover) and (pointer: fine)').matches || e.target.closest('.vp-gal-slide.vp-fail')) return;
-                    const r = strip.getBoundingClientRect(), zone = Math.min(96, r.width * 0.22), x = e.clientX - r.left;
-                    const dir = x < zone ? -1 : x > r.width - zone ? 1 : 0;
-                    if (!dir) return;
-                    e.stopPropagation(); e.preventDefault();
-                    const b = dir < 0 ? prev : next;
-                    if (b.classList.contains('vp-edge')) return;
-                    b.classList.add('vp-tap');
-                    setTimeout(() => b.classList.remove('vp-tap'), 220);
-                    go(dir)(e);
-                }, true);
                 show();
             }
             tile.addEventListener('mousedown', e => { if (e.button === 2) tile.classList.add('vp-ctx'); });
@@ -11751,7 +11747,7 @@
                 if (!memo.has(p)) memo.set(p, !p.querySelector(side) && p.getBoundingClientRect().width < innerWidth * 0.72 ? up(p) : null);
                 return memo.get(p) || el;
             };
-            document.querySelectorAll('.' + [SELECTORS.tabs, SELECTORS.feedBar, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .')).forEach(e => tops.add(up(e)));
+            document.querySelectorAll('.' + [SELECTORS.tabs, SELECTORS.feedBar, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .')).forEach(e => { if (!e.closest('.vp-sw-stage')) tops.add(up(e)); });
             tops.forEach(el => {
                 const r = el.getBoundingClientRect();
                 if (r.width > 300) { left = Math.min(left, r.left); right = Math.max(right, r.right); }
@@ -11792,14 +11788,14 @@
             return right ? { left, right } : null;
         }
         function glidePlace() {
-            if (document.querySelector('.vp-sw-stage')) { placeSidebar(); placeRail(); return; }
+            if (performance.now() < 3000) { placeSidebar(); placeRail(); return; }
             const side = siteEl('sidebar'), on = rail.classList.contains('vp-on');
             const a = side && side.getBoundingClientRect().left, b = on && rail.getBoundingClientRect().left;
             placeSidebar(); placeRail();
             [[side, a], [on && rail.classList.contains('vp-on') && rail, b]].forEach(([el, was]) => {
                 if (!el || typeof was !== 'number') return;
                 const d = was - el.getBoundingClientRect().left;
-                if (Math.abs(d) > 1) el.animate([{ transform: `translateX(${d}px)` }, { transform: 'translateX(0)' }], { duration: 360, easing: 'cubic-bezier(.25, .8, .25, 1)' });
+                if (Math.abs(d) > 1) el.animate([{ transform: `translateX(${d}px)` }, { transform: 'translateX(0)' }], { duration: 360, easing: 'cubic-bezier(.25, .8, .25, 1)', composite: 'add' });
             });
         }
         let lastCb = null;
@@ -11891,12 +11887,11 @@
             rail.style.maxHeight = box.maxH + 'px';
         }
         addEventListener('resize', placeRail);
-        onDom(placeRail);
 
         function placeSidebar() {
             if (galOpen) { document.documentElement.classList.remove('vp-side-moved'); return; }
             const side = siteEl('sidebar');
-            const cb = contentBox();
+            const cb = contentBox() || lastCb;
             if (!side || !cb) return;
             const siteLeft = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-gap')) || 36;
             const want = Math.round(cb.left - side.getBoundingClientRect().width - 24);
@@ -11905,7 +11900,7 @@
             if (on) document.documentElement.style.setProperty('--vp-side-left', want + 'px');
         }
         addEventListener('resize', placeSidebar);
-        onDom(placeSidebar);
+        onDom(glidePlace);
         placeSidebar();
 
         const railStats = rail.querySelector('.vp-stats'), railSince = rail.querySelector('.vp-stats-since');
