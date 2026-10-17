@@ -99,7 +99,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   A.p.on('dialog', d => d.accept());
   await rightClick(A.p, 0);
   const ls = await labels(A.p);
-  check(ls.join('|') === 'Ответить|Закрепить|Переслать|Удалить|Выбрать|Копировать текст', 'меню сообщения: ' + ls.join(', '));
+  check(ls.join('|') === 'Ответить|Закрепить|Переслать|Удалить у себя|Выбрать|Копировать текст', 'меню сообщения: ' + ls.join(', '));
   await clickItem(A.p, 'Ответить');
   check(await A.p.locator('.vp-msgs-reply:not([hidden])').count() === 1, 'над полем ввода появилась полоска ответа');
   await say(A.p, 'ответ на первое');
