@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.8.2
+// @version      3.5.8.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4309,7 +4309,8 @@
         }
 
         const CHANGELOG = [
-            ['3.5.8 – 3.5.8.2', '17 октября 2026', [
+            ['3.5.8 – 3.5.8.3', '17 октября 2026', [
+                'Правая колонка на средних экранах встаёт вплотную к ленте, как левое меню, а не уезжает к краю с большим пустым промежутком',
                 'Магазин: чёрная вспышка при загрузке и при листании в магазин убрана, страница магазина проявляется уже прозрачной',
                 'Галерея: на телефоне стрелок и зон нет, листание только пальцем. На ПК зоны по краям заметнее: при наведении на карточку края подсвечиваются, а у зоны под курсором появляется стрелка',
                 'Листание вкладок (WIP): боковые панели плавно подстраиваются под ширину страницы при переходе с широкой на узкую и обратно, в том числе когда страница прогрузилась позже']],
@@ -10135,6 +10136,7 @@
         .vp-gal:not(.vp-card) .vp-gal-top { margin: 9px 12px 0 6px; }
         .vp-gal:not(.vp-card) .vp-gal-card { margin-top: 9px; border-radius: 36px 36px 0 0; }
         html.vp-gal-open .vp-gal-hidden, html.vp-msgs-open .vp-gal-hidden { visibility: hidden !important; }
+        html.vp-rail-adj aside.vp-sidebar-right { visibility: hidden !important; }
         iframe.vp-page-frame, iframe[src*="/public/shop"] { background: transparent !important; color-scheme: normal; transition: opacity .2s; }
         iframe.vp-page-frame:not(.vp-frame-ok), iframe[src*="/public/shop"]:not(.vp-frame-ok) { opacity: 0; }
         html.vp-gal-open iframe.vp-page-frame, html.vp-msgs-open iframe.vp-page-frame { visibility: hidden !important; }
@@ -11881,7 +11883,7 @@
             const side = siteEl('sidebarRight');
             const right = side ? side.getBoundingClientRect().left : innerWidth;
             const gap = right - edge;
-            let box = null;
+            let box = null, adj = false;
             const on = railEnabled && !!myUsername && !!rail.querySelector(':scope > .vp-rail-card:not([hidden])');
             const sideEl = siteEl('sidebar');
             if (on && galOpen && sideEl && innerWidth > PHONE_MAX) {
@@ -11890,14 +11892,18 @@
             } else if (on && edge > 0 && gap >= 240) {
                 const width = Math.min(300, gap - 48);
                 box = { left: Math.round(edge + 24), width, maxH: innerHeight - 48 };
+            } else if (on && edge > 0 && innerWidth - edge - 48 >= 240 && innerWidth > PHONE_MAX) {
+                box = { left: Math.round(edge + 24), width: Math.min(300, innerWidth - edge - 48), maxH: innerHeight - 48 };
+                adj = true;
             } else if (on && side) {
                 const sr = side.getBoundingClientRect(), links = side.lastElementChild;
                 const maxH = (links ? links.getBoundingClientRect().top : sr.bottom) - 24 - 24;
                 if (sr.width >= 180 && maxH >= 220) box = { left: Math.round(sr.left), width: Math.round(sr.width), maxH };
             }
             rail.style.top = RAIL_TOP + 'px';
-            if (box && edge > 0 && gap >= 240 && !galOpen) box.maxH = innerHeight - RAIL_TOP - 24;
+            if (box && edge > 0 && (gap >= 240 || adj) && !galOpen) box.maxH = innerHeight - RAIL_TOP - 24;
             rail.classList.toggle('vp-on', !!box);
+            document.documentElement.classList.toggle('vp-rail-adj', adj && !!box);
             if (!box) return;
             rail.style.width = box.width + 'px';
             rail.style.left = box.left + 'px';
