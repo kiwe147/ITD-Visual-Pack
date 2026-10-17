@@ -4323,6 +4323,7 @@
                 'В профиле человека с ИТД X рядом с «Подписаться» появилась кнопка «Написать» — сразу открывает чат с ним',
                 'Сообщения: новое сообщение появляется в открытом чате само, не нужно выходить и заходить; значок на «Сообщениях» не зависает',
                 'Сообщения: чат открывается сразу на последних сообщениях, а не на самых старых',
+                'Список чатов как в Телеграме: у последнего своего сообщения галочки (одна — доставлено, две голубые — прочитано), у картинки в превью — маленькая миниатюра',
                 'Клуб ИТД X: убраны срезы свечения у аватарок и ников слева и справа',
                 'Меню сообщения (правая кнопка или долгое нажатие) как в Телеграме: Ответить, Закрепить, Переслать, Удалить, Выбрать, Копировать, Сохранить как; ответы показываются цитатой, закреплённое сообщение — полоской вверху чата',
                 'При создании поста картинки можно перетаскивать друг на друга и менять порядок',
@@ -6562,7 +6563,8 @@
         const msgUuidBytes = u => Uint8Array.from(u.replace(/-/g, '').match(/../g), h => parseInt(h, 16));
         const msgBytesUuid = b => [...b].map(x => x.toString(16).padStart(2, '0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
         const MSG_ALBUM_MAX = 10;
-        const msgPreview = m => m.imgs && m.imgs.length > 1 ? `${m.imgs.length} фото` + (m.text ? ' · ' + m.text : '') : m.img ? (m.text || 'Фото') : m.text;
+        const msgBodyText = t => { const x = String(t || ''); return /^> /.test(x) ? x.replace(/^> [^\n]*\n?/, '') ||(/^> Переслано/.test(x) ? 'Пересланное сообщение' : 'Ответ') : x; };
+        const msgPreview = m => { const t = msgBodyText(m.text); return m.imgs && m.imgs.length > 1 ? `${m.imgs.length} фото` + (t ? ' · ' + t : '') : m.img ? (t || 'Фото') : t; };
         const msgNet = { keys: new Map(), vols: [], me: null, pairs: new Map(), conv: new Map(), syncing: null, blocks: {} };
         const msgBlocks = () => GM_getValue(acctKey('msgBlocked'), {});
         function msgIsBlocked(uid) { const p = msgNet.blocks[uid] || msgBlocks()[uid]; return !!(p && p.length && !p[p.length - 1][1]); }
@@ -6898,10 +6900,10 @@
         .vp-msgs-quote { display: block; margin: 0 0 5px; padding: 3px 9px; border-left: 3px solid var(--vp-accent, #f91880); border-radius: 4px 9px 9px 4px; background: rgba(127, 127, 127, .17); font-size: 12.5px; line-height: 1.32; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .vp-msgs-quote b { display: block; font-size: 12px; color: var(--vp-accent, #f91880); }
         .vp-msgs-rest { white-space: pre-wrap; }
-        .vp-msgs-reply, .vp-msgs-pin { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-left: 3px solid var(--vp-accent, #f91880); margin: 0 12px; background: rgba(127, 127, 127, .12); border-radius: 4px 12px 12px 4px; color: var(--text-primary, #fff); }
-        .vp-msgs-pin { margin: 4px 12px 0; cursor: pointer; }
-        .vp-msgs-reply[hidden], .vp-msgs-pin[hidden], .vp-msgs-sel[hidden], .vp-msgs-fwd[hidden] { display: none; }
-        .vp-msgs-reply svg, .vp-msgs-pin > svg { flex: none; color: var(--vp-accent, #f91880); }
+        .vp-msgs-reply, .vp-msgs-pinbar { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-left: 3px solid var(--vp-accent, #f91880); margin: 0 12px; background: rgba(127, 127, 127, .12); border-radius: 4px 12px 12px 4px; color: var(--text-primary, #fff); }
+        .vp-msgs-pinbar { margin: 4px 12px 0; cursor: pointer; }
+        .vp-msgs-reply[hidden], .vp-msgs-pinbar[hidden], .vp-msgs-sel[hidden], .vp-msgs-fwd[hidden] { display: none; }
+        .vp-msgs-reply svg, .vp-msgs-pinbar > svg { flex: none; color: var(--vp-accent, #f91880); }
         .vp-msgs-reply-t, .vp-msgs-pin-t { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 13px; line-height: 1.3; }
         .vp-msgs-reply-t b, .vp-msgs-pin-t b { font-size: 12.5px; color: var(--vp-accent, #f91880); }
         .vp-msgs-reply-t span, .vp-msgs-pin-t span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .85; }
@@ -6955,6 +6957,9 @@
                 d.lastTs = last.at || last.ts;
                 d.time = msgTime(last.at || last.ts);
                 d.unread = list.filter(m => m.dir === 'in' && m.ts > seenAt(seen, t.uid, t.sup)).length;
+                d.tick = last.dir === 'out' ? (readUpTo(t.uid, t.sup, 'them') >= last.ts ? 2 : 1) : 0;
+                const lim = (last.imgs && last.imgs[0]) || last.img;
+                d.lastImg = lim ? msgImgUrl(lim) : '';
                 if (!t.sup && msgIsBlocked(t.uid)) d.last = 'Заблокирован(а)';
                 else if (!t.sup && msgBlockedMe(t.uid)) d.last = 'Тебя заблокировали';
             }
@@ -7511,6 +7516,8 @@
             clip: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5 12.5 19a5 5 0 0 1-7-7L13 4.5a3.3 3.3 0 0 1 4.7 4.7l-7.4 7.4a1.7 1.7 0 0 1-2.4-2.4l6.7-6.7"/></svg>',
             smile: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01" stroke-width="2.6"/></svg>',
             send: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg>',
+            tick1: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
+            tick2: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m1.5 12.5 4.5 4.5L15.5 7.5"/><path d="m10 15.5 1.5 1.5L21 7.5"/></svg>',
             pin: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M15 3l6 6-3 1-4 4 .5 4.5-1.5 1.5-4-4-5 5-1-1 5-5-4-4L5.5 9.5 10 10l4-4Z"/></svg>'
         };
 
@@ -7691,6 +7698,10 @@
         .vp-msgs-name { display: flex; align-items: center; gap: 5px; font-weight: 600; font-size: 15px; }
         .vp-msgs-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .vp-msgs-last { margin-top: 3px; font-size: 14px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msgs-side > span:first-child { display: inline-flex; align-items: center; gap: 3px; }
+        .vp-msgs-tick { display: inline-flex; font-style: normal; color: var(--text-secondary); }
+        .vp-msgs-tick.vp-read { color: #4aa3ff; }
+        .vp-msgs-lthumb { width: 18px; height: 18px; border-radius: 4px; object-fit: cover; vertical-align: -4px; margin-right: 6px; }
         .vp-msgs-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; font-size: 12px; color: var(--text-secondary); }
         .vp-msgs-badge { min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; display: flex; align-items: center; justify-content: center;
             font-size: 12px; font-weight: 700; background: var(--vp-accent); color: var(--vp-on-accent, #fff); }
@@ -7910,8 +7921,8 @@
                 <div class="vp-msgs-row${pins.includes(d.id) ? ' vp-pinned' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}" data-id="${d.id}">
                     <div class="vp-msgs-ava${d.online ? ' vp-online' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}">${avaHtml(d.ava)}</div>
                     <div class="vp-msgs-mid"><div class="vp-msgs-name"><span>${esc(d.name)}</span></div>
-                        <div class="vp-msgs-last">${esc(d.last)}</div></div>
-                    <div class="vp-msgs-side"><span>${esc(d.time)}</span>${d.unread ? `<span class="vp-msgs-badge">${d.unread}</span>`
+                        <div class="vp-msgs-last">${d.lastImg ? `<img class="vp-msgs-lthumb" src="${esc(d.lastImg)}" alt="" loading="lazy">` : ''}${esc(d.last)}</div></div>
+                    <div class="vp-msgs-side"><span>${d.tick ? `<i class="vp-msgs-tick${d.tick === 2 ? ' vp-read' : ''}" title="${d.tick === 2 ? 'Прочитано' : 'Доставлено'}">${d.tick === 2 ? MSG_ICON.tick2 : MSG_ICON.tick1}</i>` : ''}${esc(d.time)}</span>${d.unread ? `<span class="vp-msgs-badge">${d.unread}</span>`
                         : pins.includes(d.id) ? `<span class="vp-msgs-pin" title="Закреплён">${MSG_ICON.pin}</span>` : ''}</div>
                 </div>`).join('') : '<div class="vp-msgs-empty">Ничего не нашлось</div>';
             }
@@ -8452,7 +8463,7 @@
                 return text ? q + '\n' + text : q;
             }
             const pinEl = document.createElement('div');
-            pinEl.className = 'vp-msgs-pin';
+            pinEl.className = 'vp-msgs-pinbar';
             pinEl.hidden = true;
             pinEl.innerHTML = uiIcon('pin', 18) + '<span class="vp-msgs-pin-t"><b>Закреплённое сообщение</b><span></span></span><button type="button" class="vp-msgs-ib" title="Открепить">' + uiIcon('close', 16) + '</button>';
             $('.vp-msgs-chead').after(pinEl);

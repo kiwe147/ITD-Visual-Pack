@@ -110,11 +110,11 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   await rightClick(A.p, 1);
   await clickItem(A.p, 'Закрепить');
   await A.p.waitForTimeout(2500);
-  check(await A.p.locator('.vp-msgs-pin:not([hidden])').count() === 1 && /второе/.test(await A.p.locator('.vp-msgs-pin').textContent()), 'закреплённое сообщение — полоска вверху чата: ' + (await A.p.locator('.vp-msgs-pin').textContent()).slice(0, 60));
-  check(await until(async () => await B.p.locator('.vp-msgs-pin:not([hidden])').count() === 1, 40000), 'bob тоже видит закреплённое');
-  await A.p.locator('.vp-msgs-pin button').click();
+  check(await A.p.locator('.vp-msgs-pinbar:not([hidden])').count() === 1 && /второе/.test(await A.p.locator('.vp-msgs-pinbar').textContent()), 'закреплённое сообщение — полоска вверху чата: ' + (await A.p.locator('.vp-msgs-pinbar').textContent()).slice(0, 60));
+  check(await until(async () => await B.p.locator('.vp-msgs-pinbar:not([hidden])').count() === 1, 40000), 'bob тоже видит закреплённое');
+  await A.p.locator('.vp-msgs-pinbar button').click();
   await A.p.waitForTimeout(2500);
-  check(await A.p.locator('.vp-msgs-pin:not([hidden])').count() === 0, 'открепил — полоска ушла');
+  check(await A.p.locator('.vp-msgs-pinbar:not([hidden])').count() === 0, 'открепил — полоска ушла');
 
   await rightClick(A.p, 2);
   check((await labels(A.p)).includes('Удалить'), 'свою реплику можно удалить');
@@ -142,6 +142,12 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   const left = await bubbles(A.p);
   check(!left.some(x => x.includes('первое') && !x.includes('ответ')), 'чужое «первое» удалено только у себя: ' + left.join(' / '));
   check((await bubbles(B.p)).some(x => x.includes('первое')), 'у bob «первое» осталось');
+  await A.p.locator('.vp-msgs-back').click();
+  await A.p.waitForTimeout(800);
+  const row = A.p.locator('.vp-msgs-row[data-id="u:bob"]');
+  check(await row.locator('.vp-msgs-tick').count() === 1, 'в списке чатов у последнего своего сообщения есть галочки');
+  check(await until(async () => { await A.p.evaluate(() => { const b = document.querySelector('.vp-msgs-row[data-id="u:bob"]'); }); return await row.locator('.vp-msgs-tick.vp-read').count() === 1; }, 60000), 'когда bob прочитал, галочки голубые');
+  await A.p.locator('.vp-msgs-list').screenshot({ path: path.join(__dirname, 'out', 'msgs-list.png') }).catch(() => { });
   check(A.p.errors.length === 0 && B.p.errors.length === 0, 'нет ошибок страницы ' + A.p.errors.concat(B.p.errors).join('|'));
   await b.close();
   console.log(fails.length ? '\nПРОВАЛЕНО: ' + fails.length : '\nвсё ок');
