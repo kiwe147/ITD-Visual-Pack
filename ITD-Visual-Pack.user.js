@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.6.1.3
+// @version      3.6.1.5
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4315,10 +4315,11 @@
         }
 
         const CHANGELOG = [
-            ['3.6.1 – 3.6.1.3', '18 октября 2026', [
+            ['3.6.1 – 3.6.1.5', '18 октября 2026', [
                 'Выбор сообщений: режим включается и удержанием левой кнопки мыши на сообщении; веди с зажатой кнопкой — выбираются подряд, в том числе от уже выбранного; щелчок по выбранному снимает выбор',
                 'Сообщения: правая кнопка, удержание и выбор работают и на пустом месте рядом с сообщением, не только на самом пузыре',
                 'Картинки в сообщениях открываются плавным увеличением из того места, где лежат, и так же уезжают обратно',
+                'Сообщения: у картинки кнопка «Сохранить» сразу скачивает файл, а не открывает его в новой вкладке',
                 'Режим выбора: правая кнопка открывает меню «Удалить выбранное / Отменить выбор / Копировать выбранное как текст»; если вести мышь обратно, лишнее выделение снимается'
             ]],
             ['3.6.0.1 – 3.6.0.2', '18 октября 2026', [
@@ -8661,13 +8662,16 @@
                 if (current) { const c = msgTarget(current); if (c.uid === t.uid && c.sup === t.sup) msgRefreshChat(current); }
             }
             async function saveImage(url) {
+                const name = decodeURIComponent(url.split('?')[0].split('/').pop() || 'image');
+                const save = href => { const a = document.createElement('a'); a.href = href; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
+                if (/^(blob|data):/.test(url)) { save(url); return; }
                 try {
-                    const bl = await (await fetch(url)).blob(), a = document.createElement('a');
-                    a.href = URL.createObjectURL(bl);
-                    a.download = decodeURIComponent(url.split('?')[0].split('/').pop() || 'image');
-                    document.body.appendChild(a); a.click(); a.remove();
-                    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-                } catch (e) { window.open(url, '_blank', 'noopener'); }
+                    const bl = await new Promise((ok, no) => GM_xmlhttpRequest({ method: 'GET', url, responseType: 'blob', timeout: 60000,
+                        onload: r => r.status === 200 && r.response ? ok(r.response) : no(new Error('HTTP ' + r.status)), onerror: no, ontimeout: no }));
+                    const href = URL.createObjectURL(bl);
+                    save(href);
+                    setTimeout(() => URL.revokeObjectURL(href), 4000);
+                } catch (e) { logErr('сохранение картинки', e); window.open(url, '_blank', 'noopener'); }
             }
             let menu = null, pressT = 0;
             function closeMenu() {
@@ -8740,7 +8744,7 @@
                 }
                 if (text) item('Копировать текст', () => copyText(text), 'copy');
                 if (imgs.length) {
-                    item('Сохранить как…', () => saveImage(hit ? hit.src : imgs[0]), 'save');
+                    item('Сохранить', () => saveImage(hit ? hit.src : imgs[0]), 'save');
                     item(imgs.length > 1 ? 'Открыть альбом' : 'Открыть картинку', () => openImg(imgs, 0, text, [...b.querySelectorAll('.vp-msgs-img')]), 'image');
                 }
                 if (menu.lastChild && menu.lastChild.classList.contains('vp-msgs-menu-sep')) menu.lastChild.remove();

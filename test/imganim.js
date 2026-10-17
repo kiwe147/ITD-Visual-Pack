@@ -121,6 +121,13 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   await A.p.keyboard.press('Escape');
   await A.p.waitForTimeout(800);
   check(!(await A.p.locator('.vp-msgs-lb').count()) && await A.p.locator('.vp-msgs.vp-open .vp-msgs-chat:not([hidden])').count() === 1, 'Esc закрывает просмотр и оставляет чат');
+  await A.p.evaluate(() => { window.GM_xmlhttpRequest = o => setTimeout(() => o.onload({ status: 200, response: new Blob(['x'], { type: 'image/webp' }) }), 20); window.__opened = 0; const wo = window.open; window.open = () => { window.__opened++; return null; }; });
+  const bb = await A.p.locator('.vp-msgs-feed .vp-msgs-img').last().boundingBox();
+  await A.p.mouse.click(bb.x + 30, bb.y + 30, { button: 'right' });
+  const dl = A.p.waitForEvent('download', { timeout: 5000 }).catch(() => null);
+  await A.p.locator('.vp-msgs-menu .vp-msgs-menu-i', { hasText: 'Сохранить' }).click();
+  const d = await dl;
+  check(!!d && /.webp$/.test(d.suggestedFilename()) && await A.p.evaluate(() => window.__opened) === 0, 'Сохранить скачивает файл, не открывает вкладку: ' + (d ? d.suggestedFilename() : 'нет скачивания'));
   check(A.p.errors.length === 0, 'нет ошибок страницы ' + A.p.errors.join('|'));
   await b.close();
   console.log(fails.length ? '\nПРОВАЛЕНО: ' + fails.length : '\nвсё ок');
