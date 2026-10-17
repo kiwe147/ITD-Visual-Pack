@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.5.9
+// @version      3.5.10
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4309,6 +4309,9 @@
         }
 
         const CHANGELOG = [
+            ['3.5.10', '18 октября 2026', [
+                '«Анти цензура» снова работает: картинки уходят как GIF и при обычной загрузке, и при вставке из буфера'
+            ]],
             ['3.5.9', '18 октября 2026', [
                 'Узкие телефоны: вкладки «Для вас / Кланы / Подписки» в шапке ленты стали иконками и больше не слипаются']],
             ['3.5.8 – 3.5.8.3', '17 октября 2026', [
@@ -8737,20 +8740,24 @@
             e.target.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY }));
         }, true);
         document.addEventListener('dragover', function (e) { if (antiCensorshipEnabled) e.preventDefault(); }, true);
+        function gifForm(body) {
+            if (!antiCensorshipEnabled || !(body instanceof FormData)) return body;
+            const form = new FormData();
+            let changed = false;
+            for (const [key, value] of body.entries()) {
+                const v = gifFile(value);
+                if (v !== value) changed = true;
+                form.append(key, v);
+            }
+            return changed ? form : body;
+        }
         (function gifOnSend() {
             const X = pageWindow.XMLHttpRequest.prototype, origSend = X.send;
-            X.send = function (body) {
-                if (antiCensorshipEnabled && body instanceof FormData) {
-                    const form = new FormData();
-                    let changed = false;
-                    for (const [key, value] of body.entries()) {
-                        const v = gifFile(value);
-                        if (v !== value) changed = true;
-                        form.append(key, v);
-                    }
-                    if (changed) body = form;
-                }
-                return origSend.call(this, body);
+            X.send = function (body) { return origSend.call(this, gifForm(body)); };
+            const origFetch = pageWindow.fetch;
+            pageWindow.fetch = function (input, init) {
+                if (init && init.body instanceof FormData) init = Object.assign({}, init, { body: gifForm(init.body) });
+                return origFetch.call(this, input, init);
             };
         })();
 

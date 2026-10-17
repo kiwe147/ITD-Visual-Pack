@@ -94,10 +94,16 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
       const x = new XMLHttpRequest(); x.open('POST', '/vp-test-upload'); x.send(f);
     });
     const body = (await sent).postDataBuffer().toString();
-    return { pick: await p.evaluate(() => window.__picked), drop: await p.evaluate(() => window.__dropped), xhr: (body.match(/filename="([^"]+)"[\s\S]*?Content-Type: (\S+)/) || []).slice(1).join(' ') };
+    const sentF = p.waitForRequest(r => r.url().endsWith('/vp-test-fetch'));
+    await p.evaluate(() => {
+      const f = new FormData(); f.append('file', new File(['x'], 'd.png', { type: 'image/png' }));
+      fetch('/vp-test-fetch', { method: 'POST', body: f }).catch(() => { });
+    });
+    const bodyF = (await sentF).postDataBuffer().toString();
+    return { fetch: (bodyF.match(/filename="([^"]+)"[\s\S]*?Content-Type: (\S+)/) || []).slice(1).join(' '), pick: await p.evaluate(() => window.__picked), drop: await p.evaluate(() => window.__dropped), xhr: (body.match(/filename="([^"]+)"[\s\S]*?Content-Type: (\S+)/) || []).slice(1).join(' ') };
   };
   const ac = await antiCensor();
-  check(ac.pick === 'a.gif image/gif' && ac.drop === 'c.gif image/gif' && ac.xhr === 'b.gif image/gif', `анти цензура вкл: всё уходит .gif (${ac.pick} | ${ac.drop} | ${ac.xhr})`);
+  check(ac.pick === 'a.gif image/gif' && ac.drop === 'c.gif image/gif' && ac.xhr === 'b.gif image/gif' && ac.fetch === 'd.gif image/gif', `анти цензура вкл: всё уходит .gif (${ac.pick} | ${ac.drop} | ${ac.xhr} | ${ac.fetch})`);
   if (opener) {
     const toggleAC = async () => {
       await opener.evaluate(b => b.click()); await p.waitForTimeout(300);
@@ -107,7 +113,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     };
     await toggleAC();
     const off = await antiCensor();
-    check(off.pick === 'a.png image/png' && off.drop === 'c.webp image/webp' && off.xhr === 'b.jpg image/jpeg', `анти цензура выкл: файлы как есть (${off.pick} | ${off.drop} | ${off.xhr})`);
+    check(off.pick === 'a.png image/png' && off.drop === 'c.webp image/webp' && off.xhr === 'b.jpg image/jpeg' && off.fetch === 'd.png image/png', `анти цензура выкл: файлы как есть (${off.pick} | ${off.drop} | ${off.xhr} | ${off.fetch})`);
     await toggleAC();
   }
   await p.evaluate(() => document.querySelectorAll('.vpTestFile').forEach(e => e.remove()));
