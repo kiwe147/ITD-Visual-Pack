@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.6.0.1
+// @version      3.6.0.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4315,13 +4315,15 @@
         }
 
         const CHANGELOG = [
-            ['3.6.0.1', '18 октября 2026', [
-                'Вкладка «Сообщения» в меню больше не тусклая, если чат открыт из профиля'
+            ['3.6.0.1 – 3.6.0.2', '18 октября 2026', [
+                'Вкладка «Сообщения» в меню больше не тусклая, если чат открыт из профиля',
+                'Выбор сообщений как в Телеграме: зажми и веди по сообщениям — они выбираются подряд, у края лента сама прокручивается; если повести по выбранным — выбор снимается'
             ]],
             ['3.6.0', '18 октября 2026', [
                 'В профиле человека с ИТД X рядом с «Подписаться» появилась кнопка «Написать» — сразу открывает чат с ним',
                 'Сообщения: новое сообщение появляется в открытом чате само, не нужно выходить и заходить; значок на «Сообщениях» не зависает',
                 'Сообщения: чат открывается сразу на последних сообщениях, а не на самых старых',
+                'Список чатов как в Телеграме: у последнего своего сообщения галочки (одна — доставлено, две голубые — прочитано), у картинки в превью — маленькая миниатюра',
                 'Клуб ИТД X: убраны срезы свечения у аватарок и ников слева и справа',
                 'Меню сообщения (правая кнопка или долгое нажатие) как в Телеграме: Ответить, Закрепить, Переслать, Удалить, Выбрать, Копировать, Сохранить как; ответы показываются цитатой, закреплённое сообщение — полоской вверху чата',
                 'При создании поста картинки можно перетаскивать друг на друга и менять порядок',
@@ -6561,7 +6563,8 @@
         const msgUuidBytes = u => Uint8Array.from(u.replace(/-/g, '').match(/../g), h => parseInt(h, 16));
         const msgBytesUuid = b => [...b].map(x => x.toString(16).padStart(2, '0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
         const MSG_ALBUM_MAX = 10;
-        const msgPreview = m => m.imgs && m.imgs.length > 1 ? `${m.imgs.length} фото` + (m.text ? ' · ' + m.text : '') : m.img ? (m.text || 'Фото') : m.text;
+        const msgBodyText = t => { const x = String(t || ''); return /^> /.test(x) ? x.replace(/^> [^\n]*\n?/, '') ||(/^> Переслано/.test(x) ? 'Пересланное сообщение' : 'Ответ') : x; };
+        const msgPreview = m => { const t = msgBodyText(m.text); return m.imgs && m.imgs.length > 1 ? `${m.imgs.length} фото` + (t ? ' · ' + t : '') : m.img ? (t || 'Фото') : t; };
         const msgNet = { keys: new Map(), vols: [], me: null, pairs: new Map(), conv: new Map(), syncing: null, blocks: {} };
         const msgBlocks = () => GM_getValue(acctKey('msgBlocked'), {});
         function msgIsBlocked(uid) { const p = msgNet.blocks[uid] || msgBlocks()[uid]; return !!(p && p.length && !p[p.length - 1][1]); }
@@ -6897,10 +6900,10 @@
         .vp-msgs-quote { display: block; margin: 0 0 5px; padding: 3px 9px; border-left: 3px solid var(--vp-accent, #f91880); border-radius: 4px 9px 9px 4px; background: rgba(127, 127, 127, .17); font-size: 12.5px; line-height: 1.32; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .vp-msgs-quote b { display: block; font-size: 12px; color: var(--vp-accent, #f91880); }
         .vp-msgs-rest { white-space: pre-wrap; }
-        .vp-msgs-reply, .vp-msgs-pin { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-left: 3px solid var(--vp-accent, #f91880); margin: 0 12px; background: rgba(127, 127, 127, .12); border-radius: 4px 12px 12px 4px; color: var(--text-primary, #fff); }
-        .vp-msgs-pin { margin: 4px 12px 0; cursor: pointer; }
-        .vp-msgs-reply[hidden], .vp-msgs-pin[hidden], .vp-msgs-sel[hidden], .vp-msgs-fwd[hidden] { display: none; }
-        .vp-msgs-reply svg, .vp-msgs-pin > svg { flex: none; color: var(--vp-accent, #f91880); }
+        .vp-msgs-reply, .vp-msgs-pinbar { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-left: 3px solid var(--vp-accent, #f91880); margin: 0 12px; background: rgba(127, 127, 127, .12); border-radius: 4px 12px 12px 4px; color: var(--text-primary, #fff); }
+        .vp-msgs-pinbar { margin: 4px 12px 0; cursor: pointer; }
+        .vp-msgs-reply[hidden], .vp-msgs-pinbar[hidden], .vp-msgs-sel[hidden], .vp-msgs-fwd[hidden] { display: none; }
+        .vp-msgs-reply svg, .vp-msgs-pinbar > svg { flex: none; color: var(--vp-accent, #f91880); }
         .vp-msgs-reply-t, .vp-msgs-pin-t { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 13px; line-height: 1.3; }
         .vp-msgs-reply-t b, .vp-msgs-pin-t b { font-size: 12.5px; color: var(--vp-accent, #f91880); }
         .vp-msgs-reply-t span, .vp-msgs-pin-t span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .85; }
@@ -6911,6 +6914,7 @@
         .vp-msgs-sel button.vp-danger { color: #ff5a5f; }
         .vp-msgs-sel button:not(.vp-msgs-ib):hover { background: rgba(127, 127, 127, .28); }
         .vp-selecting .vp-msgs-b { cursor: pointer; }
+        .vp-selecting .vp-msgs-feed { user-select: none; -webkit-user-select: none; touch-action: none; }
         .vp-msgs-b.vp-sel { outline: 2px solid var(--vp-accent, #f91880); outline-offset: 2px; }
         .vp-msgs-b.vp-gone { opacity: .35; }
         .vp-msgs-b.vp-flash { animation: vpMsgFlash 1.4s ease; }
@@ -6953,6 +6957,9 @@
                 d.lastTs = last.at || last.ts;
                 d.time = msgTime(last.at || last.ts);
                 d.unread = list.filter(m => m.dir === 'in' && m.ts > seenAt(seen, t.uid, t.sup)).length;
+                d.tick = last.dir === 'out' ? (readUpTo(t.uid, t.sup, 'them') >= last.ts ? 2 : 1) : 0;
+                const lim = (last.imgs && last.imgs[0]) || last.img;
+                d.lastImg = lim ? msgImgUrl(lim) : '';
                 if (!t.sup && msgIsBlocked(t.uid)) d.last = 'Заблокирован(а)';
                 else if (!t.sup && msgBlockedMe(t.uid)) d.last = 'Тебя заблокировали';
             }
@@ -7509,6 +7516,8 @@
             clip: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5 12.5 19a5 5 0 0 1-7-7L13 4.5a3.3 3.3 0 0 1 4.7 4.7l-7.4 7.4a1.7 1.7 0 0 1-2.4-2.4l6.7-6.7"/></svg>',
             smile: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01" stroke-width="2.6"/></svg>',
             send: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg>',
+            tick1: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
+            tick2: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m1.5 12.5 4.5 4.5L15.5 7.5"/><path d="m10 15.5 1.5 1.5L21 7.5"/></svg>',
             pin: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M15 3l6 6-3 1-4 4 .5 4.5-1.5 1.5-4-4-5 5-1-1 5-5-4-4L5.5 9.5 10 10l4-4Z"/></svg>'
         };
 
@@ -7689,6 +7698,10 @@
         .vp-msgs-name { display: flex; align-items: center; gap: 5px; font-weight: 600; font-size: 15px; }
         .vp-msgs-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .vp-msgs-last { margin-top: 3px; font-size: 14px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msgs-side > span:first-child { display: inline-flex; align-items: center; gap: 3px; }
+        .vp-msgs-tick { display: inline-flex; font-style: normal; color: var(--text-secondary); }
+        .vp-msgs-tick.vp-read { color: #4aa3ff; }
+        .vp-msgs-lthumb { width: 18px; height: 18px; border-radius: 4px; object-fit: cover; vertical-align: -4px; margin-right: 6px; }
         .vp-msgs-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; font-size: 12px; color: var(--text-secondary); }
         .vp-msgs-badge { min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; display: flex; align-items: center; justify-content: center;
             font-size: 12px; font-weight: 700; background: var(--vp-accent); color: var(--vp-on-accent, #fff); }
@@ -7908,8 +7921,8 @@
                 <div class="vp-msgs-row${pins.includes(d.id) ? ' vp-pinned' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}" data-id="${d.id}">
                     <div class="vp-msgs-ava${d.online ? ' vp-online' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}">${avaHtml(d.ava)}</div>
                     <div class="vp-msgs-mid"><div class="vp-msgs-name"><span>${esc(d.name)}</span></div>
-                        <div class="vp-msgs-last">${esc(d.last)}</div></div>
-                    <div class="vp-msgs-side"><span>${esc(d.time)}</span>${d.unread ? `<span class="vp-msgs-badge">${d.unread}</span>`
+                        <div class="vp-msgs-last">${d.lastImg ? `<img class="vp-msgs-lthumb" src="${esc(d.lastImg)}" alt="" loading="lazy">` : ''}${esc(d.last)}</div></div>
+                    <div class="vp-msgs-side"><span>${d.tick ? `<i class="vp-msgs-tick${d.tick === 2 ? ' vp-read' : ''}" title="${d.tick === 2 ? 'Прочитано' : 'Доставлено'}">${d.tick === 2 ? MSG_ICON.tick2 : MSG_ICON.tick1}</i>` : ''}${esc(d.time)}</span>${d.unread ? `<span class="vp-msgs-badge">${d.unread}</span>`
                         : pins.includes(d.id) ? `<span class="vp-msgs-pin" title="Закреплён">${MSG_ICON.pin}</span>` : ''}</div>
                 </div>`).join('') : '<div class="vp-msgs-empty">Ничего не нашлось</div>';
             }
@@ -8450,7 +8463,7 @@
                 return text ? q + '\n' + text : q;
             }
             const pinEl = document.createElement('div');
-            pinEl.className = 'vp-msgs-pin';
+            pinEl.className = 'vp-msgs-pinbar';
             pinEl.hidden = true;
             pinEl.innerHTML = uiIcon('pin', 18) + '<span class="vp-msgs-pin-t"><b>Закреплённое сообщение</b><span></span></span><button type="button" class="vp-msgs-ib" title="Открепить">' + uiIcon('close', 16) + '</button>';
             $('.vp-msgs-chead').after(pinEl);
@@ -8491,11 +8504,14 @@
                 + '<button type="button" data-a="copy">' + uiIcon('copy', 16) + 'Копировать</button><button type="button" data-a="fwd">' + uiIcon('fwd', 16) + 'Переслать</button><button type="button" data-a="del" class="vp-danger">' + uiIcon('trash', 16) + 'Удалить</button>';
             $('.vp-msgs-chead').appendChild(selEl);
             function selEnd() { if (sel) sel.forEach(b => b.classList.remove('vp-sel')); sel = null; chat.classList.remove('vp-selecting'); selEl.hidden = true; }
-            function selToggle(b) {
+            function selSet(b, on) {
                 if (!sel || !b._m) return;
-                if (sel.has(b)) { sel.delete(b); b.classList.remove('vp-sel'); } else { sel.add(b); b.classList.add('vp-sel'); }
+                const has = sel.has(b);
+                if (on && !has) { sel.add(b); b.classList.add('vp-sel'); }
+                else if (!on && has) { sel.delete(b); b.classList.remove('vp-sel'); }
                 if (!sel.size) selEnd(); else selEl.querySelector('b').textContent = sel.size + ' выбрано';
             }
+            const selToggle = b => { if (sel && b._m) selSet(b, !sel.has(b)); };
             function selStart(b) { selEnd(); sel = new Set(); chat.classList.add('vp-selecting'); selEl.hidden = false; selToggle(b); }
             const selList = () => sel ? [...feed.querySelectorAll(':scope > .vp-msgs-b')].filter(b => sel.has(b)) : [];
             selEl.addEventListener('click', e => {
@@ -8507,8 +8523,48 @@
                 else if (a === 'fwd') openFwd(bs.map(b => b._m));
                 else if (a === 'del') msgDelete(bs).then(selEnd);
             });
+            let dsel = null, selMute = 0;
+            const bubbleUnder = (x, y) => { const el = document.elementFromPoint(x, y), b = el && el.closest ? el.closest('.vp-msgs-b') : null; return b && b._m && feed.contains(b) ? b : null; };
+            function selRange(b) {
+                if (!dsel) return;
+                const all = [...feed.querySelectorAll(':scope > .vp-msgs-b')], i = all.indexOf(b), j = dsel.last ? all.indexOf(dsel.last) : i;
+                if (i < 0) return;
+                for (let k = Math.min(i, j < 0 ? i : j); k <= Math.max(i, j < 0 ? i : j); k++) selSet(all[k], dsel.on);
+                dsel.last = b;
+            }
+            function selScroll() {
+                if (!dsel) return;
+                dsel.raf = 0;
+                if (!dsel.v) return;
+                feed.scrollTop += Math.max(-26, Math.min(26, dsel.v));
+                const b = bubbleUnder(dsel.x, dsel.y);
+                if (b) selRange(b);
+                dsel.raf = requestAnimationFrame(selScroll);
+            }
+            feed.addEventListener('pointerdown', e => {
+                if (!sel || e.button) return;
+                const b = e.target.closest('.vp-msgs-b');
+                if (!b || !b._m) return;
+                dsel = { on: !sel.has(b), id: e.pointerId, last: null, v: 0, x: e.clientX, y: e.clientY, raf: 0 };
+                selRange(b);
+                try { feed.setPointerCapture(e.pointerId); } catch (x) { }
+                e.preventDefault();
+            }, true);
+            feed.addEventListener('pointermove', e => {
+                if (!dsel || e.pointerId !== dsel.id) return;
+                dsel.x = e.clientX; dsel.y = e.clientY;
+                const b = bubbleUnder(e.clientX, e.clientY);
+                if (b) selRange(b);
+                const r = feed.getBoundingClientRect(), edge = 54;
+                dsel.v = e.clientY < r.top + edge ? -(r.top + edge - e.clientY) / 3 : e.clientY > r.bottom - edge ? (e.clientY - (r.bottom - edge)) / 3 : 0;
+                if (dsel.v && !dsel.raf) dsel.raf = requestAnimationFrame(selScroll);
+            });
+            const selDragEnd = e => { if (!dsel || e.pointerId !== dsel.id) return; if (dsel.raf) cancelAnimationFrame(dsel.raf); dsel = null; selMute = Date.now() + 350; };
+            feed.addEventListener('pointerup', selDragEnd);
+            feed.addEventListener('pointercancel', selDragEnd);
             feed.addEventListener('click', e => {
-                if (!sel) return;
+                if (!sel && Date.now() > selMute) return;
+                if (Date.now() < selMute) { e.preventDefault(); e.stopPropagation(); return; }
                 const b = e.target.closest('.vp-msgs-b');
                 e.preventDefault(); e.stopPropagation();
                 if (b) selToggle(b);
@@ -8646,7 +8702,7 @@
                 openMenu(b, e.clientX, e.clientY);
             });
             feed.addEventListener('pointerdown', e => {
-                if (e.pointerType === 'mouse') return;
+                if (e.pointerType === 'mouse' || sel) return;
                 const b = bubbleAt(e.clientY), x = e.clientX, y = e.clientY;
                 if (!b) return;
                 clearTimeout(pressT);
