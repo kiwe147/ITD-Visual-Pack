@@ -4317,7 +4317,7 @@
         const CHANGELOG = [
             ['3.6.0.1 – 3.6.0.2', '18 октября 2026', [
                 'Вкладка «Сообщения» в меню больше не тусклая, если чат открыт из профиля',
-                'Выбор сообщений как в Телеграме: зажми и веди по сообщениям — они выбираются подряд, у края лента сама прокручивается; если повести по выбранным — выбор снимается'
+                'Выбор сообщений как в Телеграме: зажми и веди по сообщениям — они выбираются подряд, у края лента сама прокручивается; щелчок по выбранному снимает выбор; режим выбора включается и удержанием левой кнопки на сообщении'
             ]],
             ['3.6.0', '18 октября 2026', [
                 'В профиле человека с ИТД X рядом с «Подписаться» появилась кнопка «Написать» — сразу открывает чат с ним',
@@ -8545,21 +8545,48 @@
                 if (!sel || e.button) return;
                 const b = e.target.closest('.vp-msgs-b');
                 if (!b || !b._m) return;
-                dsel = { on: !sel.has(b), id: e.pointerId, last: null, v: 0, x: e.clientX, y: e.clientY, raf: 0 };
+                dsel = { on: true, was: sel.has(b), b, moved: false, x0: e.clientX, y0: e.clientY, id: e.pointerId, last: null, v: 0, x: e.clientX, y: e.clientY, raf: 0 };
                 selRange(b);
                 try { feed.setPointerCapture(e.pointerId); } catch (x) { }
                 e.preventDefault();
             }, true);
+            let selHoldT = 0;
+            feed.addEventListener('pointerdown', e => {
+                if (sel || e.pointerType !== 'mouse' || e.button) return;
+                const b = e.target.closest('.vp-msgs-b');
+                if (!b || !b._m || e.target.closest('a, button')) return;
+                const id = e.pointerId, x0 = e.clientX, y0 = e.clientY;
+                clearTimeout(selHoldT);
+                const cancel = () => { clearTimeout(selHoldT); feed.removeEventListener('pointermove', mv); feed.removeEventListener('pointerup', cancel); feed.removeEventListener('pointercancel', cancel); };
+                const mv = ev => { if (Math.hypot(ev.clientX - x0, ev.clientY - y0) > 5) cancel(); };
+                selHoldT = setTimeout(() => {
+                    cancel();
+                    if (!b.isConnected || sel) return;
+                    if (window.getSelection) window.getSelection().removeAllRanges();
+                    selStart(b);
+                    dsel = { on: true, was: false, b, moved: false, x0, y0, id, last: b, v: 0, x: x0, y: y0, raf: 0 };
+                    try { feed.setPointerCapture(id); } catch (x) { }
+                }, 450);
+                feed.addEventListener('pointermove', mv);
+                feed.addEventListener('pointerup', cancel);
+                feed.addEventListener('pointercancel', cancel);
+            }, true);
             feed.addEventListener('pointermove', e => {
                 if (!dsel || e.pointerId !== dsel.id) return;
                 dsel.x = e.clientX; dsel.y = e.clientY;
+                if (Math.hypot(e.clientX - dsel.x0, e.clientY - dsel.y0) > 5) dsel.moved = true;
                 const b = bubbleUnder(e.clientX, e.clientY);
                 if (b) selRange(b);
                 const r = feed.getBoundingClientRect(), edge = 54;
                 dsel.v = e.clientY < r.top + edge ? -(r.top + edge - e.clientY) / 3 : e.clientY > r.bottom - edge ? (e.clientY - (r.bottom - edge)) / 3 : 0;
                 if (dsel.v && !dsel.raf) dsel.raf = requestAnimationFrame(selScroll);
             });
-            const selDragEnd = e => { if (!dsel || e.pointerId !== dsel.id) return; if (dsel.raf) cancelAnimationFrame(dsel.raf); dsel = null; selMute = Date.now() + 350; };
+            const selDragEnd = e => {
+                if (!dsel || e.pointerId !== dsel.id) return;
+                if (dsel.raf) cancelAnimationFrame(dsel.raf);
+                if (!dsel.moved && dsel.was && e.type === 'pointerup') selSet(dsel.b, false);
+                dsel = null; selMute = Date.now() + 350;
+            };
             feed.addEventListener('pointerup', selDragEnd);
             feed.addEventListener('pointercancel', selDragEnd);
             feed.addEventListener('click', e => {
