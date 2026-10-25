@@ -12,6 +12,8 @@
 13-nick-styles.js
 14-background.js
 14b-gl-aurora.js
+14c-gl-flow.js
+14d-gl-points.js
 15-look-theme-popup.js
 16-settings.js
 20-calls.js
