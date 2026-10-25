@@ -74,6 +74,19 @@
     }
     const SERVICE_POSTS = [VERIFICATION_POST_ID, STICKER_POST_ID, MSG_POST_ID, GAMES_POST_ID];
     const isServiceEvent = text => SERVICE_POSTS.some(id => text.includes(id));
+    function hideServicePosts(res) {
+        return res.then(async r => {
+            if (!r.ok) return r;
+            const j = await r.clone().json(), d = j && (j.data || j);
+            if (!d || !Array.isArray(d.posts)) return r;
+            const keep = d.posts.filter(p => !(p && SERVICE_POSTS.includes(p.id)));
+            if (keep.length === d.posts.length) return r;
+            d.posts = keep;
+            const h = new Headers(r.headers);
+            h.delete('content-length');
+            return new Response(JSON.stringify(j), { status: r.status, statusText: r.statusText, headers: h });
+        }).catch(() => res);
+    }
     function quietServiceStream(res) {
         return res.then(r => {
             if (!r.ok || !r.body || typeof TransformStream !== 'function') return r;
@@ -96,7 +109,15 @@
         try {
             const origFetch = w.fetch;
             w.fetch = function (input, init) {
+                try {
+                    const re = profSortUrl(typeof input === 'string' ? input : input && input.url);
+                    if (re) arguments[0] = typeof input === 'string' ? re : new Request(re, input);
+                } catch (e) { }
                 let res = origFetch.apply(this, arguments);
+                try {
+                    const u0 = String(typeof input === 'string' ? input : input && input.url || '').replace(/^https?:[/][/][^/]+/, '');
+                    if (/^[/]api[/]posts[/]user[/]neurosfw(?:[?]|$)/i.test(u0)) res = hideServicePosts(res);
+                } catch (e) { }
                 try {
                     const url = typeof input === 'string' ? input : input && input.url;
                     if (!netMod.skip) netNote(url, (init && init.method) || (input && input.method), false);
@@ -136,6 +157,7 @@
             }
             const X = w.XMLHttpRequest.prototype, origOpen = X.open;
             X.open = function (method, url) {
+                try { const re = /^get$/i.test(method) && profSortUrl(String(url)); if (re) { arguments[1] = re; url = re; } } catch (e) { }
                 if (/^get$/i.test(method) && USER_URL.test(String(url))) {
                     this.addEventListener('load', () => {
                         if (this.status !== 200) return;

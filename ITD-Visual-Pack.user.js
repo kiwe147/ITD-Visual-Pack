@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.0
+// @version      3.7.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -123,6 +123,23 @@
         }
         return { запросы: [...by.values()].sort((a, b) => b.мод + b.сайт - a.мод - a.сайт), по_минутам: perMin };
     }
+    const PROF_SORT_KEY = 'vp_prof_sort';
+    function profSortMode() {
+        try {
+            const o = JSON.parse(sessionStorage.getItem(PROF_SORT_KEY) || 'null');
+            return o && o.u && /^(old|popular)$/.test(o.s) ? o : null;
+        } catch (e) { return null; }
+    }
+    function profSortUrl(url) {
+        const o = profSortMode();
+        if (!o || !url) return null;
+        const m = String(url).match(/^((?:https?:\/\/[^/]+)?\/api\/posts\/user\/([^/?#]+))\?(.*)$/);
+        if (!m || decodeURIComponent(m[2]).toLowerCase() !== o.u.toLowerCase()) return null;
+        const q = new URLSearchParams(m[3]);
+        if (q.get('sort') !== 'new') return null;
+        q.set('sort', o.s);
+        return m[1] + '?' + q.toString();
+    }
     const siteUsers = new Map(), siteUsersWait = new Map();
     const siteAuth = { token: null, at: 0, me: null, meWait: [] };
     const OVERLAY_KEYS = ['vpGal', 'vpMsgs', 'vpMenu'];
@@ -199,6 +216,19 @@
     }
     const SERVICE_POSTS = [VERIFICATION_POST_ID, STICKER_POST_ID, MSG_POST_ID, GAMES_POST_ID];
     const isServiceEvent = text => SERVICE_POSTS.some(id => text.includes(id));
+    function hideServicePosts(res) {
+        return res.then(async r => {
+            if (!r.ok) return r;
+            const j = await r.clone().json(), d = j && (j.data || j);
+            if (!d || !Array.isArray(d.posts)) return r;
+            const keep = d.posts.filter(p => !(p && SERVICE_POSTS.includes(p.id)));
+            if (keep.length === d.posts.length) return r;
+            d.posts = keep;
+            const h = new Headers(r.headers);
+            h.delete('content-length');
+            return new Response(JSON.stringify(j), { status: r.status, statusText: r.statusText, headers: h });
+        }).catch(() => res);
+    }
     function quietServiceStream(res) {
         return res.then(r => {
             if (!r.ok || !r.body || typeof TransformStream !== 'function') return r;
@@ -221,7 +251,15 @@
         try {
             const origFetch = w.fetch;
             w.fetch = function (input, init) {
+                try {
+                    const re = profSortUrl(typeof input === 'string' ? input : input && input.url);
+                    if (re) arguments[0] = typeof input === 'string' ? re : new Request(re, input);
+                } catch (e) { }
                 let res = origFetch.apply(this, arguments);
+                try {
+                    const u0 = String(typeof input === 'string' ? input : input && input.url || '').replace(/^https?:[/][/][^/]+/, '');
+                    if (/^[/]api[/]posts[/]user[/]neurosfw(?:[?]|$)/i.test(u0)) res = hideServicePosts(res);
+                } catch (e) { }
                 try {
                     const url = typeof input === 'string' ? input : input && input.url;
                     if (!netMod.skip) netNote(url, (init && init.method) || (input && input.method), false);
@@ -261,6 +299,7 @@
             }
             const X = w.XMLHttpRequest.prototype, origOpen = X.open;
             X.open = function (method, url) {
+                try { const re = /^get$/i.test(method) && profSortUrl(String(url)); if (re) { arguments[1] = re; url = re; } } catch (e) { }
                 if (/^get$/i.test(method) && USER_URL.test(String(url))) {
                     this.addEventListener('load', () => {
                         if (this.status !== 200) return;
@@ -4418,6 +4457,9 @@
         }
 
         const CHANGELOG = [
+            ['3.7.1', '26 октября 2026', [
+                'Профили: над постами кнопки сортировки «Новые», «Старые», «Популярные» — работают в любом профиле, перед переключением мод проверяет, что сайт отдаёт такую сортировку',
+            ]],
             ['3.7.0', '26 октября 2026', [
                 'Оптимизация фоновых запросов: сообщения, клуб, подтверждения и автолайк работают через единый планировщик с паузой при лимите сайта',
             ]],
@@ -13352,6 +13394,66 @@
         document.addEventListener('visibilitychange', () => { if (!document.hidden) clubPollOnline(); });
         new IntersectionObserver(es => { if (es.some(e => e.isIntersecting) && Date.now() - clubPolledAt > 30e3) clubPollOnline(); }).observe(railClub);
 
+        const PSORT = [['new', 'Новые'], ['old', 'Старые'], ['popular', 'Популярные']];
+        const psortCss = addCss(`
+        .vp-psort { display: flex; gap: 4px; margin: 0 0 12px; padding: 4px; border-radius: 9999px; background: var(--glass-bg, rgba(35, 35, 35, .8)); }
+        .vp-psort button { flex: 1; padding: 7px 10px; border: 0; border-radius: 9999px; background: none; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600;
+            color: var(--text-secondary); transition: color .2s ease, background-color .2s ease; }
+        .vp-psort button:hover { color: var(--text-primary, #fff); }
+        .vp-psort button.vp-on { color: var(--text-primary, #fff); background: var(--tab-active-bg, rgba(255, 255, 255, .1));
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #4aa3ff) 55%, transparent); }
+        .vp-psort.vp-busy { opacity: .6; pointer-events: none; }
+        `);
+        async function profSortProbe(login, mode) {
+            const get = async sort => {
+                const r = await api(`/api/posts/user/${encodeURIComponent(login)}?limit=10&sort=${sort}`);
+                if (!r.ok) return null;
+                const j = await r.json(), d = j.data || j;
+                return Array.isArray(d.posts) ? d.posts.filter(p => p && !p.isPinned) : null;
+            };
+            const base = await get('new'), list = await get(mode);
+            if (!base || !list) return false;
+            if (base.length < 2 || list.length < 2) return true;
+            if (mode === 'old') {
+                for (let i = 1; i < list.length; i++) if (Date.parse(list[i].createdAt) < Date.parse(list[i - 1].createdAt)) return false;
+                return list[0].id !== base[0].id;
+            }
+            return list.map(p => p.id).join() !== base.map(p => p.id).join();
+        }
+        onDom(function profileSort() {
+            const path = location.pathname, m = path.match(/^\/@([\w.]+)\/?$/);
+            const old = document.querySelector('.vp-psort');
+            const art = m && document.querySelector('article.' + SELECTORS.post);
+            if (!art || !art.querySelector('a[href="/@' + m[1] + '"]')) { if (old) old.remove(); return; }
+            const login = m[1], o = profSortMode(), cur = o && o.u.toLowerCase() === login.toLowerCase() ? o.s : 'new';
+            if (old && old.dataset.login === login && old.dataset.cur === cur && old.isConnected && old.nextElementSibling === art) return;
+            if (old) old.remove();
+            const box = document.createElement('div');
+            box.className = 'vp-psort';
+            box.dataset.login = login;
+            box.dataset.cur = cur;
+            PSORT.forEach(([s, label]) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.dataset.s = s;
+                b.textContent = label;
+                b.classList.toggle('vp-on', s === cur);
+                b.addEventListener('click', async () => {
+                    if (s === cur) return;
+                    box.classList.add('vp-busy');
+                    try {
+                        if (s === 'new') sessionStorage.removeItem(PROF_SORT_KEY);
+                        else {
+                            if (!await profSortProbe(login, s)) { vpNote('Сайт не отдаёт такую сортировку'); box.classList.remove('vp-busy'); return; }
+                            sessionStorage.setItem(PROF_SORT_KEY, JSON.stringify({ u: login, s }));
+                        }
+                        location.reload();
+                    } catch (e) { logErr('сортировка профиля', e); vpNote('Не вышло переключить сортировку'); box.classList.remove('vp-busy'); }
+                });
+                box.appendChild(b);
+            });
+            art.parentElement.insertBefore(box, art);
+        });
         const gamesList = rail.querySelector('.vp-games-list');
         const bestText = g => {
             const v = GM_getValue(acctKey(g.best), 0);
