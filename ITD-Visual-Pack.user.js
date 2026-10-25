@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.6
+// @version      3.7.0.7
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4496,8 +4496,8 @@
         }
 
         const CHANGELOG = [
-            ['3.7.1 – 3.7.6', '26 октября 2026', [
-                'Профили: над постами кнопки сортировки «Новые», «Старые», «Популярные» — работают в любом профиле, список перестраивается на месте без перезагрузки страницы, а после обновления страницы сортировка сбрасывается на «Новые». В «Старых» и «Популярных» закреплённый пост не поднимается наверх, а подсветка кнопок плавно перетекает, как на вкладках «Посты / Лайки»',
+            ['3.7.0.1 – 3.7.0.7', '26 октября 2026', [
+                'Профили: над постами кнопки сортировки «Новые», «Старые», «Популярные» — работают в любом профиле, список перестраивается на месте без перезагрузки страницы, а после обновления страницы сортировка сбрасывается на «Новые». В «Старых» и «Популярных» закреплённый пост не поднимается наверх, а подсветка кнопок плавно перетекает, как на вкладках «Посты / Лайки». Повторный выбор «Старых» берёт список из памяти и не грузит посты заново',
             ]],
             ['3.7.0', '26 октября 2026', [
                 'Оптимизация фоновых запросов: сообщения, клуб, подтверждения и автолайк работают через единый планировщик с паузой при лимите сайта',
@@ -13508,13 +13508,23 @@
                 addEventListener('vp-unpin', function () {
                     var m = null;
                     try { m = JSON.parse(sessionStorage.getItem('vp_prof_sort') || 'null'); } catch (e) { }
-                    if (!m) return;
+                    var done = new Set();
+                    function profile(o) {
+                        if (!o || typeof o !== 'object' || Array.isArray(o) || done.has(o) || typeof o.username !== 'string' || !('pinnedPostId' in o)) return;
+                        done.add(o);
+                        try {
+                            if (m && o.username.toLowerCase() === String(m.u).toLowerCase() && o.pinnedPostId) { o.__vpPin = o.pinnedPostId; o.pinnedPostId = null; }
+                            else if (!m && o.__vpPin) { o.pinnedPostId = o.__vpPin; delete o.__vpPin; }
+                        } catch (e) { }
+                    }
                     walk(function (v) {
+                        if (v.props && typeof v.props === 'object') for (var k in v.props) profile(v.props[k]);
                         var c = v.__c, hooks = c && c.__H && c.__H.__;
                         if (!hooks) return;
                         for (var i = 0; i < hooks.length; i++) {
                             var st = hooks[i], val = st && st.__, deps = st && st.__H;
-                            if (Array.isArray(val) && Array.isArray(deps) && deps.length === 3 && Array.isArray(deps[0]) && typeof deps[1] === 'string' && deps[2] === 'posts'
+                            profile(val);
+                            if (m && Array.isArray(val) && Array.isArray(deps) && deps.length === 3 && Array.isArray(deps[0]) && typeof deps[1] === 'string' && deps[2] === 'posts'
                                 && val.length && val[0] && val[0].id === deps[1] && val !== deps[0]) {
                                 st.__ = deps[0];
                                 try { c.forceUpdate(); } catch (e) { }
@@ -13537,18 +13547,24 @@
                 setTimeout(() => done(art.getAttribute('data-vp-res') === 'ok'), 40);
             });
         }
-        async function profOldLoad(login, btn) {
-            if (profOldPosts && profOldPosts.u.toLowerCase() === login.toLowerCase()) return 'client';
-            const byId = new Map(), label = btn.textContent, hide = login.toLowerCase() === 'neurosfw';
-            let cursor = null, done = false;
+        async function profOldLoad(login, btn, force) {
+            const same = x => x && x.u && x.u.toLowerCase() === login.toLowerCase();
+            const hide = login.toLowerCase() === 'neurosfw', label = btn.textContent;
+            let base = force ? null : same(profOldPosts) ? profOldPosts : null;
+            if (!base && !force) { const c = GM_getValue('vp_old_cache', null); if (same(c) && Array.isArray(c.posts)) base = c; }
+            const incr = !!base && Date.now() - base.full < 12 * 3600e3;
+            if (incr && Date.now() - base.at < 120e3) { profOldPosts = base; return 'client'; }
+            const baseIds = new Set(incr ? base.posts.map(p => p.id) : []), byId = new Map(incr ? base.posts.map(p => [p.id, p]) : []);
+            let cursor = null, finished = false;
             try {
-                for (let pages = 0; pages < 60 && !done; pages++) {
+                for (let n = 0; n < (incr ? 10 : 60) && !finished; n++) {
                     const r = await api(`/api/posts/user/${encodeURIComponent(login)}?limit=50&sort=new` + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
                     if (!r.ok) return null;
-                    const j = await r.json(), d = j.data || j, list = d.posts || [];
-                    list.forEach(p => { if (p && p.id && !(hide && SERVICE_POSTS.includes(p.id))) byId.set(p.id, p); });
+                    const j = await r.json(), d = j.data || j, list = (d.posts || []).filter(p => p && p.id && !(hide && SERVICE_POSTS.includes(p.id)));
+                    let hit = false;
+                    list.forEach(p => { if (baseIds.has(p.id)) hit = true; byId.set(p.id, p); });
                     cursor = (d.pagination && d.pagination.nextCursor) || d.nextCursor || null;
-                    if (!list.length || !cursor) done = true;
+                    if (!(d.posts || []).length || !cursor || hit) finished = true;
                     else {
                         btn.textContent = label + ' ' + byId.size;
                         await new Promise(res => setTimeout(res, 350));
@@ -13556,8 +13572,10 @@
                     }
                 }
             } finally { btn.textContent = label; }
-            if (!done) { vpNote('Слишком много постов для такой сортировки'); return null; }
-            profOldPosts = { u: login, posts: [...byId.values()].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)) };
+            if (!finished && incr) return profOldLoad(login, btn, true);
+            if (!finished) { vpNote('Слишком много постов для такой сортировки'); return null; }
+            profOldPosts = { u: login, at: Date.now(), full: incr ? base.full : Date.now(), posts: [...byId.values()].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)) };
+            try { GM_setValue('vp_old_cache', profOldPosts); } catch (e) { }
             return 'client';
         }
         const PSORT_TRY = { old: ['old', 'oldest', 'asc'], popular: ['popular'] };
@@ -13595,7 +13613,7 @@
             if (!art || !art.querySelector('a[href="/@' + m[1] + '"]')) { if (old) psortLeave(old); return; }
             const login = m[1], o = profSortMode();
             let cur = o && o.u.toLowerCase() === login.toLowerCase() ? o.s : 'new';
-            if (old && old.dataset.login === login && old.dataset.cur === cur && old.nextElementSibling === art) return;
+            if (old && old.dataset.login === login && (old.classList.contains('vp-busy') || (old.dataset.cur === cur && old.nextElementSibling === art))) return;
             if (old) psortLeave(old);
             const box = document.createElement('div');
             box.className = 'vp-psort';
@@ -13611,8 +13629,17 @@
                 b.textContent = label;
                 b.classList.toggle('vp-on', s === cur);
                 b.addEventListener('click', async () => {
-                    if (s === cur) return;
+                    const was = box.dataset.cur;
+                    if (s === was) return;
+                    const t0 = Date.now();
                     box.classList.add('vp-busy');
+                    const show = k => {
+                        box.querySelectorAll('button').forEach(x => x.classList.toggle('vp-on', x.dataset.s === k));
+                        box.dataset.cur = k;
+                        psortMove(box, true);
+                    };
+                    const back = msg => { show(was); vpNote(msg); box.classList.remove('vp-busy'); };
+                    show(s);
                     try {
                         if (s === 'new') sessionStorage.removeItem(PROF_SORT_KEY);
                         else {
@@ -13622,28 +13649,26 @@
                                 v = await profSortProbe(login, s);
                                 if (!v && s === 'old') v = await profOldLoad(login, b);
                             } finally { profSortPause = false; }
-                            if (!v) { vpNote('Сайт не отдаёт такую сортировку'); box.classList.remove('vp-busy'); return; }
+                            if (!v) return back('Сайт не отдаёт такую сортировку');
                             sessionStorage.setItem(PROF_SORT_KEY, JSON.stringify({ u: login, s, v }));
                         }
+                        profUnpinSoon();
+                        const rest = 520 - (Date.now() - t0);
+                        if (rest > 0) await new Promise(r => setTimeout(r, rest));
                         if (await profWallRefresh()) {
-                            box.querySelectorAll('button').forEach(x => x.classList.toggle('vp-on', x.dataset.s === s));
-                            box.dataset.cur = s;
-                            cur = s;
-                            psortMove(box, true);
-                            profUnpinSoon();
-                            setTimeout(() => box.classList.remove('vp-busy'), 600);
+                            setTimeout(() => box.classList.remove('vp-busy'), 400);
                             return;
                         }
-                        if (sessionStorage.getItem(PROF_SORT_KEY) && JSON.parse(sessionStorage.getItem(PROF_SORT_KEY)).v === 'client') {
+                        const sm = profSortMode();
+                        if (sm && sm.v === 'client') {
                             sessionStorage.removeItem(PROF_SORT_KEY);
-                            vpNote('Не вышло переключить сортировку');
-                            box.classList.remove('vp-busy');
-                            return;
+                            profUnpinSoon();
+                            return back('Не вышло переключить сортировку');
                         }
                         sessionStorage.setItem('vp-soft', String(Date.now()));
                         sessionStorage.setItem('vp-intro-at', String(Date.now()));
                         location.reload();
-                    } catch (e) { logErr('сортировка профиля', e); vpNote('Не вышло переключить сортировку'); box.classList.remove('vp-busy'); }
+                    } catch (e) { logErr('сортировка профиля', e); back('Не вышло переключить сортировку'); }
                 });
                 box.appendChild(b);
             });

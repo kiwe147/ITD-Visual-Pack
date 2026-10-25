@@ -52,7 +52,8 @@ const OLD = NEW.slice().reverse(), POP = NEW.slice().sort((a, b) => b.likesCount
         const root = document.getElementById('root') || document.body;
         window.__list = [{ id: 'a' }, { id: 'pin' }, { id: 'b' }];
         window.__memo = { __: [{ id: 'pin' }, { id: 'a' }, { id: 'b' }], __H: [window.__list, 'pin', 'posts'], __h: function () { } };
-        root.__k = { __k: [{ __k: null, __c: { forceUpdate() { window.__fu = (window.__fu || 0) + 1; }, __H: { __: [{ __: function () { }, __H: [] }, { __: fn, __H: [], __h: function () { } }, window.__memo] } } }] };
+        window.__prof = { username: 'voplex', pinnedPostId: 'pin' };
+        root.__k = { __k: [{ __k: null, props: { profile: window.__prof }, __c: { forceUpdate() { window.__fu = (window.__fu || 0) + 1; }, __H: { __: [{ __: function () { }, __H: [] }, { __: fn, __H: [], __h: function () { } }, window.__memo] } } }] };
       });
     }
     const ui = await p.evaluate(() => { const b = document.querySelector('.vp-psort'); return b && { labels: [...b.querySelectorAll('button')].map(x => x.textContent), on: (b.querySelector('.vp-on') || {}).textContent, beforePost: !!b.nextElementSibling && b.nextElementSibling.tagName === 'ARTICLE' }; });
@@ -71,6 +72,7 @@ const OLD = NEW.slice().reverse(), POP = NEW.slice().sort((a, b) => b.likesCount
       check(await p.evaluate(() => window.__wall === 1), 'список сайта обновлён на месте (вызвана функция сброса кэша стены)');
       check(await p.evaluate(() => (document.querySelector('.vp-psort .vp-on') || {}).textContent) === 'Популярные', 'активной стала «Популярные»');
       await p.waitForTimeout(600);
+      check(await p.evaluate(() => window.__prof.pinnedPostId === null), 'в режиме сортировки у профиля нет закрепа, сайт не поднимает пост наверх');
       check(await p.evaluate(() => window.__memo.__ === window.__list && window.__fu >= 1), 'закреплённый пост не поднят наверх: список сайта возвращён в порядок сервера');
       check(await p.evaluate(() => { const i = document.querySelector('.vp-psort-ind'), b = document.querySelector('.vp-psort button.vp-on'); return !!i && Math.abs(i.getBoundingClientRect().left - b.getBoundingClientRect().left) < 1.5 && Math.abs(i.getBoundingClientRect().width - b.getBoundingClientRect().width) < 1.5; }), 'подсветка под активной кнопкой (перетекла на «Популярные»)');
       const url = await p.evaluate(async login => { const r = await fetch('/api/posts/user/' + login + '?limit=20&sort=new&pinnedPostId=x'); return r.url; }, LOGIN);
@@ -84,6 +86,7 @@ const OLD = NEW.slice().reverse(), POP = NEW.slice().sort((a, b) => b.likesCount
       check(await p.evaluate(() => { const i = document.querySelector('.vp-psort-ind'); return !!i && i.getAnimations().length > 0; }), 'если плашку пересоздали во время перетекания, подсветка продолжает перетекать');
       await p.evaluate(() => document.querySelectorAll('article.vp-post').forEach(a => a.previousElementSibling && a.previousElementSibling.tagName === 'I' && a.previousElementSibling.remove()));
       await p.waitForTimeout(800);
+      check(await p.evaluate(() => window.__prof.pinnedPostId) === 'pin', '«Новые» возвращают закреп профилю');
       check(await p.evaluate(() => sessionStorage.getItem('vp_prof_sort')) === null && await p.evaluate(() => window.__wall) === 2 && reloads === before, '«Новые» снимает сортировку и тоже обновляет список на месте');
       await p.click('.vp-psort button[data-s="popular"]');
       await p.waitForTimeout(1500);
@@ -96,6 +99,12 @@ const OLD = NEW.slice().reverse(), POP = NEW.slice().sort((a, b) => b.likesCount
       const got = await p.evaluate(async login => { const r = await fetch('/api/posts/user/' + login + '?limit=3&sort=new&pinnedPostId=x'); const j = await r.json(); const r2 = await fetch('/api/posts/user/' + login + '?limit=3&sort=new&cursor=' + encodeURIComponent(j.data.pagination.nextCursor)); const j2 = await r2.json(); return { a: j.data.posts.map(x => x.id).join(), cur: j.data.pagination.nextCursor, b: j2.data.posts.map(x => x.id).join(), end: j2.data.pagination.nextCursor }; }, LOGIN);
       check(got.a === 'n4,n3,n2' && got.b === 'n1' && got.end === null, 'сайт получает посты от старых к новым постранично: ' + got.a + ' / ' + got.b);
       check(await p.evaluate(() => (document.querySelector('.vp-psort .vp-on') || {}).textContent) === 'Старые', 'активной стала «Старые»');
+      await p.click('.vp-psort button[data-s="new"]');
+      await p.waitForTimeout(1000);
+      seen.length = 0;
+      await p.click('.vp-psort button[data-s="old"]');
+      await p.waitForTimeout(1500);
+      check(seen.join() === 'new,old,oldest,asc', 'повторные «Старые» берут список из памяти, постов заново не грузят: ' + seen.join());
     } else if (variant === 'reload') {
       check(seen.includes('new') && seen.includes('old') && seen.includes('oldest'), 'мод перебрал варианты названия сортировки: ' + seen.join());
       check(!!st && reloads > before && JSON.parse(st).v === 'oldest', 'функции сайта нет — мягкая перезагрузка, сортировка запомнена как oldest');
