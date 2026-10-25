@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.6.3.5
+// @version      3.6.3.7
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -550,8 +550,6 @@
             .vpi-ghost { position: absolute; }
             .vpi-xpulse { opacity: 0; }
             .vpi-shards { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-            html.vpi-hush body { visibility: hidden !important; }
-            html.vpi-hush body *, html.vpi-hush body *::before, html.vpi-hush body *::after { transition: none !important; animation-play-state: paused !important; }
         `;
         const el = (cls, parent, text) => {
             const e = document.createElement('div');
@@ -581,7 +579,6 @@
         const flash = el('vpi-flash', ov);
         const seam = el('vpi-seam', ov);
         root.appendChild(css);
-        root.classList.add('vpi-hush');
         const prevOverflow = root.style.overflow;
         root.style.overflow = 'hidden';
 
@@ -854,7 +851,6 @@
             if (done) return;
             done = true;
             ov.remove();
-            root.classList.remove('vpi-hush');
             css.remove();
             introOn = false;
             document.dispatchEvent(new CustomEvent('vp-intro-done'));
@@ -873,19 +869,6 @@
             if (started) return;
             started = true;
             for (const a of anims) { a.currentTime = 0; a.play(); }
-            let seen = performance.now(), lost = 0;
-            const guard = now => {
-                if (done) return;
-                const gap = now - seen;
-                seen = now;
-                if (gap > 90 && lost < 1500 && anims[0].currentTime !== null && anims[0].currentTime - gap < LOCK[2] + 200) {
-                    const back = Math.min(gap - 20, 1500 - lost);
-                    lost += back;
-                    for (const a of anims) if (a.currentTime !== null) a.currentTime = Math.max(0, a.currentTime - back);
-                }
-                requestAnimationFrame(guard);
-            };
-            requestAnimationFrame(guard);
             afterStart();
             if (withSound) syncSound();
         }
@@ -4342,9 +4325,7 @@
         }
 
         const CHANGELOG = [
-            ['3.6.3 – 3.6.3.5', '25 октября 2026', [
-                'Если страница на секунду подвисла во время заставки, буквы не пропускаются: падение растягивается и показывается целиком',
-                'Пока играет стартовая заставка, страница под ней не перерисовывается и не анимируется — заставка идёт ровнее на слабых компьютерах',
+            ['3.6.3 – 3.6.3.7', '25 октября 2026', [
                 'Оптимизация заставки',
                 'Под плитками статистики кнопка «Подробнее» раскрывает график лайков и лучшие посты, повторное нажатие сворачивает',
                 'Статистика в боковой панели обновлена: вкладки «Всё / День / Неделя / Месяц», плитки с подписчиками, подписками, постами и лайками (с приростом за период), график лайков по месяцам или дням и два лучших поста по лайкам',
@@ -13084,11 +13065,12 @@
             railBest.innerHTML = '<div class="vp-best-h"><b>Лучшие посты</b><span>по лайкам</span></div>';
             top.forEach(r => {
                 const a = document.createElement('a');
-                a.className = 'vp-best-post'; a.href = '/post/' + r[0];
+                const path = '/@' + myUsername + '/post/' + r[0];
+                a.className = 'vp-best-post'; a.href = path;
                 a.innerHTML = '<b></b><small></small>';
                 a.firstChild.textContent = r[3] || 'Пост без текста';
                 a.lastChild.textContent = fmtStat(r[2]) + ' ' + likesWord(r[2]);
-                a.addEventListener('click', e => { e.preventDefault(); history.pushState({}, '', '/post/' + r[0]); dispatchEvent(new PopStateEvent('popstate')); });
+                a.addEventListener('click', e => { e.preventDefault(); history.pushState({}, '', path); dispatchEvent(new PopStateEvent('popstate')); });
                 railBest.appendChild(a);
             });
             railMore.hidden = railChart.hidden && railBest.hidden;
