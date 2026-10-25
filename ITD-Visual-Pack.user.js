@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.6.3.1
+// @version      3.6.3.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -521,7 +521,7 @@
         const t = document.documentElement.getAttribute('data-theme');
         return t ? t !== 'dark' : GM_getValue('siteTheme', 'dark') === 'light';
     }
-    let introOn = false;
+    let introOn = false, introReady = false, introGate = null;
     function playIntro(mode, variant) {
         const root = document.documentElement;
         const rare = variant === true, asm = variant === 'assemble', twist = variant === 'twist';
@@ -895,7 +895,16 @@
             setTimeout(() => { if (done) return; ov.addEventListener('click', skip); addEventListener('keydown', skip, true); }, 400);
         }
 
-        if (mode !== 'tap') { begin(mode === 'desk'); return anims; }
+        if (mode !== 'tap') {
+            for (const a of anims) a.pause();
+            const go = () => {
+                if (started) return;
+                introGate = null;
+                requestAnimationFrame(() => requestAnimationFrame(() => begin(mode === 'desk')));
+            };
+            if (introReady) go(); else { introGate = go; setTimeout(go, 1800); }
+            return anims;
+        }
 
         for (const a of anims) a.pause();
         const idle = document.createElement('div');
@@ -4316,7 +4325,8 @@
         }
 
         const CHANGELOG = [
-            ['3.6.3 – 3.6.3.1', '25 октября 2026', [
+            ['3.6.3 – 3.6.3.2', '25 октября 2026', [
+                'Стартовая заставка больше не рвётся на тяжёлой странице: буквы начинают падать, когда мод уже загрузился, и не пропускаются',
                 'Под плитками статистики кнопка «Подробнее» раскрывает график лайков и лучшие посты, повторное нажатие сворачивает',
                 'Статистика в боковой панели обновлена: вкладки «Всё / День / Неделя / Месяц», плитки с подписчиками, подписками, постами и лайками (с приростом за период), график лайков по месяцам или дням и два лучших поста по лайкам',
             ]],
@@ -14042,6 +14052,8 @@
             document.dispatchEvent(new Event('itdx-ready'));
         });
 
+        introReady = true;
+        if (introGate) introGate();
         console.log('🟢 ИТД X');
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
