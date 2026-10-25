@@ -167,15 +167,23 @@
             const tabs = [...document.querySelectorAll('.vp-tabs')].find(t => /Лайки/.test(t.textContent) && /Посты/.test(t.textContent));
             if (!tabs) return null;
             const ind = tabs.querySelector('.vp-tab-ind'), first = tabs.querySelector('button');
-            if (ind && first && Math.abs(ind.getBoundingClientRect().left - first.getBoundingClientRect().left) > 8) return null;
+            if (ind && first && Math.abs(ind.getBoundingClientRect().left - first.getBoundingClientRect().left) > 8) return 'likes';
             let t = tabs;
             for (let i = 0; i < 2 && t.parentElement && t.parentElement.children.length === 1; i++) t = t.parentElement;
             return t;
         }
-        onDom(function profileSort() {
+        function profileSort() {
             const m = location.pathname.match(/^\/@([\w.]+)\/?$/), old = document.querySelector('.vp-psort');
-            const art = m && psortAnchor() && document.querySelector('article.' + SELECTORS.post);
-            if (!art || !art.querySelector('a[href="/@' + m[1] + '"]')) { if (old) psortLeave(old); return; }
+            const anchor = m && psortAnchor();
+            const art = anchor && anchor !== 'likes' && document.querySelector('article.' + SELECTORS.post);
+            if (!art || !art.querySelector('a[href="/@' + m[1] + '"]')) {
+                if (!old) return;
+                if (!m || anchor === 'likes' || old.dataset.login.toLowerCase() !== m[1].toLowerCase()) { psortLeave(old); return; }
+                if (!old.dataset.lost) { old.dataset.lost = String(Date.now()); setTimeout(profileSort, 1700); return; }
+                if (Date.now() - +old.dataset.lost > 1500) psortLeave(old);
+                return;
+            }
+            if (old) delete old.dataset.lost;
             const login = m[1], o = profSortMode();
             let cur = o && o.u.toLowerCase() === login.toLowerCase() ? o.s : 'new';
             if (old && old.dataset.login === login && (old.classList.contains('vp-busy') || (old.dataset.cur === cur && old.nextElementSibling === art))) return;
@@ -249,4 +257,5 @@
             profBridge();
             if (o) profUnpinSoon();
             if (typeof ResizeObserver === 'function') new ResizeObserver(() => psortMove(box, false)).observe(box);
-        });
+        }
+        onDom(profileSort);

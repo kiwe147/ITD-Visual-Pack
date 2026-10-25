@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.0.7
+// @version      3.7.0.8
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4496,8 +4496,8 @@
         }
 
         const CHANGELOG = [
-            ['3.7.0.1 – 3.7.0.7', '26 октября 2026', [
-                'Профили: над постами кнопки сортировки «Новые», «Старые», «Популярные» — работают в любом профиле, список перестраивается на месте без перезагрузки страницы, а после обновления страницы сортировка сбрасывается на «Новые». В «Старых» и «Популярных» закреплённый пост не поднимается наверх, а подсветка кнопок плавно перетекает, как на вкладках «Посты / Лайки». Повторный выбор «Старых» берёт список из памяти и не грузит посты заново',
+            ['3.7.0.1 – 3.7.0.8', '26 октября 2026', [
+                'Профили: над постами кнопки сортировки «Новые», «Старые», «Популярные» — работают в любом профиле, список перестраивается на месте без перезагрузки страницы, а после обновления страницы сортировка сбрасывается на «Новые». В «Старых» и «Популярных» закреплённый пост не поднимается наверх, а подсветка кнопок плавно перетекает, как на вкладках «Посты / Лайки». Повторный выбор «Старых» берёт список из памяти и не грузит посты заново. Кнопки сортировки больше не пропадают, когда сайт на мгновение перерисовывает ленту',
             ]],
             ['3.7.0', '26 октября 2026', [
                 'Оптимизация фоновых запросов: сообщения, клуб, подтверждения и автолайк работают через единый планировщик с паузой при лимите сайта',
@@ -13602,15 +13602,23 @@
             const tabs = [...document.querySelectorAll('.vp-tabs')].find(t => /Лайки/.test(t.textContent) && /Посты/.test(t.textContent));
             if (!tabs) return null;
             const ind = tabs.querySelector('.vp-tab-ind'), first = tabs.querySelector('button');
-            if (ind && first && Math.abs(ind.getBoundingClientRect().left - first.getBoundingClientRect().left) > 8) return null;
+            if (ind && first && Math.abs(ind.getBoundingClientRect().left - first.getBoundingClientRect().left) > 8) return 'likes';
             let t = tabs;
             for (let i = 0; i < 2 && t.parentElement && t.parentElement.children.length === 1; i++) t = t.parentElement;
             return t;
         }
-        onDom(function profileSort() {
+        function profileSort() {
             const m = location.pathname.match(/^\/@([\w.]+)\/?$/), old = document.querySelector('.vp-psort');
-            const art = m && psortAnchor() && document.querySelector('article.' + SELECTORS.post);
-            if (!art || !art.querySelector('a[href="/@' + m[1] + '"]')) { if (old) psortLeave(old); return; }
+            const anchor = m && psortAnchor();
+            const art = anchor && anchor !== 'likes' && document.querySelector('article.' + SELECTORS.post);
+            if (!art || !art.querySelector('a[href="/@' + m[1] + '"]')) {
+                if (!old) return;
+                if (!m || anchor === 'likes' || old.dataset.login.toLowerCase() !== m[1].toLowerCase()) { psortLeave(old); return; }
+                if (!old.dataset.lost) { old.dataset.lost = String(Date.now()); setTimeout(profileSort, 1700); return; }
+                if (Date.now() - +old.dataset.lost > 1500) psortLeave(old);
+                return;
+            }
+            if (old) delete old.dataset.lost;
             const login = m[1], o = profSortMode();
             let cur = o && o.u.toLowerCase() === login.toLowerCase() ? o.s : 'new';
             if (old && old.dataset.login === login && (old.classList.contains('vp-busy') || (old.dataset.cur === cur && old.nextElementSibling === art))) return;
@@ -13684,7 +13692,8 @@
             profBridge();
             if (o) profUnpinSoon();
             if (typeof ResizeObserver === 'function') new ResizeObserver(() => psortMove(box, false)).observe(box);
-        });
+        }
+        onDom(profileSort);
         const gamesList = rail.querySelector('.vp-games-list');
         const bestText = g => {
             const v = GM_getValue(acctKey(g.best), 0);

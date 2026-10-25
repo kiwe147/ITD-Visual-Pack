@@ -86,6 +86,12 @@ const OLD = NEW.slice().reverse(), POP = NEW.slice().sort((a, b) => b.likesCount
       check(await p.evaluate(() => { const i = document.querySelector('.vp-psort-ind'); return !!i && i.getAnimations().length > 0; }), 'если плашку пересоздали во время перетекания, подсветка продолжает перетекать');
       await p.evaluate(() => document.querySelectorAll('article.vp-post').forEach(a => a.previousElementSibling && a.previousElementSibling.tagName === 'I' && a.previousElementSibling.remove()));
       await p.waitForTimeout(800);
+      await p.evaluate(() => { const arts = [...document.querySelectorAll('article.vp-post')]; window.__gone = arts.map(x => [x, x.parentElement, x.nextSibling]); arts.forEach(x => x.remove()); });
+      await p.waitForTimeout(500);
+      check(await p.evaluate(() => !!document.querySelector('.vp-psort')), 'плашка не пропадает, пока сайт на мгновение перерисовывает ленту');
+      await p.evaluate(() => { const b = document.querySelector('.vp-psort'); window.__gone.forEach(([x]) => b.after(x)); });
+      await p.waitForTimeout(400);
+      check(await p.evaluate(() => document.querySelectorAll('.vp-psort').length === 1), 'после возврата постов плашка одна');
       check(await p.evaluate(() => window.__prof.pinnedPostId) === 'pin', '«Новые» возвращают закреп профилю');
       check(await p.evaluate(() => sessionStorage.getItem('vp_prof_sort')) === null && await p.evaluate(() => window.__wall) === 2 && reloads === before, '«Новые» снимает сортировку и тоже обновляет список на месте');
       await p.click('.vp-psort button[data-s="popular"]');
