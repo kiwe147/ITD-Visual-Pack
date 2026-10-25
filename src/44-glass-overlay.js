@@ -1,4 +1,4 @@
-        const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const calm = matchMedia('(prefers-reduced-motion: reduce)').matches || softLoad;
 
         let glassEnabled = GM_getValue('glassEnabled', true);
         const glassCss = document.createElement('style');

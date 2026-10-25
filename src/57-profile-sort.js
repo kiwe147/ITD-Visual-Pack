@@ -8,6 +8,7 @@
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #4aa3ff) 55%, transparent); }
         .vp-psort.vp-busy { opacity: .6; pointer-events: none; }
         `);
+        const PSORT_TRY = { old: ['old', 'oldest', 'asc'], popular: ['popular'] };
         async function profSortProbe(login, mode) {
             const get = async sort => {
                 const r = await api(`/api/posts/user/${encodeURIComponent(login)}?limit=10&sort=${sort}`);
@@ -15,22 +16,33 @@
                 const j = await r.json(), d = j.data || j;
                 return Array.isArray(d.posts) ? d.posts.filter(p => p && !p.isPinned) : null;
             };
-            const base = await get('new'), list = await get(mode);
-            if (!base || !list) return false;
-            if (base.length < 2 || list.length < 2) return true;
-            if (mode === 'old') {
-                for (let i = 1; i < list.length; i++) if (Date.parse(list[i].createdAt) < Date.parse(list[i - 1].createdAt)) return false;
-                return list[0].id !== base[0].id;
+            const base = await get('new');
+            if (!base) return null;
+            for (const v of PSORT_TRY[mode]) {
+                const list = await get(v);
+                if (!list) continue;
+                if (base.length < 2 || list.length < 2) return v;
+                if (mode === 'old') {
+                    if (list.every((p, i) => !i || Date.parse(p.createdAt) >= Date.parse(list[i - 1].createdAt)) && list[0].id !== base[0].id) return v;
+                } else if (list.map(p => p.id).join() !== base.map(p => p.id).join()) return v;
             }
-            return list.map(p => p.id).join() !== base.map(p => p.id).join();
+            return null;
+        }
+        function psortAnchor() {
+            const tabs = [...document.querySelectorAll('.vp-tabs')].find(t => /Лайки/.test(t.textContent) && /Посты/.test(t.textContent));
+            if (!tabs) return null;
+            const ind = tabs.querySelector('.vp-tab-ind'), first = tabs.querySelector('button');
+            if (ind && first && Math.abs(ind.getBoundingClientRect().left - first.getBoundingClientRect().left) > 8) return null;
+            let t = tabs;
+            for (let i = 0; i < 2 && t.parentElement && t.parentElement.children.length === 1; i++) t = t.parentElement;
+            return t;
         }
         onDom(function profileSort() {
-            const path = location.pathname, m = path.match(/^\/@([\w.]+)\/?$/);
-            const old = document.querySelector('.vp-psort');
-            const art = m && document.querySelector('article.' + SELECTORS.post);
-            if (!art || !art.querySelector('a[href="/@' + m[1] + '"]')) { if (old) old.remove(); return; }
+            const m = location.pathname.match(/^\/@([\w.]+)\/?$/), old = document.querySelector('.vp-psort');
+            const anchor = m && psortAnchor();
+            if (!anchor) { if (old) old.remove(); return; }
             const login = m[1], o = profSortMode(), cur = o && o.u.toLowerCase() === login.toLowerCase() ? o.s : 'new';
-            if (old && old.dataset.login === login && old.dataset.cur === cur && old.isConnected && old.nextElementSibling === art) return;
+            if (old && old.dataset.login === login && old.dataset.cur === cur && old.previousElementSibling === anchor) return;
             if (old) old.remove();
             const box = document.createElement('div');
             box.className = 'vp-psort';
@@ -48,13 +60,16 @@
                     try {
                         if (s === 'new') sessionStorage.removeItem(PROF_SORT_KEY);
                         else {
-                            if (!await profSortProbe(login, s)) { vpNote('Сайт не отдаёт такую сортировку'); box.classList.remove('vp-busy'); return; }
-                            sessionStorage.setItem(PROF_SORT_KEY, JSON.stringify({ u: login, s }));
+                            const v = await profSortProbe(login, s);
+                            if (!v) { vpNote('Сайт не отдаёт такую сортировку'); box.classList.remove('vp-busy'); return; }
+                            sessionStorage.setItem(PROF_SORT_KEY, JSON.stringify({ u: login, s, v }));
                         }
+                        sessionStorage.setItem('vp-soft', String(Date.now()));
+                        sessionStorage.setItem('vp-intro-at', String(Date.now()));
                         location.reload();
                     } catch (e) { logErr('сортировка профиля', e); vpNote('Не вышло переключить сортировку'); box.classList.remove('vp-busy'); }
                 });
                 box.appendChild(b);
             });
-            art.parentElement.insertBefore(box, art);
+            anchor.after(box);
         });
