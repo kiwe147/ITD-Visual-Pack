@@ -1,5 +1,6 @@
-// Сортировка постов в профиле (3.7.1): кнопки «Новые / Старые / Популярные», проверка сортировки сервера перед переключением,
-// подмена sort=new на выбранную сортировку в запросах сайта после перезагрузки.
+// Сортировка постов в профиле (3.7.3): кнопки «Новые / Старые / Популярные» под вкладками, проверка сортировки сервера,
+// подмена sort=new в запросах сайта, обновление списка на месте (через функцию сайта с invalidateWallCache) или мягкая перезагрузка,
+// сброс сортировки при обновлении страницы.
 // Запуск:  node test/profsort.js снимок-чужого-профиля.html
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -17,9 +18,9 @@ const NEW = [mk('n1', 5, 20), mk('n2', 50, 15), mk('n3', 9, 10), mk('n4', 70, 5)
 const OLD = NEW.slice().reverse(), POP = NEW.slice().sort((a, b) => b.likesCount - a.likesCount);
 (async () => {
   const b = await chromium.launch();
-  for (const variant of ['good', 'oldest', 'bad']) {
-    const good = variant !== 'bad', MODE = variant === 'oldest' ? 'old' : 'popular', WANT = variant === 'oldest' ? 'oldest' : 'popular';
-    console.log(variant === 'good' ? '— сервер умеет сортировку («популярные»)' : variant === 'oldest' ? '— сервер знает «старые» только как sort=oldest' : '— сервер игнорирует sort (всегда как «новые»)');
+  for (const variant of ['inplace', 'reload', 'bad']) {
+    const good = variant !== 'bad', MODE = variant === 'reload' ? 'old' : 'popular', WANT = variant === 'reload' ? 'oldest' : 'popular';
+    console.log(variant === 'inplace' ? '— сервер умеет «популярные», список обновляется на месте' : variant === 'reload' ? '— «старые» только как sort=oldest, функции сайта для обновления нет: мягкая перезагрузка' : '— сервер игнорирует sort (всегда как «новые»)');
     const ctx = await b.newContext({ viewport: { width: 1400, height: 900 } });
     const p = await ctx.newPage();
     const errors = [], seen = [];
@@ -44,29 +45,50 @@ const OLD = NEW.slice().reverse(), POP = NEW.slice().sort((a, b) => b.likesCount
     await p.addInitScript('(function () { const run = () => {' + src + String.fromCharCode(10) + '}; if (document.documentElement) run(); else { const mo = new MutationObserver(() => { if (document.documentElement) { mo.disconnect(); run(); } }); mo.observe(document, { childList: true }); } })();');
     await p.goto('https://xn--d1ah4a.com' + PATH);
     await p.waitForSelector('.vp-psort', { timeout: 15000 }).catch(() => { });
-    const ui = await p.evaluate(() => { const b = document.querySelector('.vp-psort'); return b && { labels: [...b.querySelectorAll('button')].map(x => x.textContent), on: (b.querySelector('.vp-on') || {}).textContent, afterTabs: !!b.previousElementSibling && /Посты/.test(b.previousElementSibling.textContent) && /Лайки/.test(b.previousElementSibling.textContent) }; });
+    if (variant === 'inplace') {
+      await p.evaluate(() => {
+        const art = document.querySelector('article.vp-post'), key = '__reactFiber$test';
+        art[key] = { memoizedState: { memoizedState: [function () { window.__wall = (window.__wall || 0) + 1; var k = 'invalidateWallCache'; return k; }, []], next: null }, return: null };
+      });
+    }
+    const ui = await p.evaluate(() => { const b = document.querySelector('.vp-psort'); return b && { labels: [...b.querySelectorAll('button')].map(x => x.textContent), on: (b.querySelector('.vp-on') || {}).textContent, beforePost: !!b.nextElementSibling && b.nextElementSibling.tagName === 'ARTICLE' }; });
     check(ui && ui.labels.join() === 'Новые,Старые,Популярные', 'кнопки «Новые, Старые, Популярные» на странице профиля');
-    check(ui && ui.on === 'Новые' && ui.afterTabs, 'по умолчанию «Новые», кнопки стоят сразу под вкладками «Посты / Лайки»');
-    if (variant === 'good') { const el = await p.$('.vp-psort'); if (el) { await el.scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(__dirname, 'out', 'profsort.png') }); } }
+    check(ui && ui.on === 'Новые' && ui.beforePost, 'по умолчанию «Новые», кнопки стоят прямо над первым постом');
+    if (variant === 'inplace') { const el = await p.$('.vp-psort'); await el.scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(__dirname, 'out', 'profsort.png') }); }
     const before = reloads;
     seen.length = 0;
     await p.click('.vp-psort button[data-s="' + MODE + '"]');
     await p.waitForTimeout(1800);
     const st = await p.evaluate(() => sessionStorage.getItem('vp_prof_sort'));
     console.log('—    запросы проверки: ' + seen.join(',') + '; перезагрузок: ' + (reloads - before) + '; режим: ' + st);
-    if (good) {
+    if (variant === 'inplace') {
       check(seen.includes('new') && seen.includes(WANT), 'перед переключением мод проверил сортировку сервера');
-      check(!!st && reloads > before, 'сортировка включена и страница перезагружена');
-      check(await p.evaluate(() => document.documentElement.classList.contains('vp-soft') && Date.now() - +sessionStorage.getItem('vp-intro-at') < 15000), 'после переключения страница обновилась «мягко»: без заставки, анимации отключены на 3 с');
-      await p.waitForSelector('.vp-psort', { timeout: 15000 }).catch(() => { });
-      check(await p.evaluate(() => (document.querySelector('.vp-psort .vp-on') || {}).textContent) === (MODE === 'old' ? 'Старые' : 'Популярные'), 'после перезагрузки активна выбранная сортировка');
+      check(reloads === before && !!st, 'страница не перезагружалась, сортировка включена');
+      check(await p.evaluate(() => window.__wall === 1), 'список сайта обновлён на месте (вызвана функция сброса кэша стены)');
+      check(await p.evaluate(() => (document.querySelector('.vp-psort .vp-on') || {}).textContent) === 'Популярные', 'активной стала «Популярные»');
       const url = await p.evaluate(async login => { const r = await fetch('/api/posts/user/' + login + '?limit=20&sort=new&pinnedPostId=x'); return r.url; }, LOGIN);
-      check(url.includes('sort=' + WANT) && /pinnedPostId=x/.test(url), 'запрос сайта подменён на sort=' + WANT + ': ' + url.replace(/^.*\/api/, '/api'));
+      check(url.includes('sort=' + WANT) && /pinnedPostId=x/.test(url), 'запрос сайта подменён на sort=' + WANT);
       const lk = await p.evaluate(async login => { const r = await fetch('/api/posts/user/' + login + '/liked?limit=20'); return r.url; }, LOGIN);
       check(!/sort=(popular|oldest)/.test(lk), 'вкладка «Лайки» не затронута');
       await p.click('.vp-psort button[data-s="new"]');
+      await p.waitForTimeout(800);
+      check(await p.evaluate(() => sessionStorage.getItem('vp_prof_sort')) === null && await p.evaluate(() => window.__wall) === 2 && reloads === before, '«Новые» снимает сортировку и тоже обновляет список на месте');
+      await p.click('.vp-psort button[data-s="popular"]');
       await p.waitForTimeout(1500);
-      check(await p.evaluate(() => sessionStorage.getItem('vp_prof_sort')) === null, '«Новые» снимает сортировку');
+      await p.reload();
+      await p.waitForSelector('.vp-psort', { timeout: 15000 }).catch(() => { });
+      check(await p.evaluate(() => sessionStorage.getItem('vp_prof_sort')) === null && await p.evaluate(() => (document.querySelector('.vp-psort .vp-on') || {}).textContent) === 'Новые', 'после обновления страницы сортировка сбрасывается на «Новые»');
+    } else if (variant === 'reload') {
+      check(seen.includes('new') && seen.includes('old') && seen.includes('oldest'), 'мод перебрал варианты названия сортировки: ' + seen.join());
+      check(!!st && reloads > before && JSON.parse(st).v === 'oldest', 'функции сайта нет — мягкая перезагрузка, сортировка запомнена как oldest');
+      await p.waitForSelector('.vp-psort', { timeout: 15000 }).catch(() => { });
+      check(await p.evaluate(() => document.documentElement.classList.contains('vp-soft') && Date.now() - +sessionStorage.getItem('vp-intro-at') < 15000), 'перезагрузка мягкая: без заставки, анимации отключены');
+      check(await p.evaluate(() => (document.querySelector('.vp-psort .vp-on') || {}).textContent) === 'Старые', 'после мягкой перезагрузки сортировка сохранилась');
+      const url = await p.evaluate(async login => { const r = await fetch('/api/posts/user/' + login + '?limit=20&sort=new'); return r.url; }, LOGIN);
+      check(url.includes('sort=oldest'), 'запрос сайта подменён на sort=oldest');
+      await p.reload();
+      await p.waitForSelector('.vp-psort', { timeout: 15000 }).catch(() => { });
+      check(await p.evaluate(() => sessionStorage.getItem('vp_prof_sort')) === null, 'обычное обновление страницы сбрасывает сортировку');
     } else {
       check(!st && reloads === before, 'сервер не умеет сортировку: режим не включён, страница не перезагружалась');
       check(await p.evaluate(() => !!document.querySelector('.vp-note')), 'показано сообщение, что сайт не отдаёт такую сортировку');

@@ -8,6 +8,44 @@
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #4aa3ff) 55%, transparent); }
         .vp-psort.vp-busy { opacity: .6; pointer-events: none; }
         `);
+        function profBridge() {
+            if (document.documentElement.dataset.vpWallBridge) return;
+            document.documentElement.dataset.vpWallBridge = '1';
+            const sc = document.createElement('script');
+            sc.textContent = '(' + function () {
+                addEventListener('vp-wall-refresh', function () {
+                    var el = document.querySelector('[data-vp-wall="1"]');
+                    if (!el) return;
+                    var res = 'nofiber';
+                    var key = Object.keys(el).filter(function (k) { return k.indexOf('__reactFiber$') === 0; })[0];
+                    if (key) {
+                        for (var f = el[key]; f && res !== 'ok'; f = f.return) {
+                            for (var h = f.memoizedState; h && typeof h === 'object'; h = h.next) {
+                                var v = h.memoizedState;
+                                if (Array.isArray(v) && typeof v[0] === 'function' && String(v[0]).indexOf('invalidateWallCache') > -1) {
+                                    try { v[0](); res = 'ok'; } catch (e) { res = 'err'; }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    el.setAttribute('data-vp-res', res);
+                });
+            } + ')();';
+            document.documentElement.appendChild(sc);
+            sc.remove();
+        }
+        function profWallRefresh() {
+            return new Promise(done => {
+                const art = document.querySelector('article.' + SELECTORS.post);
+                if (!art) return done(false);
+                profBridge();
+                document.querySelectorAll('[data-vp-wall]').forEach(e => { e.removeAttribute('data-vp-wall'); e.removeAttribute('data-vp-res'); });
+                art.setAttribute('data-vp-wall', '1');
+                dispatchEvent(new Event('vp-wall-refresh'));
+                setTimeout(() => done(art.getAttribute('data-vp-res') === 'ok'), 40);
+            });
+        }
         const PSORT_TRY = { old: ['old', 'oldest', 'asc'], popular: ['popular'] };
         async function profSortProbe(login, mode) {
             const get = async sort => {
@@ -39,10 +77,11 @@
         }
         onDom(function profileSort() {
             const m = location.pathname.match(/^\/@([\w.]+)\/?$/), old = document.querySelector('.vp-psort');
-            const anchor = m && psortAnchor();
-            if (!anchor) { if (old) old.remove(); return; }
-            const login = m[1], o = profSortMode(), cur = o && o.u.toLowerCase() === login.toLowerCase() ? o.s : 'new';
-            if (old && old.dataset.login === login && old.dataset.cur === cur && old.previousElementSibling === anchor) return;
+            const art = m && psortAnchor() && document.querySelector('article.' + SELECTORS.post);
+            if (!art || !art.querySelector('a[href="/@' + m[1] + '"]')) { if (old) old.remove(); return; }
+            const login = m[1], o = profSortMode();
+            let cur = o && o.u.toLowerCase() === login.toLowerCase() ? o.s : 'new';
+            if (old && old.dataset.login === login && old.dataset.cur === cur && old.nextElementSibling === art) return;
             if (old) old.remove();
             const box = document.createElement('div');
             box.className = 'vp-psort';
@@ -64,6 +103,13 @@
                             if (!v) { vpNote('Сайт не отдаёт такую сортировку'); box.classList.remove('vp-busy'); return; }
                             sessionStorage.setItem(PROF_SORT_KEY, JSON.stringify({ u: login, s, v }));
                         }
+                        if (await profWallRefresh()) {
+                            box.querySelectorAll('button').forEach(x => x.classList.toggle('vp-on', x.dataset.s === s));
+                            box.dataset.cur = s;
+                            cur = s;
+                            setTimeout(() => box.classList.remove('vp-busy'), 600);
+                            return;
+                        }
                         sessionStorage.setItem('vp-soft', String(Date.now()));
                         sessionStorage.setItem('vp-intro-at', String(Date.now()));
                         location.reload();
@@ -71,5 +117,5 @@
                 });
                 box.appendChild(b);
             });
-            anchor.after(box);
+            art.parentElement.insertBefore(box, art);
         });

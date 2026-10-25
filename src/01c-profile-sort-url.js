@@ -19,7 +19,7 @@
         try {
             const v = sessionStorage.getItem('vp-soft');
             sessionStorage.removeItem('vp-soft');
-            if (!v || Date.now() - +v > 15000) return false;
+            if (!v || Date.now() - +v > 15000) { sessionStorage.removeItem(PROF_SORT_KEY); return false; }
             const st = document.createElement('style');
             st.textContent = 'html.vp-soft *, html.vp-soft *::before, html.vp-soft *::after { animation-duration: 0s !important; animation-delay: 0s !important; transition: none !important; }';
             document.documentElement.appendChild(st);
