@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.6.1.7
+// @version      3.6.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2783,7 +2783,7 @@
             if (!m || !BANNER_VIDEO_RE.test(m[1])) throw new Error('сайт вернул не видео: ' + String(d && d.url || '—').slice(0, 90));
             return m[1];
         }
-        let lookBusy = false, lookSent = '';
+        let lookBusy = false, lookSent = '', lookRetryAt = 0;
         async function lookVer() {
             if (!MOD_VER) return '';
             const c = GM_getValue('vp_vx', null);
@@ -2793,7 +2793,7 @@
         }
         async function publishLook() {
             const myId = meData && meData.id;
-            if (!myId || lookBusy) return;
+            if (!myId || lookBusy || Date.now() < lookRetryAt) return;
             lookBusy = true;
             try {
                 const b = backgroundEnabled ? backgroundStyle : '-';
@@ -2810,7 +2810,8 @@
                     ? await editComment(mine.id, content)
                     : await sendComment(VERIFICATION_POST_ID, content);
                 if (res.ok) { lookSent = text; GM_setValue(acctKey('vp_look_day'), day); if (day !== was) checkAllComments(true); }
-            } catch (e) { logErr('стиль', e); } finally { lookBusy = false; }
+                else lookRetryAt = Date.now() + 10 * 60 * 1000;
+            } catch (e) { lookRetryAt = Date.now() + 10 * 60 * 1000; logErr('стиль', e); } finally { lookBusy = false; }
         }
         let accentProbe = null;
         function onAccentFor(color, dark) {
@@ -4315,6 +4316,10 @@
         }
 
         const CHANGELOG = [
+            ['3.6.2', '25 октября 2026', [
+                'Левая и правая панели теперь одной ширины: левая чуть шире, правая чуть уже',
+                'Мод стал заметно реже обращаться к сайту (фоновые проверки сообщений, клуба и подтверждений): меньше ошибок «Слишком много запросов», все функции работают как раньше',
+            ]],
             ['3.6.1 – 3.6.1.7', '18 октября 2026', [
                 'Выбор сообщений: режим включается и удержанием левой кнопки мыши на сообщении; веди с зажатой кнопкой — выбираются подряд, в том числе от уже выбранного; щелчок по выбранному снимает выбор',
                 'Сообщения: правая кнопка, удержание и выбор работают и на пустом месте рядом с сообщением, не только на самом пузыре',
@@ -4820,7 +4825,7 @@
             return all;
         }
         function loadVerificationComments(fresh) {
-            if (!fresh && verifyLoad && Date.now() - verifyLoadAt < 20000) return verifyLoad;
+            if (!fresh && verifyLoad && Date.now() - verifyLoadAt < 90000) return verifyLoad;
             verifyLoadAt = Date.now();
             verifyLoad = allComments(VERIFICATION_POST_ID);
             verifyLoad.catch(() => { verifyLoad = null; });
@@ -4832,6 +4837,9 @@
 
         async function checkAllComments(fresh) {
             if (isVerifying) return null;
+            if (!fresh && Date.now() - (+GM_getValue('vp_ver_at', 0) || 0) < 4 * 60 * 1000) {
+                try { const kept = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || 'null'); if (kept) return kept; } catch (e) { }
+            }
             isVerifying = true;
             try {
                 const comments = await loadVerificationComments(fresh);
@@ -4863,6 +4871,7 @@
                 if (JSON.stringify(verifiedUsers) !== localStorage.getItem(VERIFICATION_STORAGE_KEY)) {
                     localStorage.setItem(VERIFICATION_STORAGE_KEY, JSON.stringify(verifiedUsers));
                 }
+                GM_setValue('vp_ver_at', Date.now());
                 return verifiedUsers;
             } catch (e) {
                 console.warn('[ITD VP] верификация:', e);
@@ -7397,7 +7406,8 @@
         }
         async function msgBackground() {
             if (!myUsername || apiPaused() || (document.hidden && (!msgNet.me || !leadTab()))) return;
-            if (Date.now() - (msgBackground.at || 0) < 20000) return;
+            const idle = Date.now() - msgActive.at, gap = Math.max(idle < 3 * 60e3 ? 20e3 : idle < 15 * 60e3 ? 120e3 : 300e3, !document.hidden && !leadTab() ? 120e3 : 0);
+            if (Date.now() - (msgBackground.at || 0) < gap) return;
             msgBackground.at = Date.now();
             try { await msgSync(); } catch (e) { return; }
             const myId = msgMyId(), plainCalls = ((msgNet.callNote && msgNet.callNote.list) || []).filter(x => x.u === myId).map(x => x.ts);
@@ -7417,7 +7427,14 @@
             msgBadge();
             if (messagesOverlay && messagesOverlay.classList.contains('vp-open') && messagesOverlay.refreshList) messagesOverlay.refreshList();
         }
-        setTimeout(msgBackground, 8000);
+        const msgActive = { at: Date.now() };
+        const msgWake = () => {
+            const was = Date.now() - msgActive.at;
+            msgActive.at = Date.now();
+            if (was > 3 * 60e3) { msgBackground.at = 0; msgBackground(); }
+        };
+        ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => document.addEventListener(ev, msgWake, { capture: true, passive: true }));
+        setTimeout(msgBackground, 12000);
         setInterval(msgBackground, 60000);
         setInterval(() => {
             const c = callNet.cur, open = messagesOverlay && messagesOverlay.classList.contains('vp-open');
@@ -7426,7 +7443,7 @@
             callNet.lastSync = Date.now();
             msgSync().catch(() => { });
         }, 1000);
-        document.addEventListener('visibilitychange', () => { if (!document.hidden) msgBackground(); });
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) { msgBackground.at = 0; msgBackground(); } });
         const msgToastCss = addCss(`
         .vp-msg-badge { position: absolute; top: -6px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; font-size: 11px; font-weight: 600;
             line-height: 18px; text-align: center; color: #fff; background-color: var(--accent-like, #f91880); border-radius: 9px; pointer-events: none; }
@@ -12540,6 +12557,7 @@
 
         const railCss = addCss(`
         html.vp-side-moved aside:has(nav), html.vp-side-moved .vp-sidebar { left: var(--vp-side-left) !important; }
+        html.vp-side-wide aside:has(nav), html.vp-side-wide .vp-sidebar { width: var(--vp-side-w) !important; }
         .vp-rail { position: fixed; top: 24px; z-index: 50; display: none; flex-direction: column; gap: 12px;
             max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
         .vp-rail.vp-on { display: flex; animation: vpRailIn .4s ease-out; }
@@ -12737,6 +12755,23 @@
             if (overlayAt('vpMenu') && !mobileMenuOpen) openMobileMenu(true);
             else if (mobileMenuOpen && !overlayAt('vpMenu')) closeMobileMenu(true);
         });
+        let sideWide = 0;
+        function sideSync(w) {
+            const root = document.documentElement, cb = lastCb;
+            let m = 0;
+            if (w && cb && !galOpen && innerWidth > PHONE_MAX) {
+                const siteLeft = parseFloat(getComputedStyle(root).getPropertyValue('--sidebar-gap')) || 36;
+                m = Math.min(w, Math.floor(cb.left - 24 - siteLeft));
+                if (m <= 204) m = 0;
+            }
+            if (m !== sideWide) {
+                sideWide = m;
+                root.classList.toggle('vp-side-wide', !!m);
+                if (m) root.style.setProperty('--vp-side-w', m + 'px'); else root.style.removeProperty('--vp-side-w');
+                placeSidebar();
+            }
+            return m || w;
+        }
         function placeRail() {
             if (mobileMenuOpen) return;
             const cb = contentBox() || lastCb;
@@ -12745,23 +12780,26 @@
             const side = siteEl('sidebarRight');
             const right = side ? side.getBoundingClientRect().left : innerWidth;
             const gap = right - edge;
-            let box = null, adj = false;
+            let box = null, adj = false, sideW = 0;
             const on = railEnabled && !!myUsername && !!rail.querySelector(':scope > .vp-rail-card:not([hidden])');
             const sideEl = siteEl('sidebar');
             if (on && galOpen && sideEl && innerWidth > PHONE_MAX) {
-                const margin = Math.max(12, Math.round(baseLeft(sideEl))), width = 300;
+                const margin = Math.max(12, Math.round(baseLeft(sideEl))), width = 250;
                 box = { left: innerWidth - margin - width, width, maxH: innerHeight - RAIL_TOP - 24 };
             } else if (on && edge > 0 && gap >= 240) {
-                const width = Math.min(300, gap - 48);
+                const width = sideW = Math.min(250, gap - 48);
                 box = { left: Math.round(edge + 24), width, maxH: innerHeight - 48 };
             } else if (on && edge > 0 && innerWidth - edge - 48 >= 240 && innerWidth > PHONE_MAX) {
-                box = { left: Math.round(edge + 24), width: Math.min(300, innerWidth - edge - 48), maxH: innerHeight - 48 };
+                sideW = Math.min(250, innerWidth - edge - 48);
+                box = { left: Math.round(edge + 24), width: sideW, maxH: innerHeight - 48 };
                 adj = true;
             } else if (on && side) {
                 const sr = side.getBoundingClientRect(), links = side.lastElementChild;
                 const maxH = (links ? links.getBoundingClientRect().top : sr.bottom) - 24 - 24;
                 if (sr.width >= 180 && maxH >= 220) box = { left: Math.round(sr.left), width: Math.round(sr.width), maxH };
             }
+            const common = sideSync(box ? sideW : 0);
+            if (box && sideW) box.width = common;
             rail.style.top = RAIL_TOP + 'px';
             if (box && edge > 0 && (gap >= 240 || adj) && !galOpen) box.maxH = innerHeight - RAIL_TOP - 24;
             rail.classList.toggle('vp-on', !!box);
@@ -13039,7 +13077,7 @@
             const due = [...railClub.querySelectorAll('.vp-club-row')].filter(r => r.dataset.login !== myUsername)
                 .map(r => ({ n: r.dataset.login, v: seen(r) })).filter(x => late(x.n) > 0).sort((a, b) => b.v - a.v || late(b.n) - late(a.n));
             if (!due.length) return;
-            const fast = clubFirst ? due.map(x => x.n) : [];
+            const fast = due.filter(x => x.v).slice(0, 8).map(x => x.n);
             if (!fast.length && now < (+GM_getValue('vp_club_next', 0) || 0)) return;
             clubPolling = true; clubPolledAt = now; clubFirst = false;
             try {
@@ -13059,7 +13097,7 @@
         }
         const clubTick = () => Promise.resolve(renderClub()).then(() => clubPollOnline()).catch(e => logErr('клуб: в сети', e));
         setTimeout(() => Promise.resolve(renderClub()).catch(e => logErr('клуб', e)), 2500);
-        setTimeout(() => clubPollOnline(), 4000);
+        setTimeout(() => clubPollOnline(), 14000);
         setInterval(clubTick, 60 * 1000);
         setInterval(() => clubPollOnline(), 5000);
         let clubScrollT = 0;
