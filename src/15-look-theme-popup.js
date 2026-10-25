@@ -9,7 +9,7 @@
             for (const tok of m[1].split(/\s+/)) { const i = tok.indexOf('='); if (i > 0) o[tok.slice(0, i)] = tok.slice(i + 1); }
             if (!nickStyles[o.n]) return null;
             const look = { n: o.n, b: '-', g: /^[01]{2}$/.test(o.g || '') ? o.g : '11' };
-            if (o.b === 'custom' ? /^[0-4][0-9a-f]{32}$/.test(o.i || '') : BACKGROUNDS[o.b]) look.b = o.b;
+            if (o.b === 'custom' ? /^[0-4][0-9a-f]{32}$/.test(o.i || '') : BG_KEYS.includes(o.b)) look.b = o.b;
             if (look.b === 'custom') look.i = o.i;
             if (look.b === 'custom' && BANNER_VIDEO_RE.test(o.bv || '')) look.bv = o.bv;
             if (BANNER_VIDEO_RE.test(o.v || '')) look.v = o.v;
