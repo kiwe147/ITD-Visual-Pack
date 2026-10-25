@@ -52,7 +52,8 @@ const wall = cursor => ({ data: { posts: Array.from({ length: cursor ? 10 : 50 }
       document.querySelectorAll('[data-vp-posts]').forEach(e => e.removeAttribute('data-vp-posts'));   // след мода в снимке
     });
     await p.addScriptTag({ content: src });
-    await p.waitForTimeout(5000);
+    await p.waitForFunction(() => document.querySelector('.vp-likes-stat'), null, { timeout: 20000 }).catch(() => { });
+    await p.waitForTimeout(1500);
     await p.evaluate(() => document.body.appendChild(document.createElement('i')));
     await p.waitForTimeout(800);
   };
@@ -63,8 +64,9 @@ const wall = cursor => ({ data: { posts: Array.from({ length: cursor ? 10 : 50 }
   });
   check(/^220\s*лайков$/.test(row.likes || '') && row.afterPosts, `в профиле справа от постов: «${row.likes}»`);
   check(wallHits.join() === '1,p2', `стена пролистана курсором: ${wallHits.join(' ')}`);
+  await p.click('.vp-seg button[data-p="day"]'); await p.waitForTimeout(300);
   const stat = await p.evaluate(() => [...document.querySelectorAll('.vp-stat')].map(r => r.textContent.replace(/\s+/g, ' ').trim()));
-  check(stat.some(t => /^220\s*лайков\s*\+20$/.test(t)), `в «Статистике»: ${stat.join(' | ')}`);
+  check(stat.some(t => /^220Лайки\+20$/.test(t)), `в «Статистике»: ${stat.join(' | ')}`);
   await p.screenshot({ path: path.join(__dirname, 'out', 'likes-profile.png') });
   await load();
   check(wallHits.length === 2, `второй заход — без запросов стены (всего ${wallHits.length})`);
