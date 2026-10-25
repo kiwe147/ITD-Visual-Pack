@@ -2829,48 +2829,34 @@
             H = h;
             bgFit();
         }
-        const GL_STYLES = { aurora: 0.45 };
-        const GL_FRAG = `precision highp float;
-uniform vec2 uRes;
-uniform float uT;
-uniform vec3 uC0[3];
-uniform vec3 uC1[3];
-vec4 grad(float v, vec3 c0, vec3 c1) {
-    if (v <= 0.0 || v >= 1.0) return vec4(0.0);
-    if (v < 0.55) return vec4(c0, mix(0.0, 0.3, v / 0.55));
-    if (v < 0.9) { float k = (v - 0.55) / 0.35; return vec4(mix(c0, c1, k), mix(0.3, 1.0, k)); }
-    float k = (v - 0.9) / 0.1;
-    return vec4(mix(c1, c0, k), mix(1.0, 0.0, k));
-}
-vec4 col(float cc, float py, float base, float amp, float len, float dh, float a, float f, float sp, vec3 c0, vec3 c1) {
-    float y = uRes.y * (base + amp * sin(cc * f + uT * sp) + 0.025 * sin(cc * f * 3.1 - uT * 1.7 * sp));
-    float L = uRes.y * len * (0.6 + 0.4 * sin(cc * 0.011 + uT * 2.3 * sp));
-    float ga = a * (0.5 + 0.5 * sin(cc * 0.004 - uT * 1.3 + dh));
-    vec4 g = grad((py - (y - L)) / L, c0, c1);
-    return vec4(g.rgb * g.a * ga, g.a * ga);
-}
-vec4 band(float x, float py, float base, float amp, float len, float dh, float a, float f, float sp, vec3 c0, vec3 c1) {
-    float cx = floor(x / 6.0) * 6.0;
-    vec4 r = col(cx, py, base, amp, len, dh, a, f, sp, c0, c1);
-    if (x - cx < 1.0 && cx >= 6.0) r += col(cx - 6.0, py, base, amp, len, dh, a, f, sp, c0, c1);
-    return r;
-}
-void main() {
-    float x = floor(gl_FragCoord.x);
-    float py = uRes.y - gl_FragCoord.y;
-    vec4 r = band(x, py, 0.64, 0.08, 0.30, 0.0, 0.45, 0.0021, 1.0, uC0[0], uC1[0]);
-    r += band(x, py, 0.72, 0.06, 0.24, 45.0, 0.30, 0.0016, -0.7, uC0[1], uC1[1]);
-    r += band(x, py, 0.58, 0.05, 0.20, -40.0, 0.28, 0.0027, 0.55, uC0[2], uC1[2]);
-    gl_FragColor = min(r, vec4(1.0));
-}`;
-        const GL_DH = [0, 45, -40];
-        let bgGl = null, bgGlFail = false, glT = 0, glName = '', glLast = 0, glSlow = 0, glFrames = 0;
+        const GL_STYLES = {};
+        let bgGl = null, bgGlFail = false, glName = '', glSize = '', glLast = 0, glSlow = 0, glFrames = 0;
         function hslRgb(h, s, l) {
             h = (((h % 360) + 360) % 360) / 360; s /= 100; l /= 100;
             const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
             const f = t => { if (t < 0) t += 1; if (t > 1) t -= 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
             return [f(h + 1 / 3), f(h), f(h - 1 / 3)];
         }
+        const GLK = {
+            hslRgb,
+            vs: 'attribute vec2 aPos; void main() { gl_Position = vec4(aPos, 0.0, 1.0); }',
+            program(gl, vs, fs) {
+                const sh = (type, text) => { const o = gl.createShader(type); gl.shaderSource(o, text); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
+                const pr = gl.createProgram();
+                gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs));
+                gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs));
+                gl.linkProgram(pr);
+                if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
+                return pr;
+            },
+            bindFull(gl, pr) {
+                if (!gl.__full) { gl.__full = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, gl.__full); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW); }
+                gl.bindBuffer(gl.ARRAY_BUFFER, gl.__full);
+                const at = gl.getAttribLocation(pr, 'aPos');
+                gl.enableVertexAttribArray(at);
+                gl.vertexAttribPointer(at, 2, gl.FLOAT, false, 0, 0);
+            }
+        };
         function bgGlInit() {
             if (bgGlFail) return null;
             if (bgGl) return bgGl;
@@ -2879,22 +2865,9 @@ void main() {
                 if (!gl) throw new Error('нет WebGL');
                 const di = gl.getExtension('WEBGL_debug_renderer_info'), rn = di ? String(gl.getParameter(di.UNMASKED_RENDERER_WEBGL)) : '';
                 if (!GM_getValue('bgGlForce', false) && /swiftshader|llvmpipe|software|basic render/i.test(rn)) throw new Error('видеокарта программная: ' + rn);
-                const sh = (type, text) => { const o = gl.createShader(type); gl.shaderSource(o, text); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
-                const pr = gl.createProgram();
-                gl.attachShader(pr, sh(gl.VERTEX_SHADER, 'attribute vec2 aPos; void main() { gl_Position = vec4(aPos, 0.0, 1.0); }'));
-                gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, GL_FRAG));
-                gl.linkProgram(pr);
-                if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
-                gl.useProgram(pr);
-                const buf = gl.createBuffer();
-                gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-                const at = gl.getAttribLocation(pr, 'aPos');
-                gl.enableVertexAttribArray(at);
-                gl.vertexAttribPointer(at, 2, gl.FLOAT, false, 0, 0);
                 gl.clearColor(0, 0, 0, 0);
                 canvasGL.addEventListener('webglcontextlost', e => { e.preventDefault(); bgGlFail = true; bgGl = null; bgGlShown = false; bgSurface(); });
-                bgGl = { gl, uRes: gl.getUniformLocation(pr, 'uRes'), uT: gl.getUniformLocation(pr, 'uT'), uC0: gl.getUniformLocation(pr, 'uC0'), uC1: gl.getUniformLocation(pr, 'uC1') };
+                bgGl = { gl, insts: {} };
                 return bgGl;
             } catch (e) {
                 bgGlFail = true;
@@ -2903,6 +2876,8 @@ void main() {
             }
         }
         function bgGlDraw(name, dt) {
+            const def = GL_STYLES[name];
+            if (!def || def.broken) return false;
             const g = bgGlInit();
             if (!g) return false;
             const gl = g.gl;
@@ -2920,17 +2895,21 @@ void main() {
                     return false;
                 }
             }
-            if (glName !== name) { glName = name; glT = Math.random() * 100; canvasGL.style.opacity = GL_STYLES[name]; }
             if (canvasGL.width !== W || canvasGL.height !== H) { canvasGL.width = W; canvasGL.height = H; gl.viewport(0, 0, W, H); }
-            glT += 0.012 * dt;
-            const th = theme(), S = Math.min(100, th.s * 1.15), c0 = [], c1 = [];
-            for (const dh of GL_DH) { c0.push(...hslRgb(th.h + dh, S, 60)); c1.push(...hslRgb(th.h + dh, S, 70)); }
-            gl.uniform2f(g.uRes, W, H);
-            gl.uniform1f(g.uT, glT);
-            gl.uniform3fv(g.uC0, c0);
-            gl.uniform3fv(g.uC1, c1);
+            let inst = g.insts[name];
+            if (!inst) {
+                try { inst = g.insts[name] = def.create(gl, GLK); } catch (e) { def.broken = true; console.warn('[ITD VP] фон «' + name + '» на видеокарте не запустился, рисую обычным способом', e && e.message || e); return false; }
+            }
+            const size = W + 'x' + H;
+            if (glName !== name || glSize !== size) {
+                glName = name;
+                glSize = size;
+                canvasGL.style.opacity = def.opacity;
+                inst.enter(W, H);
+            }
+            gl.disable(gl.BLEND);
             gl.clear(gl.COLOR_BUFFER_BIT);
-            gl.drawArrays(gl.TRIANGLES, 0, 3);
+            inst.draw({ gl, dt, W, H, th: theme(), mouse });
             if (!bgGlShown) { bgGlShown = true; bgSurface(); }
             return true;
         }
@@ -3042,6 +3021,63 @@ void main() {
             lookStyleEl.textContent = out.join('\n');
             document.head.appendChild(lookStyleEl);
         })();
+        GL_STYLES.aurora = {
+            opacity: 0.45,
+            create(gl, K) {
+                const pr = K.program(gl, K.vs, `precision highp float;
+uniform vec2 uRes;
+uniform float uT;
+uniform vec3 uC0[3];
+uniform vec3 uC1[3];
+vec4 grad(float v, vec3 c0, vec3 c1) {
+    if (v <= 0.0 || v >= 1.0) return vec4(0.0);
+    if (v < 0.55) return vec4(c0, mix(0.0, 0.3, v / 0.55));
+    if (v < 0.9) { float k = (v - 0.55) / 0.35; return vec4(mix(c0, c1, k), mix(0.3, 1.0, k)); }
+    float k = (v - 0.9) / 0.1;
+    return vec4(mix(c1, c0, k), mix(1.0, 0.0, k));
+}
+vec4 col(float cc, float py, float base, float amp, float len, float dh, float a, float f, float sp, vec3 c0, vec3 c1) {
+    float y = uRes.y * (base + amp * sin(cc * f + uT * sp) + 0.025 * sin(cc * f * 3.1 - uT * 1.7 * sp));
+    float L = uRes.y * len * (0.6 + 0.4 * sin(cc * 0.011 + uT * 2.3 * sp));
+    float ga = a * (0.5 + 0.5 * sin(cc * 0.004 - uT * 1.3 + dh));
+    vec4 g = grad((py - (y - L)) / L, c0, c1);
+    return vec4(g.rgb * g.a * ga, g.a * ga);
+}
+vec4 band(float x, float py, float base, float amp, float len, float dh, float a, float f, float sp, vec3 c0, vec3 c1) {
+    float cx = floor(x / 6.0) * 6.0;
+    vec4 r = col(cx, py, base, amp, len, dh, a, f, sp, c0, c1);
+    if (x - cx < 1.0 && cx >= 6.0) r += col(cx - 6.0, py, base, amp, len, dh, a, f, sp, c0, c1);
+    return r;
+}
+void main() {
+    float x = floor(gl_FragCoord.x);
+    float py = uRes.y - gl_FragCoord.y;
+    vec4 r = band(x, py, 0.64, 0.08, 0.30, 0.0, 0.45, 0.0021, 1.0, uC0[0], uC1[0]);
+    r += band(x, py, 0.72, 0.06, 0.24, 45.0, 0.30, 0.0016, -0.7, uC0[1], uC1[1]);
+    r += band(x, py, 0.58, 0.05, 0.20, -40.0, 0.28, 0.0027, 0.55, uC0[2], uC1[2]);
+    gl_FragColor = min(r, vec4(1.0));
+}`);
+                const uRes = gl.getUniformLocation(pr, 'uRes'), uT = gl.getUniformLocation(pr, 'uT'), uC0 = gl.getUniformLocation(pr, 'uC0'), uC1 = gl.getUniformLocation(pr, 'uC1');
+                const DH = [0, 45, -40];
+                let t = 0;
+                return {
+                    enter() { t = Math.random() * 100; },
+                    draw(c) {
+                        const gl = c.gl;
+                        gl.useProgram(pr);
+                        K.bindFull(gl, pr);
+                        t += 0.012 * c.dt;
+                        const S = Math.min(100, c.th.s * 1.15), c0 = [], c1 = [];
+                        for (const dh of DH) { c0.push(...K.hslRgb(c.th.h + dh, S, 60)); c1.push(...K.hslRgb(c.th.h + dh, S, 70)); }
+                        gl.uniform2f(uRes, c.W, c.H);
+                        gl.uniform1f(uT, t);
+                        gl.uniform3fv(uC0, c0);
+                        gl.uniform3fv(uC1, c1);
+                        gl.drawArrays(gl.TRIANGLES, 0, 3);
+                    }
+                };
+            }
+        };
         const LOOK_RE = /^ITDXL1 (.+)$/;
         const VER_RE = /^\d{1,3}(\.\d{1,4}){1,4}$/;
         const MOD_VER = (() => { try { const v = GM_info.script.version; return VER_RE.test(v) ? v : ''; } catch (e) { return ''; } })();

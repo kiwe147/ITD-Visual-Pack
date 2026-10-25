@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const root = __dirname;
-const out = path.join(root, 'ITD-Visual-Pack.user.js');
+const out = process.env.OUT ? path.resolve(process.env.OUT) : path.join(root, 'ITD-Visual-Pack.user.js');
 const order = fs.readFileSync(path.join(root, 'src', 'order.txt'), 'utf8').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
 const built = order.map(f => fs.readFileSync(path.join(root, 'src', f), 'utf8').replace(/\r\n/g, '\n')).join('');
 const cur = fs.existsSync(out) ? fs.readFileSync(out, 'utf8') : '';

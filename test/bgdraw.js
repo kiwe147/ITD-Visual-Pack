@@ -5,7 +5,7 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const snap = fs.readFileSync(process.argv[2], 'utf8');
-const src = fs.readFileSync(path.join(__dirname, '..', 'ITD-Visual-Pack.user.js'), 'utf8').replace('function parseLook(', 'window.__pl = (...a) => parseLook(...a); function parseLook(');
+const src = fs.readFileSync(process.env.MOD || path.join(__dirname, '..', 'ITD-Visual-Pack.user.js'), 'utf8').replace('function parseLook(', 'window.__pl = (...a) => parseLook(...a); function parseLook(');
 const meta = src.slice(0, src.indexOf('==/UserScript=='));
 const ORIGIN = 'https://xn--d1ah4a.com';
 const fails = [];
