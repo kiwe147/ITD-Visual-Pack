@@ -272,6 +272,7 @@
                 }, (seconds || 10) * 1000));
             },
             sched: () => { const t = sched.table(); console.table(t); return t; },
+            bg: () => { const r = { режим: bgW ? 'отдельный поток' : 'в странице', стиль: effBg(), включён: backgroundEnabled, размер: W + 'x' + H, причина: bgWhy }; console.table(r); return r; },
             net: minutes => { const r = netTable(minutes); console.table(r.запросы); console.table(r.по_минутам); return r; }
         };
         setTimeout(() => {

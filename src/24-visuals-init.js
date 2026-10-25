@@ -553,12 +553,13 @@
             }
             const dt = Math.min(3, gap / 50);
             if (currentStyle === 'rainbow') { stepHue(dt); paint(); }
-            if (backgroundEnabled && !introOn) drawBackground(dt);
+            bgFrame(dt);
         }
         paint();
         requestAnimationFrame(frame);
 
-        new ResizeObserver(resizeCanvas).observe(canvas);
+        var canvasRO = new ResizeObserver(resizeCanvas);
+        canvasRO.observe(canvas);
         resizeCanvas();
         initVisuals();
         initBanner();
