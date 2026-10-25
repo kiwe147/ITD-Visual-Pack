@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.3
+// @version      3.7.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4470,7 +4470,7 @@
         }
 
         const CHANGELOG = [
-            ['3.7.1 – 3.7.3', '26 октября 2026', [
+            ['3.7.1 – 3.7.4', '26 октября 2026', [
                 'Профили: над постами кнопки сортировки «Новые», «Старые», «Популярные» — работают в любом профиле, список перестраивается на месте без перезагрузки страницы, а после обновления страницы сортировка сбрасывается на «Новые»',
             ]],
             ['3.7.0', '26 октября 2026', [
@@ -13425,19 +13425,28 @@
                 addEventListener('vp-wall-refresh', function () {
                     var el = document.querySelector('[data-vp-wall="1"]');
                     if (!el) return;
-                    var res = 'nofiber';
-                    var key = Object.keys(el).filter(function (k) { return k.indexOf('__reactFiber$') === 0; })[0];
-                    if (key) {
-                        for (var f = el[key]; f && res !== 'ok'; f = f.return) {
-                            for (var h = f.memoizedState; h && typeof h === 'object'; h = h.next) {
-                                var v = h.memoizedState;
-                                if (Array.isArray(v) && typeof v[0] === 'function' && String(v[0]).indexOf('invalidateWallCache') > -1) {
-                                    try { v[0](); res = 'ok'; } catch (e) { res = 'err'; }
-                                    break;
+                    var res = 'novnode';
+                    var root = document.getElementById('root') || document.body;
+                    var seen = new Set(), stack = root && root.__k ? [root.__k] : [], steps = 0;
+                    while (stack.length && res !== 'ok' && steps++ < 60000) {
+                        var v = stack.pop();
+                        if (!v || typeof v !== 'object' || seen.has(v)) continue;
+                        seen.add(v);
+                        var hooks = v.__c && v.__c.__H && v.__c.__H.__;
+                        if (hooks) {
+                            res = 'nohook';
+                            for (var i = 0; i < hooks.length && res !== 'ok'; i++) {
+                                var fn = hooks[i] && hooks[i].__;
+                                if (typeof fn !== 'function') continue;
+                                var src = String(fn);
+                                if (src.length < 600 && src.indexOf('invalidateWallCache') > -1 && src.indexOf('await') > -1) {
+                                    try { fn(); res = 'ok'; } catch (e) { res = 'err'; }
                                 }
                             }
                         }
+                        if (Array.isArray(v.__k)) for (var j = v.__k.length - 1; j >= 0; j--) stack.push(v.__k[j]);
                     }
+                    if (res !== 'ok') res = steps > 1 ? 'nofunc' : 'novnode';
                     el.setAttribute('data-vp-res', res);
                 });
             } + ')();';

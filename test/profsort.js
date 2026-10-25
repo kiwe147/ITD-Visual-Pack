@@ -47,8 +47,9 @@ const OLD = NEW.slice().reverse(), POP = NEW.slice().sort((a, b) => b.likesCount
     await p.waitForSelector('.vp-psort', { timeout: 15000 }).catch(() => { });
     if (variant === 'inplace') {
       await p.evaluate(() => {
-        const art = document.querySelector('article.vp-post'), key = '__reactFiber$test';
-        art[key] = { memoizedState: { memoizedState: [function () { window.__wall = (window.__wall || 0) + 1; var k = 'invalidateWallCache'; return k; }, []], next: null }, return: null };
+        const fn = async function () { window.__wall = (window.__wall || 0) + 1; var k = 'invalidateWallCache'; await 0; };
+        const root = document.getElementById('root') || document.body;
+        root.__k = { __k: [{ __k: null, __c: { __H: { __: [{ __: function () { }, __H: [] }, { __: fn, __H: [], __h: function () { } }] } } }] };
       });
     }
     const ui = await p.evaluate(() => { const b = document.querySelector('.vp-psort'); return b && { labels: [...b.querySelectorAll('button')].map(x => x.textContent), on: (b.querySelector('.vp-on') || {}).textContent, beforePost: !!b.nextElementSibling && b.nextElementSibling.tagName === 'ARTICLE' }; });
