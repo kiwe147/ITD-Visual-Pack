@@ -54,6 +54,7 @@ const { openText } = require('./seal');
       rows: [...document.querySelectorAll('.vp-stat')].map(r => r.textContent.replace(/\s+/g, ' ').trim()),
       since: (document.querySelector('.vp-stats-since') || {}).textContent || ''
     }));
+    await p.click('.vp-seg button[data-p="day"]'); await p.waitForTimeout(300);
     const day = await read();
     await p.click('.vp-seg button[data-p="month"]'); await p.waitForTimeout(300);
     const month = await read();
@@ -67,9 +68,9 @@ const { openText } = require('./seal');
     { ago: 26 * H, followers: 233, following: 125, posts: 572, likes: 210 }]);
   console.log('—    день:  ' + r.day.rows.join(' | ') + ' · ' + r.day.since);
   console.log('—    месяц: ' + r.month.rows.join(' | ') + ' · ' + r.month.since);
-  check(r.day.rows.some(t => /подписчиков\s*\+3$/.test(t)) && r.day.rows.some(t => /лайков\s*\+10$/.test(t)), 'день — от снимка 26 ч назад: подписчиков +3, лайков +10');
+  check(r.day.rows.some(t => /Подписчики\+3$/.test(t)) && r.day.rows.some(t => /Лайки\+10$/.test(t)), 'день — от снимка 26 ч назад: подписчиков +3, лайков +10');
   check(!r.day.since, 'день: снимок почти ровно сутки — без подписи «с …»');
-  check(r.month.rows.some(t => /подписчиков\s*\+36$/.test(t)), 'месяц — от ближайшего к 30 дням (35 дней): подписчиков +36');
+  check(r.month.rows.some(t => /Подписчики\+36$/.test(t)), 'месяц — от ближайшего к 30 дням (35 дней): подписчиков +36');
   check(/^с \d\d\.\d\d/.test(r.month.since), `месяц: 35 дней вместо 30 — подпись «${r.month.since}»`);
 
   console.log('— синхронизация (3.3.11): тот же аккаунт на телефоне без своей истории');
@@ -78,7 +79,7 @@ const { openText } = require('./seal');
   r = await run([]);
   console.log('—    день:  ' + r.day.rows.join(' | ') + ' · ' + r.day.since);
   console.log('—    месяц: ' + r.month.rows.join(' | ') + ' · ' + r.month.since);
-  check(r.day.rows.some(t => /подписчиков\s*\+3$/.test(t)) && r.month.rows.some(t => /подписчиков\s*\+36$/.test(t)), 'телефон: день +3 и месяц +36 — как на компьютере');
+  check(r.day.rows.some(t => /Подписчики\+3$/.test(t)) && r.month.rows.some(t => /Подписчики\+36$/.test(t)), 'телефон: день +3 и месяц +36 — как на компьютере');
   check(server.length === 1, `запись осталась одна (${server.length})`);
   server.length = 0;
 

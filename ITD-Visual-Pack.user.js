@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.6.2
+// @version      3.6.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4316,6 +4316,9 @@
         }
 
         const CHANGELOG = [
+            ['3.6.3', '25 октября 2026', [
+                'Статистика в боковой панели обновлена: вкладки «Всё / День / Неделя / Месяц», плитки с подписчиками, подписками, постами и лайками (с приростом за период), график лайков по месяцам или дням и два лучших поста по лайкам',
+            ]],
             ['3.6.2', '25 октября 2026', [
                 'Левая и правая панели теперь одной ширины: левая чуть шире, правая чуть уже',
                 'Мод стал заметно реже обращаться к сайту (фоновые проверки сообщений, клуба и подтверждений): меньше ошибок «Слишком много запросов», все функции работают как раньше',
@@ -12485,8 +12488,8 @@
         rail.className = 'vp-rail';
         rail.innerHTML = `
         <section class="vp-rail-card" data-block="stats"><div class="vp-rail-title">${svgIcon('<path d="M4 19V10M10 19V5M16 19v-7M21 19H3"/>', 16)}<span>Статистика</span></div>
-            <div class="vp-seg"><div class="vp-seg-ind"></div><button data-p="day">День</button><button data-p="month">Месяц</button></div>
-            <div class="vp-stats"><div class="vp-menu-note">Загрузка...</div></div><div class="vp-stats-since"></div></section>
+            <div class="vp-seg"><div class="vp-seg-ind"></div><button data-p="all">Всё</button><button data-p="day">День</button><button data-p="week"><span class="vp-f">Неделя</span><span class="vp-s">Нед.</span></button><button data-p="month"><span class="vp-f">Месяц</span><span class="vp-s">Мес.</span></button></div>
+            <div class="vp-stats"><div class="vp-menu-note">Загрузка...</div></div><div class="vp-stats-since"></div><div class="vp-chart" hidden></div><div class="vp-best" hidden></div></section>
         <section class="vp-rail-card" data-block="club"><div class="vp-rail-title">${svgIcon('<circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.5a3 3 0 0 1 0 5.5M18 14.5a5 5 0 0 1 2.5 4.5"/>', 16)}<span>Клуб ИТД&nbsp;X</span><b class="vp-club-count"></b></div>
             <div class="vp-club"><div class="vp-menu-note">Загрузка...</div></div></section>
         <section class="vp-rail-card" data-block="games"><div class="vp-rail-title">${svgIcon('<rect x="2.5" y="7" width="19" height="11" rx="5.5"/><path d="M7.5 10.5v4M5.5 12.5h4"/><circle cx="15.5" cy="11.5" r=".8"/><circle cx="17.5" cy="13.5" r=".8"/>', 16)}<span>Игры</span></div>
@@ -12575,15 +12578,34 @@
         .vp-seg button { position: relative; z-index: 1; flex: 1; padding: 6px 0; border: 0; background: none; cursor: pointer; font: inherit;
             font-size: 13px; font-weight: 500; color: var(--text-secondary); transition: color .2s ease; }
         .vp-seg button.vp-on { color: var(--text-primary, #fff); }
-        .vp-seg-ind { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 9999px;
+        .vp-seg-ind { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 4); border-radius: 9999px;
             background: var(--tab-active-bg, rgba(255, 255, 255, .08)); transition: transform .3s cubic-bezier(.5, 0, 0, 1); }
-        .vp-seg.vp-month .vp-seg-ind { transform: translateX(100%); }
+        .vp-seg-ind { transform: translateX(calc(var(--vp-i, 0) * 100%)); }
+        .vp-seg .vp-f { display: none; }
+        .vp-menu-body .vp-seg .vp-f { display: inline; }
+        .vp-menu-body .vp-seg .vp-s { display: none; }
         .vp-stats-since { margin-top: 4px; font-size: 12px; color: var(--text-secondary); }
         .vp-stats-since:empty { display: none; }
-        .vp-stat { display: flex; align-items: baseline; gap: 6px; padding: 5px 0; font-size: 15px; }
-        .vp-stat-val { font-weight: 700; }
-        .vp-stat-label { flex: 1; color: var(--text-secondary); }
-        .vp-stat-diff { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+        .vp-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 8px; padding: 12px 14px; border-radius: 20px; background: var(--glass-bg, rgba(35, 35, 35, .8)); }
+        .vp-stats > .vp-menu-note { grid-column: 1 / -1; }
+        .vp-stat { display: flex; flex-direction: column; min-width: 0; }
+        .vp-stat-label { order: -1; font-size: 12px; color: var(--text-secondary); }
+        .vp-stat-val { font-size: 17px; font-weight: 700; white-space: nowrap; }
+        .vp-menu-body .vp-stat-val { font-size: 19px; }
+        .vp-stat-diff { font-size: 12.5px; font-weight: 700; color: var(--text-secondary); }
+        .vp-stat-diff:empty { display: none; }
+        .vp-chart { margin-top: 12px; padding: 12px; border-radius: 22px; background: rgba(127, 127, 127, .1); }
+        .vp-chart[hidden], .vp-best[hidden] { display: none; }
+        .vp-chart-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; font-weight: 700; }
+        .vp-chart-h span, .vp-best-h span { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+        .vp-chart-cap { min-height: 2.6em; margin: 0 0 8px; font-size: 12px; font-weight: 600; line-height: 1.3; color: var(--text-secondary); }
+        .vp-chart svg { display: block; width: 100%; height: auto; border-radius: 14px; touch-action: pan-y; }
+        .vp-chart-ax { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); }
+        .vp-best { margin-top: 12px; }
+        .vp-best-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; font-size: 14px; font-weight: 700; }
+        .vp-best-post { display: block; margin-bottom: 6px; padding: 10px 14px; border-radius: 18px; background: var(--glass-bg, rgba(35, 35, 35, .8)); color: inherit; text-decoration: none; cursor: pointer; }
+        .vp-best-post b { display: block; overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-best-post small { font-size: 12px; color: var(--text-secondary); }
         .vp-stat-diff.vp-up { color: #3ddc84; }
         .vp-stat-diff.vp-down { color: #ff5a6a; }
         .vp-club { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; overflow-x: hidden; padding: 10px 14px; margin: 0 -12px;
@@ -12829,7 +12851,7 @@
         const railStats = rail.querySelector('.vp-stats'), railSince = rail.querySelector('.vp-stats-since');
         const seg = rail.querySelector('.vp-seg');
         const fmtNum = n => n >= 10000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1).replace('.0', '') + 'к' : String(n);
-        let statsPeriod = GM_getValue('vp_stats_tab', 'day'), statsNow = null;
+        let statsPeriod = GM_getValue('vp_stats_tab', 'all'), statsNow = null;
         const DAY_MS = 864e5;
         function statsHistory() { try { return JSON.parse(GM_getValue(acctKey('vp_stats_hist'), '[]')); } catch (e) { return []; } }
         const STATS_TAG = 'ITDXT1 ', STATS_F = ['followers', 'following', 'posts', 'likes'];
@@ -12897,28 +12919,46 @@
             }
             return merged;
         }
-        let likesPending = null;
-        function myLikesTotal() {
-            const c = GM_getValue('vp_likes_total', null);
-            if (c && c.user === myUsername && Date.now() - c.at < 3 * 3600e3) return Promise.resolve(c.total);
-            if (likesPending) return likesPending;
-            likesPending = (async () => {
-                let total = 0, cursor = null, pages = 0;
-                do {
+        const PERIODS = ['all', 'day', 'week', 'month'], SPAN_D = { day: 1, week: 7, month: 30 };
+        const MON = ['янв', 'февр', 'март', 'апр', 'май', 'июнь', 'июль', 'авг', 'сент', 'окт', 'нояб', 'дек'];
+        const MONF = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+        var postsPending = null, statsList = null, statsBusy = '';
+        function postsCache() { const c = GM_getValue('vp_posts_list', null); return c && c.user === myUsername && Array.isArray(c.list) ? c : null; }
+        function postRow(p) { return [p.id, Date.parse(p.createdAt) || 0, +p.likesCount || 0, String(p.content || '').replace(/\s+/g, ' ').trim().slice(0, 48), p.originalPost ? 1 : 0]; }
+        function postsLikes(c) { return c ? c.list.reduce((a, r) => a + r[2], 0) : null; }
+        function myPostsLoad() {
+            const c = postsCache(), now = Date.now();
+            if (c && now - c.at < 3 * 3600e3) return Promise.resolve(c);
+            if (postsPending) return postsPending;
+            if (c && now - (+GM_getValue('vp_posts_lock', 0) || 0) < 3 * 60e3) return Promise.resolve(c);
+            GM_setValue('vp_posts_lock', now);
+            const deep = !c || now - (c.full || 0) > 24 * 3600e3, stop = now - 30 * 864e5;
+            postsPending = (async () => {
+                const byId = new Map(deep ? [] : c.list.map(r => [r[0], r]));
+                let cursor = null, pages = 0;
+                for (;;) {
                     const res = await api(`/api/posts/user/${encodeURIComponent(myUsername)}?limit=50&sort=new` + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
                     if (!res.ok) throw new Error('посты: ' + res.status);
-                    const j = await res.json(), d = j.data || j;
+                    const j = await res.json(), d = j.data || j, posts = d.posts || [];
                     keepSitePosts(j);
-                    (d.posts || []).forEach(p => { total += +p.likesCount || 0; });
+                    posts.forEach(p => { if (p && p.id) byId.set(p.id, postRow(p)); });
                     cursor = (d.pagination && d.pagination.nextCursor) || d.nextCursor || d.cursor || null;
-                    if (!(d.posts || []).length) break;
-                } while (cursor && ++pages < 60);
-                GM_setValue('vp_likes_total', { user: myUsername, at: Date.now(), total });
-                return total;
-            })().catch(e => { logErr('лайки всего', e); const c2 = GM_getValue('vp_likes_total', null); return c2 && c2.user === myUsername ? c2.total : null; })
-                .finally(() => { likesPending = null; });
-            return likesPending;
+                    pages++;
+                    if (!posts.length || !cursor || pages >= 80) break;
+                    if (!deep && Date.parse(posts[posts.length - 1].createdAt) < stop) break;
+                    statsBusy = 'Считаю посты… ' + pages * 50;
+                    renderStats();
+                    await new Promise(r => setTimeout(r, 1200));
+                    if (apiPaused()) throw new Error('пауза сайта');
+                }
+                const out = { user: myUsername, at: Date.now(), full: deep ? Date.now() : c.full, list: [...byId.values()] };
+                GM_setValue('vp_posts_list', out);
+                return out;
+            })().catch(e => { logErr('посты для статистики', e); return c; })
+                .finally(() => { postsPending = null; statsBusy = ''; });
+            return postsPending;
         }
+        function myLikesTotal() { return myPostsLoad().then(postsLikes); }
         async function loadStats() {
             if (!myUsername) return setTimeout(loadStats, 1500);
             const d = meData && typeof meData.followersCount === 'number' ? meData : await hcData(myUsername, 2500);
@@ -12927,8 +12967,10 @@
                 following: pick(d && d.followingCount, d && d.following_count, d && d.stats && d.stats.following, d && typeof d.following === 'number' ? d.following : undefined)
             };
             if (d && typeof d.postsCount === 'number') now.posts = d.postsCount;
-            const likes = await myLikesTotal();
-            if (typeof likes === 'number') now.likes = likes;
+            const first = postsCache();
+            if (first) { statsList = first.list; now.likes = postsLikes(first); statsNow = Object.assign({}, now); renderStats(); }
+            const fresh = await myPostsLoad();
+            if (fresh) { statsList = fresh.list; now.likes = postsLikes(fresh); }
             const hist = statsHistory().filter(h => Date.now() - h.at < 40 * DAY_MS);
             if (!hist.length || Date.now() - hist[hist.length - 1].at > 6 * 3600e3) hist.push({ at: Date.now(), ...now });
             GM_setValue(acctKey('vp_stats_hist'), JSON.stringify(hist));
@@ -12936,11 +12978,78 @@
             renderStats();
             statsSync(hist).then(m => { if (m !== hist) { GM_setValue(acctKey('vp_stats_hist'), JSON.stringify(m)); renderStats(); } }).catch(e => logErr('статистика: синхронизация', e));
         }
+        const fmtStat = n => {
+            const a = Math.abs(Math.round(n)), k = (v, u) => v.toFixed(v >= 100 ? 0 : 1).replace('.', ',').replace(/,0$/, '') + ' ' + u;
+            return a >= 1e6 ? k(a / 1e6, 'млн') : a >= 10000 ? k(a / 1000, 'тыс.') : String(a).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+        };
+        const fmtDiff = n => n > 0 ? '+' + fmtStat(n) : n < 0 ? '−' + fmtStat(n) : '0';
+        const likesWord = n => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? 'лайков' : b === 1 ? 'лайк' : b > 1 && b < 5 ? 'лайка' : 'лайков'; };
+        const railChart = rail.querySelector('.vp-chart'), railBest = rail.querySelector('.vp-best');
+        function statsBuckets() {
+            const list = statsList || [], now = new Date(), out = [];
+            const add = (from, to, label, long) => out.push({ from: from.getTime(), to: to.getTime(), label, long, likes: 0, posts: 0 });
+            if (statsPeriod === 'all') {
+                const times = list.map(r => r[1]).filter(Boolean);
+                if (!times.length) return out;
+                const a = new Date(Math.min(...times)), total = (now.getFullYear() - a.getFullYear()) * 12 + now.getMonth() - a.getMonth() + 1;
+                for (let i = Math.min(total, 24) - 1; i >= 0; i--) {
+                    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    add(d, new Date(d.getFullYear(), d.getMonth() + 1, 1), MON[d.getMonth()] + ' ' + d.getFullYear(), MONF[d.getMonth()] + ' ' + d.getFullYear());
+                }
+            } else if (SPAN_D[statsPeriod] > 1) {
+                for (let i = SPAN_D[statsPeriod] - 1; i >= 0; i--) {
+                    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i), l = d.getDate() + ' ' + MON[d.getMonth()];
+                    add(d, new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1), l, l);
+                }
+            }
+            list.forEach(r => { const b = out.find(x => r[1] >= x.from && r[1] < x.to); if (b) { b.likes += r[2]; b.posts++; } });
+            return out;
+        }
+        function paintChart() {
+            const b = statsBuckets(), has = b.some(x => x.posts);
+            railChart.hidden = !has;
+            if (has) {
+                const n = b.length, max = Math.max(...b.map(x => x.likes), 1), px = i => n === 1 ? 150 : 18 + i * 264 / (n - 1), py = x => 100 - x.likes / max * 76;
+                const pts = b.map((x, i) => px(i).toFixed(1) + ',' + py(x).toFixed(1)).join(' '), dot = n > 14 ? 2.6 : 4;
+                const best = b.reduce((m, x) => x.likes > m.likes ? x : m, b[0]), bestText = (statsPeriod === 'all' ? 'Лучший месяц: ' : 'Лучший день: ') + best.long + ', ' + fmtStat(best.likes) + ' ' + likesWord(best.likes);
+                railChart.innerHTML = '<div class="vp-chart-h"><b>Лайки</b><span>' + (statsPeriod === 'all' ? 'по месяцам' : 'по дням') + '</span></div><p class="vp-chart-cap"></p>'
+                    + '<svg viewBox="0 0 300 130"><defs><linearGradient id="vpChartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--vp-accent, #4aa3ff)" stop-opacity=".35"/><stop offset="1" stop-color="var(--vp-accent, #4aa3ff)" stop-opacity="0"/></linearGradient></defs>'
+                    + '<g style="stroke: var(--text-secondary, #888); opacity: .35" stroke-dasharray="3 4"><line x1="10" y1="30" x2="290" y2="30"/><line x1="10" y1="64" x2="290" y2="64"/></g>'
+                    + (n > 1 ? '<polygon points="' + px(0).toFixed(1) + ',108 ' + pts + ' ' + px(n - 1).toFixed(1) + ',108" fill="url(#vpChartFill)"/>' : '')
+                    + '<line class="vp-chart-hair" y1="10" y2="112" style="stroke: var(--text-secondary, #888)" stroke-dasharray="3 3" visibility="hidden"/>'
+                    + '<polyline fill="none" style="stroke: var(--vp-accent, #4aa3ff)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" points="' + pts + '"/>'
+                    + b.map((x, i) => '<circle cx="' + px(i).toFixed(1) + '" cy="' + py(x).toFixed(1) + '" r="' + dot + '" stroke-width="2" style="fill: var(--block-bg, #111); stroke: var(--text-primary, #fff)"/>').join('')
+                    + b.map((x, i) => x.posts ? '<circle cx="' + px(i).toFixed(1) + '" cy="122" r="2.6" fill="#3ddc84"/>' : '').join('')
+                    + '<rect width="300" height="130" fill="transparent"/></svg><div class="vp-chart-ax"><span></span><span></span></div>';
+                const cap = railChart.querySelector('.vp-chart-cap'), svg = railChart.querySelector('svg'), hair = railChart.querySelector('.vp-chart-hair'), ax = railChart.querySelectorAll('.vp-chart-ax span');
+                cap.textContent = bestText; ax[0].textContent = b[0].label; ax[1].textContent = b[n - 1].label;
+                const at = e => { const r = svg.getBoundingClientRect(), i = n === 1 ? 0 : Math.max(0, Math.min(n - 1, Math.round(((e.clientX - r.left) / r.width * 300 - 18) / 264 * (n - 1)))); return i; };
+                svg.addEventListener('pointermove', e => {
+                    const i = at(e), x = b[i];
+                    hair.setAttribute('x1', px(i)); hair.setAttribute('x2', px(i)); hair.setAttribute('visibility', 'visible');
+                    cap.textContent = x.long + ': ' + fmtStat(x.likes) + ' ' + likesWord(x.likes) + ', постов ' + x.posts;
+                });
+                svg.addEventListener('pointerleave', () => { hair.setAttribute('visibility', 'hidden'); cap.textContent = bestText; });
+            }
+            const from = statsPeriod === 'all' ? 0 : Date.now() - SPAN_D[statsPeriod] * DAY_MS;
+            const top = (statsList || []).filter(r => !r[4] && r[1] >= from && r[2] > 0).sort((x, y) => y[2] - x[2]).slice(0, 2);
+            railBest.hidden = !top.length;
+            railBest.innerHTML = '<div class="vp-best-h"><b>Лучшие посты</b><span>по лайкам</span></div>';
+            top.forEach(r => {
+                const a = document.createElement('a');
+                a.className = 'vp-best-post'; a.href = '/post/' + r[0];
+                a.innerHTML = '<b></b><small></small>';
+                a.firstChild.textContent = r[3] || 'Пост без текста';
+                a.lastChild.textContent = fmtStat(r[2]) + ' ' + likesWord(r[2]);
+                a.addEventListener('click', e => { e.preventDefault(); history.pushState({}, '', '/post/' + r[0]); dispatchEvent(new PopStateEvent('popstate')); });
+                railBest.appendChild(a);
+            });
+        }
         function renderStats() {
-            seg.classList.toggle('vp-month', statsPeriod === 'month');
+            seg.style.setProperty('--vp-i', Math.max(0, PERIODS.indexOf(statsPeriod)));
             seg.querySelectorAll('button').forEach(b => b.classList.toggle('vp-on', b.dataset.p === statsPeriod));
             if (!statsNow) return;
-            const span = statsPeriod === 'month' ? 30 * DAY_MS : DAY_MS;
+            const all = statsPeriod === 'all', span = (SPAN_D[statsPeriod] || 1) * DAY_MS;
             const hist = statsHistory();
             const now = Date.now();
             const pickBase = list => {
@@ -12948,29 +13057,32 @@
                 if (!old.length) return list[0] || null;
                 return old.reduce((b, h) => Math.abs(now - h.at - span) < Math.abs(now - b.at - span) ? h : b);
             };
-            const base = pickBase(hist) || statsNow;
-            const off = base.at && Math.abs(now - base.at - span) > span * 0.1;
-            railSince.textContent = off ? 'с ' + new Date(base.at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
-                + ', ' + new Date(base.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
-            const rows = [['followers', 'подписчиков'], ['following', 'подписок'], ['posts', 'постов'], ['likes', 'лайков']].filter(([k]) => typeof statsNow[k] === 'number');
+            const base = all ? statsNow : pickBase(hist) || statsNow;
+            const off = !all && base.at && Math.abs(now - base.at - span) > span * 0.1;
+            railSince.textContent = statsBusy || (off ? 'с ' + new Date(base.at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
+                + ', ' + new Date(base.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '');
+            const rows = [['followers', 'Подписчики'], ['following', 'Подписки'], ['posts', 'Посты'], ['likes', 'Лайки']].filter(([k]) => typeof statsNow[k] === 'number');
             if (!rows.length) { railStats.innerHTML = '<div class="vp-menu-note">Сайт не отдал числа</div>'; return; }
             railStats.innerHTML = '';
             const baseFor = k => typeof base[k] === 'number' ? base : pickBase(hist.filter(h => typeof h[k] === 'number'));
             rows.forEach(([k, label]) => {
-                const b = baseFor(k);
+                const b = all ? null : baseFor(k);
                 const diff = b ? statsNow[k] - b[k] : 0;
                 const row = document.createElement('div');
                 if (b && b !== base && b.at) row.title = 'изменение с ' + new Date(b.at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
                     + ', ' + new Date(b.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
                 row.className = 'vp-stat';
                 row.innerHTML = '<span class="vp-stat-val"></span><span class="vp-stat-label"></span><span class="vp-stat-diff"></span>';
-                row.children[0].textContent = fmtNum(statsNow[k]);
+                row.children[0].textContent = fmtStat(statsNow[k]);
                 row.children[1].textContent = label;
                 const df = row.children[2];
-                df.textContent = diff > 0 ? '+' + fmtNum(diff) : diff < 0 ? '−' + fmtNum(-diff) : '0';
-                df.classList.add(diff > 0 ? 'vp-up' : diff < 0 ? 'vp-down' : 'vp-same');
+                if (!all) {
+                    df.textContent = fmtDiff(diff);
+                    df.classList.add(diff > 0 ? 'vp-up' : diff < 0 ? 'vp-down' : 'vp-same');
+                }
                 railStats.appendChild(row);
             });
+            paintChart();
         }
         seg.addEventListener('click', e => {
             const b = e.target.closest('button');
