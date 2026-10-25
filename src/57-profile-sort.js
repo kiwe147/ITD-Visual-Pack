@@ -1,13 +1,31 @@
         const PSORT = [['new', 'Новые'], ['old', 'Старые'], ['popular', 'Популярные']];
         const psortCss = addCss(`
-        .vp-psort { display: flex; gap: 4px; margin: 0 0 12px; padding: 4px; border-radius: 9999px; background: var(--glass-bg, rgba(35, 35, 35, .8)); }
-        .vp-psort button { flex: 1; padding: 7px 10px; border: 0; border-radius: 9999px; background: none; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600;
-            color: var(--text-secondary); transition: color .2s ease, background-color .2s ease; }
+        .vp-psort { position: relative; display: flex; gap: 4px; margin: 0 0 12px; padding: 4px; border-radius: 9999px; background: var(--glass-bg, rgba(35, 35, 35, .8)); }
+        .vp-psort button { position: relative; z-index: 1; flex: 1; padding: 7px 10px; border: 0; border-radius: 9999px; background: none; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600;
+            color: var(--text-secondary); transition: color .2s ease; }
         .vp-psort button:hover { color: var(--text-primary, #fff); }
-        .vp-psort button.vp-on { color: var(--text-primary, #fff); background: var(--tab-active-bg, rgba(255, 255, 255, .1));
+        .vp-psort button.vp-on { color: var(--text-primary, #fff); }
+        .vp-psort-ind { position: absolute; top: 4px; bottom: 4px; left: 0; width: 0; border-radius: 9999px; pointer-events: none; background: var(--tab-active-bg, rgba(255, 255, 255, .1));
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #4aa3ff) 55%, transparent); }
         .vp-psort.vp-busy { opacity: .6; pointer-events: none; }
         `);
+        function psortMove(box, animate) {
+            const ind = box.querySelector('.vp-psort-ind'), on = box.querySelector('button.vp-on');
+            if (!ind || !on || !on.offsetWidth) return;
+            const x0 = parseFloat(ind.dataset.x), w0 = parseFloat(ind.dataset.w), x1 = on.offsetLeft, w1 = on.offsetWidth;
+            if (x0 === x1 && w0 === w1) return;
+            ind.style.transform = `translateX(${x1}px)`;
+            ind.style.width = w1 + 'px';
+            ind.dataset.x = x1;
+            ind.dataset.w = w1;
+            if (!animate || calm || isNaN(x0) || x0 === x1) return;
+            const lo = Math.min(x0, x1), span = Math.abs(x1 - x0) + Math.max(w0, w1);
+            ind.animate([
+                { transform: `translateX(${x0}px)`, width: w0 + 'px' },
+                { transform: `translateX(${lo}px)`, width: span + 'px', offset: .45 },
+                { transform: `translateX(${x1}px)`, width: w1 + 'px' }
+            ], { duration: 440, easing: 'cubic-bezier(.65, 0, .25, 1)' });
+        }
         function profBridge() {
             if (document.documentElement.dataset.vpWallBridge) return;
             document.documentElement.dataset.vpWallBridge = '1';
@@ -55,6 +73,29 @@
                 setTimeout(() => done(art.getAttribute('data-vp-res') === 'ok'), 40);
             });
         }
+        async function profOldLoad(login, btn) {
+            if (profOldPosts && profOldPosts.u.toLowerCase() === login.toLowerCase()) return 'client';
+            const byId = new Map(), label = btn.textContent, hide = login.toLowerCase() === 'neurosfw';
+            let cursor = null, done = false;
+            try {
+                for (let pages = 0; pages < 60 && !done; pages++) {
+                    const r = await api(`/api/posts/user/${encodeURIComponent(login)}?limit=50&sort=new` + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
+                    if (!r.ok) return null;
+                    const j = await r.json(), d = j.data || j, list = d.posts || [];
+                    list.forEach(p => { if (p && p.id && !(hide && SERVICE_POSTS.includes(p.id))) byId.set(p.id, p); });
+                    cursor = (d.pagination && d.pagination.nextCursor) || d.nextCursor || null;
+                    if (!list.length || !cursor) done = true;
+                    else {
+                        btn.textContent = label + ' ' + byId.size;
+                        await new Promise(res => setTimeout(res, 350));
+                        if (apiPaused()) return null;
+                    }
+                }
+            } finally { btn.textContent = label; }
+            if (!done) { vpNote('Слишком много постов для такой сортировки'); return null; }
+            profOldPosts = { u: login, posts: [...byId.values()].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)) };
+            return 'client';
+        }
         const PSORT_TRY = { old: ['old', 'oldest', 'asc'], popular: ['popular'] };
         async function profSortProbe(login, mode) {
             const get = async sort => {
@@ -96,6 +137,9 @@
             box.className = 'vp-psort';
             box.dataset.login = login;
             box.dataset.cur = cur;
+            const ind = document.createElement('span');
+            ind.className = 'vp-psort-ind';
+            box.appendChild(ind);
             PSORT.forEach(([s, label]) => {
                 const b = document.createElement('button');
                 b.type = 'button';
@@ -108,7 +152,12 @@
                     try {
                         if (s === 'new') sessionStorage.removeItem(PROF_SORT_KEY);
                         else {
-                            const v = await profSortProbe(login, s);
+                            profSortPause = true;
+                            let v;
+                            try {
+                                v = await profSortProbe(login, s);
+                                if (!v && s === 'old') v = await profOldLoad(login, b);
+                            } finally { profSortPause = false; }
                             if (!v) { vpNote('Сайт не отдаёт такую сортировку'); box.classList.remove('vp-busy'); return; }
                             sessionStorage.setItem(PROF_SORT_KEY, JSON.stringify({ u: login, s, v }));
                         }
@@ -116,7 +165,14 @@
                             box.querySelectorAll('button').forEach(x => x.classList.toggle('vp-on', x.dataset.s === s));
                             box.dataset.cur = s;
                             cur = s;
+                            psortMove(box, true);
                             setTimeout(() => box.classList.remove('vp-busy'), 600);
+                            return;
+                        }
+                        if (sessionStorage.getItem(PROF_SORT_KEY) && JSON.parse(sessionStorage.getItem(PROF_SORT_KEY)).v === 'client') {
+                            sessionStorage.removeItem(PROF_SORT_KEY);
+                            vpNote('Не вышло переключить сортировку');
+                            box.classList.remove('vp-busy');
                             return;
                         }
                         sessionStorage.setItem('vp-soft', String(Date.now()));
@@ -127,4 +183,6 @@
                 box.appendChild(b);
             });
             art.parentElement.insertBefore(box, art);
+            psortMove(box, false);
+            if (typeof ResizeObserver === 'function') new ResizeObserver(() => psortMove(box, false)).observe(box);
         });

@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.4
+// @version      3.7.5
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -130,15 +130,28 @@
             return o && o.u && /^(old|popular)$/.test(o.s) ? o : null;
         } catch (e) { return null; }
     }
+    let profOldPosts = null, profSortPause = false;
     function profSortUrl(url) {
         const o = profSortMode();
-        if (!o || !url) return null;
+        if (!o || !url || profSortPause || o.v === 'client') return null;
         const m = String(url).match(/^((?:https?:\/\/[^/]+)?\/api\/posts\/user\/([^/?#]+))\?(.*)$/);
         if (!m || decodeURIComponent(m[2]).toLowerCase() !== o.u.toLowerCase()) return null;
         const q = new URLSearchParams(m[3]);
         if (q.get('sort') !== 'new') return null;
         q.set('sort', o.v || o.s);
+        q.delete('pinnedPostId');
         return m[1] + '?' + q.toString();
+    }
+    function profOldAnswer(url) {
+        const o = profSortMode();
+        if (!o || o.v !== 'client' || !profOldPosts || profSortPause || !url || profOldPosts.u.toLowerCase() !== o.u.toLowerCase()) return null;
+        const m = String(url).match(/^(?:https?:\/\/[^/]+)?\/api\/posts\/user\/([^/?#]+)\?(.*)$/);
+        if (!m || decodeURIComponent(m[1]).toLowerCase() !== o.u.toLowerCase()) return null;
+        const q = new URLSearchParams(m[2]), cur = q.get('cursor');
+        if (q.get('sort') !== 'new' || (cur && !/^vpold:\d+$/.test(cur))) return null;
+        const lim = Math.max(1, +q.get('limit') || 20), off = cur ? +cur.slice(6) : 0, all = profOldPosts.posts;
+        const next = off + lim < all.length ? 'vpold:' + (off + lim) : null;
+        return Promise.resolve(new Response(JSON.stringify({ data: { posts: all.slice(off, off + lim), pagination: { limit: lim, nextCursor: next, hasMore: !!next } } }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     }
     const softLoad = (() => {
         try {
@@ -264,6 +277,10 @@
         try {
             const origFetch = w.fetch;
             w.fetch = function (input, init) {
+                try {
+                    const own = profOldAnswer(typeof input === 'string' ? input : input && input.url);
+                    if (own) return own;
+                } catch (e) { }
                 try {
                     const re = profSortUrl(typeof input === 'string' ? input : input && input.url);
                     if (re) arguments[0] = typeof input === 'string' ? re : new Request(re, input);
@@ -4470,8 +4487,8 @@
         }
 
         const CHANGELOG = [
-            ['3.7.1 – 3.7.4', '26 октября 2026', [
-                'Профили: над постами кнопки сортировки «Новые», «Старые», «Популярные» — работают в любом профиле, список перестраивается на месте без перезагрузки страницы, а после обновления страницы сортировка сбрасывается на «Новые»',
+            ['3.7.1 – 3.7.5', '26 октября 2026', [
+                'Профили: над постами кнопки сортировки «Новые», «Старые», «Популярные» — работают в любом профиле, список перестраивается на месте без перезагрузки страницы, а после обновления страницы сортировка сбрасывается на «Новые». В «Старых» и «Популярных» закреплённый пост не поднимается наверх, а подсветка кнопок плавно перетекает, как на вкладках «Посты / Лайки»',
             ]],
             ['3.7.0', '26 октября 2026', [
                 'Оптимизация фоновых запросов: сообщения, клуб, подтверждения и автолайк работают через единый планировщик с паузой при лимите сайта',
@@ -13409,14 +13426,32 @@
 
         const PSORT = [['new', 'Новые'], ['old', 'Старые'], ['popular', 'Популярные']];
         const psortCss = addCss(`
-        .vp-psort { display: flex; gap: 4px; margin: 0 0 12px; padding: 4px; border-radius: 9999px; background: var(--glass-bg, rgba(35, 35, 35, .8)); }
-        .vp-psort button { flex: 1; padding: 7px 10px; border: 0; border-radius: 9999px; background: none; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600;
-            color: var(--text-secondary); transition: color .2s ease, background-color .2s ease; }
+        .vp-psort { position: relative; display: flex; gap: 4px; margin: 0 0 12px; padding: 4px; border-radius: 9999px; background: var(--glass-bg, rgba(35, 35, 35, .8)); }
+        .vp-psort button { position: relative; z-index: 1; flex: 1; padding: 7px 10px; border: 0; border-radius: 9999px; background: none; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600;
+            color: var(--text-secondary); transition: color .2s ease; }
         .vp-psort button:hover { color: var(--text-primary, #fff); }
-        .vp-psort button.vp-on { color: var(--text-primary, #fff); background: var(--tab-active-bg, rgba(255, 255, 255, .1));
+        .vp-psort button.vp-on { color: var(--text-primary, #fff); }
+        .vp-psort-ind { position: absolute; top: 4px; bottom: 4px; left: 0; width: 0; border-radius: 9999px; pointer-events: none; background: var(--tab-active-bg, rgba(255, 255, 255, .1));
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #4aa3ff) 55%, transparent); }
         .vp-psort.vp-busy { opacity: .6; pointer-events: none; }
         `);
+        function psortMove(box, animate) {
+            const ind = box.querySelector('.vp-psort-ind'), on = box.querySelector('button.vp-on');
+            if (!ind || !on || !on.offsetWidth) return;
+            const x0 = parseFloat(ind.dataset.x), w0 = parseFloat(ind.dataset.w), x1 = on.offsetLeft, w1 = on.offsetWidth;
+            if (x0 === x1 && w0 === w1) return;
+            ind.style.transform = `translateX(${x1}px)`;
+            ind.style.width = w1 + 'px';
+            ind.dataset.x = x1;
+            ind.dataset.w = w1;
+            if (!animate || calm || isNaN(x0) || x0 === x1) return;
+            const lo = Math.min(x0, x1), span = Math.abs(x1 - x0) + Math.max(w0, w1);
+            ind.animate([
+                { transform: `translateX(${x0}px)`, width: w0 + 'px' },
+                { transform: `translateX(${lo}px)`, width: span + 'px', offset: .45 },
+                { transform: `translateX(${x1}px)`, width: w1 + 'px' }
+            ], { duration: 440, easing: 'cubic-bezier(.65, 0, .25, 1)' });
+        }
         function profBridge() {
             if (document.documentElement.dataset.vpWallBridge) return;
             document.documentElement.dataset.vpWallBridge = '1';
@@ -13464,6 +13499,29 @@
                 setTimeout(() => done(art.getAttribute('data-vp-res') === 'ok'), 40);
             });
         }
+        async function profOldLoad(login, btn) {
+            if (profOldPosts && profOldPosts.u.toLowerCase() === login.toLowerCase()) return 'client';
+            const byId = new Map(), label = btn.textContent, hide = login.toLowerCase() === 'neurosfw';
+            let cursor = null, done = false;
+            try {
+                for (let pages = 0; pages < 60 && !done; pages++) {
+                    const r = await api(`/api/posts/user/${encodeURIComponent(login)}?limit=50&sort=new` + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
+                    if (!r.ok) return null;
+                    const j = await r.json(), d = j.data || j, list = d.posts || [];
+                    list.forEach(p => { if (p && p.id && !(hide && SERVICE_POSTS.includes(p.id))) byId.set(p.id, p); });
+                    cursor = (d.pagination && d.pagination.nextCursor) || d.nextCursor || null;
+                    if (!list.length || !cursor) done = true;
+                    else {
+                        btn.textContent = label + ' ' + byId.size;
+                        await new Promise(res => setTimeout(res, 350));
+                        if (apiPaused()) return null;
+                    }
+                }
+            } finally { btn.textContent = label; }
+            if (!done) { vpNote('Слишком много постов для такой сортировки'); return null; }
+            profOldPosts = { u: login, posts: [...byId.values()].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)) };
+            return 'client';
+        }
         const PSORT_TRY = { old: ['old', 'oldest', 'asc'], popular: ['popular'] };
         async function profSortProbe(login, mode) {
             const get = async sort => {
@@ -13505,6 +13563,9 @@
             box.className = 'vp-psort';
             box.dataset.login = login;
             box.dataset.cur = cur;
+            const ind = document.createElement('span');
+            ind.className = 'vp-psort-ind';
+            box.appendChild(ind);
             PSORT.forEach(([s, label]) => {
                 const b = document.createElement('button');
                 b.type = 'button';
@@ -13517,7 +13578,12 @@
                     try {
                         if (s === 'new') sessionStorage.removeItem(PROF_SORT_KEY);
                         else {
-                            const v = await profSortProbe(login, s);
+                            profSortPause = true;
+                            let v;
+                            try {
+                                v = await profSortProbe(login, s);
+                                if (!v && s === 'old') v = await profOldLoad(login, b);
+                            } finally { profSortPause = false; }
                             if (!v) { vpNote('Сайт не отдаёт такую сортировку'); box.classList.remove('vp-busy'); return; }
                             sessionStorage.setItem(PROF_SORT_KEY, JSON.stringify({ u: login, s, v }));
                         }
@@ -13525,7 +13591,14 @@
                             box.querySelectorAll('button').forEach(x => x.classList.toggle('vp-on', x.dataset.s === s));
                             box.dataset.cur = s;
                             cur = s;
+                            psortMove(box, true);
                             setTimeout(() => box.classList.remove('vp-busy'), 600);
+                            return;
+                        }
+                        if (sessionStorage.getItem(PROF_SORT_KEY) && JSON.parse(sessionStorage.getItem(PROF_SORT_KEY)).v === 'client') {
+                            sessionStorage.removeItem(PROF_SORT_KEY);
+                            vpNote('Не вышло переключить сортировку');
+                            box.classList.remove('vp-busy');
                             return;
                         }
                         sessionStorage.setItem('vp-soft', String(Date.now()));
@@ -13536,6 +13609,8 @@
                 box.appendChild(b);
             });
             art.parentElement.insertBefore(box, art);
+            psortMove(box, false);
+            if (typeof ResizeObserver === 'function') new ResizeObserver(() => psortMove(box, false)).observe(box);
         });
         const gamesList = rail.querySelector('.vp-games-list');
         const bestText = g => {

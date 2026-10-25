@@ -110,6 +110,10 @@
             const origFetch = w.fetch;
             w.fetch = function (input, init) {
                 try {
+                    const own = profOldAnswer(typeof input === 'string' ? input : input && input.url);
+                    if (own) return own;
+                } catch (e) { }
+                try {
                     const re = profSortUrl(typeof input === 'string' ? input : input && input.url);
                     if (re) arguments[0] = typeof input === 'string' ? re : new Request(re, input);
                 } catch (e) { }

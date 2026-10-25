@@ -18,9 +18,9 @@ const NEW = [mk('n1', 5, 20), mk('n2', 50, 15), mk('n3', 9, 10), mk('n4', 70, 5)
 const OLD = NEW.slice().reverse(), POP = NEW.slice().sort((a, b) => b.likesCount - a.likesCount);
 (async () => {
   const b = await chromium.launch();
-  for (const variant of ['inplace', 'reload', 'bad']) {
-    const good = variant !== 'bad', MODE = variant === 'reload' ? 'old' : 'popular', WANT = variant === 'reload' ? 'oldest' : 'popular';
-    console.log(variant === 'inplace' ? '— сервер умеет «популярные», список обновляется на месте' : variant === 'reload' ? '— «старые» только как sort=oldest, функции сайта для обновления нет: мягкая перезагрузка' : '— сервер игнорирует sort (всегда как «новые»)');
+  for (const variant of ['inplace', 'reload', 'client', 'bad']) {
+    const good = variant !== 'bad', MODE = variant === 'reload' || variant === 'client' ? 'old' : 'popular', WANT = variant === 'reload' ? 'oldest' : 'popular';
+    console.log(variant === 'client' ? '— сервер не умеет «старые»: мод грузит посты страницами и отдаёт сайту в обратном порядке, без закрепа' : variant === 'inplace' ? '— сервер умеет «популярные», список обновляется на месте' : variant === 'reload' ? '— «старые» только как sort=oldest, функции сайта для обновления нет: мягкая перезагрузка' : '— сервер игнорирует sort (всегда как «новые»)');
     const ctx = await b.newContext({ viewport: { width: 1400, height: 900 } });
     const p = await ctx.newPage();
     const errors = [], seen = [];
@@ -36,6 +36,7 @@ const OLD = NEW.slice().reverse(), POP = NEW.slice().sort((a, b) => b.likesCount
       if (u.pathname.startsWith('/api/posts/user/' + LOGIN)) {
         const s = u.searchParams.get('sort');
         seen.push(s);
+        if (variant === 'client') { const second = u.searchParams.get('cursor') === 'c1'; return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { posts: second ? NEW.slice(2) : NEW.slice(0, 2), pagination: { hasMore: !second, nextCursor: second ? null : 'c1' } } }) }); }
         const posts = good ? (s === 'oldest' ? OLD : s === 'popular' ? POP : NEW) : NEW;
         return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { posts, pagination: { hasMore: false } } }) });
       }
@@ -45,7 +46,7 @@ const OLD = NEW.slice().reverse(), POP = NEW.slice().sort((a, b) => b.likesCount
     await p.addInitScript('(function () { const run = () => {' + src + String.fromCharCode(10) + '}; if (document.documentElement) run(); else { const mo = new MutationObserver(() => { if (document.documentElement) { mo.disconnect(); run(); } }); mo.observe(document, { childList: true }); } })();');
     await p.goto('https://xn--d1ah4a.com' + PATH);
     await p.waitForSelector('.vp-psort', { timeout: 15000 }).catch(() => { });
-    if (variant === 'inplace') {
+    if (variant === 'inplace' || variant === 'client') {
       await p.evaluate(() => {
         const fn = async function () { window.__wall = (window.__wall || 0) + 1; var k = 'invalidateWallCache'; await 0; };
         const root = document.getElementById('root') || document.body;
@@ -67,8 +68,10 @@ const OLD = NEW.slice().reverse(), POP = NEW.slice().sort((a, b) => b.likesCount
       check(reloads === before && !!st, 'страница не перезагружалась, сортировка включена');
       check(await p.evaluate(() => window.__wall === 1), 'список сайта обновлён на месте (вызвана функция сброса кэша стены)');
       check(await p.evaluate(() => (document.querySelector('.vp-psort .vp-on') || {}).textContent) === 'Популярные', 'активной стала «Популярные»');
+      await p.waitForTimeout(600);
+      check(await p.evaluate(() => { const i = document.querySelector('.vp-psort-ind'), b = document.querySelector('.vp-psort button.vp-on'); return !!i && Math.abs(i.getBoundingClientRect().left - b.getBoundingClientRect().left) < 1.5 && Math.abs(i.getBoundingClientRect().width - b.getBoundingClientRect().width) < 1.5; }), 'подсветка под активной кнопкой (перетекла на «Популярные»)');
       const url = await p.evaluate(async login => { const r = await fetch('/api/posts/user/' + login + '?limit=20&sort=new&pinnedPostId=x'); return r.url; }, LOGIN);
-      check(url.includes('sort=' + WANT) && /pinnedPostId=x/.test(url), 'запрос сайта подменён на sort=' + WANT);
+      check(url.includes('sort=' + WANT) && !/pinnedPostId/.test(url), 'запрос сайта подменён на sort=' + WANT + ', закреп не запрашивается');
       const lk = await p.evaluate(async login => { const r = await fetch('/api/posts/user/' + login + '/liked?limit=20'); return r.url; }, LOGIN);
       check(!/sort=(popular|oldest)/.test(lk), 'вкладка «Лайки» не затронута');
       await p.click('.vp-psort button[data-s="new"]');
@@ -79,6 +82,12 @@ const OLD = NEW.slice().reverse(), POP = NEW.slice().sort((a, b) => b.likesCount
       await p.reload();
       await p.waitForSelector('.vp-psort', { timeout: 15000 }).catch(() => { });
       check(await p.evaluate(() => sessionStorage.getItem('vp_prof_sort')) === null && await p.evaluate(() => (document.querySelector('.vp-psort .vp-on') || {}).textContent) === 'Новые', 'после обновления страницы сортировка сбрасывается на «Новые»');
+    } else if (variant === 'client') {
+      check(reloads === before && !!st && JSON.parse(st).v === 'client', 'страница не перезагружалась, сортировка включена своими силами');
+      check(await p.evaluate(() => window.__wall === 1), 'список сайта обновлён на месте');
+      const got = await p.evaluate(async login => { const r = await fetch('/api/posts/user/' + login + '?limit=3&sort=new&pinnedPostId=x'); const j = await r.json(); const r2 = await fetch('/api/posts/user/' + login + '?limit=3&sort=new&cursor=' + encodeURIComponent(j.data.pagination.nextCursor)); const j2 = await r2.json(); return { a: j.data.posts.map(x => x.id).join(), cur: j.data.pagination.nextCursor, b: j2.data.posts.map(x => x.id).join(), end: j2.data.pagination.nextCursor }; }, LOGIN);
+      check(got.a === 'n4,n3,n2' && got.b === 'n1' && got.end === null, 'сайт получает посты от старых к новым постранично: ' + got.a + ' / ' + got.b);
+      check(await p.evaluate(() => (document.querySelector('.vp-psort .vp-on') || {}).textContent) === 'Старые', 'активной стала «Старые»');
     } else if (variant === 'reload') {
       check(seen.includes('new') && seen.includes('old') && seen.includes('oldest'), 'мод перебрал варианты названия сортировки: ' + seen.join());
       check(!!st && reloads > before && JSON.parse(st).v === 'oldest', 'функции сайта нет — мягкая перезагрузка, сортировка запомнена как oldest');
