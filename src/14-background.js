@@ -8,6 +8,15 @@
         const canvas = document.createElement('canvas');
         canvas.className = 'vp-bg-canvas';
         document.body.appendChild(canvas);
+        const canvasGL = document.createElement('canvas');
+        canvasGL.className = 'vp-bg-canvas vp-bg-off';
+        document.body.appendChild(canvasGL);
+        let bgGlShown = false;
+        function bgSurface() {
+            const hide = !backgroundEnabled || effBg() === 'custom';
+            canvas.classList.toggle('vp-bg-off', hide || bgGlShown);
+            canvasGL.classList.toggle('vp-bg-off', hide || !bgGlShown);
+        }
         const bgMedia = document.createElement('div');
         bgMedia.className = 'vp-bg-media vp-bg-off';
         document.body.appendChild(bgMedia);
@@ -109,9 +118,10 @@
                     document.addEventListener('vp-intro-done', () => { updateBackgroundVisibility._wait = false; updateBackgroundVisibility(); }, { once: true });
                 }
                 canvas.classList.add('vp-bg-off');
+                canvasGL.classList.add('vp-bg-off');
                 return;
             }
-            canvas.classList.toggle('vp-bg-off', !backgroundEnabled || custom);
+            bgSurface();
             bgMedia.classList.toggle('vp-bg-off', !backgroundEnabled || !custom);
             const v = bgMedia.querySelector('video');
             if (v) { if (backgroundEnabled && custom) v.play().catch(() => { }); else v.pause(); }
@@ -523,10 +533,117 @@
             H = h;
             bgFit();
         }
-        function bgReset() { bgMain.reset(); }
+        const GL_STYLES = { aurora: 0.45 };
+        const GL_FRAG = `precision highp float;
+uniform vec2 uRes;
+uniform float uT;
+uniform vec3 uC0[3];
+uniform vec3 uC1[3];
+vec4 grad(float v, vec3 c0, vec3 c1) {
+    if (v <= 0.0 || v >= 1.0) return vec4(0.0);
+    if (v < 0.55) return vec4(c0, mix(0.0, 0.3, v / 0.55));
+    if (v < 0.9) { float k = (v - 0.55) / 0.35; return vec4(mix(c0, c1, k), mix(0.3, 1.0, k)); }
+    float k = (v - 0.9) / 0.1;
+    return vec4(mix(c1, c0, k), mix(1.0, 0.0, k));
+}
+vec4 col(float cc, float py, float base, float amp, float len, float dh, float a, float f, float sp, vec3 c0, vec3 c1) {
+    float y = uRes.y * (base + amp * sin(cc * f + uT * sp) + 0.025 * sin(cc * f * 3.1 - uT * 1.7 * sp));
+    float L = uRes.y * len * (0.6 + 0.4 * sin(cc * 0.011 + uT * 2.3 * sp));
+    float ga = a * (0.5 + 0.5 * sin(cc * 0.004 - uT * 1.3 + dh));
+    vec4 g = grad((py - (y - L)) / L, c0, c1);
+    return vec4(g.rgb * g.a * ga, g.a * ga);
+}
+vec4 band(float x, float py, float base, float amp, float len, float dh, float a, float f, float sp, vec3 c0, vec3 c1) {
+    float cx = floor(x / 6.0) * 6.0;
+    vec4 r = col(cx, py, base, amp, len, dh, a, f, sp, c0, c1);
+    if (x - cx < 1.0 && cx >= 6.0) r += col(cx - 6.0, py, base, amp, len, dh, a, f, sp, c0, c1);
+    return r;
+}
+void main() {
+    float x = floor(gl_FragCoord.x);
+    float py = uRes.y - gl_FragCoord.y;
+    vec4 r = band(x, py, 0.64, 0.08, 0.30, 0.0, 0.45, 0.0021, 1.0, uC0[0], uC1[0]);
+    r += band(x, py, 0.72, 0.06, 0.24, 45.0, 0.30, 0.0016, -0.7, uC0[1], uC1[1]);
+    r += band(x, py, 0.58, 0.05, 0.20, -40.0, 0.28, 0.0027, 0.55, uC0[2], uC1[2]);
+    gl_FragColor = min(r, vec4(1.0));
+}`;
+        const GL_DH = [0, 45, -40];
+        let bgGl = null, bgGlFail = false, glT = 0, glName = '', glLast = 0, glSlow = 0, glFrames = 0;
+        function hslRgb(h, s, l) {
+            h = (((h % 360) + 360) % 360) / 360; s /= 100; l /= 100;
+            const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+            const f = t => { if (t < 0) t += 1; if (t > 1) t -= 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+            return [f(h + 1 / 3), f(h), f(h - 1 / 3)];
+        }
+        function bgGlInit() {
+            if (bgGlFail) return null;
+            if (bgGl) return bgGl;
+            try {
+                const gl = canvasGL.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false, powerPreference: 'low-power', failIfMajorPerformanceCaveat: !GM_getValue('bgGlForce', false) });
+                if (!gl) throw new Error('нет WebGL');
+                const di = gl.getExtension('WEBGL_debug_renderer_info'), rn = di ? String(gl.getParameter(di.UNMASKED_RENDERER_WEBGL)) : '';
+                if (!GM_getValue('bgGlForce', false) && /swiftshader|llvmpipe|software|basic render/i.test(rn)) throw new Error('видеокарта программная: ' + rn);
+                const sh = (type, text) => { const o = gl.createShader(type); gl.shaderSource(o, text); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
+                const pr = gl.createProgram();
+                gl.attachShader(pr, sh(gl.VERTEX_SHADER, 'attribute vec2 aPos; void main() { gl_Position = vec4(aPos, 0.0, 1.0); }'));
+                gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, GL_FRAG));
+                gl.linkProgram(pr);
+                if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
+                gl.useProgram(pr);
+                const buf = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+                const at = gl.getAttribLocation(pr, 'aPos');
+                gl.enableVertexAttribArray(at);
+                gl.vertexAttribPointer(at, 2, gl.FLOAT, false, 0, 0);
+                gl.clearColor(0, 0, 0, 0);
+                canvasGL.addEventListener('webglcontextlost', e => { e.preventDefault(); bgGlFail = true; bgGl = null; bgGlShown = false; bgSurface(); });
+                bgGl = { gl, uRes: gl.getUniformLocation(pr, 'uRes'), uT: gl.getUniformLocation(pr, 'uT'), uC0: gl.getUniformLocation(pr, 'uC0'), uC1: gl.getUniformLocation(pr, 'uC1') };
+                return bgGl;
+            } catch (e) {
+                bgGlFail = true;
+                console.warn('[ITD VP] фон на видеокарте не запустился, рисую обычным способом', e && e.message || e);
+                return null;
+            }
+        }
+        function bgGlDraw(name, dt) {
+            const g = bgGlInit();
+            if (!g) return false;
+            const gl = g.gl;
+            const now = performance.now(), gap = glLast ? now - glLast : 16;
+            glLast = now;
+            if (glFrames < 400 && gap < 400) {
+                glFrames++;
+                glSlow = gap > 45 ? glSlow + 1 : Math.max(0, glSlow - 1);
+                if (glSlow > 40) {
+                    bgGlFail = true;
+                    bgGl = null;
+                    bgGlShown = false;
+                    bgSurface();
+                    console.warn('[ITD VP] видеокарта не тянет фон, возвращаю обычное рисование');
+                    return false;
+                }
+            }
+            if (glName !== name) { glName = name; glT = Math.random() * 100; canvasGL.style.opacity = GL_STYLES[name]; }
+            if (canvasGL.width !== W || canvasGL.height !== H) { canvasGL.width = W; canvasGL.height = H; gl.viewport(0, 0, W, H); }
+            glT += 0.012 * dt;
+            const th = theme(), S = Math.min(100, th.s * 1.15), c0 = [], c1 = [];
+            for (const dh of GL_DH) { c0.push(...hslRgb(th.h + dh, S, 60)); c1.push(...hslRgb(th.h + dh, S, 70)); }
+            gl.uniform2f(g.uRes, W, H);
+            gl.uniform1f(g.uT, glT);
+            gl.uniform3fv(g.uC0, c0);
+            gl.uniform3fv(g.uC1, c1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+            if (!bgGlShown) { bgGlShown = true; bgSurface(); }
+            return true;
+        }
+        function bgReset() { bgMain.reset(); glName = ''; }
         function bgFrame(dt) {
             const name = effBg();
             if (!backgroundEnabled || introOn || name === 'custom' || !W) return;
+            if (GL_STYLES[name] && bgGlDraw(name, dt)) return;
+            if (bgGlShown) { bgGlShown = false; bgSurface(); }
             const k = BG_RES[name] || 1;
             if (k !== bgK) { bgK = k; bgFit(); }
             bgMain.mouse(mouse.x, mouse.y);
