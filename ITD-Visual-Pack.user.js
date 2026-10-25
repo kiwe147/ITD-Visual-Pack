@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.6.3.7
+// @version      3.7.0
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -99,6 +99,30 @@
     const vpErrors = [];
     const logErr = (where, e) => { vpErrors.push(new Date().toTimeString().slice(0, 8) + ' ' + where + ': ' + (e && (e.message || e))); if (vpErrors.length > 30) vpErrors.shift(); };
 
+    const netLog = [];
+    const netMod = { skip: false };
+    function netNote(url, method, mod) {
+        try {
+            const u = new URL(String(url), location.origin);
+            if (!/\/api\//.test(u.pathname)) return;
+            const p = u.pathname.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ':id')
+                .replace(/\/users\/(?!me\b)[^/]+/, '/users/:name').replace(/\/posts\/user\/[^/]+/, '/posts/user/:name').replace(/\/\d{4,}/g, '/:n');
+            netLog.push([Date.now(), String(method || 'GET').toUpperCase() + ' ' + p, mod ? 1 : 0]);
+            if (netLog.length > 3000) netLog.splice(0, 500);
+        } catch (e) { }
+    }
+    function netTable(minutes = 5) {
+        const from = Date.now() - minutes * 60000, by = new Map(), perMin = {};
+        for (const [t, k, m] of netLog) {
+            if (t < from) continue;
+            const o = by.get(k) || { запрос: k, мод: 0, сайт: 0 };
+            o[m ? 'мод' : 'сайт']++;
+            by.set(k, o);
+            const mm = new Date(t).toTimeString().slice(0, 5), r = perMin[mm] || (perMin[mm] = { мод: 0, сайт: 0 });
+            r[m ? 'мод' : 'сайт']++;
+        }
+        return { запросы: [...by.values()].sort((a, b) => b.мод + b.сайт - a.мод - a.сайт), по_минутам: perMin };
+    }
     const siteUsers = new Map(), siteUsersWait = new Map();
     const siteAuth = { token: null, at: 0, me: null, meWait: [] };
     const OVERLAY_KEYS = ['vpGal', 'vpMsgs', 'vpMenu'];
@@ -200,6 +224,7 @@
                 let res = origFetch.apply(this, arguments);
                 try {
                     const url = typeof input === 'string' ? input : input && input.url;
+                    if (!netMod.skip) netNote(url, (init && init.method) || (input && input.method), false);
                     if (url && /\/notifications\/stream(?:[?#]|$)/.test(url)) res = quietServiceStream(res);
                     if (url && /\/api\//.test(url)) res.then(apiPause).catch(() => { });
                     const method = (init && init.method) || (input && input.method) || 'GET';
@@ -262,6 +287,59 @@
     }
     setInterval(() => { const l = GM_getValue('vp_lead_tab', null); if (l && l.id === TAB_ID) GM_setValue('vp_lead_tab', { id: TAB_ID, at: Date.now(), hidden: document.hidden }); }, 5000);
     const soundVolume = () => Math.max(0, Math.min(100, +GM_getValue('soundVolume', 100))) / 100;
+    const sched = (() => {
+        const tasks = new Map(), NET_GAP = 600;
+        let timer = 0, lastNet = -1e9;
+        const period = k => (typeof k.every === 'function' ? k.every() : k.every) || 0;
+        function arm(ms) {
+            if (timer) return;
+            timer = setTimeout(tick, Math.max(250, Math.min(5000, ms)));
+        }
+        function run(k, t) {
+            k.last = t;
+            k.busy = true;
+            k.runs++;
+            Promise.resolve().then(k.fn)
+                .catch(e => { k.errors++; try { logErr('планировщик: ' + k.id, e); } catch (x) { } })
+                .finally(() => { k.busy = false; k.ms += performance.now() - t; });
+        }
+        function tick() {
+            timer = 0;
+            const t = performance.now();
+            let wait = 5000;
+            try {
+            for (const k of tasks.values()) {
+                if (k.busy && t - k.last > 90000) k.busy = false;
+                if (k.busy) continue;
+                const ev = period(k);
+                if (!ev) { wait = Math.min(wait, 1000); continue; }
+                const due = k.last + ev;
+                if (t < due) { wait = Math.min(wait, due - t); continue; }
+                if (k.visible && document.hidden) { wait = Math.min(wait, 1000); continue; }
+                if (k.net) {
+                    if (apiPaused()) { wait = Math.min(wait, 1000); continue; }
+                    if (t - lastNet < NET_GAP) { wait = Math.min(wait, NET_GAP - (t - lastNet)); continue; }
+                    lastNet = t;
+                }
+                run(k, t);
+                wait = Math.min(wait, ev);
+            }
+            } catch (e) { try { logErr('планировщик', e); } catch (x) { } console.warn('[ITD VP] планировщик', e); }
+            arm(wait);
+        }
+        return {
+            add(id, fn, o = {}) {
+                const k = { id, fn, every: o.every, net: !!o.net, visible: !!o.visible, last: performance.now(), busy: false, runs: 0, errors: 0, ms: 0 };
+                if (o.first !== undefined) k.last += o.first - period(k);
+                tasks.set(id, k);
+                arm(250);
+                return { id, remove: () => tasks.delete(id), kick: () => { k.last = -1e9; arm(250); } };
+            },
+            table() {
+                return [...tasks.values()].map(k => ({ задача: k.id, период: typeof k.every === 'function' ? 'динамический' : k.every, сеть: k.net, запусков: k.runs, ошибок: k.errors, мс_всего: Math.round(k.ms) }));
+            }
+        };
+    })();
     const INTRO = {
         LOCK: [620, 1020, 1420],
         FLY: 520,
@@ -1163,7 +1241,7 @@
         function onDom(fn) { domHandlers.push(fn); }
         let domQueued = false;
         const DOM_WATCH = { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true };
-        let lastTick = 0;
+        let lastTick = 0, domProf = null;
         function domTick() {
             domQueued = false;
             lastTick = performance.now();
@@ -1171,7 +1249,11 @@
             domObserver.disconnect();
             try {
                 tagAll(false);
-                for (const fn of domHandlers) { try { fn(); } catch (e) { console.warn('[ITD VP]', fn.name || 'обработчик', e); logErr(fn.name || 'обработчик', e); } }
+                for (const fn of domHandlers) {
+                    const t0 = domProf ? performance.now() : 0;
+                    try { fn(); } catch (e) { console.warn('[ITD VP]', fn.name || 'обработчик', e); logErr(fn.name || 'обработчик', e); }
+                    if (domProf) { const k = fn.name || ('#' + domHandlers.indexOf(fn)), o = domProf[k] || (domProf[k] = { мс: 0, вызовов: 0, максимум: 0 }), d = performance.now() - t0; o.мс += d; o.вызовов++; if (d > o.максимум) o.максимум = d; }
+                }
             } finally {
                 domObserver.observe(document.body, DOM_WATCH);
             }
@@ -1212,7 +1294,18 @@
                 console.table(ROLE_ORDER.map(r => ({ роль: r, найдено: roleCount[r], класс: SELECTORS[r] })));
                 return roleCount;
             },
-            learned
+            learned,
+            domCost: seconds => {
+                domProf = {};
+                return new Promise(done => setTimeout(() => {
+                    const rows = Object.entries(domProf).map(([k, o]) => ({ обработчик: k, мс: +o.мс.toFixed(1), вызовов: o.вызовов, максимум: +o.максимум.toFixed(1) })).sort((x, y) => y.мс - x.мс);
+                    domProf = null;
+                    console.table(rows.slice(0, 15));
+                    done(rows);
+                }, (seconds || 10) * 1000));
+            },
+            sched: () => { const t = sched.table(); console.table(t); return t; },
+            net: minutes => { const r = netTable(minutes); console.table(r.запросы); console.table(r.по_минутам); return r; }
         };
         setTimeout(() => {
             tagAll();
@@ -1647,7 +1740,7 @@
             }
         }
         function scheduleAutoLike() {
-            setInterval(autoLikeTick, 20000);
+            sched.add('autolike', autoLikeTick, { every: 20000, net: true });
         }
 
         async function fetchAutoLikeUsers() {
@@ -4325,6 +4418,9 @@
         }
 
         const CHANGELOG = [
+            ['3.7.0', '26 октября 2026', [
+                'Оптимизация фоновых запросов: сообщения, клуб, подтверждения и автолайк работают через единый планировщик с паузой при лимите сайта',
+            ]],
             ['3.6.3 – 3.6.3.7', '25 октября 2026', [
                 'Оптимизация заставки',
                 'Под плитками статистики кнопка «Подробнее» раскрывает график лайков и лучшие посты, повторное нажатие сворачивает',
@@ -4709,7 +4805,16 @@
         function sendComment(postId, content) { return api(`/api/posts/${postId}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }); }
         function editComment(id, content) { return api(`/api/comments/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }); }
         async function api(path, opts = {}) {
-            const call = async t => { const t0 = Date.now(), r = await fetch(path, { credentials: 'include', ...opts, headers: { ...opts.headers, Authorization: `Bearer ${t}` } }); noteServerTime(r, t0, Date.now()); return r; };
+            const call = async t => {
+                const t0 = Date.now();
+                netNote(path, opts.method, true);
+                netMod.skip = true;
+                let pr;
+                try { pr = fetch(path, { credentials: 'include', ...opts, headers: { ...opts.headers, Authorization: `Bearer ${t}` } }); } finally { netMod.skip = false; }
+                const r = await pr;
+                noteServerTime(r, t0, Date.now());
+                return r;
+            };
             let res = await call(await getAccessToken());
             if (res.status === 401) res = await call(await getAccessToken(true));
             apiPause(res);
@@ -5024,8 +5129,8 @@
                 createScrollTopButton();
 
                 checkAllComments().then(() => { markVerifiedUsers(); return verifyMyself(); }).then(verifyRequestAgain).then(publishLook);
-                setInterval(publishLook, 60000);
-                setInterval(() => { if (!document.hidden && !apiPaused()) checkAllComments(); }, 10 * 60 * 1000);
+                sched.add('look', publishLook, { every: 60000, net: true });
+                sched.add('verify', () => checkAllComments(), { every: 10 * 60 * 1000, net: true, visible: true });
 
                 lbSyncFromServer();
 
@@ -5660,7 +5765,7 @@
                 if (!STICKER_POST_ID) return;
                 const tick = () => myUsername && myAccountId() && verifiedInfo(myUsername) ? syncPacks(false) : setTimeout(tick, 3000);
                 setTimeout(tick, 6000);
-                setInterval(() => { if (!document.hidden && !apiPaused()) syncPacks(false); }, 10 * 60 * 1000);
+                sched.add('packs', () => syncPacks(false), { every: 10 * 60 * 1000, net: true, visible: true });
             })();
 
             const ZIP_IMG = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
@@ -7449,14 +7554,14 @@
         };
         ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => document.addEventListener(ev, msgWake, { capture: true, passive: true }));
         setTimeout(msgBackground, 12000);
-        setInterval(msgBackground, 60000);
-        setInterval(() => {
+        sched.add('msgBackground', msgBackground, { every: 60000, net: true });
+        sched.add('callSync', () => {
             const c = callNet.cur, open = messagesOverlay && messagesOverlay.classList.contains('vp-open');
             const every = c && /^(calling|ringing|connecting)$/.test(c.state) ? 4000 : document.hidden ? 0 : open ? 15000 : 0;
             if (!every || Date.now() - callNet.lastSync < every || msgNet.syncing || !msgNet.me || apiPaused()) return;
             callNet.lastSync = Date.now();
             msgSync().catch(() => { });
-        }, 1000);
+        }, { every: 1000, net: true });
         document.addEventListener('visibilitychange', () => { if (!document.hidden) { msgBackground.at = 0; msgBackground(); } });
         const msgToastCss = addCss(`
         .vp-msg-badge { position: absolute; top: -6px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; font-size: 11px; font-weight: 600;
@@ -8205,8 +8310,8 @@
                 });
                 p1.focus();
             }
-            const msgPoll = setInterval(async () => {
-                if (!root.isConnected) return clearInterval(msgPoll);
+            const msgPoll = sched.add('msgPoll', async () => {
+                if (!root.isConnected) return msgPoll.remove();
                 if (!msgsOpen || !msgNet.me || apiPaused()) return;
                 if (Date.now() - callNet.lastSync > 12000) { callNet.lastSync = Date.now(); try { await msgSync(); } catch (e) { return; } }
                 msgFillDialogs();
@@ -8214,7 +8319,7 @@
                 if (current.bot) return;
                 const tt = msgTarget(current), list = msgThread(tt);
                 if (list.length !== current.shown || chatSig(tt.uid) !== current.sig) msgRefreshChat(current);
-            }, 20000);
+            }, { every: 20000, net: true });
             root.refreshList = () => { if (!current) { msgFillDialogs(); renderList(); } };
             const onSynced = () => {
                 if (!root.isConnected) return document.removeEventListener('vp-msg-synced', onSynced);
@@ -13240,8 +13345,8 @@
         const clubTick = () => Promise.resolve(renderClub()).then(() => clubPollOnline()).catch(e => logErr('клуб: в сети', e));
         setTimeout(() => Promise.resolve(renderClub()).catch(e => logErr('клуб', e)), 2500);
         setTimeout(() => clubPollOnline(), 14000);
-        setInterval(clubTick, 60 * 1000);
-        setInterval(() => clubPollOnline(), 5000);
+        sched.add('clubRender', clubTick, { every: 60 * 1000, net: true });
+        sched.add('clubPoll', () => clubPollOnline(), { every: 5000, net: true });
         let clubScrollT = 0;
         railClub.addEventListener('scroll', () => { clearTimeout(clubScrollT); clubScrollT = setTimeout(() => clubPollOnline(), 400); }, { passive: true });
         document.addEventListener('visibilitychange', () => { if (!document.hidden) clubPollOnline(); });

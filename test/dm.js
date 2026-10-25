@@ -10,7 +10,7 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const snap = fs.readFileSync(process.argv[2], 'utf8');
-const src = fs.readFileSync(path.join(__dirname, '..', 'ITD-Visual-Pack.user.js'), 'utf8').replace('const msgNet = {', 'const msgNet = window.__msgNet = {').replace('setInterval(msgBackground, 60000)', 'setInterval(msgBackground, 2500)');
+const src = fs.readFileSync(path.join(__dirname, '..', 'ITD-Visual-Pack.user.js'), 'utf8').replace('const msgNet = {', 'const msgNet = window.__msgNet = {').replace("sched.add('msgBackground', msgBackground, { every: 60000, net: true })", "sched.add('msgBackground', msgBackground, { every: 2500, net: true })").replace('idle < 3 * 60e3 ? 20e3', 'idle < 3 * 60e3 ? 1e3');
 const ORIGIN = 'https://xn--d1ah4a.com', POST = 'a53b53e0-9950-4f62-83f4-91e5985ef6c5';
 const OWNER = '5e064703-104d-4794-bc28-9ed6f5847cca';
 const USERS = { NeuroSFW: { id: OWNER, username: 'NeuroSFW', displayName: 'Нейро' }, bob: { id: 'u2', username: 'bob', displayName: 'Боб' }, carl: { id: 'u3', username: 'carl', displayName: 'Карл' }, dan: { id: 'u4', username: 'dan', displayName: 'Дэн' } };
@@ -214,7 +214,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   check(await A.p.evaluate(() => getComputedStyle(document.querySelector('.vp-msgs-pend')).display === 'none'), 'у получателя полосы превью нет');
   check(!afterBack.lb && afterBack.chat, `«назад» — просмотр закрыт, чат на месте ${JSON.stringify(afterBack)}`);
   await A.p.click('.vp-msgs-feed .vp-msgs-imgw >> nth=-1'); await A.p.waitForTimeout(300);
-  await A.p.keyboard.press('Escape'); await A.p.waitForTimeout(300);
+  await A.p.keyboard.press('Escape'); await A.p.waitForTimeout(700);
   const afterEsc = await A.p.evaluate(() => ({ lb: !!document.querySelector('.vp-msgs-lb'), chat: !!document.querySelector('.vp-msgs.vp-open .vp-msgs-chat:not([hidden])') }));
   check(!afterEsc.lb && afterEsc.chat, `Esc — просмотр закрыт, чат на месте ${JSON.stringify(afterEsc)}`);
   await A.p.$eval('.vp-msgs-back', b => b.click()); await A.p.waitForTimeout(500);
