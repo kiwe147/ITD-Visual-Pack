@@ -4,7 +4,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
-const snap = fs.readFileSync(process.argv[2], 'utf8');
+const snap = process.env.LIVE ? '' : fs.readFileSync(process.argv[2], 'utf8');
 const WIN = +process.argv[3] || 3500, CPU = +process.env.CPU || 1;
 let src = fs.readFileSync(process.env.SRC || path.join(__dirname, '..', 'ITD-Visual-Pack.user.js'), 'utf8');
 if (process.env.NOSTART) {
@@ -21,12 +21,12 @@ const ORIGIN = 'https://xn--d1ah4a.com';
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const ctx = await b.newContext({ viewport: { width: 1280, height: 800 } });
   const p = await ctx.newPage();
-  p.on('console', m => { if (/START_MS/.test(m.text())) console.log(m.text()); });
+  p.on('console', m => { if (/START_MS|заставк/.test(m.text())) console.log(m.text().slice(0, 300)); });
   const cdp = await ctx.newCDPSession(p);
   if (CPU > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU });
   await cdp.send('Profiler.enable');
   await cdp.send('Profiler.setSamplingInterval', { interval: 500 });
-  await p.route('**/*', r => {
+  if (!process.env.LIVE) await p.route('**/*', r => {
     const req = r.request(), u = new URL(req.url()), t = req.resourceType();
     if (u.origin === ORIGIN && t === 'document') return r.fulfill({ contentType: 'text/html; charset=utf-8', body: snap });
     if (['image', 'stylesheet', 'font'].includes(t)) return r.continue();
