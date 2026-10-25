@@ -87,6 +87,10 @@ const cls = (u, m) => {
     await ctx.clock.runFor(1000);
     await A.waitForTimeout(20);
   }
+  const sc = await A.evaluate(() => { try { return window.itdvp.sched(); } catch (e) { return String(e); } });
+  console.log('планировщик:', JSON.stringify(sc));
+  const nt = await A.evaluate(() => { try { return window.itdvp.net(10).запросы; } catch (e) { return String(e); } });
+  console.log('учёт запросов в моде (itdvp.net):', JSON.stringify(nt).slice(0, 600));
   const by = {};
   log.forEach(l => { by[l.k] = (by[l.k] || 0) + 1; });
   console.log(`\nСЦЕНАРИЙ ${scen}: ${MIN} мин, людей ${PEOPLE}, комментариев проверки ${VCOM}, лички ${MCOM}; страница: ${path.basename(snapFile)}`);
