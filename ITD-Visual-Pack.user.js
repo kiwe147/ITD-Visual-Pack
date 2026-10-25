@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.6.3
+// @version      3.6.3.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4316,7 +4316,8 @@
         }
 
         const CHANGELOG = [
-            ['3.6.3', '25 октября 2026', [
+            ['3.6.3 – 3.6.3.1', '25 октября 2026', [
+                'Под плитками статистики кнопка «Подробнее» раскрывает график лайков и лучшие посты, повторное нажатие сворачивает',
                 'Статистика в боковой панели обновлена: вкладки «Всё / День / Неделя / Месяц», плитки с подписчиками, подписками, постами и лайками (с приростом за период), график лайков по месяцам или дням и два лучших поста по лайкам',
             ]],
             ['3.6.2', '25 октября 2026', [
@@ -12489,7 +12490,7 @@
         rail.innerHTML = `
         <section class="vp-rail-card" data-block="stats"><div class="vp-rail-title">${svgIcon('<path d="M4 19V10M10 19V5M16 19v-7M21 19H3"/>', 16)}<span>Статистика</span></div>
             <div class="vp-seg"><div class="vp-seg-ind"></div><button data-p="all">Всё</button><button data-p="day">День</button><button data-p="week"><span class="vp-f">Неделя</span><span class="vp-s">Нед.</span></button><button data-p="month"><span class="vp-f">Месяц</span><span class="vp-s">Мес.</span></button></div>
-            <div class="vp-stats"><div class="vp-menu-note">Загрузка...</div></div><div class="vp-stats-since"></div><div class="vp-chart" hidden></div><div class="vp-best" hidden></div></section>
+            <div class="vp-stats"><div class="vp-menu-note">Загрузка...</div></div><div class="vp-stats-since"></div><button type="button" class="vp-more" hidden><span>Подробнее</span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><div class="vp-more-body"><div class="vp-more-in"><div class="vp-chart" hidden></div><div class="vp-best" hidden></div></div></div></section>
         <section class="vp-rail-card" data-block="club"><div class="vp-rail-title">${svgIcon('<circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.5a3 3 0 0 1 0 5.5M18 14.5a5 5 0 0 1 2.5 4.5"/>', 16)}<span>Клуб ИТД&nbsp;X</span><b class="vp-club-count"></b></div>
             <div class="vp-club"><div class="vp-menu-note">Загрузка...</div></div></section>
         <section class="vp-rail-card" data-block="games"><div class="vp-rail-title">${svgIcon('<rect x="2.5" y="7" width="19" height="11" rx="5.5"/><path d="M7.5 10.5v4M5.5 12.5h4"/><circle cx="15.5" cy="11.5" r=".8"/><circle cx="17.5" cy="13.5" r=".8"/>', 16)}<span>Игры</span></div>
@@ -12594,6 +12595,15 @@
         .vp-menu-body .vp-stat-val { font-size: 19px; }
         .vp-stat-diff { font-size: 12.5px; font-weight: 700; color: var(--text-secondary); }
         .vp-stat-diff:empty { display: none; }
+        .vp-more { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 10px; padding: 8px 0; border: 0; border-radius: 9999px; cursor: pointer;
+            font: inherit; font-size: 13px; font-weight: 600; color: var(--text-secondary); background: var(--glass-bg, rgba(35, 35, 35, .8)); transition: color .2s ease, background-color .2s ease; }
+        .vp-more:hover { color: var(--text-primary, #fff); }
+        .vp-more[hidden] { display: none; }
+        .vp-more svg { transition: transform .3s ease; }
+        [data-block="stats"].vp-more-on .vp-more svg { transform: rotate(180deg); }
+        .vp-more-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .32s cubic-bezier(.5, 0, 0, 1); }
+        [data-block="stats"].vp-more-on .vp-more-body { grid-template-rows: 1fr; }
+        .vp-more-in { min-height: 0; overflow: hidden; }
         .vp-chart { margin-top: 12px; padding: 12px; border-radius: 22px; background: rgba(127, 127, 127, .1); }
         .vp-chart[hidden], .vp-best[hidden] { display: none; }
         .vp-chart-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; font-weight: 700; }
@@ -12984,7 +12994,15 @@
         };
         const fmtDiff = n => n > 0 ? '+' + fmtStat(n) : n < 0 ? '−' + fmtStat(n) : '0';
         const likesWord = n => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? 'лайков' : b === 1 ? 'лайк' : b > 1 && b < 5 ? 'лайка' : 'лайков'; };
-        const railChart = rail.querySelector('.vp-chart'), railBest = rail.querySelector('.vp-best');
+        const railChart = rail.querySelector('.vp-chart'), railBest = rail.querySelector('.vp-best'), railMore = rail.querySelector('.vp-more'), statsCard = rail.querySelector('[data-block="stats"]');
+        const paintMore = () => {
+            const on = !!GM_getValue('vp_stats_more', false);
+            statsCard.classList.toggle('vp-more-on', on);
+            railMore.querySelector('span').textContent = on ? 'Свернуть' : 'Подробнее';
+            railMore.setAttribute('aria-expanded', on ? 'true' : 'false');
+        };
+        railMore.addEventListener('click', () => { GM_setValue('vp_stats_more', !GM_getValue('vp_stats_more', false)); paintMore(); });
+        paintMore();
         function statsBuckets() {
             const list = statsList || [], now = new Date(), out = [];
             const add = (from, to, label, long) => out.push({ from: from.getTime(), to: to.getTime(), label, long, likes: 0, posts: 0 });
@@ -13044,6 +13062,7 @@
                 a.addEventListener('click', e => { e.preventDefault(); history.pushState({}, '', '/post/' + r[0]); dispatchEvent(new PopStateEvent('popstate')); });
                 railBest.appendChild(a);
             });
+            railMore.hidden = railChart.hidden && railBest.hidden;
         }
         function renderStats() {
             seg.style.setProperty('--vp-i', Math.max(0, PERIODS.indexOf(statsPeriod)));
