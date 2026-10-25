@@ -499,7 +499,7 @@
                 0 8px 24px -10px color-mix(in srgb, var(--vp-accent) 70%, transparent);
             transition: opacity .25s ease, background-color .4s ease; }
 
-        .vp-banner.vp-depth { background: transparent !important; }
+        .vp-banner.vp-depth { background: transparent !important; overflow: hidden !important; }
         .vp-banner { isolation: isolate; }
         .vp-banner.vp-depth > img[alt="Banner"], .vp-banner.vp-depth > .vp-banner-video, .vp-banner.vp-depth > [aria-label="Стекло"], .vp-banner.vp-depth > [aria-label="Разбитое стекло"] { will-change: transform; transform-origin: 50% 50%;
             -webkit-mask-image: linear-gradient(to bottom, #000 58%, transparent); mask-image: linear-gradient(to bottom, #000 58%, transparent); }
