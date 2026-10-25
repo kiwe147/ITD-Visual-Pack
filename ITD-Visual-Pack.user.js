@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.2
+// @version      3.7.2.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1383,7 +1383,7 @@
                 }, (seconds || 10) * 1000));
             },
             sched: () => { const t = sched.table(); console.table(t); return t; },
-            bg: () => { const r = { режим: bgW ? 'отдельный поток' : 'в странице', стиль: effBg(), включён: backgroundEnabled, размер: W + 'x' + H, причина: bgWhy }; console.table(r); return r; },
+            bg: () => { const r = { стиль: effBg(), включён: backgroundEnabled, размер: W + 'x' + H, масштаб: bgK }; console.table(r); return r; },
             net: minutes => { const r = netTable(minutes); console.table(r.запросы); console.table(r.по_минутам); return r; }
         };
         setTimeout(() => {
@@ -2301,7 +2301,7 @@
         }
         .vp-bg-canvas.vp-bg-off { display: none; }
     `);
-        let canvas = document.createElement('canvas');
+        const canvas = document.createElement('canvas');
         canvas.className = 'vp-bg-canvas';
         document.body.appendChild(canvas);
         const bgMedia = document.createElement('div');
@@ -2414,6 +2414,7 @@
             if (backgroundEnabled && custom && !bgMedia.firstChild) showBgMedia();
         }
         updateBackgroundVisibility();
+        const BG_KEYS = ['matrix', 'stars', 'particles', 'waves', 'aurora', 'bokeh', 'grid', 'snow'];
         function bgEngine(mkCanvas) {
             let ctx = null, W = 0, H = 0, bg = null, bgName = '';
             const mouse = { x: -1e4, y: -1e4 };
@@ -2791,38 +2792,11 @@
                 draw
             };
         }
-        function bgWorkerMain() {
-            let eng = null, canvas = null, cfg = { run: false, name: 'matrix', h: 210, s: 100 }, last = 0;
-            const raf = self.requestAnimationFrame ? f => self.requestAnimationFrame(f) : f => setTimeout(() => f(performance.now()), 16);
-            const loop = t => {
-                raf(loop);
-                const gap = last ? t - last : 16.7;
-                last = t;
-                if (!cfg.run || !eng) return;
-                const op = eng.draw(cfg.name, Math.min(3, gap / 50), { h: cfg.h, s: cfg.s });
-                if (op != null) postMessage({ t: 'op', v: op });
-            };
-            onmessage = e => {
-                const m = e.data;
-                if (m.t === 'init') {
-                    canvas = m.canvas;
-                    canvas.width = m.w;
-                    canvas.height = m.h;
-                    eng = bgEngine((w, h) => new OffscreenCanvas(w || 1, h || 1));
-                    eng.attach(canvas.getContext('2d'));
-                    eng.size(m.w, m.h);
-                    raf(loop);
-                } else if (m.t === 'size') {
-                    canvas.width = m.w;
-                    canvas.height = m.h;
-                    eng.size(m.w, m.h);
-                } else if (m.t === 'cfg') cfg = m;
-                else if (m.t === 'mouse') eng.mouse(m.x, m.y);
-                else if (m.t === 'reset') eng.reset();
-            };
-        }
-        let W = 0, H = 0, bgW = null, bgStarted = false, bgReady = false, bgSent = '', bgMouseSent = '', bgWhy = 'ещё не запускали';
+        const BG_RES = { aurora: 0.5, bokeh: 0.5, waves: 0.6, grid: 0.75, snow: 0.75 };
+        let W = 0, H = 0, bgK = 1, bgOn = false;
         const bgMain = bgEngine(() => document.createElement('canvas'));
+        const bgCtx = canvas.getContext('2d');
+        bgMain.attach(bgCtx);
         const mouse = { x: -1e4, y: -1e4 };
         let canvasRect = { left: 0, top: 0, width: 1, height: 1 };
         addEventListener('pointermove', e => {
@@ -2830,45 +2804,11 @@
             mouse.y = (e.clientY - canvasRect.top) * H / canvasRect.height;
         }, { passive: true });
         document.addEventListener('pointerleave', () => { mouse.x = mouse.y = -1e4; });
-        function bgFallback() {
-            if (!bgW) return;
-            bgWhy = 'воркер не запустился (политика сайта или браузер)';
-            try { bgW.terminate(); } catch (e) { }
-            bgW = null;
-            const fresh = document.createElement('canvas');
-            fresh.className = canvas.className;
-            fresh.style.opacity = canvas.style.opacity;
-            canvas.replaceWith(fresh);
-            canvas = fresh;
-            if (typeof canvasRO !== 'undefined') canvasRO.observe(canvas);
-            canvas.width = W;
-            canvas.height = H;
-            bgMain.attach(canvas.getContext('2d'));
+        function bgFit() {
+            canvas.width = Math.max(1, Math.round(W * bgK));
+            canvas.height = Math.max(1, Math.round(H * bgK));
+            bgCtx.setTransform(bgK, 0, 0, bgK, 0, 0);
             bgMain.size(W, H);
-            bgSent = '';
-        }
-        function bgStart() {
-            const w = W, h = H;
-            bgReady = true;
-            try {
-                if (typeof Worker !== 'function' || typeof OffscreenCanvas !== 'function' || !canvas.transferControlToOffscreen) throw new Error('нет воркеров');
-                const off = canvas.transferControlToOffscreen();
-                const url = URL.createObjectURL(new Blob(['const bgEngine = ' + bgEngine.toString() + ';\n(' + bgWorkerMain.toString() + ')();'], { type: 'text/javascript' }));
-                const wk = new Worker(url);
-                setTimeout(() => URL.revokeObjectURL(url), 10000);
-                wk.onmessage = e => { if (e.data && e.data.t === 'op') canvas.style.opacity = e.data.v; };
-                wk.onerror = e => { if (e && e.preventDefault) e.preventDefault(); console.warn('[ITD VP] фон в воркере не запустился, рисую в странице', e && e.message); bgFallback(); };
-                wk.postMessage({ t: 'init', canvas: off, w, h }, [off]);
-                bgW = wk;
-                bgWhy = 'воркер запущен';
-            } catch (e) {
-                bgW = null;
-                bgWhy = 'воркеры недоступны: ' + (e && e.message || e);
-                canvas.width = w;
-                canvas.height = h;
-                bgMain.attach(canvas.getContext('2d'));
-                bgMain.size(w, h);
-            }
         }
         function resizeCanvas() {
             const r = canvas.getBoundingClientRect();
@@ -2877,27 +2817,14 @@
             if (w === W && h === H) return;
             W = w;
             H = h;
-            if (!bgStarted) { bgStarted = true; setTimeout(bgStart, 900); return; }
-            if (!bgReady) return;
-            if (bgW) bgW.postMessage({ t: 'size', w, h });
-            else { canvas.width = w; canvas.height = h; bgMain.size(w, h); }
+            bgFit();
         }
-        function bgReset() {
-            if (bgW) bgW.postMessage({ t: 'reset' });
-            else bgMain.reset();
-        }
+        function bgReset() { bgMain.reset(); }
         function bgFrame(dt) {
-            if (!bgReady) return;
-            const want = backgroundEnabled && !introOn, name = effBg();
-            if (bgW) {
-                const th = theme(), run = want && name !== 'custom';
-                const key = run + '|' + name + '|' + Math.round(th.h * 4) + '|' + Math.round(th.s);
-                if (key !== bgSent) { bgSent = key; bgW.postMessage({ t: 'cfg', run, name, h: th.h, s: th.s }); }
-                const mk = Math.round(mouse.x) + ',' + Math.round(mouse.y);
-                if (run && mk !== bgMouseSent) { bgMouseSent = mk; bgW.postMessage({ t: 'mouse', x: mouse.x, y: mouse.y }); }
-                return;
-            }
-            if (!want || name === 'custom') return;
+            const name = effBg();
+            if (!backgroundEnabled || introOn || name === 'custom' || !W) return;
+            const k = BG_RES[name] || 1;
+            if (k !== bgK) { bgK = k; bgFit(); }
             bgMain.mouse(mouse.x, mouse.y);
             const op = bgMain.draw(name, dt, theme());
             if (op != null) canvas.style.opacity = op;
@@ -3009,7 +2936,7 @@
             for (const tok of m[1].split(/\s+/)) { const i = tok.indexOf('='); if (i > 0) o[tok.slice(0, i)] = tok.slice(i + 1); }
             if (!nickStyles[o.n]) return null;
             const look = { n: o.n, b: '-', g: /^[01]{2}$/.test(o.g || '') ? o.g : '11' };
-            if (o.b === 'custom' ? /^[0-4][0-9a-f]{32}$/.test(o.i || '') : BACKGROUNDS[o.b]) look.b = o.b;
+            if (o.b === 'custom' ? /^[0-4][0-9a-f]{32}$/.test(o.i || '') : BG_KEYS.includes(o.b)) look.b = o.b;
             if (look.b === 'custom') look.i = o.i;
             if (look.b === 'custom' && BANNER_VIDEO_RE.test(o.bv || '')) look.bv = o.bv;
             if (BANNER_VIDEO_RE.test(o.v || '')) look.v = o.v;
@@ -4598,8 +4525,8 @@
         }
 
         const CHANGELOG = [
-            ['3.7.2', '26 октября 2026', [
-                'Анимированный фон рисуется отдельно от страницы: заметно меньше нагрузка на процессор и видеокарту, лента и меню работают плавнее'
+            ['3.7.2 – 3.7.2.1', '26 октября 2026', [
+                'Мягкие анимированные фоны (сияние, боке, волны, сетка, снег) стали легче для процессора и видеокарты при том же виде и плавности'
             ]],
             ['3.7.1 – 3.7.1.2', '26 октября 2026', [
                 'Профили: над постами появились кнопки сортировки «Новые», «Старые», «Популярные», они работают в любом профиле',
