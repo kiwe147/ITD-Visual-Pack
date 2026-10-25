@@ -84,7 +84,7 @@ const STICKER_POST = '92f2913c-18be-499a-bc03-97aed0947b34';
   await p.hover('.vp-chart svg', { position: { x: 100, y: 60 } }); await p.waitForTimeout(200);
   console.log('— наведение: ' + await p.$eval('.vp-chart-cap', e => e.textContent));
   await p.click('.vp-best-post >> nth=0'); await p.waitForTimeout(300);
-  check(await p.evaluate(() => location.pathname.startsWith('/post/')), 'клик по лучшему посту ведёт на /post/…');
+  check(await p.evaluate(() => location.pathname.startsWith('/@NeuroSFW/post/p')), 'клик по лучшему посту ведёт на /@ник/post/id');
   check(!p.errors.length, 'ошибок нет' + (p.errors.length ? ': ' + p.errors.join(' | ') : ''));
   await b.close();
   console.log(fails.length ? '\nОШИБОК: ' + fails.length : '\nВсё прошло');

@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.6.3.6
+// @version      3.6.3.7
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4325,7 +4325,7 @@
         }
 
         const CHANGELOG = [
-            ['3.6.3 – 3.6.3.6', '25 октября 2026', [
+            ['3.6.3 – 3.6.3.7', '25 октября 2026', [
                 'Оптимизация заставки',
                 'Под плитками статистики кнопка «Подробнее» раскрывает график лайков и лучшие посты, повторное нажатие сворачивает',
                 'Статистика в боковой панели обновлена: вкладки «Всё / День / Неделя / Месяц», плитки с подписчиками, подписками, постами и лайками (с приростом за период), график лайков по месяцам или дням и два лучших поста по лайкам',
@@ -13065,11 +13065,12 @@
             railBest.innerHTML = '<div class="vp-best-h"><b>Лучшие посты</b><span>по лайкам</span></div>';
             top.forEach(r => {
                 const a = document.createElement('a');
-                a.className = 'vp-best-post'; a.href = '/post/' + r[0];
+                const path = '/@' + myUsername + '/post/' + r[0];
+                a.className = 'vp-best-post'; a.href = path;
                 a.innerHTML = '<b></b><small></small>';
                 a.firstChild.textContent = r[3] || 'Пост без текста';
                 a.lastChild.textContent = fmtStat(r[2]) + ' ' + likesWord(r[2]);
-                a.addEventListener('click', e => { e.preventDefault(); history.pushState({}, '', '/post/' + r[0]); dispatchEvent(new PopStateEvent('popstate')); });
+                a.addEventListener('click', e => { e.preventDefault(); history.pushState({}, '', path); dispatchEvent(new PopStateEvent('popstate')); });
                 railBest.appendChild(a);
             });
             railMore.hidden = railChart.hidden && railBest.hidden;
