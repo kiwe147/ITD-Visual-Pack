@@ -1,6 +1,7 @@
 00-header.js
 01-util-fps.js
 01b-net-stats.js
+01c-profile-sort-url.js
 02-site-hooks.js
 03-tabs-pause.js
 03b-scheduler.js
@@ -36,6 +37,7 @@
 54-rail-menu.js
 55-stats-card.js
 56-club.js
+57-profile-sort.js
 60-games.js
 61-leaderboard.js
 90-boot-tail.js

@@ -450,7 +450,7 @@
         .vp-nav-has-blob { position: relative; }
         .vp-nav-has-blob .vp-nav-link { position: relative; z-index: 1; transition: background-color .2s ease, opacity .2s ease !important; }
         .vp-nav-has-blob .vp-nav-link .vp-nav-icon { transition: none; }
-        .vp-nav-has-blob .vp-nav-link.vp-active { background: transparent !important; }
+        .vp-nav-has-blob .vp-nav-link.vp-active { background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
         .vp-nav-has-blob > div:not(.vp-nav-blob):not(:has(a)) { opacity: 0 !important; }
         .vp-post-slot { border-bottom: none !important; }
         .vp-new-post { position: absolute !important; width: ${BUMP}px !important; height: ${BUMP}px !important; z-index: 2; margin: 0 !important;
