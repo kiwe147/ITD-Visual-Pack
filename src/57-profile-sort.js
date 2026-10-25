@@ -9,6 +9,12 @@
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #4aa3ff) 55%, transparent); }
         .vp-psort.vp-busy { opacity: .6; pointer-events: none; }
         `);
+        let psortPrev = null, psortFrom = null;
+        function psortLeave(old) {
+            const i = old.querySelector('.vp-psort-ind');
+            if (i && i.dataset.x !== undefined) psortPrev = { login: old.dataset.login, x: i.dataset.x, w: i.dataset.w, at: Date.now() };
+            old.remove();
+        }
         function psortMove(box, animate) {
             const ind = box.querySelector('.vp-psort-ind'), on = box.querySelector('button.vp-on');
             if (!ind || !on || !on.offsetWidth) return;
@@ -19,6 +25,7 @@
             ind.dataset.x = x1;
             ind.dataset.w = w1;
             if (!animate || calm || isNaN(x0) || x0 === x1) return;
+            psortFrom = { login: box.dataset.login, x: x0, w: w0, at: Date.now() };
             const lo = Math.min(x0, x1), span = Math.abs(x1 - x0) + Math.max(w0, w1);
             ind.animate([
                 { transform: `translateX(${x0}px)`, width: w0 + 'px' },
@@ -31,32 +38,54 @@
             document.documentElement.dataset.vpWallBridge = '1';
             const sc = document.createElement('script');
             sc.textContent = '(' + function () {
-                addEventListener('vp-wall-refresh', function () {
-                    var el = document.querySelector('[data-vp-wall="1"]');
-                    if (!el) return;
-                    var res = 'novnode';
+                function walk(each) {
                     var root = document.getElementById('root') || document.body;
                     var seen = new Set(), stack = root && root.__k ? [root.__k] : [], steps = 0;
-                    while (stack.length && res !== 'ok' && steps++ < 60000) {
+                    while (stack.length && steps++ < 60000) {
                         var v = stack.pop();
                         if (!v || typeof v !== 'object' || seen.has(v)) continue;
                         seen.add(v);
-                        var hooks = v.__c && v.__c.__H && v.__c.__H.__;
-                        if (hooks) {
-                            res = 'nohook';
-                            for (var i = 0; i < hooks.length && res !== 'ok'; i++) {
-                                var fn = hooks[i] && hooks[i].__;
-                                if (typeof fn !== 'function') continue;
-                                var src = String(fn);
-                                if (src.length < 600 && src.indexOf('invalidateWallCache') > -1 && src.indexOf('await') > -1) {
-                                    try { fn(); res = 'ok'; } catch (e) { res = 'err'; }
-                                }
-                            }
-                        }
+                        if (each(v) === true) return steps;
                         if (Array.isArray(v.__k)) for (var j = v.__k.length - 1; j >= 0; j--) stack.push(v.__k[j]);
                     }
-                    if (res !== 'ok') res = steps > 1 ? 'nofunc' : 'novnode';
+                    return steps > 1 ? 0 : -1;
+                }
+                addEventListener('vp-wall-refresh', function () {
+                    var el = document.querySelector('[data-vp-wall="1"]');
+                    if (!el) return;
+                    var res = 'ok';
+                    var r = walk(function (v) {
+                        var hooks = v.__c && v.__c.__H && v.__c.__H.__;
+                        if (!hooks) return;
+                        for (var i = 0; i < hooks.length; i++) {
+                            var fn = hooks[i] && hooks[i].__;
+                            if (typeof fn !== 'function') continue;
+                            var src = String(fn);
+                            if (src.length < 600 && src.indexOf('invalidateWallCache') > -1 && src.indexOf('await') > -1) {
+                                try { fn(); } catch (e) { res = 'err'; }
+                                return true;
+                            }
+                        }
+                    });
+                    if (r <= 0) res = r < 0 ? 'novnode' : 'nofunc';
                     el.setAttribute('data-vp-res', res);
+                });
+                addEventListener('vp-unpin', function () {
+                    var m = null;
+                    try { m = JSON.parse(sessionStorage.getItem('vp_prof_sort') || 'null'); } catch (e) { }
+                    if (!m) return;
+                    walk(function (v) {
+                        var c = v.__c, hooks = c && c.__H && c.__H.__;
+                        if (!hooks) return;
+                        for (var i = 0; i < hooks.length; i++) {
+                            var st = hooks[i], val = st && st.__, deps = st && st.__H;
+                            if (Array.isArray(val) && Array.isArray(deps) && deps.length === 3 && Array.isArray(deps[0]) && typeof deps[1] === 'string' && deps[2] === 'posts'
+                                && val.length && val[0] && val[0].id === deps[1] && val !== deps[0]) {
+                                st.__ = deps[0];
+                                try { c.forceUpdate(); } catch (e) { }
+                            }
+                        }
+                    });
                 });
             } + ')();';
             document.documentElement.appendChild(sc);
@@ -128,11 +157,11 @@
         onDom(function profileSort() {
             const m = location.pathname.match(/^\/@([\w.]+)\/?$/), old = document.querySelector('.vp-psort');
             const art = m && psortAnchor() && document.querySelector('article.' + SELECTORS.post);
-            if (!art || !art.querySelector('a[href="/@' + m[1] + '"]')) { if (old) old.remove(); return; }
+            if (!art || !art.querySelector('a[href="/@' + m[1] + '"]')) { if (old) psortLeave(old); return; }
             const login = m[1], o = profSortMode();
             let cur = o && o.u.toLowerCase() === login.toLowerCase() ? o.s : 'new';
             if (old && old.dataset.login === login && old.dataset.cur === cur && old.nextElementSibling === art) return;
-            if (old) old.remove();
+            if (old) psortLeave(old);
             const box = document.createElement('div');
             box.className = 'vp-psort';
             box.dataset.login = login;
@@ -166,6 +195,7 @@
                             box.dataset.cur = s;
                             cur = s;
                             psortMove(box, true);
+                            profUnpinSoon();
                             setTimeout(() => box.classList.remove('vp-busy'), 600);
                             return;
                         }
@@ -183,6 +213,15 @@
                 box.appendChild(b);
             });
             art.parentElement.insertBefore(box, art);
-            psortMove(box, false);
+            const keep = [psortFrom && Date.now() - psortFrom.at < 700 ? psortFrom : null, psortPrev && Date.now() - psortPrev.at < 4000 ? psortPrev : null].find(k => k && k.login === login);
+            if (keep) {
+                ind.dataset.x = keep.x;
+                ind.dataset.w = keep.w;
+                ind.style.transform = `translateX(${keep.x}px)`;
+                ind.style.width = keep.w + 'px';
+            }
+            psortMove(box, !!keep);
+            profBridge();
+            if (o) profUnpinSoon();
             if (typeof ResizeObserver === 'function') new ResizeObserver(() => psortMove(box, false)).observe(box);
         });

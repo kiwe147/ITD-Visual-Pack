@@ -17,6 +17,13 @@
         q.delete('pinnedPostId');
         return m[1] + '?' + q.toString();
     }
+    function profUnpinSoon() {
+        const w = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window, f = () => { try { w.dispatchEvent(new Event('vp-unpin')); } catch (e) { } };
+        Promise.resolve().then(f);
+        setTimeout(f, 0);
+        setTimeout(f, 150);
+        setTimeout(f, 600);
+    }
     function profOldAnswer(url) {
         const o = profSortMode();
         if (!o || o.v !== 'client' || !profOldPosts || profSortPause || !url || profOldPosts.u.toLowerCase() !== o.u.toLowerCase()) return null;

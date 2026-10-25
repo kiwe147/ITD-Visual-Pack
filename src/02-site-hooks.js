@@ -111,13 +111,15 @@
             w.fetch = function (input, init) {
                 try {
                     const own = profOldAnswer(typeof input === 'string' ? input : input && input.url);
-                    if (own) return own;
+                    if (own) { own.then(profUnpinSoon); return own; }
                 } catch (e) { }
                 try {
                     const re = profSortUrl(typeof input === 'string' ? input : input && input.url);
                     if (re) arguments[0] = typeof input === 'string' ? re : new Request(re, input);
+                    var rewritten = !!re;
                 } catch (e) { }
                 let res = origFetch.apply(this, arguments);
+                if (rewritten) res.then(profUnpinSoon).catch(() => { });
                 try {
                     const u0 = String(typeof input === 'string' ? input : input && input.url || '').replace(/^https?:[/][/][^/]+/, '');
                     if (/^[/]api[/]posts[/]user[/]neurosfw(?:[?]|$)/i.test(u0)) res = hideServicePosts(res);

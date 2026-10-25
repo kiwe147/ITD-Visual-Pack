@@ -50,7 +50,9 @@ const OLD = NEW.slice().reverse(), POP = NEW.slice().sort((a, b) => b.likesCount
       await p.evaluate(() => {
         const fn = async function () { window.__wall = (window.__wall || 0) + 1; var k = 'invalidateWallCache'; await 0; };
         const root = document.getElementById('root') || document.body;
-        root.__k = { __k: [{ __k: null, __c: { __H: { __: [{ __: function () { }, __H: [] }, { __: fn, __H: [], __h: function () { } }] } } }] };
+        window.__list = [{ id: 'a' }, { id: 'pin' }, { id: 'b' }];
+        window.__memo = { __: [{ id: 'pin' }, { id: 'a' }, { id: 'b' }], __H: [window.__list, 'pin', 'posts'], __h: function () { } };
+        root.__k = { __k: [{ __k: null, __c: { forceUpdate() { window.__fu = (window.__fu || 0) + 1; }, __H: { __: [{ __: function () { }, __H: [] }, { __: fn, __H: [], __h: function () { } }, window.__memo] } } }] };
       });
     }
     const ui = await p.evaluate(() => { const b = document.querySelector('.vp-psort'); return b && { labels: [...b.querySelectorAll('button')].map(x => x.textContent), on: (b.querySelector('.vp-on') || {}).textContent, beforePost: !!b.nextElementSibling && b.nextElementSibling.tagName === 'ARTICLE' }; });
@@ -69,12 +71,18 @@ const OLD = NEW.slice().reverse(), POP = NEW.slice().sort((a, b) => b.likesCount
       check(await p.evaluate(() => window.__wall === 1), 'список сайта обновлён на месте (вызвана функция сброса кэша стены)');
       check(await p.evaluate(() => (document.querySelector('.vp-psort .vp-on') || {}).textContent) === 'Популярные', 'активной стала «Популярные»');
       await p.waitForTimeout(600);
+      check(await p.evaluate(() => window.__memo.__ === window.__list && window.__fu >= 1), 'закреплённый пост не поднят наверх: список сайта возвращён в порядок сервера');
       check(await p.evaluate(() => { const i = document.querySelector('.vp-psort-ind'), b = document.querySelector('.vp-psort button.vp-on'); return !!i && Math.abs(i.getBoundingClientRect().left - b.getBoundingClientRect().left) < 1.5 && Math.abs(i.getBoundingClientRect().width - b.getBoundingClientRect().width) < 1.5; }), 'подсветка под активной кнопкой (перетекла на «Популярные»)');
       const url = await p.evaluate(async login => { const r = await fetch('/api/posts/user/' + login + '?limit=20&sort=new&pinnedPostId=x'); return r.url; }, LOGIN);
       check(url.includes('sort=' + WANT) && !/pinnedPostId/.test(url), 'запрос сайта подменён на sort=' + WANT + ', закреп не запрашивается');
       const lk = await p.evaluate(async login => { const r = await fetch('/api/posts/user/' + login + '/liked?limit=20'); return r.url; }, LOGIN);
       check(!/sort=(popular|oldest)/.test(lk), 'вкладка «Лайки» не затронута');
       await p.click('.vp-psort button[data-s="new"]');
+      await p.waitForTimeout(80);
+      await p.evaluate(() => { const b = document.querySelector('.vp-psort'); const sp = document.createElement('i'); b.after(sp); });
+      await p.waitForTimeout(250);
+      check(await p.evaluate(() => { const i = document.querySelector('.vp-psort-ind'); return !!i && i.getAnimations().length > 0; }), 'если плашку пересоздали во время перетекания, подсветка продолжает перетекать');
+      await p.evaluate(() => document.querySelectorAll('article.vp-post').forEach(a => a.previousElementSibling && a.previousElementSibling.tagName === 'I' && a.previousElementSibling.remove()));
       await p.waitForTimeout(800);
       check(await p.evaluate(() => sessionStorage.getItem('vp_prof_sort')) === null && await p.evaluate(() => window.__wall) === 2 && reloads === before, '«Новые» снимает сортировку и тоже обновляет список на месте');
       await p.click('.vp-psort button[data-s="popular"]');
