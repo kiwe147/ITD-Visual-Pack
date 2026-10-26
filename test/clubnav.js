@@ -41,6 +41,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   console.log('—    строки клуба:', rows.join(', '), '· вкладки в меню:', await p.evaluate(() => [...document.querySelectorAll('.vp-nav-link')].map(a => a.getAttribute('href')).join(' ')));
   check(rows.length > 0, 'клуб построился');
   const click = login => p.evaluate(l => [...document.querySelectorAll('.vp-club-row')].filter(r => r.dataset.login.toLowerCase() === l.toLowerCase()).pop().click(), login);
+  await p.evaluate(() => { history.pushState({}, '', '/@NeuroSFW'); dispatchEvent(new PopStateEvent('popstate')); }); await p.waitForTimeout(900);
   await p.evaluate(() => { history.pushState({}, '', '/@alice'); dispatchEvent(new PopStateEvent('popstate')); }); await p.waitForTimeout(700);
   let a = await active();
   console.log('—    после клика по alice: path', await p.evaluate(() => location.pathname), 'подсвечено', JSON.stringify(a));

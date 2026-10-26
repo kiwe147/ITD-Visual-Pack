@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.6.4
+// @version      3.7.6.5
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -5767,7 +5767,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             avatarEditor(own ? lookImgUrl(own) : img && img.src);
         }, true);
         const CHANGELOG = [
-            ['3.7.6 – 3.7.6.4', '26 октября 2026', [
+            ['3.7.6 – 3.7.6.5', '26 октября 2026', [
                 'Аватарка: нажми на свою аву в профиле, откроется редактор с кружком-примеркой, можно картинку, GIF или короткое видео, увидят все, у кого стоит ИТД X',
                 'Змейка снова открывается в играх',
                 'Свой профиль, открытый через клуб, подсвечивается в боковом меню',
@@ -12000,7 +12000,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     if (flow && performance.now() - flow.t0 < BLOB_MS) blobFlow(flow.f, flow.t, flow.t0);
                 }
             }
-            if (!active) { blob.style.opacity = '0'; return; }
+            if (!active) { blob.style.opacity = '0'; blobAt = null; return; }
             const row = navIsRow(nav);
             let to = { top: active.offsetTop, left: active.offsetLeft, width: active.offsetWidth, height: active.offsetHeight };
             const siteInd = row && [...nav.children].find(c => c.tagName === 'DIV' && c !== blob);
