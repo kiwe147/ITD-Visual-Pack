@@ -138,7 +138,6 @@
         });
 
         const postDesignStyle = addCss(`
-        html:has(article[data-alice-water-anchor-kind="post"]) { overflow-anchor: none; }
         article[data-alice-water-anchor-kind="post"] { margin-bottom: 16px !important; }
         article.vp-post {
             background: var(--block-bg);
