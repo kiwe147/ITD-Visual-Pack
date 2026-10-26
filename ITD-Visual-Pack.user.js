@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.6.7
+// @version      3.7.6.8
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -5767,10 +5767,11 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             avatarEditor(own ? lookImgUrl(own) : img && img.src);
         }, true);
         const CHANGELOG = [
-            ['3.7.6 – 3.7.6.7', '26 октября 2026', [
+            ['3.7.6 – 3.7.6.8', '26 октября 2026', [
                 'Аватарка: нажми на свою аву в профиле, откроется редактор с кружком-примеркой, можно картинку, GIF или короткое видео, увидят все, у кого стоит ИТД X',
                 'Змейка снова открывается в играх',
                 'Баннер в профиле показывается целиком, как на сайте без мода, и не смещается и не приближается при прокрутке',
+                'Ответ на комментарий: после миниатюры плашка ответа больше не теряет стиль и не становится квадратной',
                 'Свой профиль, открытый через клуб, подсвечивается в боковом меню',
                 'В уведомлениях у лайков в розовом кружке появилось сердечко, как значок у ответов'
             ]],
@@ -11832,22 +11833,23 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         applyGlass();
         onDom(function glassSheetsCheck() { if (glassEnabled) collectGlass(); });
-        const floatSeen = new WeakSet();
+        const floatSeen = new WeakMap();
         let floatAt = 0;
         onDom(function glassFloating() {
             if (!glassEnabled || !glassSel || performance.now() - floatAt < 250) return;
             floatAt = performance.now();
             document.querySelectorAll(`:is(${glassSel}), [style*="--block-bg"], [style*="--modal-bg"], [style*="--glass-bg"]`).forEach(el => {
-                if (floatSeen.has(el)) return;
-                floatSeen.add(el);
+                const was = floatSeen.get(el);
+                if (was !== undefined) { if (was && !el.classList.contains(was)) el.classList.add(was); return; }
+                floatSeen.set(el, '');
                 if (el.matches('article, .' + SELECTORS.post + ', .' + SELECTORS.avatar) || el.closest('nav, aside, .vp-rail, .vp-msgs, .vp-comments-sheet, .vp-sw-stage')) return;
                 for (let n = el, i = 0; n && n !== document.body && i < 6; n = n.parentElement, i++) {
                     const cs = getComputedStyle(n);
-                    if (cs.position === 'fixed' || (cs.position === 'absolute' && +cs.zIndex >= 5)) { el.classList.add('vp-float'); return; }
+                    if (cs.position === 'fixed' || (cs.position === 'absolute' && +cs.zIndex >= 5)) { el.classList.add('vp-float'); floatSeen.set(el, 'vp-float'); return; }
                 }
                 const outer = el.parentElement && el.parentElement.closest(`:is(${glassSel})`);
                 const bg = getComputedStyle(el).backgroundColor;
-                if (outer && !outer.classList.contains('vp-float') && getComputedStyle(outer).backgroundColor === bg && !/^rgba\(0, 0, 0, 0\)$/.test(bg)) el.classList.add('vp-nested');
+                if (outer && !outer.classList.contains('vp-float') && getComputedStyle(outer).backgroundColor === bg && !/^rgba\(0, 0, 0, 0\)$/.test(bg)) { el.classList.add('vp-nested'); floatSeen.set(el, 'vp-nested'); }
             });
         });
         onDom(function commentsSheet() {

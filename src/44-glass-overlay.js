@@ -28,22 +28,23 @@
         }
         applyGlass();
         onDom(function glassSheetsCheck() { if (glassEnabled) collectGlass(); });
-        const floatSeen = new WeakSet();
+        const floatSeen = new WeakMap();
         let floatAt = 0;
         onDom(function glassFloating() {
             if (!glassEnabled || !glassSel || performance.now() - floatAt < 250) return;
             floatAt = performance.now();
             document.querySelectorAll(`:is(${glassSel}), [style*="--block-bg"], [style*="--modal-bg"], [style*="--glass-bg"]`).forEach(el => {
-                if (floatSeen.has(el)) return;
-                floatSeen.add(el);
+                const was = floatSeen.get(el);
+                if (was !== undefined) { if (was && !el.classList.contains(was)) el.classList.add(was); return; }
+                floatSeen.set(el, '');
                 if (el.matches('article, .' + SELECTORS.post + ', .' + SELECTORS.avatar) || el.closest('nav, aside, .vp-rail, .vp-msgs, .vp-comments-sheet, .vp-sw-stage')) return;
                 for (let n = el, i = 0; n && n !== document.body && i < 6; n = n.parentElement, i++) {
                     const cs = getComputedStyle(n);
-                    if (cs.position === 'fixed' || (cs.position === 'absolute' && +cs.zIndex >= 5)) { el.classList.add('vp-float'); return; }
+                    if (cs.position === 'fixed' || (cs.position === 'absolute' && +cs.zIndex >= 5)) { el.classList.add('vp-float'); floatSeen.set(el, 'vp-float'); return; }
                 }
                 const outer = el.parentElement && el.parentElement.closest(`:is(${glassSel})`);
                 const bg = getComputedStyle(el).backgroundColor;
-                if (outer && !outer.classList.contains('vp-float') && getComputedStyle(outer).backgroundColor === bg && !/^rgba\(0, 0, 0, 0\)$/.test(bg)) el.classList.add('vp-nested');
+                if (outer && !outer.classList.contains('vp-float') && getComputedStyle(outer).backgroundColor === bg && !/^rgba\(0, 0, 0, 0\)$/.test(bg)) { el.classList.add('vp-nested'); floatSeen.set(el, 'vp-nested'); }
             });
         });
         onDom(function commentsSheet() {
