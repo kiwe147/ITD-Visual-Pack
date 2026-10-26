@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.5.5
+// @version      3.7.5.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3926,6 +3926,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (/^\d{5,6}$/.test(o.t || '')) look.t = +o.t;
             return look;
         }
+        let avaLookOf = () => '';
+        const avaUrlOf = login => avaLookOf(String(login || '').toLowerCase());
         function lookImgUrl(ref) {
             const h = ref.slice(1);
             return `https://cdn.xn--d1ah4a.com/images/${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}.${MSG_IMG_EXT[+ref[0]] || 'png'}`;
@@ -4215,7 +4217,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const row = document.createElement('div');
                 row.className = 'nick-style-option vp-like-row';
                 row.innerHTML = `<div class="vp-like-user"><div class="vp-like-avatar"></div><div class="vp-like-names"><span class="vp-like-name"></span><span class="vp-like-login"></span></div></div><div class="toggle-switch"></div>`;
-                const av = row.querySelector('.vp-like-avatar'), ava = (data.avatar && (data.avatar.url || data.avatar)) || '👤';
+                const av = row.querySelector('.vp-like-avatar'), ava = avaUrlOf(username) || (data.avatar && (data.avatar.url || data.avatar)) || '👤';
                 if (isUrl(ava)) { const img = document.createElement('img'); img.alt = ''; img.onerror = () => { av.textContent = '👤'; }; img.src = ava; av.appendChild(img); } else av.textContent = ava;
                 row.querySelector('.vp-like-name').textContent = (data.displayName || username).slice(0, 20);
                 row.querySelector('.vp-like-login').textContent = '@' + username;
@@ -5757,7 +5759,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             avatarEditor(own ? lookImgUrl(own) : img && img.src);
         }, true);
         const CHANGELOG = [
-            ['3.7.5 – 3.7.5.5', '26 октября 2026', [
+            ['3.7.5 – 3.7.5.6', '26 октября 2026', [
                 'Аватарка: нажми на свою аву в профиле, откроется редактор с кружком-примеркой, можно картинку, GIF или короткое видео, увидят все, у кого стоит ИТД X',
                 'Змейка снова открывается в играх'
             ]],
@@ -6636,6 +6638,12 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     }
                     if (v.getAttribute('src') !== src) { v.classList.remove('vp-live'); v.src = src; v.play().catch(() => { }); }
                 }
+                avaLookOf = u => {
+                    const own = (GM_getValue(acctKey('vp_ava'), null) || {}).ref || '';
+                    if (u === (myUsername || '').toLowerCase()) return own ? lookImgUrl(own) : '';
+                    const r = showLooks && lookBy.get(u);
+                    return r && r.a ? lookImgUrl(r.a) : '';
+                };
                 function markAvatars(me, pu, others) {
                     const own = GM_getValue(acctKey('vp_ava'), null) || {};
                     const refOf = u => u === me ? { a: own.ref || '', va: own.vid || '' } : others && lookBy.get(u) || {};
@@ -6651,6 +6659,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     if (pu) document.querySelectorAll('.' + SELECTORS.avatar).forEach(av => {
                         if (!av.closest(PROFILE_LINK) && !av.closest('.' + SELECTORS.post) && nearLargeNick(av)) put(av, pu);
                     });
+                    document.querySelectorAll('.' + SELECTORS.avatar + '.my-avatar-glow').forEach(av => { if (!av.closest(PROFILE_LINK) && !(pu && nearLargeNick(av))) put(av, me); });
                 }
                 function markLooks() {
                     const me = (myUsername || '').toLowerCase();
@@ -9025,7 +9034,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const d = await hcData(n).catch(() => null), p = msgPeople.get(n);
                 if (!d || !p) return;
                 p.name = pick(d.displayName, d.display_name, n);
-                p.ava = pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl, d.emoji, '👤');
+                p.ava = avaUrlOf(n) || pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl, d.emoji, '👤');
                 p.online = !!d.online; p.lastSeen = d.lastSeen || null;
             }));
             onUpdate();
@@ -12351,7 +12360,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const el = document.createElement('div');
             el.className = 'vp-hc';
             const banner = pick(d.banner && (d.banner.url || d.banner), d.bannerUrl, d.banner_url, d.cover && (d.cover.url || d.cover));
-            const ava = pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl, d.emoji, '👤');
+            const ava = avaUrlOf(user) || pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl, d.emoji, '👤');
             const followers = pick(d.followersCount, d.followers_count, d.stats && d.stats.followers, typeof d.followers === 'number' ? d.followers : undefined);
             const following = pick(d.followingCount, d.following_count, d.stats && d.stats.following, typeof d.following === 'number' ? d.following : undefined);
             const bio = pick(d.bio, d.description, d.about, '');
@@ -14613,7 +14622,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 row.className = 'vp-club-row';
                 row.dataset.login = n;
                 row.innerHTML = '<div class="vp-club-ava"></div><div class="vp-club-names"><span class="vp-club-name"></span><span class="vp-club-login"></span></div>';
-                const ava = pick(d && d.avatar && (d.avatar.url || d.avatar), d && d.avatarUrl, '👤');
+                const ava = avaUrlOf(n) || pick(d && d.avatar && (d.avatar.url || d.avatar), d && d.avatarUrl, '👤');
                 const av = row.firstChild;
                 if (isUrl(ava)) { const img = document.createElement('img'); img.src = ava; av.appendChild(img); } else av.textContent = ava;
                 row.querySelector('.vp-club-name').textContent = pick(d && d.displayName, d && d.display_name, n) + (n === myUsername ? ' (ты)' : '');

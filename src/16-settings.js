@@ -14,7 +14,7 @@
                 const row = document.createElement('div');
                 row.className = 'nick-style-option vp-like-row';
                 row.innerHTML = `<div class="vp-like-user"><div class="vp-like-avatar"></div><div class="vp-like-names"><span class="vp-like-name"></span><span class="vp-like-login"></span></div></div><div class="toggle-switch"></div>`;
-                const av = row.querySelector('.vp-like-avatar'), ava = (data.avatar && (data.avatar.url || data.avatar)) || '👤';
+                const av = row.querySelector('.vp-like-avatar'), ava = avaUrlOf(username) || (data.avatar && (data.avatar.url || data.avatar)) || '👤';
                 if (isUrl(ava)) { const img = document.createElement('img'); img.alt = ''; img.onerror = () => { av.textContent = '👤'; }; img.src = ava; av.appendChild(img); } else av.textContent = ava;
                 row.querySelector('.vp-like-name').textContent = (data.displayName || username).slice(0, 20);
                 row.querySelector('.vp-like-login').textContent = '@' + username;

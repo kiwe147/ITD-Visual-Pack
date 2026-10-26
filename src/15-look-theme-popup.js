@@ -19,6 +19,8 @@
             if (/^\d{5,6}$/.test(o.t || '')) look.t = +o.t;
             return look;
         }
+        let avaLookOf = () => '';
+        const avaUrlOf = login => avaLookOf(String(login || '').toLowerCase());
         function lookImgUrl(ref) {
             const h = ref.slice(1);
             return `https://cdn.xn--d1ah4a.com/images/${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}.${MSG_IMG_EXT[+ref[0]] || 'png'}`;

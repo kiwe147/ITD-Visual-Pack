@@ -33,7 +33,7 @@
                 row.className = 'vp-club-row';
                 row.dataset.login = n;
                 row.innerHTML = '<div class="vp-club-ava"></div><div class="vp-club-names"><span class="vp-club-name"></span><span class="vp-club-login"></span></div>';
-                const ava = pick(d && d.avatar && (d.avatar.url || d.avatar), d && d.avatarUrl, '👤');
+                const ava = avaUrlOf(n) || pick(d && d.avatar && (d.avatar.url || d.avatar), d && d.avatarUrl, '👤');
                 const av = row.firstChild;
                 if (isUrl(ava)) { const img = document.createElement('img'); img.src = ava; av.appendChild(img); } else av.textContent = ava;
                 row.querySelector('.vp-club-name').textContent = pick(d && d.displayName, d && d.display_name, n) + (n === myUsername ? ' (ты)' : '');
