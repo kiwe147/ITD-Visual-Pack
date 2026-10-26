@@ -138,6 +138,7 @@
         });
 
         const postDesignStyle = addCss(`
+        article[data-alice-water-anchor-kind="post"] { margin-bottom: 16px !important; }
         article.vp-post {
             background: var(--block-bg);
             backdrop-filter: var(--vp-glass-filter, blur(4px)) !important;

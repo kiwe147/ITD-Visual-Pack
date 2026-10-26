@@ -6228,6 +6228,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         };
         const CHANGELOG = [
             ['3.7.7.3', '26 октября 2026', [
+                'Лента меньше дёргается при прокрутке вверх: отступ под постом теперь действует с первого мгновения, а не через долю секунды после появления, поэтому список сайта больше не пересчитывает высоту и не подправляет прокрутку',
                 'Клуб ИТД X: аватарки-картинки больше не остаются эмодзи, если картинка нашлась позже списка. Список сам подставляет её, а последняя найденная аватарка запоминается и показывается сразу',
                 'В консоли браузера появилась команда itdvp.jank(20) для поиска рывков ленты при прокрутке вверх: запусти и листай ленту, она покажет, что именно дёргается'
             ]],
@@ -11232,6 +11233,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         });
 
         const postDesignStyle = addCss(`
+        article[data-alice-water-anchor-kind="post"] { margin-bottom: 16px !important; }
         article.vp-post {
             background: var(--block-bg);
             backdrop-filter: var(--vp-glass-filter, blur(4px)) !important;
