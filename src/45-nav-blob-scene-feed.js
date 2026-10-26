@@ -24,7 +24,7 @@
                     if (flow && performance.now() - flow.t0 < BLOB_MS) blobFlow(flow.f, flow.t, flow.t0);
                 }
             }
-            if (!active) { blob.style.opacity = '0'; return; }
+            if (!active) { blob.style.opacity = '0'; blobAt = null; return; }
             const row = navIsRow(nav);
             let to = { top: active.offsetTop, left: active.offsetLeft, width: active.offsetWidth, height: active.offsetHeight };
             const siteInd = row && [...nav.children].find(c => c.tagName === 'DIV' && c !== blob);
@@ -99,6 +99,9 @@
             });
         }
         onDom(moveNavBlob);
+        const navLater = () => [60, 250, 700].forEach(ms => setTimeout(() => { markActiveNav(); moveNavBlob(); }, ms));
+        addEventListener('popstate', navLater);
+        document.addEventListener('vp-loc', navLater);
         addEventListener('resize', () => { blobAt = null; moveNavBlob(); });
 
         const PROX_MAX = 14, PROX_SIGMA = 46;

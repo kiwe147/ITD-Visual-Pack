@@ -215,7 +215,7 @@
                         paint(out);
                         const blob = await new Promise(r => out.toBlob(r, 'image/jpeg', 0.92));
                         if (!blob) throw new Error('не удалось подготовить картинку');
-                        ref = toRef(await msgUploadImage(new File([blob], 'avatar.jpg', { type: 'image/jpeg' })));
+                        ref = toRef(await msgUploadImage(new File([blob], 'avatar.jpg', { type: 'image/jpeg' }), true));
                     } else if (st.kind === 'gif') {
                         ref = toRef(await msgUploadImage(st.file));
                     } else {
@@ -229,7 +229,7 @@
                     setTimeout(close, 500);
                 } catch (error) {
                     const m = String(error && error.message || error);
-                    say(/модерац|MODERATION|запрещ|незнакомую/i.test(m) ? 'Картинка не прошла модерацию — возьми другую' : /сети|network|fetch/i.test(m) ? 'Нет связи с сайтом, попробуй ещё раз' : 'Не вышло: ' + m, true);
+                    say((/модерац|MODERATION|запрещ/i.test(m) ? 'Сайт не пропустил картинку: ' : /сети|network|fetch/i.test(m) ? 'Нет связи с сайтом: ' : 'Не вышло: ') + m, true);
                     logErr('аватарка', error);
                     st.busy = false; ok.disabled = false; pick.disabled = false;
                 }

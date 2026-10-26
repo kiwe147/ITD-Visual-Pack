@@ -262,6 +262,13 @@
                 return roleCount;
             },
             learned,
+            nav() {
+                const nav = siteEl('nav'), b = nav && nav.querySelector('.vp-nav-blob');
+                const rows = [...document.querySelectorAll('.' + SELECTORS.navLink)].map(a => ({ ссылка: a.getAttribute('href'), классы: a.className, сверху: a.offsetTop }));
+                console.table(rows);
+                console.log('путь', location.pathname, '· капля', b ? { opacity: b.style.opacity, top: b.style.top, left: b.style.left, width: b.style.width } : 'нет');
+                return rows;
+            },
             domCost: seconds => {
                 domProf = {};
                 return new Promise(done => setTimeout(() => {

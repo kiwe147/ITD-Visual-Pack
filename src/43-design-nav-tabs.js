@@ -107,12 +107,13 @@
 
         let msgsOpen = false;
         let galOpen = false;
+        const navPath = s => { try { return decodeURIComponent(s).toLowerCase(); } catch (e) { return String(s).toLowerCase(); } };
         function markActiveNav() {
-            const path = location.pathname;
+            const path = navPath(location.pathname);
             document.querySelectorAll('.' + SELECTORS.navLink).forEach(a => {
-                const href = a.getAttribute('href') || '';
+                const href = a.getAttribute('href') || '', hl = navPath(href);
                 const active = msgsOpen ? href === '#' : galOpen ? href === '#gallery'
-                    : href.startsWith('/') && (href === path || (href !== '/' && path.startsWith(href + '/')));
+                    : href.startsWith('/') && (hl === path || (hl !== '/' && path.startsWith(hl + '/')));
                 a.classList.toggle('vp-active', active);
             });
             msgsNavLook();
@@ -120,9 +121,9 @@
         function msgsNavLook() {
             const links = [...document.querySelectorAll('.' + SELECTORS.navLink)];
             if (!msgsOpen && !galOpen) { links.forEach(a => { if (a.classList.contains('vp-site-cur')) a.classList.remove('vp-site-cur'); }); return; }
-            const path = location.pathname;
-            const cur = links.find(a => { const h = a.getAttribute('href') || ''; return h.startsWith('/') && (h === path || (h !== '/' && path.startsWith(h + '/'))); });
-            const other = links.find(a => a !== cur && !/^#/.test(a.getAttribute('href') || '') && a.getAttribute('href') !== path);
+            const path = navPath(location.pathname);
+            const cur = links.find(a => { const h = navPath(a.getAttribute('href') || ''); return h.startsWith('/') && (h === path || (h !== '/' && path.startsWith(h + '/'))); });
+            const other = links.find(a => a !== cur && !/^#/.test(a.getAttribute('href') || '') && navPath(a.getAttribute('href')) !== path);
             const nav = (cur || other) && (cur || other).closest('nav');
             if (!nav || !other || (cur && cur.classList.contains('vp-site-cur'))) return;
             const look = (a, k) => { const g = getComputedStyle(a); nav.style.setProperty(`--vp-${k}-c`, g.color); nav.style.setProperty(`--vp-${k}-o`, g.opacity); nav.style.setProperty(`--vp-${k}-b`, g.backgroundColor); };

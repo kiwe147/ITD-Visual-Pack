@@ -27,7 +27,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
       if (u.pathname.includes('/auth/refresh')) return r.fulfill({ contentType: 'application/json', body: '{"accessToken":"t"}' });
       if (u.pathname === '/api/files/upload') {
         const body = req.postDataBuffer() || Buffer.alloc(0);
-        calls.push({ what: 'upload', size: body.length, jpeg: body.includes(Buffer.from([0xff, 0xd8, 0xff])) });
+        calls.push({ what: 'upload', size: body.length, jpeg: body.includes(Buffer.from([0xff, 0xd8, 0xff])), name: (body.toString('latin1').match(/filename="([^"]*)"/) || [])[1] });
         return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { url: NEW } }) });
       }
       if (/\/comments$/.test(u.pathname) && req.method() === 'POST') { calls.push({ what: 'comment', text: JSON.parse(req.postData()).content }); return r.fulfill({ status: 201, contentType: 'application/json', body: '{"data":{"id":"c1"}}' }); }
@@ -42,9 +42,11 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
       window.GM_xmlhttpRequest = o => setTimeout(() => o.onerror && o.onerror('x'), 0);
       window.GM_info = { script: { version: 't' }, scriptMetaStr: m }; window.unsafeWindow = window;
     }, [src.slice(0, src.indexOf('==/UserScript=='))]);
+    await p.addInitScript(() => { window.__nativeFetch = window.fetch; });
     await p.addInitScript('(function () { const run = () => {' + src + String.fromCharCode(10) + '}; if (document.documentElement) run(); else { const mo = new MutationObserver(() => { if (document.documentElement) { mo.disconnect(); run(); } }); mo.observe(document, { childList: true }); } })();');
         await p.goto(ORIGIN + '/@NeuroSFW');
     await p.waitForTimeout(2500);
+    if (process.env.NOHOOK) await p.evaluate(() => { window.fetch = window.__nativeFetch; });
     const tag = phone ? 'телефон' : 'компьютер';
     const spot = await p.evaluate(() => { const av = [...document.querySelectorAll('.vp-avatar.vp-ava-edit')][0]; if (!av) return null; const r = av.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width }; });
     check(!!spot, tag + ': своя большая ава помечена для нажатия' + (spot ? ' (' + Math.round(spot.w) + ' px)' : ''));
@@ -68,7 +70,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     await p.screenshot({ path: path.join(__dirname, 'out', 'avatared-' + (phone ? 'phone' : 'desk') + '.png') });
     await p.click('.vp-ave-ok');
     await p.waitForTimeout(3500);
-    check(calls.some(c => c.what === 'upload' && c.size > 2000), tag + ': на сервер ушла картинка-квадрат ' + JSON.stringify(calls.find(c => c.what === 'upload') || {}));
+    check(calls.some(c => c.what === 'upload' && c.size > 2000 && c.jpeg && c.name === 'avatar.gif'), tag + ': на сервер ушёл jpeg-квадрат под именем .gif (антицензура) ' + JSON.stringify(calls.find(c => c.what === 'upload') || {}));
     const posted = await Promise.all(calls.filter(c => c.what === 'comment').map(c => p.evaluate(t => window.__ot(t), c.text)));
     check(posted.some(t => /^ITDXL1 /.test(t) && t.includes(' a=1' + UUID.replace(/-/g, ''))), tag + ': в стиле профиля записана ссылка на аватарку ' + JSON.stringify(posted.map(t => t.slice(0, 120))));
     check(await p.evaluate(() => !document.querySelector('.vp-ave')), tag + ': редактор закрылся');

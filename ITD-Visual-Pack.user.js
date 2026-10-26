@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.5.7
+// @version      3.7.6.5
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1373,6 +1373,13 @@
                 return roleCount;
             },
             learned,
+            nav() {
+                const nav = siteEl('nav'), b = nav && nav.querySelector('.vp-nav-blob');
+                const rows = [...document.querySelectorAll('.' + SELECTORS.navLink)].map(a => ({ ссылка: a.getAttribute('href'), классы: a.className, сверху: a.offsetTop }));
+                console.table(rows);
+                console.log('путь', location.pathname, '· капля', b ? { opacity: b.style.opacity, top: b.style.top, left: b.style.left, width: b.style.width } : 'нет');
+                return rows;
+            },
             domCost: seconds => {
                 domProf = {};
                 return new Promise(done => setTimeout(() => {
@@ -2192,6 +2199,7 @@
         .vp-post header .vp-nick-row:not(:last-child) { padding-right: 50px; }
         @media (max-width: ${PHONE_MAX}px) { .vp-post header .vp-nick-row:not(:last-child) { padding-right: 42px; } }
         .vp-notif .vp-nick-row > a { max-width: 100%; }
+        .vp-notif [data-icon="liked"] svg path { fill: none !important; stroke: currentColor !important; stroke-width: 2 !important; }
         .vp-notif .vp-nick-row .vp-nick:not(.vp-nick-large *) { display: flex; flex-wrap: nowrap; align-items: center; }
         article .vp-nick-row time { flex-shrink: 0; }
         .vp-clamp::after { display: none !important; }
@@ -5729,7 +5737,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                         paint(out);
                         const blob = await new Promise(r => out.toBlob(r, 'image/jpeg', 0.92));
                         if (!blob) throw new Error('не удалось подготовить картинку');
-                        ref = toRef(await msgUploadImage(new File([blob], 'avatar.jpg', { type: 'image/jpeg' })));
+                        ref = toRef(await msgUploadImage(new File([blob], 'avatar.jpg', { type: 'image/jpeg' }), true));
                     } else if (st.kind === 'gif') {
                         ref = toRef(await msgUploadImage(st.file));
                     } else {
@@ -5743,7 +5751,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     setTimeout(close, 500);
                 } catch (error) {
                     const m = String(error && error.message || error);
-                    say(/модерац|MODERATION|запрещ|незнакомую/i.test(m) ? 'Картинка не прошла модерацию — возьми другую' : /сети|network|fetch/i.test(m) ? 'Нет связи с сайтом, попробуй ещё раз' : 'Не вышло: ' + m, true);
+                    say((/модерац|MODERATION|запрещ/i.test(m) ? 'Сайт не пропустил картинку: ' : /сети|network|fetch/i.test(m) ? 'Нет связи с сайтом: ' : 'Не вышло: ') + m, true);
                     logErr('аватарка', error);
                     st.busy = false; ok.disabled = false; pick.disabled = false;
                 }
@@ -5759,9 +5767,11 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             avatarEditor(own ? lookImgUrl(own) : img && img.src);
         }, true);
         const CHANGELOG = [
-            ['3.7.5 – 3.7.5.7', '26 октября 2026', [
+            ['3.7.6 – 3.7.6.5', '26 октября 2026', [
                 'Аватарка: нажми на свою аву в профиле, откроется редактор с кружком-примеркой, можно картинку, GIF или короткое видео, увидят все, у кого стоит ИТД X',
-                'Змейка снова открывается в играх'
+                'Змейка снова открывается в играх',
+                'Свой профиль, открытый через клуб, подсвечивается в боковом меню',
+                'В уведомлениях у лайков в розовом кружке появилось сердечко, как значок у ответов'
             ]],
             ['3.7.4', '26 октября 2026', [
                 'Фон «Снег» стал метелью: порывы ветра, снежинки-кристаллы и размытые хлопья вблизи',
@@ -8378,11 +8388,12 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (blob.size > 5 * 1024 * 1024) throw new Error('картинка больше 5 МБ');
             return new File([blob], 'img.' + (blob.type.split('/')[1] || 'png'), { type: blob.type });
         }
-        async function msgUploadImage(file) {
+        async function msgUploadImage(file, asis) {
             const fd = new FormData();
-            fd.append('file', await msgPrepImage(file));
+            fd.append('file', asis && /^image\/(jpeg|png)$/.test(file.type) ? (antiCensorshipEnabled ? gifFile(file) : file) : await msgPrepImage(file));
             const res = await api('/api/files/upload', { method: 'POST', body: fd });
             const j = await res.json().catch(() => null), d = j && (j.data || j);
+            if (!res.ok) console.log('[ITD VP] загрузка картинки: ответ сервера', res.status, JSON.stringify(j).slice(0, 300));
             if (!res.ok) throw new Error('загрузка картинки: ' + res.status + (j && (j.error && j.error.message || j.message) ? ', ' + (j.error && j.error.message || j.message) : ''));
             const m = String(d && d.url || '').match(MSG_IMG_RE), ext = m ? MSG_IMG_EXT.indexOf(m[2].toLowerCase()) : -1;
             if (!m || ext < 0) throw new Error('сервер вернул незнакомую ссылку');
@@ -11334,12 +11345,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
 
         let msgsOpen = false;
         let galOpen = false;
+        const navPath = s => { try { return decodeURIComponent(s).toLowerCase(); } catch (e) { return String(s).toLowerCase(); } };
         function markActiveNav() {
-            const path = location.pathname;
+            const path = navPath(location.pathname);
             document.querySelectorAll('.' + SELECTORS.navLink).forEach(a => {
-                const href = a.getAttribute('href') || '';
+                const href = a.getAttribute('href') || '', hl = navPath(href);
                 const active = msgsOpen ? href === '#' : galOpen ? href === '#gallery'
-                    : href.startsWith('/') && (href === path || (href !== '/' && path.startsWith(href + '/')));
+                    : href.startsWith('/') && (hl === path || (hl !== '/' && path.startsWith(hl + '/')));
                 a.classList.toggle('vp-active', active);
             });
             msgsNavLook();
@@ -11347,9 +11359,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         function msgsNavLook() {
             const links = [...document.querySelectorAll('.' + SELECTORS.navLink)];
             if (!msgsOpen && !galOpen) { links.forEach(a => { if (a.classList.contains('vp-site-cur')) a.classList.remove('vp-site-cur'); }); return; }
-            const path = location.pathname;
-            const cur = links.find(a => { const h = a.getAttribute('href') || ''; return h.startsWith('/') && (h === path || (h !== '/' && path.startsWith(h + '/'))); });
-            const other = links.find(a => a !== cur && !/^#/.test(a.getAttribute('href') || '') && a.getAttribute('href') !== path);
+            const path = navPath(location.pathname);
+            const cur = links.find(a => { const h = navPath(a.getAttribute('href') || ''); return h.startsWith('/') && (h === path || (h !== '/' && path.startsWith(h + '/'))); });
+            const other = links.find(a => a !== cur && !/^#/.test(a.getAttribute('href') || '') && navPath(a.getAttribute('href')) !== path);
             const nav = (cur || other) && (cur || other).closest('nav');
             if (!nav || !other || (cur && cur.classList.contains('vp-site-cur'))) return;
             const look = (a, k) => { const g = getComputedStyle(a); nav.style.setProperty(`--vp-${k}-c`, g.color); nav.style.setProperty(`--vp-${k}-o`, g.opacity); nav.style.setProperty(`--vp-${k}-b`, g.backgroundColor); };
@@ -11988,7 +12000,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     if (flow && performance.now() - flow.t0 < BLOB_MS) blobFlow(flow.f, flow.t, flow.t0);
                 }
             }
-            if (!active) { blob.style.opacity = '0'; return; }
+            if (!active) { blob.style.opacity = '0'; blobAt = null; return; }
             const row = navIsRow(nav);
             let to = { top: active.offsetTop, left: active.offsetLeft, width: active.offsetWidth, height: active.offsetHeight };
             const siteInd = row && [...nav.children].find(c => c.tagName === 'DIV' && c !== blob);
@@ -12063,6 +12075,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             });
         }
         onDom(moveNavBlob);
+        const navLater = () => [60, 250, 700].forEach(ms => setTimeout(() => { markActiveNav(); moveNavBlob(); }, ms));
+        addEventListener('popstate', navLater);
+        document.addEventListener('vp-loc', navLater);
         addEventListener('resize', () => { blobAt = null; moveNavBlob(); });
 
         const PROX_MAX = 14, PROX_SIGMA = 46;
@@ -14590,6 +14605,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         const railClub = rail.querySelector('.vp-club');
         let clubShown = '';
         function openProfile(login) {
+            if (myUsername && login.toLowerCase() === myUsername.toLowerCase()) login = myUsername;
             history.pushState({}, '', '/@' + login);
             dispatchEvent(new PopStateEvent('popstate'));
         }
