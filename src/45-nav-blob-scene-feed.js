@@ -297,6 +297,14 @@
             const s = feedAt && feedSaved.get(feedAt);
             if (s && (pop || was.includes('/post/'))) feedRestore(feedAt, s);
         }
+        (function muteSiteRestore() {
+            const w = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window, orig = w.scrollTo;
+            if (typeof orig !== 'function') return;
+            w.scrollTo = function (x, y) {
+                if (feedJob && typeof x === 'number' && y > 0) return;
+                return orig.apply(this, arguments);
+            };
+        })();
         addEventListener('popstate', () => feedNav(true));
         document.addEventListener('vp-loc', () => feedNav(false));
         addEventListener('scroll', () => { clearTimeout(feedSaveTimer); feedSaveTimer = setTimeout(() => feedSave(), 150); }, { passive: true });

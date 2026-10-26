@@ -60,11 +60,15 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   await p.evaluate(() => { window.__calls = []; window.__grow = true; history.back(); window.__t0 = Math.round(performance.now()); });
   await p.waitForTimeout(500);
   console.log('—    сразу после возврата: ' + JSON.stringify(await p.evaluate(() => [window.__fs && window.__fs(), window.__fr, window.__fr0])));
+  const mute = await p.evaluate(() => { const a = window.__calls.length; window.scrollTo(0, 7); return window.__calls.length === a; });
+  check(mute, 'пока мод возвращает место, числовая прокрутка сайта глушится');
   await p.waitForTimeout(7500);
   const r = await p.evaluate(() => ({ n: window.__calls.length, last: window.__calls.length ? window.__calls[window.__calls.length - 1] - window.__t0 : 0 }));
   console.log('—    прокруток мода после возврата: ' + r.n + ', последняя через ' + r.last + ' мс');
   check(r.n <= 12, 'прокруток немного (' + r.n + ', раньше десятки)');
   check(r.last < 3000, 'мод перестаёт крутить за 3 секунды (' + r.last + ' мс)');
+  const free = await p.evaluate(() => { const a = window.__calls.length; window.scrollTo(0, 0); return window.__calls.length === a + 1; });
+  check(free, 'после возврата прокрутка сайта снова работает');
   check(errors.length === 0, 'нет ошибок страницы ' + errors.join('|'));
   await b.close();
   console.log(fails.length ? '\nПРОВАЛЕНО: ' + fails.length : '\nвсё ок');

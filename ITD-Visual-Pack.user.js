@@ -6232,7 +6232,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 'Быстрые кнопки «скопировать ссылку» и «скопировать картинку» снова у всех постов, в том числе с видео',
                 'Сообщения: аватарки-картинки собеседников показываются в списке и в шапке чата',
                 'Сообщения: дата дня плашкой по центру, как в Telegram, у сообщения только время',
-                'Возврат в ленту больше не прокручивает страницу вниз без конца'
+                'Возврат в ленту и профиль: страница возвращается на то же место без бесконечной прокрутки, а сайт и мод больше не тянут её каждый в свою сторону'
             ]],
             ['3.7.7.6', '27 октября 2026', [
                 'Листание вкладок на телефоне: страницы сдвигаются влево и вправо по порядку пунктов меню',
@@ -12899,6 +12899,14 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const s = feedAt && feedSaved.get(feedAt);
             if (s && (pop || was.includes('/post/'))) feedRestore(feedAt, s);
         }
+        (function muteSiteRestore() {
+            const w = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window, orig = w.scrollTo;
+            if (typeof orig !== 'function') return;
+            w.scrollTo = function (x, y) {
+                if (feedJob && typeof x === 'number' && y > 0) return;
+                return orig.apply(this, arguments);
+            };
+        })();
         addEventListener('popstate', () => feedNav(true));
         document.addEventListener('vp-loc', () => feedNav(false));
         addEventListener('scroll', () => { clearTimeout(feedSaveTimer); feedSaveTimer = setTimeout(() => feedSave(), 150); }, { passive: true });
