@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.7.7
+// @version      3.7.7.8
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6227,6 +6227,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.7.8', '27 октября 2026', [
+                'Красные уведомления сайта об ошибках стали с юмором: «Нет.», «Бро, проверь интернет», «ПРИТОРМОЗИ», «Файл слишком жирный», «Сначала купи подписку»'
+            ]],
             ['3.7.7.7', '27 октября 2026', [
                 'Посты с размытой картинкой: заливка точно по скруглению, обводка идёт по самому краю',
                 'Быстрые кнопки «скопировать ссылку» и «скопировать картинку» снова у всех постов, в том числе с видео',
@@ -13164,6 +13167,25 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 box.insertBefore(wrap, box.firstChild);
             });
         });
+        const MEME_ERR = new Map([
+            ['Превышено время ожидания', 'Нет.'],
+            ['Ошибка сети. Проверьте подключение', 'Бро, проверь интернет'],
+            ['Слишком много запросов. Попробуйте позже', 'ПРИТОРМОЗИ'],
+            ['Файл слишком большой', 'Файл слишком жирный'],
+            ['Видео — только для верифицированных пользователей', 'Сначала купи подписку']
+        ]);
+        function memeFix(root) {
+            if (root.nodeType !== 1 || root.childElementCount > 20) return;
+            const spans = root.tagName === 'SPAN' ? [root] : root.querySelectorAll('span');
+            for (const s of spans) {
+                if (s.childElementCount) continue;
+                const m = MEME_ERR.get(s.textContent.trim());
+                if (!m) continue;
+                const icon = s.previousElementSibling, close = s.nextElementSibling;
+                if (icon && icon.querySelector('svg') && close && close.tagName === 'BUTTON') s.textContent = m;
+            }
+        }
+        new MutationObserver(muts => { for (const m of muts) m.addedNodes.forEach(memeFix); }).observe(document.documentElement, { childList: true, subtree: true });
         const galIcon = size => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="10" rx="2.5"/><rect x="13" y="3" width="8" height="6" rx="2.5"/><rect x="3" y="15" width="8" height="6" rx="2.5"/><rect x="13" y="11" width="8" height="10" rx="2.5"/></svg>`;
         const GAL_TABS = [['popular', 'Популярное'], ['clan', 'Кланы'], ['following', 'Подписки']];
         const gal = { acts: new Map(), el: null, tab: 'popular', cursor: null, loading: false, done: false, cols: [], heights: [], seen: new Set(), hist: false };
