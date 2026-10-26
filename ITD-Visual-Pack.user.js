@@ -2281,9 +2281,6 @@
         .vp-sec-title { font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--text-secondary);
             margin: 12px 12px 6px; }
         .vp-like-inline { max-height: none !important; }
-        .vp-settings-tabs { width: 320px !important; max-width: calc(100vw - 16px) !important; box-sizing: border-box !important;
-            max-height: calc(100dvh - 16px); display: flex !important; flex-direction: column; overflow: hidden !important; }
-        .vp-settings-tabs .vp-stabs { flex: 0 0 auto; }
         .vp-settings-tabs .settings-option.vp-dim { opacity: .4; pointer-events: none; }
         .vp-pals { position: fixed; inset: 0; z-index: 9000; pointer-events: none; overflow: hidden; }
         .vp-pal { position: absolute; bottom: 0; box-sizing: content-box; padding: 24px; margin: -24px; width: auto; height: min(var(--vp-pal-h, 45vh), calc(48vw * var(--vp-pal-r, 1))); pointer-events: none;
@@ -2314,9 +2311,6 @@
         .vp-pick-grid .nick-style-option > span:not(.vp-opt-check) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .vp-pick-grid .vp-opt-check { display: none; }
         .vp-pick-grid .style-color-dot { width: 18px !important; height: 18px !important; }
-        .vp-settings-tabs::-webkit-scrollbar { display: none; }
-        .vp-stabs { display: flex; gap: 4px; padding: 3px; margin-bottom: 8px; border-radius: 16px;
-            background: color-mix(in srgb, var(--text-primary, #fff) 7%, transparent); }
         .vp-stab { flex: 1 1 auto; min-width: 0; border: 0; background: none; cursor: pointer; font: inherit; font-size: 13px;
             padding: 7px 2px; white-space: nowrap; border-radius: 13px; color: var(--text-secondary); transition: background .15s ease, color .15s ease; }
         .vp-stab:hover { color: var(--text-primary, #fff); }
@@ -4450,6 +4444,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             row.className = 'settings-option';
             row.innerHTML = `<span class="vp-setting-label">${ICONS.settings[opt.label] || ''}<span></span></span><div class="toggle-switch"></div>`;
             row.querySelector('.vp-setting-label > span').textContent = opt.label;
+            if (SETTING_HINTS[opt.label]) row.querySelector('.vp-setting-label > span').dataset.hint = SETTING_HINTS[opt.label];
             const toggle = row.lastElementChild;
             toggle.classList.toggle('active', !!opt.get());
             row.onclick = (e) => {
@@ -4543,36 +4538,156 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             o.onclick = (e) => { e.stopPropagation(); onPick(); redraw(); };
             return o;
         }
+        addCss(`
+        .vp-sm { position: fixed; inset: 0; z-index: 10010; display: flex; align-items: center; justify-content: center; padding: 20px;
+            background: rgba(0, 0, 0, .55); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); overscroll-behavior: contain;
+            animation: vpSmIn .18s ease both; }
+        .vp-sm.vp-sm-out { opacity: 0; transition: opacity .14s ease; pointer-events: none; }
+        .vp-sm-box { width: min(860px, 100%); height: min(640px, 100%); display: flex; flex-direction: column; overflow: hidden; outline: none;
+            border-radius: 28px; background: var(--block-bg); color: var(--text-primary, #fff); box-sizing: border-box;
+            border: 1px solid var(--border-color, rgba(255, 255, 255, .1)); box-shadow: 0 24px 80px rgba(0, 0, 0, .55); animation: vpSmBox .22s cubic-bezier(.2, .8, .2, 1) both; }
+        .vp-sm-head { flex: 0 0 auto; display: flex; align-items: center; gap: 14px; padding: 14px 16px 14px 24px; border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, .1)); }
+        .vp-sm-title { font-size: 18px; font-weight: 700; white-space: nowrap; }
+        .vp-sm-search { flex: 1 1 auto; max-width: 300px; margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 38px; box-sizing: border-box;
+            border-radius: 19px; color: var(--text-secondary); background: color-mix(in srgb, var(--text-primary, #fff) 7%, transparent);
+            border: 1px solid transparent; transition: border-color .15s ease; }
+        .vp-sm-search:focus-within { border-color: var(--vp-accent); }
+        .vp-sm-search svg { flex: 0 0 auto; }
+        .vp-sm-search input { flex: 1 1 auto; min-width: 0; width: 100%; border: 0; outline: 0; background: none; font: inherit; font-size: 14px; color: var(--text-primary, #fff); }
+        .vp-sm-search input::-webkit-search-cancel-button { display: none; }
+        .vp-sm-x { flex: 0 0 auto; display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+            background: none; color: var(--text-secondary); transition: background .15s ease, color .15s ease; }
+        .vp-sm-x:hover { background: color-mix(in srgb, var(--text-primary, #fff) 10%, transparent); color: var(--text-primary, #fff); }
+        .vp-sm-main { flex: 1 1 auto; min-height: 0; display: flex; }
+        .vp-sm-nav { flex: 0 0 210px; display: flex; flex-direction: column; gap: 2px; padding: 12px; overflow-y: auto; scrollbar-width: none;
+            border-right: 1px solid var(--border-color, rgba(255, 255, 255, .1)); }
+        .vp-sm-nav::-webkit-scrollbar { display: none; }
+        .vp-sm .vp-stab { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; font-size: 14.5px; text-align: left; border-radius: 14px; }
+        .vp-sm .vp-stab svg { flex: 0 0 auto; }
+        .vp-sm .vp-tab-body { margin: 0; padding: 12px 20px 22px; }
+        .vp-sm .vp-tab-body > * { max-width: 620px; }
+        .vp-sm .vp-sec-title { margin: 14px 12px 6px; }
+        .vp-sm .vp-sec-title:first-child { margin-top: 4px; }
+        .vp-sm .vp-setting-label > span[data-hint]::after { content: attr(data-hint); display: block; margin-top: 1px; font-size: 12px; font-weight: 400; line-height: 1.3; color: var(--text-secondary); }
+        .vp-sm .vp-setting-label > span[data-hint] { display: block; }
+        .vp-sm .settings-option { padding: 11px 12px !important; }
+        .vp-sm .toggle-switch:not(.active):not(.vp-tri) { background: color-mix(in srgb, var(--text-primary, #fff) 22%, transparent) !important; }
+        @keyframes vpSmIn { from { opacity: 0; } }
+        @keyframes vpSmBox { from { opacity: 0; transform: translateY(14px) scale(.98); } }
+        @media (max-width: 700px) {
+            .vp-sm { padding: 0; align-items: stretch; }
+            .vp-sm-box { width: 100%; height: 100%; border-radius: 0; border: 0; }
+            .vp-sm-head { gap: 8px; padding: 10px 8px 10px 16px; }
+            .vp-sm-title { font-size: 16px; }
+            .vp-sm-search { max-width: none; min-width: 0; }
+            .vp-sm-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+            .vp-sm-main { flex-direction: column; }
+            .vp-sm-nav { flex: 0 0 auto; flex-direction: row; gap: 4px; padding: 8px 10px; overflow-x: auto; overflow-y: hidden; border-right: 0; border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, .1)); }
+            .vp-sm .vp-stab { width: auto; gap: 7px; padding: 8px 12px; font-size: 13.5px; white-space: nowrap; border-radius: 16px; }
+            .vp-sm .vp-tab-body { padding: 8px 10px calc(24px + env(safe-area-inset-bottom, 0px)); }
+            .vp-sm .vp-tab-body > * { max-width: none; }
+        }
+        @media (prefers-reduced-motion: reduce) { .vp-sm, .vp-sm-box { animation: none; } }
+        `);
+        const SETTING_HINTS = {
+            'Фон': 'Анимированный или свой фон за страницей',
+            'Неоновая подсветка': 'Общий выключатель свечения: ник, аватарки, посты, иконки',
+            'Подсветка ника': 'Свечение вокруг ника',
+            'Подсветка аватарок': 'Свечение вокруг аватарок',
+            'Подсветка постов': 'Цветная рамка у постов',
+            'Заставка при входе': 'Короткая заставка при открытии сайта',
+            'Размытый фон постов': 'Размытая подложка за карточками постов с картинкой',
+            'Анти цензура': 'Картинки грузятся как GIF, чтобы сайт не пережимал их',
+            'Автолайки': 'Сам ставит лайки постам выбранных людей',
+            'Стекло': 'Полупрозрачные размытые окна и панели',
+            'Звуки интерфейса': 'Тихие звуки при нажатиях и переключателях',
+            'Листание вкладок': 'Плавный переход между страницами по пунктам меню',
+            'Карточка профиля при наведении': 'Окошко с баннером и подписчиками над ссылкой на профиль',
+            'Сцена ленты': 'Посты в ленте чуть уменьшаются и тают у края экрана',
+            'Свечение видео': 'Мягкое цветное свечение вокруг видео',
+            'Боковая панель': 'Правая панель с карточками',
+            'Версия для ПК на планшете': 'На планшете открывается компьютерная вёрстка',
+            'Мику и Тето': 'Персонажи по краям экрана',
+            'Мику справа': 'Показывать Мику справа',
+            'Тето слева': 'Показывать Тето слева'
+        };
+        const SET_TAB_ICONS = {
+            nick: '<path d="M4 7h16M4 12h10M4 17h6"/><circle cx="18" cy="16" r="3"/>',
+            bg: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="m3 16 5-5 4 4 3-3 6 6"/>',
+            look: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16M3 10h6"/>',
+            likes: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+            pals: '<circle cx="12" cy="8" r="3.5"/><path d="M5.5 20c1-3.6 3.4-5.5 6.5-5.5s5.5 1.9 6.5 5.5"/>',
+            misc: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
+            icon: '<rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="M9 12.5 11 14.5l4-5"/>'
+        };
+        function settingItem(label, redraw, after) {
+            if (label === 'Заставка при входе' && IS_PHONE) return introModeRow();
+            if (label === 'Громкость') return volumeRow();
+            if (label === 'Карточки панели') return railCardsBox(redraw);
+            if (label === 'Размер персонажей') { const r = palSizeRow(); if (!palsOn) r.classList.add('vp-dim'); return r; }
+            const row = settingRow(SETTINGS.find(o => o.label === label), after);
+            if (!neonEnabled && label.startsWith('Подсветка ')) row.classList.add('vp-dim');
+            if (!palsOn && (label === 'Мику справа' || label === 'Тето слева')) row.classList.add('vp-dim');
+            return row;
+        }
+        let settingsModal = null, settingsModalHist = false;
+        function closeSettingsMenu(fromPop) {
+            const m = settingsModal;
+            if (!m) return;
+            settingsModal = null;
+            document.removeEventListener('keydown', m.onKey, true);
+            m.el.classList.add('vp-sm-out');
+            setTimeout(() => m.el.remove(), 140);
+            if (m.from && m.from.isConnected) try { m.from.focus({ preventScroll: true }); } catch (e) { }
+            if (settingsModalHist && !fromPop) {
+                settingsModalHist = false;
+                if (history.state && history.state.vpSm) history.back();
+            }
+            settingsModalHist = false;
+        }
+        window.addEventListener('popstate', () => { if (settingsModalHist) { settingsModalHist = false; closeSettingsMenu(true); } });
         function openSettingsMenu(btn) {
-            const menu = document.createElement('div');
-            menu.className = 'settings-dropdown vp-settings-tabs';
-            const tabs = document.createElement('div');
-            tabs.className = 'vp-stabs';
-            const body = document.createElement('div');
-            body.className = 'vp-tab-body';
-            menu.append(tabs, body);
+            if (settingsModal) { closeSettingsMenu(); return; }
+            closePopup();
+            const el = document.createElement('div');
+            el.className = 'vp-sm';
+            el.innerHTML = '<div class="vp-sm-box vp-settings-tabs" role="dialog" aria-modal="true" aria-label="Настройки ИТД X" tabindex="-1">'
+                + '<div class="vp-sm-head"><div class="vp-sm-title">Настройки ИТД X</div>'
+                + '<label class="vp-sm-search">' + svgIcon('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>', 16) + '<input type="search" placeholder="Найти настройку" aria-label="Найти настройку" autocomplete="off" spellcheck="false"></label>'
+                + '<button type="button" class="vp-sm-x" aria-label="Закрыть">' + svgIcon('<path d="M6 6l12 12M18 6 6 18"/>', 18) + '</button></div>'
+                + '<div class="vp-sm-main"><div class="vp-sm-nav"></div><div class="vp-tab-body"></div></div></div>';
+            const box = el.firstChild, nav = el.querySelector('.vp-sm-nav'), body = el.querySelector('.vp-tab-body'), search = el.querySelector('.vp-sm-search input');
             let current = GM_getValue('settingsTab', 'nick');
             if (!SETTINGS_TABS.some(t => t.id === current)) current = 'nick';
+            let query = '';
+            const renderSearch = () => {
+                const keep = body.scrollTop;
+                nav.querySelectorAll('.vp-stab').forEach(t => t.classList.remove('vp-active'));
+                body.dataset.tab = 'search';
+                body.textContent = '';
+                const q = query.trim().toLowerCase();
+                let found = 0;
+                for (const t of SETTINGS_TABS) {
+                    const hits = (t.items || []).filter(label => (label + ' ' + (SETTING_HINTS[label] || '')).toLowerCase().includes(q));
+                    if (!hits.length) continue;
+                    found += hits.length;
+                    body.appendChild(secTitle(t.name));
+                    hits.forEach(label => body.appendChild(settingItem(label, renderSearch, renderSearch)));
+                }
+                if (!found) { const n = document.createElement('div'); n.className = 'vp-menu-note'; n.textContent = 'Ничего не найдено'; body.appendChild(n); }
+                body.scrollTop = keep;
+            };
             const show = (id) => {
                 current = id;
                 GM_setValue('settingsTab', id);
-                tabs.querySelectorAll('.vp-stab').forEach(t => t.classList.toggle('vp-active', t.dataset.tab === id));
+                nav.querySelectorAll('.vp-stab').forEach(t => t.classList.toggle('vp-active', t.dataset.tab === id));
                 const keep = body.dataset.tab === id ? body.scrollTop : 0;
                 body.dataset.tab = id;
                 body.textContent = '';
                 const redraw = () => show(id);
                 const tab = SETTINGS_TABS.find(t => t.id === id);
                 if (id === 'icon') body.appendChild(iconPicker());
-                else for (const label of tab.items) {
-                    if (label === 'Заставка при входе' && IS_PHONE) { body.appendChild(introModeRow()); continue; }
-                    if (label === 'Громкость') { body.appendChild(volumeRow()); continue; }
-                    if (label === 'Карточки панели') { body.appendChild(railCardsBox(redraw)); continue; }
-                    if (label === 'Размер персонажей') { const r = palSizeRow(); if (!palsOn) r.classList.add('vp-dim'); body.appendChild(r); continue; }
-                    const row = settingRow(SETTINGS.find(o => o.label === label), id === 'bg' || id === 'nick' || id === 'pals' ? redraw : null);
-                    if (!neonEnabled && label.startsWith('Подсветка ')) row.classList.add('vp-dim');
-                    if (!palsOn && (label === 'Мику справа' || label === 'Тето слева')) row.classList.add('vp-dim');
-                    body.appendChild(row);
-                }
+                else for (const label of tab.items) body.appendChild(settingItem(label, redraw, id === 'bg' || id === 'nick' || id === 'pals' ? redraw : null));
                 if (id === 'pals') {
                     body.appendChild(secTitle('Вид'));
                     const grid = document.createElement('div');
@@ -4634,18 +4749,16 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 }
                 if (id === 'likes') {
                     body.appendChild(secTitle('Кого лайкать'));
-                    const box = document.createElement('div');
-                    box.className = 'vp-like-menu vp-like-inline';
-                    box.innerHTML = '<div class="vp-like-list"><div class="vp-menu-note">Загрузка...</div></div><div class="vp-like-footer">Активно: 0</div>';
-                    body.appendChild(box);
-                    const list = box.firstElementChild, footer = box.lastElementChild;
+                    const lbox = document.createElement('div');
+                    lbox.className = 'vp-like-menu vp-like-inline';
+                    lbox.innerHTML = '<div class="vp-like-list"><div class="vp-menu-note">Загрузка...</div></div><div class="vp-like-footer">Активно: 0</div>';
+                    body.appendChild(lbox);
+                    const list = lbox.firstElementChild, footer = lbox.lastElementChild;
                     fetchAutoLikeUsers().then(usersData => {
                         if (!list.isConnected) return;
                         renderAutoLikeUsers(list, footer, usersData);
-                        if (popup && popup.el === menu) placePopup();
                     }).catch(() => { list.innerHTML = '<div class="vp-menu-note">Ошибка загрузки</div>'; });
                 }
-                if (popup && popup.el === menu) placePopup();
                 body.scrollTop = keep;
             };
             for (const t of SETTINGS_TABS) {
@@ -4653,13 +4766,24 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 b.type = 'button';
                 b.className = 'vp-stab';
                 b.dataset.tab = t.id;
-                b.textContent = t.name;
-                b.onclick = (e) => { e.stopPropagation(); if (current !== t.id) show(t.id); };
-                tabs.appendChild(b);
+                b.innerHTML = svgIcon(SET_TAB_ICONS[t.id] || '', 18) + '<span></span>';
+                b.lastChild.textContent = t.name;
+                b.onclick = (e) => { e.stopPropagation(); search.value = ''; query = ''; if (current !== t.id || body.dataset.tab === 'search') show(t.id); };
+                nav.appendChild(b);
             }
-            for (const t of ['touchstart', 'touchmove']) menu.addEventListener(t, e => e.stopPropagation(), { passive: true });
+            search.addEventListener('input', () => { query = search.value; if (query.trim()) renderSearch(); else show(current); });
+            el.querySelector('.vp-sm-x').onclick = () => closeSettingsMenu();
+            el.addEventListener('mousedown', e => { el._down = e.target === el; });
+            el.addEventListener('click', e => { if (e.target === el && el._down) closeSettingsMenu(); });
+            el.addEventListener('wheel', e => { if (!e.target.closest('.vp-tab-body, .vp-sm-nav')) e.preventDefault(); }, { passive: false });
+            const onKey = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSettingsMenu(); } };
+            document.addEventListener('keydown', onKey, true);
+            settingsModal = { el, from: btn, onKey };
+            history.pushState(Object.assign({}, history.state, { vpSm: true }), '', location.href);
+            settingsModalHist = true;
             show(current);
-            openPopup(btn, menu);
+            document.body.appendChild(el);
+            box.focus({ preventScroll: true });
         }
 
         function iconPicker() {
@@ -6104,6 +6228,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         };
         const CHANGELOG = [
             ['3.7.7.1', '26 октября 2026', [
+                'Настройки мода теперь открываются отдельным окном: слева разделы, справа настройки с пояснениями под названием, сверху поиск по настройкам. Закрыть можно крестиком, клавишей Esc, нажатием на тёмный фон или кнопкой «назад». На телефоне окно на весь экран, разделы листаются полосой сверху',
                 'В настройках, на вкладке «Вид», появился переключатель «Карточка профиля при наведении»: можно отключить всплывашку с баннером и подписчиками, которая появляется над ссылкой на профиль'
             ]],
             ['3.7.7', '26 октября 2026', [

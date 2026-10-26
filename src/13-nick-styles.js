@@ -400,9 +400,6 @@
         .vp-sec-title { font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--text-secondary);
             margin: 12px 12px 6px; }
         .vp-like-inline { max-height: none !important; }
-        .vp-settings-tabs { width: 320px !important; max-width: calc(100vw - 16px) !important; box-sizing: border-box !important;
-            max-height: calc(100dvh - 16px); display: flex !important; flex-direction: column; overflow: hidden !important; }
-        .vp-settings-tabs .vp-stabs { flex: 0 0 auto; }
         .vp-settings-tabs .settings-option.vp-dim { opacity: .4; pointer-events: none; }
         .vp-pals { position: fixed; inset: 0; z-index: 9000; pointer-events: none; overflow: hidden; }
         .vp-pal { position: absolute; bottom: 0; box-sizing: content-box; padding: 24px; margin: -24px; width: auto; height: min(var(--vp-pal-h, 45vh), calc(48vw * var(--vp-pal-r, 1))); pointer-events: none;
@@ -433,9 +430,6 @@
         .vp-pick-grid .nick-style-option > span:not(.vp-opt-check) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .vp-pick-grid .vp-opt-check { display: none; }
         .vp-pick-grid .style-color-dot { width: 18px !important; height: 18px !important; }
-        .vp-settings-tabs::-webkit-scrollbar { display: none; }
-        .vp-stabs { display: flex; gap: 4px; padding: 3px; margin-bottom: 8px; border-radius: 16px;
-            background: color-mix(in srgb, var(--text-primary, #fff) 7%, transparent); }
         .vp-stab { flex: 1 1 auto; min-width: 0; border: 0; background: none; cursor: pointer; font: inherit; font-size: 13px;
             padding: 7px 2px; white-space: nowrap; border-radius: 13px; color: var(--text-secondary); transition: background .15s ease, color .15s ease; }
         .vp-stab:hover { color: var(--text-primary, #fff); }
