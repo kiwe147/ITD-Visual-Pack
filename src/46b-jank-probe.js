@@ -43,3 +43,48 @@
             return 'идёт замер ' + sec + ' с: листай ленту вверх, как обычно, потом смотри консоль';
         };
 
+        pageWindow.itdvp.slots = function (sec = 20) {
+            if (pageWindow.itdvp._slotsOn) return 'замер уже идёт';
+            pageWindow.itdvp._slotsOn = true;
+            const t0 = performance.now(), end = t0 + sec * 1000, recent = new WeakMap(), last = new WeakMap(), rows = [];
+            const desc = n => n.nodeType === 1 ? n.tagName.toLowerCase() + (typeof n.className === 'string' && n.className.trim() ? '.' + n.className.trim().split(/\s+/).slice(0, 3).join('.') : '') : '#text';
+            const slotOf = n => { const e = n.nodeType === 1 ? n : n.parentElement; return e && e.closest('.vp-post-slot'); };
+            const mo = new MutationObserver(ms => {
+                const t = performance.now();
+                for (const m of ms) {
+                    const slot = slotOf(m.target);
+                    if (!slot) continue;
+                    if (m.type === 'attributes' && m.attributeName === 'style' && m.target.matches('article')) continue;
+                    let arr = recent.get(slot);
+                    if (!arr) recent.set(slot, arr = []);
+                    arr.push([t, m.type === 'attributes' ? m.attributeName + ' @' + desc(m.target) : '+' + [...m.addedNodes].map(desc).join(',') + ' -' + [...m.removedNodes].map(desc).join(',') + ' @' + desc(m.target)]);
+                    if (arr.length > 12) arr.shift();
+                }
+            });
+            mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'width', 'height'] });
+            const ro = new ResizeObserver(es => es.forEach(e => {
+                const h = e.borderBoxSize && e.borderBoxSize[0] ? e.borderBoxSize[0].blockSize : e.contentRect.height, prev = last.get(e.target), now = performance.now();
+                last.set(e.target, h);
+                if (prev === undefined || Math.abs(h - prev) < 0.5) return;
+                const art = e.target.querySelector('article');
+                rows.push({
+                    мс: Math.round(now - t0), было: Math.round(prev * 10) / 10, стало: Math.round(h * 10) / 10, разница: Math.round((h - prev) * 10) / 10,
+                    пост: ((art && art.textContent) || '').trim().slice(0, 22),
+                    перед: (recent.get(e.target) || []).filter(x => now - x[0] < 200).map(x => x[1]).slice(-5)
+                });
+            }));
+            const scan = () => {
+                document.querySelectorAll('.vp-post-slot').forEach(sl => ro.observe(sl));
+                if (performance.now() < end) return requestAnimationFrame(scan);
+                mo.disconnect(); ro.disconnect();
+                pageWindow.itdvp._slotsOn = false;
+                pageWindow.itdvp._slotRows = rows;
+                const withMod = rows.filter(r => r.перед.some(x => /vp-/.test(x))).length;
+                console.info('[ITD VP] замер высот закончен: изменений высоты постов ' + rows.length + ', из них после правок мода ' + withMod);
+                if (rows.length) console.table(rows.slice(0, 40));
+                console.info('[ITD VP] скопируй вот это и пришли:', JSON.stringify(rows.slice(0, 30)));
+            };
+            requestAnimationFrame(scan);
+            return 'идёт замер высот ' + sec + ' с: листай ленту вверх, потом смотри консоль';
+        };
+
