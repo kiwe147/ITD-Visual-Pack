@@ -42,6 +42,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     box.insertAdjacentHTML('beforeend', toast('Превышено время ожидания'));
     box.insertAdjacentHTML('beforeend', toast('Файл слишком большой'));
     box.insertAdjacentHTML('beforeend', toast('Какая-то другая ошибка'));
+    box.insertAdjacentHTML('beforeend', toast('Доступ запрещён'));
     await new Promise(r => setTimeout(r, 200));
     return { toasts: [...box.querySelectorAll('.h5QT')].map(s => s.textContent), plain: plain.textContent };
   });
@@ -49,6 +50,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(out.toasts[0] === 'Нет.' && out.toasts[1] === 'Нет.', 'плашки с таймаутом получили мемный текст');
   check(out.toasts[2] === 'Файл слишком жирный', 'другая ошибка тоже заменена');
   check(out.toasts[3] === 'Какая-то другая ошибка', 'незнакомый текст ошибки не трогается');
+  check(out.toasts[4] === 'Нет, иди нахуй', 'плашка «Доступ запрещён» заменена');
   check(out.plain === 'Доступ запрещён', 'такой же текст не в плашке (нет иконки и кнопки) не трогается');
   check(errors.length === 0, 'нет ошибок страницы ' + errors.join('|'));
   await b.close();
