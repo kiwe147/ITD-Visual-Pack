@@ -74,6 +74,7 @@
                     accSave(s);
                 }
                 accLog('вошёл как ' + (me && me.username || '?'));
+                if (me && me.id) GM_set0('vp_last_acct', String(me.id));
                 location.assign('/');
             } catch (e) {
                 accBusy = false;

@@ -23,4 +23,4 @@
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
     else start();
-})();
+})(GM_getValue, GM_setValue);

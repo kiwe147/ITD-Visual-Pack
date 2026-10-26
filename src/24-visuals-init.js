@@ -75,6 +75,15 @@
                     || await api('/api/users/me').then(r => r.json()).catch(() => null);
                 if (!me || !me.username) { if (visualsTry++ < 6) setTimeout(initVisuals, 4000 * visualsTry); return; }
                 meData = me;
+                if (me.id) {
+                    ACCT.id = String(me.id);
+                    GM_set0('vp_last_acct', ACCT.id);
+                    const owner = GM_get0('vp_acct_owner', null);
+                    const wrong = ACCT.boot ? ACCT.boot !== ACCT.id : !!owner && owner !== ACCT.id;
+                    let again = false;
+                    try { again = sessionStorage.getItem('vp_acct_rl') === ACCT.id; if (!again && wrong) sessionStorage.setItem('vp_acct_rl', ACCT.id); } catch (e) { again = true; }
+                    if (wrong && !again) { location.reload(); return; }
+                }
                 myUsername = me.username;
                 reloadAutoLike();
                 myDisplayName = me.displayName || me.username;

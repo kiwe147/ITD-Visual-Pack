@@ -147,7 +147,13 @@
                     if (url && /^get$/i.test(method) && /\/api\/users\/me\/?(?:[?#]|$)/.test(url)) {
                         res.then(r => r.ok && r.clone().json().then(d => {
                             const me = d && (d.data || d.user || d);
-                            if (me && me.username) { siteAuth.me = me; siteAuth.meWait.splice(0).forEach(done => done(me)); }
+                            if (me && me.username) {
+                                if (me.id) {
+                                    const nid = String(me.id);
+                                    if (ACCT.live && ACCT.live !== nid) { try { sessionStorage.removeItem('vp_acct_rl'); } catch (e) { } GM_set0('vp_last_acct', nid); location.reload(); return; }
+                                    ACCT.live = ACCT.id = nid;
+                                }
+                                siteAuth.me = me; siteAuth.meWait.splice(0).forEach(done => done(me)); }
                         })).catch(() => { });
                     }
                 } catch (e) { }

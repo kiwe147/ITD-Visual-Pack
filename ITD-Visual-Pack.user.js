@@ -21,7 +21,7 @@
 // @icon         data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='n' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%2300e5ff'/><stop offset='.5' stop-color='%237c4dff'/><stop offset='1' stop-color='%23ff3d9a'/></linearGradient><linearGradient id='d' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%230a3d62'/><stop offset='.5' stop-color='%233b1a7a'/><stop offset='1' stop-color='%237a1450'/></linearGradient><linearGradient id='m' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%231565c0'/><stop offset='.5' stop-color='%235e35b1'/><stop offset='1' stop-color='%23ad1457'/></linearGradient><filter id='b' x='-50%' y='-50%' width='200%' height='200%'><feGaussianBlur stdDeviation='2.2'/></filter><filter id='s' x='-20%' y='-20%' width='140%' height='140%'><feDropShadow dx='0' dy='1.5' stdDeviation='1.5' flood-opacity='.5'/></filter></defs><rect width='64' height='64' rx='16' fill='%230b0d13'/><g fill='none'><path d='M17 17L47 47M47 17L17 47' stroke='url(%23n)' stroke-opacity='1' stroke-width='12' stroke-linecap='round'/><path d='M17 17L47 47M47 17L17 47' stroke='%230b0d13' stroke-opacity='1' stroke-width='7' stroke-linecap='round'/></g><text x='32' y='40' font-family='Arial Black, Arial, sans-serif' font-weight='900' text-anchor='middle' font-size='21' fill='%23fff' filter='url(%23s)'>ИТД</text></svg>
 // ==/UserScript==
 
-(function () {
+(function (GM_get0, GM_set0) {
     'use strict';
     if (window.top !== window.self) return;
     const PHONE_MAX = 1173;
@@ -35,6 +35,25 @@
     const TG_CHAT_URL = 'https://t.me/+P7NeR_AEc35lYjEy';
     const AUTO_LIKE_KEY = 'itd_auto_like_ids';
     const isUrl = a => /^https?:|^\//.test(a);
+    const ACCT_DEVICE = new Set(['vp_ver_at', 'vp_upd_ask', 'vp_latest', 'vp_vx', 'vp_learned', 'vp_old_cache', 'vp_posts_list', 'vp_posts_lock', 'vp_api_pause',
+        'vp_club_online', 'vp_club_next', 'changelogSeen', 'bgGlForce', 'tabletDesktop', 'junkOk', 'adminFabPos', 'fabFace']);
+    const ACCT = { id: String(GM_get0('vp_last_acct', '') || '') };
+    ACCT.boot = ACCT.id;
+    const acctScoped = k => {
+        if (typeof k !== 'string' || !ACCT.id || k.includes('@') || ACCT_DEVICE.has(k) || /^vp_(acc|logins)/.test(k)) return k;
+        return k + '@' + ACCT.id;
+    };
+    const GM_getValue = (k, d) => {
+        const sk = acctScoped(k);
+        if (sk === k) return GM_get0(k, d);
+        const v = GM_get0(sk, undefined);
+        if (v !== undefined) return v;
+        let own = GM_get0('vp_acct_owner', null);
+        if (!own) { own = ACCT.id; GM_set0('vp_acct_owner', own); }
+        if (own === ACCT.id) { const lg = GM_get0(k, undefined); if (lg !== undefined) { GM_set0(sk, lg); return lg; } }
+        return d;
+    };
+    const GM_setValue = (k, v) => GM_set0(acctScoped(k), v);
     const addCss = css => {
         const st = document.createElement('style');
         st.textContent = css;
@@ -322,7 +341,13 @@
                     if (url && /^get$/i.test(method) && /\/api\/users\/me\/?(?:[?#]|$)/.test(url)) {
                         res.then(r => r.ok && r.clone().json().then(d => {
                             const me = d && (d.data || d.user || d);
-                            if (me && me.username) { siteAuth.me = me; siteAuth.meWait.splice(0).forEach(done => done(me)); }
+                            if (me && me.username) {
+                                if (me.id) {
+                                    const nid = String(me.id);
+                                    if (ACCT.live && ACCT.live !== nid) { try { sessionStorage.removeItem('vp_acct_rl'); } catch (e) { } GM_set0('vp_last_acct', nid); location.reload(); return; }
+                                    ACCT.live = ACCT.id = nid;
+                                }
+                                siteAuth.me = me; siteAuth.meWait.splice(0).forEach(done => done(me)); }
                         })).catch(() => { });
                     }
                 } catch (e) { }
@@ -5858,6 +5883,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     accSave(s);
                 }
                 accLog('вошёл как ' + (me && me.username || '?'));
+                if (me && me.id) GM_set0('vp_last_acct', String(me.id));
                 location.assign('/');
             } catch (e) {
                 accBusy = false;
@@ -6076,6 +6102,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         };
         const CHANGELOG = [
             ['3.7.7', '26 октября 2026', [
+                'Настройки мода теперь у каждого аккаунта свои: фон, свечение, боковая панель, звуки и всё остальное запоминается отдельно, при смене аккаунта подхватываются нужные. У нового аккаунта всё по умолчанию',
                 'Быстрая смена аккаунта: кнопка над «Выйти» (на телефоне в настройках профиля). Добавь аккаунт один раз, дальше мод сам выходит, проходит проверку Cloudflare и входит. Почта и пароль хранятся только в твоём браузере и только после твоего согласия'
             ]],
             ['3.7.6 – 3.7.6.9', '26 октября 2026', [
@@ -6813,6 +6840,15 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     || await api('/api/users/me').then(r => r.json()).catch(() => null);
                 if (!me || !me.username) { if (visualsTry++ < 6) setTimeout(initVisuals, 4000 * visualsTry); return; }
                 meData = me;
+                if (me.id) {
+                    ACCT.id = String(me.id);
+                    GM_set0('vp_last_acct', ACCT.id);
+                    const owner = GM_get0('vp_acct_owner', null);
+                    const wrong = ACCT.boot ? ACCT.boot !== ACCT.id : !!owner && owner !== ACCT.id;
+                    let again = false;
+                    try { again = sessionStorage.getItem('vp_acct_rl') === ACCT.id; if (!again && wrong) sessionStorage.setItem('vp_acct_rl', ACCT.id); } catch (e) { again = true; }
+                    if (wrong && !again) { location.reload(); return; }
+                }
                 myUsername = me.username;
                 reloadAutoLike();
                 myDisplayName = me.displayName || me.username;
@@ -16129,4 +16165,4 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
     else start();
-})();
+})(GM_getValue, GM_setValue);
