@@ -344,6 +344,7 @@
         .vp-post header .vp-nick-row:not(:last-child) { padding-right: 50px; }
         @media (max-width: ${PHONE_MAX}px) { .vp-post header .vp-nick-row:not(:last-child) { padding-right: 42px; } }
         .vp-notif .vp-nick-row > a { max-width: 100%; }
+        .vp-notif [data-icon="liked"] svg path { fill: #fff !important; stroke: #fff !important; }
         .vp-notif .vp-nick-row .vp-nick:not(.vp-nick-large *) { display: flex; flex-wrap: nowrap; align-items: center; }
         article .vp-nick-row time { flex-shrink: 0; }
         .vp-clamp::after { display: none !important; }
