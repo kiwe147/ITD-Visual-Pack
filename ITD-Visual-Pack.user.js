@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.6.8
+// @version      3.7.6.9
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -5767,7 +5767,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             avatarEditor(own ? lookImgUrl(own) : img && img.src);
         }, true);
         const CHANGELOG = [
-            ['3.7.6 – 3.7.6.8', '26 октября 2026', [
+            ['3.7.6 – 3.7.6.9', '26 октября 2026', [
                 'Аватарка: нажми на свою аву в профиле, откроется редактор с кружком-примеркой, можно картинку, GIF или короткое видео, увидят все, у кого стоит ИТД X',
                 'Змейка снова открывается в играх',
                 'Баннер в профиле показывается целиком, как на сайте без мода, и не смещается и не приближается при прокрутке',
@@ -11834,9 +11834,18 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         applyGlass();
         onDom(function glassSheetsCheck() { if (glassEnabled) collectGlass(); });
         const floatSeen = new WeakMap();
+        const floatKeep = new MutationObserver(muts => {
+            for (const m of muts) {
+                const keep = floatSeen.get(m.target);
+                if (keep && !m.target.classList.contains(keep)) m.target.classList.add(keep);
+            }
+        });
+        const floatMark = (el, cls) => { el.classList.add(cls); floatSeen.set(el, cls); floatKeep.observe(el, { attributes: true, attributeFilter: ['class'] }); };
         let floatAt = 0;
-        onDom(function glassFloating() {
-            if (!glassEnabled || !glassSel || performance.now() - floatAt < 250) return;
+        let floatTimer = 0;
+        function glassFloatingRun() {
+            floatTimer = 0;
+            if (!glassEnabled || !glassSel) return;
             floatAt = performance.now();
             document.querySelectorAll(`:is(${glassSel}), [style*="--block-bg"], [style*="--modal-bg"], [style*="--glass-bg"]`).forEach(el => {
                 const was = floatSeen.get(el);
@@ -11845,12 +11854,17 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (el.matches('article, .' + SELECTORS.post + ', .' + SELECTORS.avatar) || el.closest('nav, aside, .vp-rail, .vp-msgs, .vp-comments-sheet, .vp-sw-stage')) return;
                 for (let n = el, i = 0; n && n !== document.body && i < 6; n = n.parentElement, i++) {
                     const cs = getComputedStyle(n);
-                    if (cs.position === 'fixed' || (cs.position === 'absolute' && +cs.zIndex >= 5)) { el.classList.add('vp-float'); floatSeen.set(el, 'vp-float'); return; }
+                    if (cs.position === 'fixed' || (cs.position === 'absolute' && +cs.zIndex >= 5)) { floatMark(el, 'vp-float'); return; }
                 }
                 const outer = el.parentElement && el.parentElement.closest(`:is(${glassSel})`);
                 const bg = getComputedStyle(el).backgroundColor;
-                if (outer && !outer.classList.contains('vp-float') && getComputedStyle(outer).backgroundColor === bg && !/^rgba\(0, 0, 0, 0\)$/.test(bg)) { el.classList.add('vp-nested'); floatSeen.set(el, 'vp-nested'); }
+                if (outer && !outer.classList.contains('vp-float') && getComputedStyle(outer).backgroundColor === bg && !/^rgba\(0, 0, 0, 0\)$/.test(bg)) floatMark(el, 'vp-nested');
             });
+        }
+        onDom(function glassFloating() {
+            const wait = 120 - (performance.now() - floatAt);
+            if (wait > 0) { if (!floatTimer) floatTimer = setTimeout(glassFloatingRun, wait); return; }
+            glassFloatingRun();
         });
         onDom(function commentsSheet() {
             for (const input of commentInputs()) {

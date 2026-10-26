@@ -36,7 +36,8 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   const st = () => p.evaluate(() => { const e = document.querySelector('.pkqD') && document.querySelector('.pkqD').parentElement; return e ? { cls: e.className, nested: e.classList.contains('vp-nested'), rad: getComputedStyle(e).borderRadius, bg: getComputedStyle(e).backgroundColor } : null; });
   let s0 = await st();
   check(s0 && s0.nested, 'плашка ответа получила стиль vp-nested: ' + JSON.stringify(s0));
-  await p.evaluate(() => { const e = document.querySelector('.pkqD').parentElement; e.className = 'wSFu k1D7 d67y'; });
+  const sync = await p.evaluate(async () => { const e = document.querySelector('.pkqD').parentElement; e.className = 'wSFu k1D7 d67y'; await Promise.resolve(); return e.classList.contains('vp-nested'); });
+  check(sync, 'класс возвращается сразу, до отрисовки кадра (без мигания старого стиля)');
   await p.waitForTimeout(900);
   const s1 = await st();
   check(s1 && s1.nested && s1.rad === '18px', 'после того как сайт сбросил класс (миниатюра) стиль вернулся: ' + JSON.stringify(s1));
