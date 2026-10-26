@@ -27,7 +27,7 @@
         }, true);
         document.addEventListener('dragover', function (e) { if (antiCensorshipEnabled) e.preventDefault(); }, true);
         function gifForm(body) {
-            if (!antiCensorshipEnabled || !(body instanceof FormData) || body.vpRaw) return body;
+            if (!antiCensorshipEnabled || !(body instanceof FormData)) return body;
             const form = new FormData();
             let changed = false;
             for (const [key, value] of body.entries()) {

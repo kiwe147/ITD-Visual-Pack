@@ -28,7 +28,6 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
       if (u.pathname === '/api/files/upload') {
         const body = req.postDataBuffer() || Buffer.alloc(0);
         calls.push({ what: 'upload', size: body.length, jpeg: body.includes(Buffer.from([0xff, 0xd8, 0xff])) });
-        if (calls.filter(c => c.what === 'upload').length === 1) return r.fulfill({ status: 400, contentType: 'application/json', body: '{"error":{"message":"отказ"}}' });
         return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { url: NEW } }) });
       }
       if (/\/comments$/.test(u.pathname) && req.method() === 'POST') { calls.push({ what: 'comment', text: JSON.parse(req.postData()).content }); return r.fulfill({ status: 201, contentType: 'application/json', body: '{"data":{"id":"c1"}}' }); }
@@ -69,7 +68,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     await p.screenshot({ path: path.join(__dirname, 'out', 'avatared-' + (phone ? 'phone' : 'desk') + '.png') });
     await p.click('.vp-ave-ok');
     await p.waitForTimeout(3500);
-    check(calls.filter(c => c.what === 'upload').length === 2 && calls.some(c => c.what === 'upload' && c.size > 2000), tag + ': на сервер ушла картинка-квадрат, после отказа повтор обычным путём ' + JSON.stringify(calls.find(c => c.what === 'upload') || {}));
+    check(calls.some(c => c.what === 'upload' && c.size > 2000), tag + ': на сервер ушла картинка-квадрат ' + JSON.stringify(calls.find(c => c.what === 'upload') || {}));
     const posted = await Promise.all(calls.filter(c => c.what === 'comment').map(c => p.evaluate(t => window.__ot(t), c.text)));
     check(posted.some(t => /^ITDXL1 /.test(t) && t.includes(' a=1' + UUID.replace(/-/g, ''))), tag + ': в стиле профиля записана ссылка на аватарку ' + JSON.stringify(posted.map(t => t.slice(0, 120))));
     check(await p.evaluate(() => !document.querySelector('.vp-ave')), tag + ': редактор закрылся');

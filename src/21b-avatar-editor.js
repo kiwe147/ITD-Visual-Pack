@@ -215,11 +215,11 @@
                         paint(out);
                         const blob = await new Promise(r => out.toBlob(r, 'image/jpeg', 0.92));
                         if (!blob) throw new Error('не удалось подготовить картинку');
-                        ref = toRef(await msgUploadImage(new File([blob], 'avatar.jpg', { type: 'image/jpeg' }), true));
+                        ref = toRef(await msgUploadImage(new File([blob], 'avatar.jpg', { type: 'image/jpeg' })));
                     } else if (st.kind === 'gif') {
-                        ref = toRef(await msgUploadImage(st.file, true));
+                        ref = toRef(await msgUploadImage(st.file));
                     } else {
-                        ref = toRef(await msgUploadImage(st.still, true));
+                        ref = toRef(await msgUploadImage(st.still));
                         vid = await uploadVideo(st.file);
                     }
                     GM_setValue(acctKey('vp_ava'), vid ? { ref, vid, at: Date.now() } : { ref, at: Date.now() });
