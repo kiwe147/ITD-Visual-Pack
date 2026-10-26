@@ -99,6 +99,9 @@
             });
         }
         onDom(moveNavBlob);
+        const navLater = () => [60, 250, 700].forEach(ms => setTimeout(() => { markActiveNav(); moveNavBlob(); }, ms));
+        addEventListener('popstate', navLater);
+        document.addEventListener('vp-loc', navLater);
         addEventListener('resize', () => { blobAt = null; moveNavBlob(); });
 
         const PROX_MAX = 14, PROX_SIGMA = 46;

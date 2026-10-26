@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.6.3
+// @version      3.7.6.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1373,6 +1373,13 @@
                 return roleCount;
             },
             learned,
+            nav() {
+                const nav = siteEl('nav'), b = nav && nav.querySelector('.vp-nav-blob');
+                const rows = [...document.querySelectorAll('.' + SELECTORS.navLink)].map(a => ({ ссылка: a.getAttribute('href'), классы: a.className, сверху: a.offsetTop }));
+                console.table(rows);
+                console.log('путь', location.pathname, '· капля', b ? { opacity: b.style.opacity, top: b.style.top, left: b.style.left, width: b.style.width } : 'нет');
+                return rows;
+            },
             domCost: seconds => {
                 domProf = {};
                 return new Promise(done => setTimeout(() => {
@@ -5760,7 +5767,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             avatarEditor(own ? lookImgUrl(own) : img && img.src);
         }, true);
         const CHANGELOG = [
-            ['3.7.6 – 3.7.6.3', '26 октября 2026', [
+            ['3.7.6 – 3.7.6.4', '26 октября 2026', [
                 'Аватарка: нажми на свою аву в профиле, откроется редактор с кружком-примеркой, можно картинку, GIF или короткое видео, увидят все, у кого стоит ИТД X',
                 'Змейка снова открывается в играх',
                 'Свой профиль, открытый через клуб, подсвечивается в боковом меню',
@@ -12068,6 +12075,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             });
         }
         onDom(moveNavBlob);
+        const navLater = () => [60, 250, 700].forEach(ms => setTimeout(() => { markActiveNav(); moveNavBlob(); }, ms));
+        addEventListener('popstate', navLater);
+        document.addEventListener('vp-loc', navLater);
         addEventListener('resize', () => { blobAt = null; moveNavBlob(); });
 
         const PROX_MAX = 14, PROX_SIGMA = 46;

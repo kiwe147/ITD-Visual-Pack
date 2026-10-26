@@ -49,6 +49,11 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   a = await active();
   console.log('—    после клика по себе: path', await p.evaluate(() => location.pathname), 'подсвечено', JSON.stringify(a));
   check(a.some(h => h.toLowerCase() === '/@' + ME.toLowerCase()), 'свой профиль через клуб: «Профиль» в меню подсвечен');
+  await p.waitForTimeout(900);
+  const bl = await p.evaluate(() => { const b = document.querySelector('.vp-nav-blob'), l = document.querySelector('.vp-nav-link.vp-active'); if (!b || !l) return { b: !!b, l: !!l }; return { op: b.style.opacity, top: b.style.top, linkTop: l.offsetTop + 'px', left: b.style.left, linkLeft: l.offsetLeft + 'px', row: b.classList.contains('vp-blob-row') }; });
+  console.log('—    капля меню:', JSON.stringify(bl));
+  check(bl.op === '1' && (bl.row || bl.top === bl.linkTop), 'под активной вкладкой «Профиль» стоит капля (плашка) ' + JSON.stringify(bl));
+
   check(!errors.length, 'ошибок страницы нет' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await b.close();
   console.log(fails.length ? '\nОШИБОК: ' + fails.length : '\nВсё прошло');
