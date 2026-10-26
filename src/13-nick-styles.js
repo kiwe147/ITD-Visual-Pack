@@ -159,6 +159,11 @@
             }
         };
 
+        const GLOW_K = 0.5;
+        for (const st of Object.values(nickStyles)) {
+            if (st.glow) st.glow = st.glow.replace(/drop-shadow\(0 0 ([\d.]+)px/g, (m, n) => `drop-shadow(0 0 ${+n * GLOW_K}px`);
+        }
+
         const hueOf = hex => {
             const h = hex.length === 4 ? hex.replace(/#(.)(.)(.)/, '#$1$1$2$2$3$3') : hex;
             const [r, g, b] = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);

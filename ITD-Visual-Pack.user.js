@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.6.8
+// @version      3.7.6.9
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2014,6 +2014,11 @@
             }
         };
 
+        const GLOW_K = 0.5;
+        for (const st of Object.values(nickStyles)) {
+            if (st.glow) st.glow = st.glow.replace(/drop-shadow\(0 0 ([\d.]+)px/g, (m, n) => `drop-shadow(0 0 ${+n * GLOW_K}px`);
+        }
+
         const hueOf = hex => {
             const h = hex.length === 4 ? hex.replace(/#(.)(.)(.)/, '#$1$1$2$2$3$3') : hex;
             const [r, g, b] = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
@@ -3004,7 +3009,7 @@
                     : currentStyle === 'white' ? 'linear-gradient(270deg, #1a1a1a, #4a4a4a, #262626)' : style.gradientLight;
                 nick.cssText = `background: ${gradient} !important; -webkit-background-clip: text !important; background-clip: text !important; -webkit-text-fill-color: transparent !important;`;
             }
-            const glow = rainbow ? `drop-shadow(0 0 6px ${hsl}) drop-shadow(0 0 12px ${hsl})`
+            const glow = rainbow ? `drop-shadow(0 0 3px ${hsl}) drop-shadow(0 0 6px ${hsl})`
                 : dark ? style.glow
                     : currentStyle === 'white' ? 'drop-shadow(0 0 5px rgba(0, 0, 0, 0.25))'
                         : `brightness(0.8) saturate(1.3) drop-shadow(0 0 5px color-mix(in srgb, ${accentOf(style)} 55%, transparent))`;
@@ -3012,7 +3017,7 @@
                 : `filter: ${glow} !important;`;
             const ah = style.avatarHue || 210, as = style.avatarSat ?? 100;
             avatar.cssText = !avatarGlowOn ? '' : `filter: ${rainbow
-                ? `drop-shadow(0 0 5px ${hsl}) drop-shadow(0 0 12px ${hsl})`
+                ? `drop-shadow(0 0 3px ${hsl}) drop-shadow(0 0 6px ${hsl})`
                 : `drop-shadow(0 0 3px hsl(${ah}, ${as}%, 60%)) drop-shadow(0 0 6px hsl(${ah}, ${as}%, 60%))`} !important;`;
             post.cssText = '';
             document.documentElement.classList.toggle('vp-post-hl', neonEnabled && postBorderEnabled);
@@ -3040,7 +3045,7 @@
                     let nick, glow;
                     if (key === 'rainbow') {
                         nick = 'animation: vp-look-rb 8s linear infinite !important; background: none !important; -webkit-text-fill-color: currentColor !important;';
-                        glow = 'drop-shadow(0 0 6px hsl(300, 100%, 60%)) drop-shadow(0 0 10px hsl(200, 100%, 60%))';
+                        glow = 'drop-shadow(0 0 3px hsl(300, 100%, 60%)) drop-shadow(0 0 5px hsl(200, 100%, 60%))';
                     } else {
                         if (st.nickCss) nick = st.nickCss(dark);
                         else {
@@ -3055,7 +3060,7 @@
                 }
                 const ah = st.avatarHue || 210, as = st.avatarSat ?? 100;
                 out.push(key === 'rainbow'
-                    ? `html.vp-looks [data-vp-look-av="${key}"] { filter: drop-shadow(0 0 5px hsl(300, 100%, 60%)) drop-shadow(0 0 10px hsl(190, 100%, 55%)) !important; }`
+                    ? `html.vp-looks [data-vp-look-av="${key}"] { filter: drop-shadow(0 0 3px hsl(300, 100%, 60%)) drop-shadow(0 0 5px hsl(190, 100%, 55%)) !important; }`
                     : `html.vp-looks [data-vp-look-av="${key}"] { filter: drop-shadow(0 0 3px hsl(${ah}, ${as}%, 60%)) drop-shadow(0 0 6px hsl(${ah}, ${as}%, 60%)) !important; }`);
             }
             out.push('html.vp-no-neon .vp-my-nick, html.vp-no-neon [data-vp-look], html.vp-no-neon [data-vp-look] * { text-shadow: none !important; }',
@@ -5767,11 +5772,12 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             avatarEditor(own ? lookImgUrl(own) : img && img.src);
         }, true);
         const CHANGELOG = [
-            ['3.7.6 – 3.7.6.8', '26 октября 2026', [
+            ['3.7.6 – 3.7.6.9', '26 октября 2026', [
                 'Аватарка: нажми на свою аву в профиле, откроется редактор с кружком-примеркой, можно картинку, GIF или короткое видео, увидят все, у кого стоит ИТД X',
                 'Змейка снова открывается в играх',
                 'Баннер в профиле показывается целиком, как на сайте без мода, и не смещается и не приближается при прокрутке',
                 'Ответ на комментарий: после миниатюры плашка ответа больше не теряет стиль и не становится квадратной',
+                'Свечение ников и аватарок стало вдвое меньше: на тёмном фоне оно слишком разливалось',
                 'Свой профиль, открытый через клуб, подсвечивается в боковом меню',
                 'В уведомлениях у лайков в розовом кружке появилось сердечко, как значок у ответов'
             ]],
