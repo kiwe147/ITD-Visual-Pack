@@ -34,6 +34,10 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(st.like && st.like.fill === 'none' && st.like.stroke === st.comment.stroke && st.like.stroke !== 'none', 'сердечко в лайке контурное того же цвета, что значок ответа: ' + JSON.stringify(st));
   const box = await p.evaluate(() => { const l = document.querySelector('.vp-notif [data-icon="liked"]').closest('.vp-notif'), c = document.querySelector('.vp-notif [data-icon="comment"]').closest('.vp-notif'); const a = l.getBoundingClientRect(), z = c.getBoundingClientRect(), top = Math.min(a.y, z.y), bot = Math.max(a.bottom, z.bottom); return { x: Math.max(0, a.x), y: Math.max(0, top), width: 520, height: Math.min(800, bot - top) }; });
   await p.screenshot({ path: path.join(__dirname, 'out', 'notifheart.png'), clip: box });
+  const size = await p.evaluate(() => { const s = document.querySelector('.vp-notif [data-icon="liked"] svg').getBoundingClientRect(), c = document.querySelector('.vp-notif [data-icon="liked"]').closest('div').getBoundingClientRect(); return { heart: Math.round(s.width), circle: Math.round(c.width) }; });
+  check(size.heart === 15 && size.heart < size.circle, 'сердечко 15 px и помещается в кружок ' + JSON.stringify(size));
+  const mid = await p.evaluate(() => { const h = document.querySelector('.vp-notif [data-icon="liked"] svg').getBoundingClientRect(), c = document.querySelector('.vp-notif [data-icon="liked"]').parentElement.getBoundingClientRect(); return { dx: Math.round(Math.abs(h.x + h.width / 2 - c.x - c.width / 2) * 10) / 10, dy: Math.round(Math.abs(h.y + h.height / 2 - c.y - c.height / 2) * 10) / 10 }; });
+  check(mid.dx <= 1.5 && mid.dy <= 1.5, 'сердечко по центру кружка ' + JSON.stringify(mid));
   check(!errors.length, 'ошибок страницы нет' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await b.close();
   console.log(fails.length ? '\nОШИБОК: ' + fails.length : '\nВсё прошло');
