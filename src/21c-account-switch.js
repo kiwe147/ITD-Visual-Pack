@@ -53,6 +53,12 @@
             }
         }
         let accBusy = false;
+        const accNames = cs => cs.map(c => c.name + '[' + (c.path || '/') + (c.httpOnly ? ',H' : '') + ']').join(' ') || 'нет';
+        function accLog(text) {
+            const l = GM_getValue('vp_acc_log', []);
+            l.push({ at: Date.now(), text });
+            GM_setValue('vp_acc_log', l.slice(-40));
+        }
         async function accSwitch(id) {
             const slots = accSlots(), t = slots[id], me = accMe();
             if (accBusy || !t || !accHas() || (me && me.id === id)) return;
@@ -60,13 +66,34 @@
             if (who && String(who.id) === id) { accSay('Этот аккаунт уже открыт'); return; }
             accBusy = true;
             accSay('Меняю аккаунт…');
+            let before = [];
             try {
                 await accCapture();
+                before = await accReadCookies();
+                accLog('смена на @' + t.username + ', сейчас куки: ' + accNames(before) + '; в записи: ' + accNames(t.cookies));
                 await accWipe();
+                accLog('после удаления: ' + accNames(await accReadCookies()));
                 await accApply(t.cookies);
+                const now = await accReadCookies();
+                accLog('после записи: ' + accNames(now) + '; записаны все нужные: ' + t.cookies.every(c => now.some(n => n.name === c.name && n.value === c.value)));
+                const r = await fetch('/api/v1/auth/refresh', { method: 'POST', credentials: 'include' }).catch(() => null);
+                accLog('проверка входа: ' + (r ? r.status : 'нет ответа'));
+                if (!r || !r.ok) {
+                    await accWipe();
+                    await accApply(before);
+                    accBusy = false;
+                    accSay('Вход в @' + t.username + ' не подошёл (сервер ответил ' + (r ? r.status : 'ничего') + '). Вернул прежний аккаунт. Выбери «×» у этого аккаунта и добавь его заново', true);
+                    return;
+                }
                 GM_setValue(ACC_PENDING, { id, at: Date.now() });
                 location.assign('/');
-            } catch (e) { accBusy = false; accSay('Не получилось сменить аккаунт', true); logErr('смена аккаунта', e); }
+            } catch (e) {
+                accBusy = false;
+                try { await accWipe(); await accApply(before); } catch (x) { }
+                accLog('ошибка: ' + (e && e.message || e));
+                accSay('Не получилось сменить аккаунт', true);
+                logErr('смена аккаунта', e);
+            }
         }
         async function accAdd() {
             if (accBusy || !accHas()) return;
@@ -243,6 +270,7 @@
                 else if (Date.now() - (pend.at || 0) > 14000) {
                     GM_setValue(ACC_PENDING, null);
                     const s = accSlots()[pend.id];
+                    accLog('после смены аккаунт не открылся: путь ' + location.pathname + ', куки: ' + accNames(await accReadCookies()));
                     if (s) { accForget(pend.id); accSay('Вход в @' + s.username + ' устарел, войди в него заново, и он снова появится в списке', true); }
                 }
             }
@@ -255,5 +283,6 @@
             const cookies = await accReadCookies();
             console.log('GM_cookie доступен:', accHas(), ' включено:', accOn());
             console.table(cookies.map(c => ({ имя: c.name, домен: c.domain, путь: c.path, httpOnly: c.httpOnly, session: c.session, секунд_до_конца: c.expirationDate ? Math.round(c.expirationDate - Date.now() / 1000) : '' })));
-            console.table(Object.values(accSlots()).map(s => ({ ник: s.username, id: s.id, кук: s.cookies.length, сохранено: new Date(s.at).toLocaleString() })));
+            console.table(Object.values(accSlots()).map(s => ({ ник: s.username, id: s.id, куки: accNames(s.cookies), сохранено: new Date(s.at).toLocaleString() })));
+            console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };

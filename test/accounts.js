@@ -32,10 +32,11 @@ const IDB = '99999999-2222-4333-8444-555555555555';
       return true;
     });
     await p.exposeFunction('__ckDel', async d => { await ctx.clearCookies({ name: d.name }); return true; });
-    await p.route('**/*', r => {
+    await p.route('**/*', async r => {
       const req = r.request(), u = new URL(req.url()), t = req.resourceType();
       if (u.origin === ORIGIN && t === 'document') return r.fulfill({ contentType: 'text/html; charset=utf-8', body: snap });
       if (['image', 'stylesheet', 'font'].includes(t)) return r.continue();
+      if (u.pathname.includes('/auth/refresh') && process.env.FAILB && (await ctx.cookies()).some(c => c.value === 'BBB-SECOND')) return r.fulfill({ status: 401, contentType: 'application/json', body: '{}' });
       if (u.pathname.includes('/auth/refresh')) return r.fulfill({ contentType: 'application/json', body: '{"accessToken":"t"}' });
       if (u.pathname === '/api/users/me' && req.method() === 'GET') return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ username: 'NeuroSFW', displayName: 'NeuroSFW', id: OWNER }) });
       if (u.pathname.startsWith('/api/')) return r.fulfill({ contentType: 'application/json', body: '{}' });
@@ -73,14 +74,23 @@ const IDB = '99999999-2222-4333-8444-555555555555';
     const pos = await p.evaluate(() => { const r = document.querySelector('.vp-acc-pop').getBoundingClientRect(); return r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; });
     check(pos, 'окно целиком на экране');
     await p.screenshot({ path: 'C:/Code/Kwork/build/acc-' + (phone ? 'phone' : 'pc') + '.png' });
-    await Promise.all([p.waitForNavigation({ timeout: 15000 }).catch(() => null), p.click('.vp-acc-pop .vp-acc-row:not(.vp-cur)')]);
-    await p.waitForTimeout(1500);
-    const ck = await ctx.cookies();
-    check(ck.some(c => c.name === 'refresh_token' && c.value === 'BBB-SECOND') && !ck.some(c => c.value === 'AAA-OWNER'), 'куки подменены на второй аккаунт, старая убрана: ' + ck.map(c => c.name + '=' + c.value).join(', '));
-    const slots2 = await p.evaluate(() => JSON.parse(sessionStorage.getItem('__gm')).vp_accounts);
-    check(ck.some(c => c.name === 'cf_clearance' && c.value === 'CF-KEEP'), 'кука Cloudflare не тронута (иначе на входе просят «подтвердите, что вы человек»)');
-    check(Object.values(slots2).find(s => s.username === 'NeuroSFW').cookies.some(c => c.value === 'AAA-OWNER'), 'вход первого аккаунта остался в списке на потом');
-    check(await p.evaluate(() => !!JSON.parse(sessionStorage.getItem('__gm')).vp_acc_pending), 'отмечено, что смена идёт (для проверки после перезагрузки)');
+    if (process.env.FAILB) {
+      await p.click('.vp-acc-pop .vp-acc-row:not(.vp-cur)');
+      await p.waitForTimeout(2500);
+      const ck = await ctx.cookies();
+      check(ck.some(c => c.name === 'refresh_token' && c.value === 'AAA-OWNER') && !ck.some(c => c.value === 'BBB-SECOND'), 'вход второго аккаунта не подошёл: прежняя кука вернулась, смены нет: ' + ck.map(c => c.name + '=' + c.value).join(', '));
+      check(await p.evaluate(() => /не подошёл/.test((document.querySelector('.vp-acc-note') || {}).textContent || '')), 'мод сообщил, что вход не подошёл');
+    } else {
+      await Promise.all([p.waitForNavigation({ timeout: 15000 }).catch(() => null), p.click('.vp-acc-pop .vp-acc-row:not(.vp-cur)')]);
+      await p.waitForTimeout(1500);
+      const ck = await ctx.cookies();
+      check(ck.some(c => c.name === 'refresh_token' && c.value === 'BBB-SECOND') && !ck.some(c => c.value === 'AAA-OWNER'), 'куки подменены на второй аккаунт, старая убрана: ' + ck.map(c => c.name + '=' + c.value).join(', '));
+      const slots2 = await p.evaluate(() => JSON.parse(sessionStorage.getItem('__gm')).vp_accounts);
+      check(ck.some(c => c.name === 'cf_clearance' && c.value === 'CF-KEEP'), 'кука Cloudflare не тронута (иначе на входе просят «подтвердите, что вы человек»)');
+      check(Object.values(slots2).find(s => s.username === 'NeuroSFW').cookies.some(c => c.value === 'AAA-OWNER'), 'вход первого аккаунта остался в списке на потом');
+      check(await p.evaluate(() => !!JSON.parse(sessionStorage.getItem('__gm')).vp_acc_pending), 'отмечено, что смена идёт (для проверки после перезагрузки)');
+      check(await p.evaluate(() => /проверка входа: 200/.test(JSON.parse(sessionStorage.getItem('__gm')).vp_acc_log.map(l => l.text).join('|'))), 'в журнале есть успешная проверка входа');
+    }
     check(!errors.length, 'ошибок страницы нет' + (errors.length ? ': ' + errors.join(' | ') : ''));
     if (!phone) {
       const q = await ctx.newPage();
