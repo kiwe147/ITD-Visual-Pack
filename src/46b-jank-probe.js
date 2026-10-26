@@ -49,10 +49,13 @@
             const t0 = performance.now(), end = t0 + sec * 1000, st = new WeakMap(), rows = [];
             const desc = n => n.nodeType === 1 ? n.tagName.toLowerCase() + (typeof n.className === 'string' && n.className.trim() ? '.' + n.className.trim().split(/\s+/).slice(0, 3).join('.') : '') : '#text';
             const slotOf = n => { const e = n.nodeType === 1 ? n : n.parentElement; const a = e && e.closest('article'); return a && a.parentElement; };
+            const depthOf = (e, root) => { let d = 0; for (let x = e; x && x !== root; x = x.parentElement) d++; return d; };
             const watch = slot => {
                 if (st.has(slot)) return;
                 const now = performance.now();
-                st.set(slot, { h: slot.getBoundingClientRect().height, born: now, muts: [] });
+                const parts = new Map();
+                [...slot.querySelectorAll('*')].slice(0, 220).forEach(e => parts.set(e, [e.getBoundingClientRect().height, depthOf(e, slot)]));
+                st.set(slot, { h: slot.getBoundingClientRect().height, born: now, muts: [], parts });
                 ro.observe(slot);
             };
             const mo = new MutationObserver(ms => {
@@ -73,9 +76,14 @@
                 const h = e.borderBoxSize && e.borderBoxSize[0] ? e.borderBoxSize[0].blockSize : e.contentRect.height;
                 if (!h || Math.abs(h - s.h) < 0.5) return;
                 const art = e.target.querySelector('article');
-                rows.push({ мс: Math.round(now - t0), черезМсПослеПоявления: Math.round(now - s.born), было: Math.round(s.h * 10) / 10, стало: Math.round(h * 10) / 10, разница: Math.round((h - s.h) * 10) / 10, пост: ((art && art.textContent) || '').trim().slice(0, 22), правки: s.muts.slice(-6) });
+                const moved = [];
+                s.parts.forEach(([h0, d], el) => { if (!el.isConnected) return; const h1 = el.getBoundingClientRect().height; if (Math.abs(h1 - h0) > 0.5) moved.push([d, desc(el), Math.round(h0 * 10) / 10, Math.round(h1 * 10) / 10]); });
+                moved.sort((a, b) => b[0] - a[0]);
+                rows.push({ части: moved.slice(0, 3).map(x => x[1] + ' ' + x[2] + '>' + x[3]), мс: Math.round(now - t0), черезМсПослеПоявления: Math.round(now - s.born), было: Math.round(s.h * 10) / 10, стало: Math.round(h * 10) / 10, разница: Math.round((h - s.h) * 10) / 10, пост: ((art && art.textContent) || '').trim().slice(0, 22), правки: s.muts.slice(-6) });
                 s.h = h;
                 s.muts = [];
+                s.parts = new Map();
+                [...e.target.querySelectorAll('*')].slice(0, 220).forEach(el => s.parts.set(el, [el.getBoundingClientRect().height, depthOf(el, e.target)]));
             }));
             document.querySelectorAll('article').forEach(a => a.parentElement && watch(a.parentElement));
             mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'width', 'height'] });
