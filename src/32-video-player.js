@@ -36,6 +36,8 @@
             const q = s => bar.querySelector(s);
             const prog = q('.vp-vprog'), fill = q('.vp-vfill'), buf = q('.vp-vbuf'), knob = q('.vp-vknob'), tip = q('.vp-vtip'), playB = q('.vp-vplay'), muteB = q('.vp-vmute'), range = q('.vp-vrange');
             const timeNow = q('.vp-vtime b'), timeAll = q('.vp-vtime i'), rateB = q('.vp-vrate'), menu = q('.vp-vmenu'), pipB = q('.vp-vpip'), fullB = q('.vp-vfull');
+            pipB.innerHTML = VP_ICO.pip;
+            fullB.innerHTML = VP_ICO.full;
             let hideT = 0, scrub = false, lastTouch = 0, raf = 0;
             const dur = () => Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
             const paint = () => {
@@ -107,9 +109,45 @@
             prog.addEventListener('pointermove', e => tipAt(e.clientX));
             video.playbackRate = vpRate;
             box.classList.add('vp-vp-ready');
+            let touched = [], fitRaf = 0;
+            const unfit = () => {
+                touched.forEach(e => ['overflow', 'margin-left', 'margin-right'].forEach(k => e.style.removeProperty(k)));
+                touched = [];
+                box.classList.remove('vp-vwide', 'vp-vtight');
+                box.style.removeProperty('--vp-bw');
+                box.style.removeProperty('--vp-bl');
+            };
+            const overflows = () => { const row = q('.vp-vrow'); return row.scrollWidth > row.clientWidth + 1; };
+            const fit = () => {
+                fitRaf = 0;
+                if (!box.isConnected || document.fullscreenElement === box) return;
+                unfit();
+                let host = box.parentElement;
+                while (host && host !== document.body && host.clientWidth <= box.clientWidth + 8) host = host.parentElement;
+                const wide = host && host !== document.body && host.clientWidth > box.clientWidth + 8;
+                if (wide) {
+                    const par = box.parentElement;
+                    par.style.setProperty('margin-left', 'auto', 'important');
+                    par.style.setProperty('margin-right', 'auto', 'important');
+                    touched.push(par);
+                }
+                if (wide && overflows()) {
+                    for (let e = box.parentElement; e && e !== host; e = e.parentElement) { e.style.setProperty('overflow', 'visible', 'important'); if (!touched.includes(e)) touched.push(e); }
+                    const hr = host.getBoundingClientRect();
+                    box.style.setProperty('--vp-bw', Math.floor(hr.width) + 'px');
+                    box.style.setProperty('--vp-bl', Math.round(hr.left - box.getBoundingClientRect().left) + 'px');
+                    box.classList.add('vp-vwide');
+                }
+                if (overflows()) box.classList.add('vp-vtight');
+            };
+            const refit = () => { if (!fitRaf) fitRaf = requestAnimationFrame(fit); };
+            if (window.ResizeObserver) new ResizeObserver(refit).observe(box);
+            video.addEventListener('loadedmetadata', refit);
+            addEventListener('resize', refit);
+            refit();
             state();
             if (video.paused) box.classList.add('vp-vshow');
-            box.vpDestroy = () => { clearTimeout(hideT); if (raf) cancelAnimationFrame(raf); bar.remove(); flash.remove(); box.classList.remove('vp-vp', 'vp-vp-ready', 'vp-vshow', 'vp-vscrub', 'vp-vp-rel'); };
+            box.vpDestroy = () => { clearTimeout(hideT); if (raf) cancelAnimationFrame(raf); bar.remove(); flash.remove(); unfit(); removeEventListener('resize', refit); box.classList.remove('vp-vp', 'vp-vp-ready', 'vp-vshow', 'vp-vscrub', 'vp-vp-rel'); };
         }
         onDom(function videoPlayers() {
             document.querySelectorAll('.vp-vp').forEach(box => { if (!box.isConnected || !vpSiteBtn(box, /^(pause|play)$/i)) { if (box.vpDestroy) box.vpDestroy(); } });
@@ -155,6 +193,10 @@
         .vp-site-ctl { display: none !important; }
         .vp-vbar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; padding: 34px 12px 8px; box-sizing: border-box; color: #fff; user-select: none; -webkit-user-select: none;
             background: linear-gradient(to top, rgba(0, 0, 0, .78), rgba(0, 0, 0, .42) 55%, transparent); opacity: 0; transform: translateY(6px); pointer-events: none; transition: opacity .2s ease, transform .2s ease; }
+        .vp-vp.vp-vwide { overflow: visible; }
+        .vp-vp.vp-vwide .vp-vbar { right: auto; left: var(--vp-bl, 0px); width: var(--vp-bw); border-radius: 0 0 12px 12px; }
+        .vp-vp.vp-vwide > video { border-radius: 12px; }
+        .vp-vtight .vp-vskip, .vp-vtight .vp-vpip { display: none; }
         .vp-vp.vp-vshow .vp-vbar { opacity: 1; transform: none; pointer-events: auto; }
         .vp-vp.vp-vshow { cursor: default; }
         .vp-vp:not(.vp-vshow) { cursor: none; }
