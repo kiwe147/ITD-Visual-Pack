@@ -13006,7 +13006,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     pageWindow.itdvp._jankOn = false;
                     pageWindow.itdvp._jankRows = rows;
                     const slotN = rows.filter(r => r.причина === 'список сайта').length, postN = rows.filter(r => r.причина === 'сам пост').length;
-                    console.info('[ITD VP] замер закончен: кадров ' + frames + ', рывков ' + jumps + ' (список сайта ' + slotN + ', сам пост ' + postN + ')');
+                    console.info('[ITD VP] замер закончен: кадров ' + frames + ', рывков ' + jumps + ' (список сайта ' + slotN + ', сам пост ' + postN + '), сцена ленты ' + (sceneEnabled && !sceneAutoOff ? 'включена' : 'выключена'));
                     if (rows.length) console.table(rows.slice(0, 40));
                     console.info('[ITD VP] скопируй вот это и пришли:', JSON.stringify(rows.slice(0, 40)));
                     return;
