@@ -12,6 +12,7 @@ const COL = ['#c0392b', '#27ae60', '#2980b9'];
 const SIZES = [[600, 700], [600, 340], [600, 1000], [600, 600], [600, 800], [600, 450]];
 const posts = SIZES.map(([w, h], i) => ({ id: 'p' + i, author: { username: 'a' }, isLiked: i === 1,
   attachments: (i % 2 ? [0] : [0, 1, 2]).map(k => ({ type: 'image', url: `https://cdn.xn--d1ah4a.com/images/vpph-${i}-${k}-${w}-${h}.png`, width: w, height: h })) }));
+posts.push({ id: 'pv', author: { username: 'a' }, attachments: [{ type: 'video', url: 'https://cdn.xn--d1ah4a.com/videos/vpv.mp4', width: 600, height: 400, duration: 5 }] });
 async function run(b, phone) {
   const ctx = await b.newContext(phone ? { viewport: { width: 392, height: 812 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width: 1300, height: 800 } });
   const p = await ctx.newPage();
@@ -51,7 +52,7 @@ async function run(b, phone) {
   await p.waitForTimeout(1200);
   const info = await p.evaluate(() => [...document.querySelectorAll('.vp-gal-tile')].map(t => {
     const r = t.getBoundingClientRect(), s = t.querySelector('.vp-gal-strip').getBoundingClientRect(), bar = t.querySelector('.vp-gal-bar'), acts = [...t.querySelectorAll('.vp-gal-acts')].map(a => a.getBoundingClientRect());
-    return { tileH: r.height, tileW: r.width, strip: [s.top - r.top, s.height], acts: acts.map(a => [a.top - r.top, a.height, a.width]), pos: getComputedStyle(t.querySelector('.vp-gal-acts')).position, barDisp: bar && getComputedStyle(bar).display };
+    return { tileH: r.height, tileW: r.width, strip: [s.top - r.top, s.height], acts: acts.map(a => [a.top - r.top, a.height, a.width]), pos: getComputedStyle(t.querySelector('.vp-gal-acts')).position, video: !!t.querySelector('video'), bgx: !!bar && bar.classList.contains('vp-bgx'), bgImg: (t.querySelector('.vp-gal-bgx') || {}).style && t.querySelector('.vp-gal-bgx').style.backgroundImage, barDisp: bar && getComputedStyle(bar).display };
   }));
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT.replace('.png', phone ? '-phone.png' : '-desk.png') });
   await ctx.close();
@@ -61,9 +62,13 @@ async function run(b, phone) {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const P = await run(b, true);
   check(P.info.length >= 4, 'на телефоне плитки есть: ' + P.info.length);
-  check(P.info.every(t => t.pos === 'static'), 'телефон: ряды кнопок не лежат поверх картинки');
+  check(P.info.every(t => t.pos !== 'absolute'), 'телефон: ряды кнопок не лежат поверх картинки');
   check(P.info.every(t => t.acts.every(a => a[0] >= t.strip[0] + t.strip[1] - 0.5)), 'телефон: кнопки целиком ниже картинки');
   check(P.info.every(t => t.tileH > t.strip[1] + 20), 'телефон: плитка выше картинки на высоту ряда кнопок');
+  const imgs = P.info.filter(t => !t.video), vids = P.info.filter(t => t.video);
+  check(imgs.length >= 4 && imgs.every(t => t.bgx && /url\(/.test(t.bgImg)), 'телефон: под кнопками картинок растянут кусок низа картинки (' + imgs.filter(t => t.bgx).length + ' из ' + imgs.length + ')');
+  check(vids.length >= 1 && vids.every(t => !t.bgx && !t.bgImg), 'телефон: у видео подложки из картинки нет (' + vids.length + ')');
+  if (process.env.DBG) console.log(JSON.stringify(P.info));
   check(P.errors.length === 0, 'телефон: нет ошибок страницы ' + P.errors.join('|'));
   const D = await run(b, false);
   if (D.info.length) {

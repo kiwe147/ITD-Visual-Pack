@@ -13149,12 +13149,16 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             .vp-gal-tile:hover .vp-gal-acts, .vp-gal-acts:has(:focus-visible) { opacity: 1; }
         }
         .vp-gal-bar { display: contents; }
+        .vp-gal-bgx { display: none; }
         @media not ((hover: hover) and (pointer: fine)) {
             .vp-gal-tile { display: flex; flex-direction: column; aspect-ratio: auto !important; }
             .vp-gal-tile .vp-gal-strip { flex: 0 0 auto; height: calc(100cqw * var(--vp-r, 1)); }
-            .vp-gal-bar { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px; }
-            .vp-gal-bar .vp-gal-acts { position: static; padding: 0; background: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+            .vp-gal-bar { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; padding: 2px 4px; }
+            .vp-gal-bar .vp-gal-acts { position: relative; inset: auto; z-index: 2; padding: 0; background: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
             .vp-gal-act { color: var(--text-primary, #fff); }
+            .vp-gal-bar.vp-bgx .vp-gal-bgx { display: block; position: absolute; inset: -12px; background-size: 100% 1400%; background-position: center bottom; filter: blur(8px) saturate(1.3); pointer-events: none; }
+            .vp-gal-bar.vp-bgx::after { content: ''; position: absolute; inset: 0; z-index: 1; background: rgba(0, 0, 0, .3); pointer-events: none; }
+            .vp-gal-bar.vp-bgx .vp-gal-act:not(.vp-on) { color: #fff; }
         }
         .vp-gal-badge { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
             color: #fff; pointer-events: none; background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4);
@@ -13465,7 +13469,20 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             tile.addEventListener('mousedown', e => { if (e.button === 2) tile.classList.add('vp-ctx'); });
             tile.addEventListener('contextmenu', () => setTimeout(() => tile.classList.remove('vp-ctx'), 300));
             tile.addEventListener('mouseleave', () => tile.classList.remove('vp-ctx'));
-            tile.appendChild(galActions(post));
+            const bar = galActions(post), bgx = document.createElement('div');
+            bgx.className = 'vp-gal-bgx';
+            bar.prepend(bgx);
+            tile.appendChild(bar);
+            const barBg = () => {
+                const slide = strip.children[Math.min(media.length - 1, Math.round(strip.scrollLeft / Math.max(1, strip.clientWidth)))];
+                const img = slide && slide.querySelector('img');
+                const ok = !!img && img.complete && img.naturalWidth > 0 && !!img.currentSrc;
+                bar.classList.toggle('vp-bgx', ok);
+                bgx.style.backgroundImage = ok ? `url("${img.currentSrc}")` : '';
+            };
+            strip.querySelectorAll('img').forEach(i => i.addEventListener('load', barBg));
+            if (media.length > 1) strip.addEventListener('scroll', () => requestAnimationFrame(barBg), { passive: true });
+            barBg();
             tile.addEventListener('click', () => { if (!tile._vpDragged) galOpenPost(post); });
             return tile;
         }
