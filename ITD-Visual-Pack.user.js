@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.6.5
+// @version      3.7.6.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -5767,9 +5767,10 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             avatarEditor(own ? lookImgUrl(own) : img && img.src);
         }, true);
         const CHANGELOG = [
-            ['3.7.6 – 3.7.6.5', '26 октября 2026', [
+            ['3.7.6 – 3.7.6.6', '26 октября 2026', [
                 'Аватарка: нажми на свою аву в профиле, откроется редактор с кружком-примеркой, можно картинку, GIF или короткое видео, увидят все, у кого стоит ИТД X',
                 'Змейка снова открывается в играх',
+                'Баннер в профиле показывается целиком, как на сайте без мода: приближение включается только при прокрутке',
                 'Свой профиль, открытый через клуб, подсвечивается в боковом меню',
                 'В уведомлениях у лайков в розовом кружке появилось сердечко, как значок у ответов'
             ]],
@@ -13644,7 +13645,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const past = Math.max(0, -r.top);
             const y = Math.round(past * .35);
             const glassEl = bannerGlassEl(banner), glass = !bannerNoGlass && glassEl;
-            const tf = calm ? '' : `translateY(${y}px)` + (glassEl ? '' : ' scale(1.15)'), op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
+            const zoom = Math.min(.15, 2 * y / Math.max(1, r.height)).toFixed(3), tf = calm ? '' : `translateY(${y}px)` + (glassEl || !+zoom ? '' : ` scale(${1 + +zoom})`), op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
             for (const el of [img, banner.querySelector(':scope > .vp-banner-video'), glass].filter(Boolean)) {
                 if (el.style.transform !== tf) el.style.transform = tf;
                 if (el.style.opacity !== op) el.style.opacity = op;

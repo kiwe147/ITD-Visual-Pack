@@ -166,7 +166,7 @@
             const past = Math.max(0, -r.top);
             const y = Math.round(past * .35);
             const glassEl = bannerGlassEl(banner), glass = !bannerNoGlass && glassEl;
-            const tf = calm ? '' : `translateY(${y}px)` + (glassEl ? '' : ' scale(1.15)'), op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
+            const zoom = Math.min(.15, 2 * y / Math.max(1, r.height)).toFixed(3), tf = calm ? '' : `translateY(${y}px)` + (glassEl || !+zoom ? '' : ` scale(${1 + +zoom})`), op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
             for (const el of [img, banner.querySelector(':scope > .vp-banner-video'), glass].filter(Boolean)) {
                 if (el.style.transform !== tf) el.style.transform = tf;
                 if (el.style.opacity !== op) el.style.opacity = op;
