@@ -19,7 +19,7 @@
             if (/^\d{5,6}$/.test(o.t || '')) look.t = +o.t;
             return look;
         }
-        let avaLookOf = () => '';
+        let avaLookOf = () => '', avaReady = false;
         const avaUrlOf = login => avaLookOf(String(login || '').toLowerCase());
         function lookImgUrl(ref) {
             const h = ref.slice(1);

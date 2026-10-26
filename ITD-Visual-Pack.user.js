@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.7.2
+// @version      3.7.7.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -36,7 +36,7 @@
     const AUTO_LIKE_KEY = 'itd_auto_like_ids';
     const isUrl = a => /^https?:|^\//.test(a);
     const ACCT_DEVICE = new Set(['vp_ver_at', 'vp_upd_ask', 'vp_latest', 'vp_vx', 'vp_learned', 'vp_old_cache', 'vp_posts_list', 'vp_posts_lock', 'vp_api_pause',
-        'vp_club_online', 'vp_club_next', 'changelogSeen', 'bgGlForce', 'tabletDesktop', 'junkOk', 'adminFabPos', 'fabFace']);
+        'vp_club_online', 'vp_club_ava', 'vp_club_next', 'changelogSeen', 'bgGlForce', 'tabletDesktop', 'junkOk', 'adminFabPos', 'fabFace']);
     const ACCT = { id: String(GM_get0('vp_last_acct', '') || '') };
     ACCT.boot = ACCT.id;
     const acctScoped = k => {
@@ -3970,7 +3970,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (/^\d{5,6}$/.test(o.t || '')) look.t = +o.t;
             return look;
         }
-        let avaLookOf = () => '';
+        let avaLookOf = () => '', avaReady = false;
         const avaUrlOf = login => avaLookOf(String(login || '').toLowerCase());
         function lookImgUrl(ref) {
             const h = ref.slice(1);
@@ -6227,6 +6227,10 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.7.3', '26 октября 2026', [
+                'Клуб ИТД X: аватарки-картинки больше не остаются эмодзи, если картинка нашлась позже списка. Список сам подставляет её, а последняя найденная аватарка запоминается и показывается сразу',
+                'В консоли браузера появилась команда itdvp.jank(20) для поиска рывков ленты при прокрутке вверх: запусти и листай ленту, она покажет, что именно дёргается'
+            ]],
             ['3.7.7.2', '26 октября 2026', [
                 'Вертикальные видео в постах: панель плеера больше не вылезает за видео. Она растягивается на всю ширину поста, а само видео стоит по центру. Заодно у кнопок «Во весь экран» и «Картинка в картинке» появились значки'
             ]],
@@ -7167,6 +7171,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                         try { parsed = JSON.parse(raw) || {}; } catch (e) { }
                         for (const [name, info] of Object.entries(parsed)) if (info && info.look) lookBy.set(name.toLowerCase(), info.look);
                     }
+                    avaReady = true;
                     setBgGuest(pu && pu !== me ? lookBy.get(pu) : null);
                     markAvatars(me, pu, true);
                     if (!lookBy.size) return;
@@ -12982,6 +12987,51 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         document.addEventListener('click', e => { if (e.target.closest && e.target.closest(PROFILE_LINK)) { clearTimeout(hcTimer); hcClose(); } }, true);
         onDom(function hcLinkGone() { if (hc && !(hcLink && hcLink.isConnected)) hcClose(); });
 
+        pageWindow.itdvp.jank = function (sec = 20) {
+            if (pageWindow.itdvp._jankOn) return 'замер уже идёт';
+            pageWindow.itdvp._jankOn = true;
+            const posts = () => [...document.querySelectorAll('article.' + SELECTORS.post)].filter(a => !a.parentElement.closest('article.' + SELECTORS.post));
+            const rows = [];
+            let prev = null, frames = 0, jumps = 0;
+            const t0 = performance.now(), end = t0 + sec * 1000;
+            const snap = () => {
+                const a = posts().find(p => p.getBoundingClientRect().bottom > 120);
+                if (!a) return null;
+                const slot = a.parentElement, r = a.getBoundingClientRect(), s = slot.getBoundingClientRect();
+                return { a, y: scrollY, art: r.top, slot: s.top, lay: a.offsetHeight, rect: r.height, sh: document.documentElement.scrollHeight, so: a.style.getPropertyValue('--vp-so'), sy: a.style.getPropertyValue('--vp-sy'), ss: a.style.getPropertyValue('--vp-ss') };
+            };
+            const step = () => {
+                const now = performance.now();
+                if (now > end) {
+                    pageWindow.itdvp._jankOn = false;
+                    pageWindow.itdvp._jankRows = rows;
+                    const slotN = rows.filter(r => r.причина === 'список сайта').length, postN = rows.filter(r => r.причина === 'сам пост').length;
+                    console.info('[ITD VP] замер закончен: кадров ' + frames + ', рывков ' + jumps + ' (список сайта ' + slotN + ', сам пост ' + postN + ')');
+                    if (rows.length) console.table(rows.slice(0, 40));
+                    console.info('[ITD VP] скопируй вот это и пришли:', JSON.stringify(rows.slice(0, 40)));
+                    return;
+                }
+                const c = snap();
+                frames++;
+                if (c && prev && c.a === prev.a) {
+                    const jump = (c.art - prev.art) + (c.y - prev.y), slotJump = (c.slot - prev.slot) + (c.y - prev.y);
+                    if (Math.abs(jump) > 1.5) {
+                        jumps++;
+                        rows.push({
+                            мс: Math.round(now - t0), рывок: +jump.toFixed(1), причина: Math.abs(slotJump) > Math.abs(jump - slotJump) ? 'список сайта' : 'сам пост',
+                            прокрутка: +(c.y - prev.y).toFixed(1), высотаПоста: c.lay - prev.lay, высотаСтраницы: c.sh - prev.sh,
+                            так: [prev.so, prev.sy, prev.ss].join('/') + ' > ' + [c.so, c.sy, c.ss].join('/'),
+                            пост: (c.a.querySelector('.' + SELECTORS.postText) || c.a).textContent.trim().slice(0, 24)
+                        });
+                    }
+                }
+                prev = c;
+                requestAnimationFrame(step);
+            };
+            requestAnimationFrame(step);
+            return 'идёт замер ' + sec + ' с: листай ленту вверх, как обычно, потом смотри консоль';
+        };
+
         const galIcon = size => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="10" rx="2.5"/><rect x="13" y="3" width="8" height="6" rx="2.5"/><rect x="3" y="15" width="8" height="6" rx="2.5"/><rect x="13" y="11" width="8" height="10" rx="2.5"/></svg>`;
         const GAL_TABS = [['popular', 'Популярное'], ['clan', 'Кланы'], ['following', 'Подписки']];
         const gal = { acts: new Map(), el: null, tab: 'popular', cursor: null, loading: false, done: false, cols: [], heights: [], seen: new Set(), hist: false };
@@ -15151,9 +15201,30 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             history.pushState({}, '', '/@' + login);
             dispatchEvent(new PopStateEvent('popstate'));
         }
+        function clubAvaOf(n, fb) {
+            let url = avaUrlOf(n);
+            const cache = GM_getValue('vp_club_ava', null) || {};
+            if (url) { if (cache[n] !== url) { cache[n] = url; GM_setValue('vp_club_ava', cache); } }
+            else if (avaReady || !showLooks) { if (cache[n] && avaReady) { delete cache[n]; GM_setValue('vp_club_ava', cache); } }
+            else url = cache[n] || '';
+            return url || fb;
+        }
+        function clubAvaPut(av, ava, fb) {
+            if (isUrl(ava)) {
+                const img = av.firstElementChild;
+                if (img && img.tagName === 'IMG' && img.getAttribute('src') === ava) return;
+                av.textContent = '';
+                const im = document.createElement('img');
+                im.alt = '';
+                im.onerror = () => { av.textContent = fb; };
+                im.src = ava;
+                av.appendChild(im);
+            } else if (av.firstElementChild || av.textContent !== ava) av.textContent = ava;
+        }
         function paintClub() {
             railClub.querySelectorAll('.vp-club-row').forEach(row => {
                 const n = row.dataset.login, name = row.querySelector('.vp-club-name'), av = row.querySelector('.vp-club-ava');
+                clubAvaPut(av, clubAvaOf(n, row._fb || '👤'), row.dataset.fb || '👤');
                 if (n === myUsername) { name.classList.add('vp-my-nick', 'vp-my-nick-box'); av.classList.add('my-avatar-glow'); return; }
                 const look = (verifiedInfo(n) || {}).look;
                 const put = (el, attr, val) => { if (val) { if (el.getAttribute(attr) !== val) el.setAttribute(attr, val); } else el.removeAttribute(attr); };
@@ -15180,9 +15251,10 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 row.className = 'vp-club-row';
                 row.dataset.login = n;
                 row.innerHTML = '<div class="vp-club-ava"></div><div class="vp-club-names"><span class="vp-club-name"></span><span class="vp-club-login"></span></div>';
-                const ava = avaUrlOf(n) || pick(d && d.avatar && (d.avatar.url || d.avatar), d && d.avatarUrl, '👤');
-                const av = row.firstChild;
-                if (isUrl(ava)) { const img = document.createElement('img'); img.src = ava; av.appendChild(img); } else av.textContent = ava;
+                const fb = pick(d && d.avatar && (d.avatar.url || d.avatar), d && d.avatarUrl, '👤');
+                row.dataset.fb = isUrl(fb) ? '👤' : fb;
+                row._fb = fb;
+                clubAvaPut(row.firstChild, clubAvaOf(n, fb), row.dataset.fb);
                 row.querySelector('.vp-club-name').textContent = pick(d && d.displayName, d && d.display_name, n) + (n === myUsername ? ' (ты)' : '');
                 row.querySelector('.vp-club-login').textContent = '@' + n;
                 row.onclick = () => openProfile(n);

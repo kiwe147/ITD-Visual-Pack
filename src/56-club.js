@@ -5,9 +5,30 @@
             history.pushState({}, '', '/@' + login);
             dispatchEvent(new PopStateEvent('popstate'));
         }
+        function clubAvaOf(n, fb) {
+            let url = avaUrlOf(n);
+            const cache = GM_getValue('vp_club_ava', null) || {};
+            if (url) { if (cache[n] !== url) { cache[n] = url; GM_setValue('vp_club_ava', cache); } }
+            else if (avaReady || !showLooks) { if (cache[n] && avaReady) { delete cache[n]; GM_setValue('vp_club_ava', cache); } }
+            else url = cache[n] || '';
+            return url || fb;
+        }
+        function clubAvaPut(av, ava, fb) {
+            if (isUrl(ava)) {
+                const img = av.firstElementChild;
+                if (img && img.tagName === 'IMG' && img.getAttribute('src') === ava) return;
+                av.textContent = '';
+                const im = document.createElement('img');
+                im.alt = '';
+                im.onerror = () => { av.textContent = fb; };
+                im.src = ava;
+                av.appendChild(im);
+            } else if (av.firstElementChild || av.textContent !== ava) av.textContent = ava;
+        }
         function paintClub() {
             railClub.querySelectorAll('.vp-club-row').forEach(row => {
                 const n = row.dataset.login, name = row.querySelector('.vp-club-name'), av = row.querySelector('.vp-club-ava');
+                clubAvaPut(av, clubAvaOf(n, row._fb || '👤'), row.dataset.fb || '👤');
                 if (n === myUsername) { name.classList.add('vp-my-nick', 'vp-my-nick-box'); av.classList.add('my-avatar-glow'); return; }
                 const look = (verifiedInfo(n) || {}).look;
                 const put = (el, attr, val) => { if (val) { if (el.getAttribute(attr) !== val) el.setAttribute(attr, val); } else el.removeAttribute(attr); };
@@ -34,9 +55,10 @@
                 row.className = 'vp-club-row';
                 row.dataset.login = n;
                 row.innerHTML = '<div class="vp-club-ava"></div><div class="vp-club-names"><span class="vp-club-name"></span><span class="vp-club-login"></span></div>';
-                const ava = avaUrlOf(n) || pick(d && d.avatar && (d.avatar.url || d.avatar), d && d.avatarUrl, '👤');
-                const av = row.firstChild;
-                if (isUrl(ava)) { const img = document.createElement('img'); img.src = ava; av.appendChild(img); } else av.textContent = ava;
+                const fb = pick(d && d.avatar && (d.avatar.url || d.avatar), d && d.avatarUrl, '👤');
+                row.dataset.fb = isUrl(fb) ? '👤' : fb;
+                row._fb = fb;
+                clubAvaPut(row.firstChild, clubAvaOf(n, fb), row.dataset.fb);
                 row.querySelector('.vp-club-name').textContent = pick(d && d.displayName, d && d.display_name, n) + (n === myUsername ? ' (ты)' : '');
                 row.querySelector('.vp-club-login').textContent = '@' + n;
                 row.onclick = () => openProfile(n);

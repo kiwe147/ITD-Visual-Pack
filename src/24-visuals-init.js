@@ -269,6 +269,7 @@
                         try { parsed = JSON.parse(raw) || {}; } catch (e) { }
                         for (const [name, info] of Object.entries(parsed)) if (info && info.look) lookBy.set(name.toLowerCase(), info.look);
                     }
+                    avaReady = true;
                     setBgGuest(pu && pu !== me ? lookBy.get(pu) : null);
                     markAvatars(me, pu, true);
                     if (!lookBy.size) return;

@@ -35,6 +35,7 @@
 44-glass-overlay.js
 45-nav-blob-scene-feed.js
 46-hover-card.js
+46b-jank-probe.js
 50-gallery.js
 51-post-tools.js
 52-toasts-links-banner-fx.js

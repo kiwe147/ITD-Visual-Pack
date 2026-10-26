@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.7.2
+// @version      3.7.7.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -36,7 +36,7 @@
     const AUTO_LIKE_KEY = 'itd_auto_like_ids';
     const isUrl = a => /^https?:|^\//.test(a);
     const ACCT_DEVICE = new Set(['vp_ver_at', 'vp_upd_ask', 'vp_latest', 'vp_vx', 'vp_learned', 'vp_old_cache', 'vp_posts_list', 'vp_posts_lock', 'vp_api_pause',
-        'vp_club_online', 'vp_club_next', 'changelogSeen', 'bgGlForce', 'tabletDesktop', 'junkOk', 'adminFabPos', 'fabFace']);
+        'vp_club_online', 'vp_club_ava', 'vp_club_next', 'changelogSeen', 'bgGlForce', 'tabletDesktop', 'junkOk', 'adminFabPos', 'fabFace']);
     const ACCT = { id: String(GM_get0('vp_last_acct', '') || '') };
     ACCT.boot = ACCT.id;
     const acctScoped = k => {
