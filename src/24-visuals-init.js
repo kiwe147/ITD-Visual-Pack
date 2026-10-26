@@ -205,10 +205,45 @@
                 }
 
                 let lookRaw = null, lookBy = new Map();
+                function avaPut(el, ref, vid) {
+                    if ((el.getAttribute('data-vp-ava') || '') !== ref) {
+                        if (ref) { el.setAttribute('data-vp-ava', ref); el.style.setProperty('--vp-ava-url', `url("${lookImgUrl(ref)}")`); }
+                        else { el.removeAttribute('data-vp-ava'); el.style.removeProperty('--vp-ava-url'); }
+                    }
+                    let v = el.querySelector(':scope > .vp-ava-vid');
+                    const want = ref && vid && el.getBoundingClientRect().width >= 60 ? vid : '';
+                    if (!want) { if (v) v.remove(); return; }
+                    const src = 'https://cdn.xn--d1ah4a.com/' + want;
+                    if (!v) {
+                        v = document.createElement('video');
+                        v.className = 'vp-ava-vid';
+                        v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true;
+                        v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+                        v.addEventListener('playing', () => v.classList.add('vp-live'));
+                        el.appendChild(v);
+                    }
+                    if (v.getAttribute('src') !== src) { v.classList.remove('vp-live'); v.src = src; v.play().catch(() => { }); }
+                }
+                function markAvatars(me, pu, others) {
+                    const own = GM_getValue(acctKey('vp_ava'), null) || {};
+                    const refOf = u => u === me ? { a: own.ref || '', va: own.vid || '' } : others && lookBy.get(u) || {};
+                    const put = (av, u) => { const r = refOf(u); avaPut(av, r.a || '', r.va || ''); };
+                    document.querySelectorAll(PROFILE_LINK).forEach(link => {
+                        const av = link.querySelector('.' + SELECTORS.avatar);
+                        if (av) put(av, userOf(link.getAttribute('href')));
+                    });
+                    loneNicks().forEach(({ el, u }) => {
+                        const av = [...(el.parentElement || el).children].find(x => x.matches('.' + SELECTORS.avatar));
+                        if (av) put(av, u);
+                    });
+                    if (pu) document.querySelectorAll('.' + SELECTORS.avatar).forEach(av => {
+                        if (!av.closest(PROFILE_LINK) && !av.closest('.' + SELECTORS.post) && nearLargeNick(av)) put(av, pu);
+                    });
+                }
                 function markLooks() {
                     const me = (myUsername || '').toLowerCase();
                     const pm = location.pathname.match(/^\/@([\w.]+)(\/.*)?$/), pu = pm && !/\/post\//.test(pm[2] || '') ? pm[1].toLowerCase() : '';
-                    if (!showLooks) { setBgGuest(null); return; }
+                    if (!showLooks) { setBgGuest(null); markAvatars(me, pu, false); return; }
                     const raw = localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}';
                     if (raw !== lookRaw) {
                         lookRaw = raw;
@@ -218,6 +253,7 @@
                         for (const [name, info] of Object.entries(parsed)) if (info && info.look) lookBy.set(name.toLowerCase(), info.look);
                     }
                     setBgGuest(pu && pu !== me ? lookBy.get(pu) : null);
+                    markAvatars(me, pu, true);
                     if (!lookBy.size) return;
                     const put = (el, attr, val) => {
                         if (!el) return;
@@ -259,6 +295,7 @@
                 findAllMyNicks();
 
                 markVerifiedUsers();
+                avatarRefresh = markLooks;
                 markLooks();
                 onDom(function myNickAndAvatar() {
                     findAllMyAvatars();

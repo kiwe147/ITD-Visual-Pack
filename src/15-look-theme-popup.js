@@ -13,6 +13,8 @@
             if (look.b === 'custom') look.i = o.i;
             if (look.b === 'custom' && BANNER_VIDEO_RE.test(o.bv || '')) look.bv = o.bv;
             if (BANNER_VIDEO_RE.test(o.v || '')) look.v = o.v;
+            if (/^[0-4][0-9a-f]{32}$/.test(o.a || '')) look.a = o.a;
+            if (BANNER_VIDEO_RE.test(o.va || '')) look.va = o.va;
             if (VER_RE.test(o.ver || '')) look.ver = o.ver;
             if (/^\d{5,6}$/.test(o.t || '')) look.t = +o.t;
             return look;
@@ -82,9 +84,11 @@
             try {
                 const b = backgroundEnabled ? backgroundStyle : '-';
                 const today = Math.floor(srvNow() / 864e5), was = GM_getValue(acctKey('vp_look_day'), 0), day = today - was < 7 && today >= was ? was : today;
+                const own = GM_getValue(acctKey('vp_ava'), null) || {}, ownAva = own.ref || '', ownVid = ownAva && own.vid || '';
                 let img = '', bv = '';
                 if (b === 'custom') ({ ref: img = '', vid: bv = '' } = await customBgCdn().then(x => x || {}).catch(e => { logErr('свой фон на сервер', e); return {}; }));
-                const text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (img && bv ? ' bv=' + bv : '') + (bannerVideoOwn() ? ' v=' + bannerVideoOwn() : '') + await lookVer().then(x => x ? ' vx=' + x : '') + ' t=' + day;
+                let text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (img && bv ? ' bv=' + bv : '') + (bannerVideoOwn() ? ' v=' + bannerVideoOwn() : '') + (ownAva ? ' a=' + ownAva : '') + (ownVid ? ' va=' + ownVid : '') + await lookVer().then(x => x ? ' vx=' + x : '') + ' t=' + day;
+                for (const k of ['va', 'bv', 'v', 'a']) { if (sealText(text).length <= 990) break; text = text.split(' ').filter(t => !t.startsWith(k + '=')).join(' '); }
                 if (text === lookSent) return;
                 const all = await loadVerificationComments();
                 const mine = all.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));

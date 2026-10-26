@@ -5,10 +5,12 @@ const fs = require('fs');
 const path = require('path');
 const snap = fs.readFileSync(process.argv[2], 'utf8');
 const pic = fs.readFileSync(process.argv[3] || 'C:/Code/ITD/promo/glbuild/ava_test.png');
-const src = fs.readFileSync(process.env.MOD || path.join(__dirname, '..', 'ITD-Visual-Pack.user.js'), 'utf8');
+const src = fs.readFileSync(process.env.MOD || path.join(__dirname, '..', 'ITD-Visual-Pack.user.js'), 'utf8')
+  .replace('function openText(content) {', 'window.__ot = c => openText(c); function openText(content) {');
 const OWNER = src.match(/const OWNER_ID = '([^']+)'/)[1];
 const ORIGIN = 'https://xn--d1ah4a.com';
-const NEW = 'https://cdn.xn--d1ah4a.com/images/avatars/11111111-2222-4333-8444-555555555555.jpg';
+const UUID = '11111111-2222-4333-8444-555555555555';
+const NEW = 'https://cdn.xn--d1ah4a.com/images/' + UUID + '.jpg';
 const fails = [];
 const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + what); if (!ok) fails.push(what); };
 (async () => {
@@ -23,11 +25,12 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
       if (u.origin === ORIGIN && t === 'document') return r.fulfill({ contentType: 'text/html; charset=utf-8', body: snap });
       if (['image', 'stylesheet', 'font'].includes(t)) return r.continue();
       if (u.pathname.includes('/auth/refresh')) return r.fulfill({ contentType: 'application/json', body: '{"accessToken":"t"}' });
-      if (u.pathname === '/api/files/avatar') {
+      if (u.pathname === '/api/files/upload') {
         const body = req.postDataBuffer() || Buffer.alloc(0);
-        calls.push({ what: 'upload', size: body.length, jpeg: body.includes(Buffer.from([0xff, 0xd8, 0xff])), name: (body.toString('latin1').match(/filename="([^"]*)"/) || [])[1] });
+        calls.push({ what: 'upload', size: body.length, jpeg: body.includes(Buffer.from([0xff, 0xd8, 0xff])) });
         return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { url: NEW } }) });
       }
+      if (/\/comments$/.test(u.pathname) && req.method() === 'POST') { calls.push({ what: 'comment', text: JSON.parse(req.postData()).content }); return r.fulfill({ status: 201, contentType: 'application/json', body: '{"data":{"id":"c1"}}' }); }
       if (u.pathname === '/api/users/me' && req.method() === 'GET') return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ username: 'NeuroSFW', displayName: 'NeuroSFW', id: OWNER, avatar: 'https://cdn.xn--d1ah4a.com/images/avatars/0b46cd5f-2b28-4739-8395-bb9ea544c7d2.jpg' }) });
       if (u.pathname === '/api/users/me' && req.method() === 'PUT') { calls.push({ what: 'put', body: req.postData() }); return r.fulfill({ contentType: 'application/json', body: '{}' }); }
       if (u.pathname.startsWith('/api/')) return r.fulfill({ contentType: 'application/json', body: '{}' });
@@ -40,8 +43,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
       window.GM_info = { script: { version: 't' }, scriptMetaStr: m }; window.unsafeWindow = window;
     }, [src.slice(0, src.indexOf('==/UserScript=='))]);
     await p.addInitScript('(function () { const run = () => {' + src + String.fromCharCode(10) + '}; if (document.documentElement) run(); else { const mo = new MutationObserver(() => { if (document.documentElement) { mo.disconnect(); run(); } }); mo.observe(document, { childList: true }); } })();');
-    p.on('framenavigated', () => { });
-    await p.goto(ORIGIN + '/@NeuroSFW');
+        await p.goto(ORIGIN + '/@NeuroSFW');
     await p.waitForTimeout(2500);
     const tag = phone ? 'телефон' : 'компьютер';
     const spot = await p.evaluate(() => { const av = [...document.querySelectorAll('.vp-avatar.vp-ava-edit')][0]; if (!av) return null; const r = av.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width }; });
@@ -64,11 +66,16 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     const after = await px();
     check(before !== after, tag + ': масштаб и перетаскивание меняют картинку (' + before + ' → ' + after + ')');
     await p.screenshot({ path: path.join(__dirname, 'out', 'avatared-' + (phone ? 'phone' : 'desk') + '.png') });
-    const nav = p.waitForNavigation({ timeout: 4000 }).catch(() => null);
     await p.click('.vp-ave-ok');
-    await nav;
-    check(calls.some(c => c.what === 'upload' && c.jpeg && c.size > 3000), tag + ': на сервер ушёл jpeg-квадрат ' + JSON.stringify(calls.find(c => c.what === 'upload') || {}));
-    check(calls.some(c => c.what === 'put' && /"avatar"/.test(c.body || '')), tag + ': аватарка привязана к профилю ' + JSON.stringify(calls.find(c => c.what === 'put') || {}));
+    await p.waitForTimeout(3500);
+    check(calls.some(c => c.what === 'upload' && c.size > 2000), tag + ': на сервер ушла картинка-квадрат ' + JSON.stringify(calls.find(c => c.what === 'upload') || {}));
+    const posted = await Promise.all(calls.filter(c => c.what === 'comment').map(c => p.evaluate(t => window.__ot(t), c.text)));
+    check(posted.some(t => /^ITDXL1 /.test(t) && t.includes(' a=1' + UUID.replace(/-/g, ''))), tag + ': в стиле профиля записана ссылка на аватарку ' + JSON.stringify(posted.map(t => t.slice(0, 120))));
+    check(await p.evaluate(() => !document.querySelector('.vp-ave')), tag + ': редактор закрылся');
+    const own = await p.evaluate(() => [...document.querySelectorAll('.vp-avatar[data-vp-ava]')].length);
+    check(own > 0, tag + ': своя аватарка на странице заменена (' + own + ')');
+    const css = await p.evaluate(() => { const a = document.querySelector('.vp-avatar[data-vp-ava]'); return a ? getComputedStyle(a, '::after').backgroundImage.slice(0, 90) : ''; });
+    check(/images\/1111/.test(css) || /UUID/.test(css) || css.includes(UUID), tag + ': картинка подставлена поверх (' + css + ')');
     check(!errors.length, tag + ': ошибок страницы нет' + (errors.length ? ': ' + errors.join(' | ') : ''));
     await ctx.close();
   }

@@ -268,8 +268,9 @@
             if (blob.size > 5 * 1024 * 1024) throw new Error('картинка больше 5 МБ');
             return new File([blob], 'img.' + (blob.type.split('/')[1] || 'png'), { type: blob.type });
         }
-        async function msgUploadImage(file) {
+        async function msgUploadImage(file, raw) {
             const fd = new FormData();
+            if (raw) fd.vpRaw = true;
             fd.append('file', await msgPrepImage(file));
             const res = await api('/api/files/upload', { method: 'POST', body: fd });
             if (!res.ok) throw new Error('загрузка картинки: ' + res.status);
