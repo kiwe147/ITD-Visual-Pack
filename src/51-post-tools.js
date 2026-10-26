@@ -85,6 +85,8 @@
         onDom(postMediaWait);
 
         function postIdOf(card) {
+            const anchor = card.matches('article[data-alice-water-anchor-kind="post"]') && card.getAttribute('data-alice-water-anchor-id');
+            if (anchor && /^[0-9a-f-]{36}$/i.test(anchor)) return anchor;
             if (!card.matches('article')) { const m = location.pathname.match(/\/post\/([0-9a-f-]{36})/); if (m) return m[1]; }
             const rp = card.querySelector('.' + SELECTORS.repost);
             if (rp) {

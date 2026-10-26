@@ -6228,7 +6228,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         };
         const CHANGELOG = [
             ['3.7.7.7', '27 октября 2026', [
-                'Посты с размытой картинкой: заливка точно по скруглению, обводка идёт по самому краю'
+                'Посты с размытой картинкой: заливка точно по скруглению, обводка идёт по самому краю',
+                'Быстрые кнопки «скопировать ссылку» и «скопировать картинку» снова у всех постов, в том числе с видео'
             ]],
             ['3.7.7.6', '27 октября 2026', [
                 'Листание вкладок на телефоне: страницы сдвигаются влево и вправо по порядку пунктов меню',
@@ -13967,6 +13968,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         onDom(postMediaWait);
 
         function postIdOf(card) {
+            const anchor = card.matches('article[data-alice-water-anchor-kind="post"]') && card.getAttribute('data-alice-water-anchor-id');
+            if (anchor && /^[0-9a-f-]{36}$/i.test(anchor)) return anchor;
             if (!card.matches('article')) { const m = location.pathname.match(/\/post\/([0-9a-f-]{36})/); if (m) return m[1]; }
             const rp = card.querySelector('.' + SELECTORS.repost);
             if (rp) {
