@@ -11,7 +11,6 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
-// @grant        GM_cookie
 // @grant        unsafeWindow
 // @connect      raw.githubusercontent.com
 // @connect      cdn.xn--d1ah4a.com
@@ -5783,145 +5782,105 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const img = av.querySelector('img'), own = aveOwnRef();
             avatarEditor(own ? lookImgUrl(own) : img && img.src);
         }, true);
-        const ACC_KEY = 'vp_accounts', ACC_ON = 'vp_acc_on', ACC_PENDING = 'vp_acc_pending';
-        const ACC_HOST = location.hostname;
-        const accHas = () => typeof GM_cookie !== 'undefined' && !!GM_cookie && typeof GM_cookie.list === 'function';
+        const ACC_KEY = 'vp_logins', ACC_ON = 'vp_acc_on', ACC_TS_KEY = '0x4AAAAAACHhxczw6fJGwPBg';
         const accSlots = () => { try { const o = GM_getValue(ACC_KEY, null); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } };
         const accSave = o => GM_setValue(ACC_KEY, o);
         const accOn = () => GM_getValue(ACC_ON, false) === true;
         const accMe = () => meData && meData.id ? { id: String(meData.id), username: meData.username || myUsername || '', name: meData.displayName || meData.username || '' } : null;
-        const cookieList = d => new Promise(ok => { try { GM_cookie.list(d, (r, e) => ok(e || !Array.isArray(r) ? [] : r)); } catch (e) { ok([]); } });
-        const cookieSet = d => new Promise(ok => { try { GM_cookie.set(d, e => ok(!e)); } catch (e) { ok(false); } });
-        const cookieDel = d => new Promise(ok => { try { GM_cookie.delete(d, () => ok(true)); } catch (e) { ok(false); } });
-        const ACC_SKIP = /^(__?cf|cf_|_ga|_gid|_ym|_fbp|_gcl)/i;
-        async function accWho() {
-            try {
-                const t = await getAccessToken();
-                const r = await fetch('/api/users/me', { credentials: 'include', headers: { Authorization: 'Bearer ' + t } });
-                const u = r.ok ? await r.json() : null;
-                return u && u.id && u.username ? u : null;
-            } catch (e) { return null; }
-        }
-        async function accReadCookies() {
-            const seen = new Map();
-            for (const d of [{ domain: ACC_HOST }, { url: location.origin + '/' }, { url: location.origin + '/api/v1/auth/refresh' }]) {
-                for (const c of await cookieList(d)) if (!ACC_SKIP.test(c.name)) seen.set([c.name, c.domain, c.path].join('|'), c);
-            }
-            return [...seen.values()];
-        }
-        const accCookieUrl = c => 'https://' + String(c.domain || ACC_HOST).replace(/^\./, '') + (c.path || '/');
-        async function accCapture() {
-            if (!accHas() || !accOn()) return false;
-            const who = await accWho();
-            if (!who) return false;
-            const me = { id: String(who.id), username: who.username, name: who.displayName || who.username };
-            const cookies = (await accReadCookies()).map(c => ({ name: c.name, value: c.value, domain: c.domain, hostOnly: !!c.hostOnly, path: c.path || '/', secure: !!c.secure, httpOnly: !!c.httpOnly, sameSite: c.sameSite, session: !!c.session, expirationDate: c.expirationDate }));
-            if (!cookies.length) return false;
-            const slots = accSlots();
-            const sig = cs => cs.filter(c => c.httpOnly).map(c => c.name + '=' + c.value).join('|');
-            for (const [k, v] of Object.entries(slots)) if (k !== me.id && sig(v.cookies || []) && sig(v.cookies) === sig(cookies)) delete slots[k];
-            const ava = typeof who.avatar === 'string' && who.avatar.length <= 8 ? who.avatar : '';
-            slots[me.id] = { id: me.id, username: me.username, name: me.name, ava, cookies, at: Date.now() };
-            accSave(slots);
-            return true;
-        }
-        async function accWipe() {
-            for (const c of await accReadCookies()) await cookieDel({ url: accCookieUrl(c), name: c.name });
-        }
-        async function accApply(cookies) {
-            for (const c of cookies) {
-                const d = { url: accCookieUrl(c), name: c.name, value: c.value, path: c.path, secure: c.secure, httpOnly: c.httpOnly };
-                if (!c.hostOnly && c.domain) d.domain = c.domain;
-                if (!c.session && c.expirationDate) d.expirationDate = c.expirationDate;
-                if (c.sameSite && c.sameSite !== 'unspecified') d.sameSite = c.sameSite;
-                await cookieSet(d);
-            }
-        }
-        let accBusy = false;
-        const accNames = cs => cs.map(c => c.name + '[' + (c.path || '/') + (c.httpOnly ? ',H' : '') + ']').join(' ') || 'нет';
         function accLog(text) {
             const l = GM_getValue('vp_acc_log', []);
             l.push({ at: Date.now(), text });
             GM_setValue('vp_acc_log', l.slice(-40));
         }
-        async function accSwitch(id) {
-            const slots = accSlots(), t = slots[id], me = accMe();
-            if (accBusy || !t || !accHas() || (me && me.id === id)) return;
-            const who = await accWho();
-            if (who && String(who.id) === id) { accSay('Этот аккаунт уже открыт'); return; }
-            accBusy = true;
-            accSay('Меняю аккаунт…');
-            let before = [];
-            try {
-                await accCapture();
-                before = await accReadCookies();
-                accLog('смена на @' + t.username + ', сейчас куки: ' + accNames(before) + '; в записи: ' + accNames(t.cookies));
-                await accWipe();
-                accLog('после удаления: ' + accNames(await accReadCookies()));
-                await accApply(t.cookies);
-                const now = await accReadCookies();
-                accLog('после записи: ' + accNames(now) + '; записаны все нужные: ' + t.cookies.every(c => now.some(n => n.name === c.name && n.value === c.value)));
-                const r = await fetch('/api/v1/auth/refresh', { method: 'POST', credentials: 'include' }).catch(() => null);
-                let nowId = '';
-                if (r && r.ok) {
-                    try {
-                        const tk = (await r.json()).accessToken;
-                        const m = await fetch('/api/users/me', { credentials: 'include', headers: { Authorization: 'Bearer ' + tk } });
-                        nowId = m.ok ? String((await m.json()).id || '') : '';
-                    } catch (e) { }
+        const accHeaders = () => {
+            const h = { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+            try { const d = localStorage.getItem('device_id'); if (d) h['X-Device-Id'] = d; } catch (e) { }
+            return h;
+        };
+        function accTsApi() {
+            return new Promise((ok, no) => {
+                const have = () => pageWindow.turnstile && pageWindow.turnstile.render;
+                if (have()) return ok(pageWindow.turnstile);
+                if (!document.getElementById('cf-turnstile-script')) {
+                    const s = document.createElement('script');
+                    s.id = 'cf-turnstile-script';
+                    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+                    s.async = true;
+                    s.onerror = () => no(new Error('Cloudflare не загрузился'));
+                    document.head.appendChild(s);
                 }
-                accLog('проверка входа: ' + (r ? r.status : 'нет ответа') + ', открыт аккаунт ' + (nowId || '?') + ', нужен ' + id);
-                if (nowId !== id) {
-                    await accWipe();
-                    await accApply(before);
+                const t0 = Date.now();
+                const wait = setInterval(() => {
+                    if (have()) { clearInterval(wait); ok(pageWindow.turnstile); }
+                    else if (Date.now() - t0 > 15000) { clearInterval(wait); no(new Error('Cloudflare не загрузился')); }
+                }, 150);
+            });
+        }
+        async function accToken(box) {
+            const ts = await accTsApi();
+            return new Promise((ok, no) => {
+                let wid = null;
+                const done = (f, v) => { try { if (wid !== null) ts.remove(wid); } catch (e) { } f(v); };
+                wid = ts.render(box, {
+                    sitekey: ACC_TS_KEY, theme: 'dark',
+                    callback: t => done(ok, t),
+                    'error-callback': () => done(no, new Error('Cloudflare не пропустил, попробуй ещё раз')),
+                    'expired-callback': () => done(no, new Error('Проверка Cloudflare истекла'))
+                });
+            });
+        }
+        let accBusy = false;
+        async function accLogin(cred, ui) {
+            if (accBusy) return;
+            accBusy = true;
+            try {
+                ui.say('Проверка Cloudflare…');
+                const token = await accToken(ui.box);
+                ui.box.textContent = '';
+                ui.say('Выхожу из аккаунта…');
+                await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include', headers: accHeaders() }).catch(() => { });
+                ui.say('Вхожу…');
+                const r = await fetch('/api/v1/auth/sign-in', { method: 'POST', credentials: 'include', headers: accHeaders(), body: JSON.stringify({ email: cred.email, password: cred.password, turnstileToken: token }) });
+                accLog('вход: ответ ' + r.status);
+                const j = await r.json().catch(() => null);
+                const d = j && (j.accessToken ? j : j.data);
+                if (!r.ok || !d || !d.accessToken) {
+                    const why = !r.ok ? ((j && (j.message || (j.error && j.error.message))) || ('код ' + r.status)) : 'сайт просит код из почты';
                     accBusy = false;
-                    const hidden = !t.cookies.some(c => c.httpOnly);
-                    accSay(hidden ? 'Не получилось: Tampermonkey не отдаёт мод закрытую куку входа сайта, поэтому сессию подменить нельзя. Прежний аккаунт оставил' : 'Вход в @' + t.username + ' не подошёл (сервер открыл другой аккаунт). Прежний оставил. Нажми «×» у этого аккаунта и добавь его заново', true);
+                    ui.fail('Не вошёл: ' + why + '. Ты сейчас вышел из аккаунта, войди обычным способом.');
                     return;
                 }
-                GM_setValue(ACC_PENDING, { id, at: Date.now() });
+                let me = null;
+                try { const m = await fetch('/api/users/me', { credentials: 'include', headers: { Authorization: 'Bearer ' + d.accessToken } }); me = m.ok ? await m.json() : null; } catch (e) { }
+                if (me && me.id && cred.remember !== false) {
+                    const s = accSlots();
+                    s[String(me.id)] = { id: String(me.id), username: me.username, name: me.displayName || me.username, ava: typeof me.avatar === 'string' && me.avatar.length <= 8 ? me.avatar : '', email: cred.email, password: cred.password, at: Date.now() };
+                    accSave(s);
+                }
+                accLog('вошёл как ' + (me && me.username || '?'));
                 location.assign('/');
             } catch (e) {
                 accBusy = false;
-                try { await accWipe(); await accApply(before); } catch (x) { }
                 accLog('ошибка: ' + (e && e.message || e));
-                accSay('Не получилось сменить аккаунт', true);
-                logErr('смена аккаунта', e);
+                ui.fail(e && e.message || 'Не получилось');
             }
-        }
-        async function accAdd() {
-            if (accBusy || !accHas()) return;
-            accBusy = true;
-            accSay('Открываю вход…');
-            try {
-                await accCapture();
-                await accWipe();
-                GM_setValue(ACC_PENDING, null);
-                location.assign('/login');
-            } catch (e) { accBusy = false; accSay('Не получилось', true); logErr('добавить аккаунт', e); }
         }
         function accForget(id) {
             const s = accSlots();
             delete s[id];
             accSave(s);
         }
-        let accNote = null, accNoteTimer = 0;
-        function accSay(text, bad) {
-            if (!accNote || !accNote.isConnected) { accNote = document.createElement('div'); accNote.className = 'vp-acc-note'; document.body.appendChild(accNote); }
-            accNote.textContent = text;
-            accNote.classList.toggle('vp-bad', !!bad);
-            clearTimeout(accNoteTimer);
-            accNoteTimer = setTimeout(() => accNote && accNote.remove(), bad ? 7000 : 4000);
-        }
 
         addCss(`
         .vp-acc-btn { position: relative; }
         .vp-acc-wrap .vp-acc-btn { color: var(--text-primary, #fff) !important; border-color: var(--border-color, rgba(255, 255, 255, .22)) !important; }
-        .vp-acc-pop { position: fixed; z-index: 99990; width: min(320px, calc(100vw - 24px)); box-sizing: border-box; padding: 10px; border-radius: 22px; display: flex; flex-direction: column; gap: 4px;
+        .vp-acc-pop { position: fixed; z-index: 99990; width: min(330px, calc(100vw - 24px)); box-sizing: border-box; padding: 10px; border-radius: 22px; display: flex; flex-direction: column; gap: 4px;
             background: var(--block-bg, #15151b); color: var(--text-primary, #fff); border: 1px solid var(--border-color, rgba(255, 255, 255, .12)); box-shadow: 0 18px 50px rgba(0, 0, 0, .55);
             backdrop-filter: var(--vp-glass-filter, blur(18px)); -webkit-backdrop-filter: var(--vp-glass-filter, blur(18px)); animation: vp-acc-in .14s ease-out; }
         @keyframes vp-acc-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-        .vp-acc-head { padding: 6px 8px 8px; font-size: 15px; font-weight: 700; }
+        .vp-acc-head { padding: 6px 8px 8px; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .vp-acc-back { all: unset; cursor: pointer; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--text-secondary, #9aa0b4); }
+        .vp-acc-back:hover { background: rgba(128, 128, 128, .25); }
         .vp-acc-row { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 16px; cursor: pointer; }
         .vp-acc-row:hover { background: rgba(128, 128, 128, .16); }
         .vp-acc-row.vp-cur { cursor: default; background: color-mix(in srgb, var(--vp-accent, #f91880) 14%, transparent); }
@@ -5936,16 +5895,22 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-acc-add { all: unset; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 4px; padding: 11px; border-radius: 16px; cursor: pointer; font-weight: 600; font-size: 14px; background: rgba(128, 128, 128, .18); }
         .vp-acc-add:hover { background: rgba(128, 128, 128, .3); }
         .vp-acc-text { padding: 4px 8px 8px; font-size: 13px; line-height: 1.45; color: var(--text-secondary, #9aa0b4); }
+        .vp-acc-text.vp-bad { color: #ff6b81; }
         .vp-acc-btns { display: flex; gap: 8px; }
         .vp-acc-btns .vp-acc-add { flex: 1; margin: 0; }
-        .vp-acc-btns .vp-acc-go { background: var(--vp-accent, #f91880); color: var(--vp-on-accent, #fff); }
-        .vp-acc-note { position: fixed; left: 50%; top: 18px; transform: translateX(-50%); z-index: 99995; padding: 11px 18px; border-radius: 16px; font-size: 14px; font-weight: 600; max-width: calc(100vw - 32px);
-            background: var(--block-bg, #15151b); color: var(--text-primary, #fff); border: 1px solid var(--border-color, rgba(255, 255, 255, .14)); box-shadow: 0 12px 34px rgba(0, 0, 0, .5); }
-        .vp-acc-note.vp-bad { border-color: #ff6b81; }
+        .vp-acc-go { background: var(--vp-accent, #f91880) !important; color: var(--vp-on-accent, #fff) !important; }
+        .vp-acc-form { display: flex; flex-direction: column; gap: 8px; padding: 2px 4px; }
+        .vp-acc-form input[type=email], .vp-acc-form input[type=password] { all: unset; box-sizing: border-box; width: 100%; padding: 11px 14px; border-radius: 14px; font-size: 15px;
+            background: rgba(128, 128, 128, .18); color: var(--text-primary, #fff); border: 1px solid transparent; }
+        .vp-acc-form input:focus { border-color: var(--vp-accent, #f91880); }
+        .vp-acc-chk { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.4; color: var(--text-secondary, #9aa0b4); }
+        .vp-acc-chk input { margin-top: 2px; accent-color: var(--vp-accent, #f91880); }
+        .vp-acc-ts { min-height: 65px; display: flex; justify-content: center; }
         `);
 
-        let accPop = null;
+        let accPop = null, accAnchor = null;
         function accClose() {
+            if (accBusy) return;
             if (accPop) accPop.remove();
             accPop = null;
             document.removeEventListener('pointerdown', accOutside, true);
@@ -5953,81 +5918,122 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         const accOutside = e => { if (accPop && !accPop.contains(e.target) && !e.target.closest('.vp-acc-btn')) accClose(); };
         const accKey = e => { if (e.key === 'Escape') accClose(); };
+        const accEl = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+        function accPlace() {
+            if (!accPop || !accAnchor) return;
+            const r = accAnchor.getBoundingClientRect(), h = accPop.offsetHeight, w = accPop.offsetWidth;
+            const left = Math.max(12, Math.min(r.left, innerWidth - w - 12));
+            const top = r.top - h - 8 >= 8 ? r.top - h - 8 : Math.min(innerHeight - h - 8, r.bottom + 8);
+            accPop.style.left = left + 'px';
+            accPop.style.top = Math.max(8, top) + 'px';
+        }
+        function accHead(title, back) {
+            const head = accEl('div', 'vp-acc-head');
+            if (back) { const b = accEl('button', 'vp-acc-back'); b.type = 'button'; b.innerHTML = svgIcon('<path d="M15 5l-7 7 7 7"/>', 18); b.onclick = back; head.appendChild(b); }
+            head.appendChild(accEl('span', '', title));
+            accPop.appendChild(head);
+        }
         function accRow(s, cur) {
-            const row = document.createElement(cur ? 'div' : 'button');
-            row.className = 'vp-acc-row' + (cur ? ' vp-cur' : '');
-            const ava = document.createElement('span');
-            ava.className = 'vp-acc-ava';
+            const row = accEl(cur ? 'div' : 'button', 'vp-acc-row' + (cur ? ' vp-cur' : ''));
+            const ava = accEl('span', 'vp-acc-ava');
             const url = avaUrlOf(s.username);
             if (url) { const im = document.createElement('img'); im.src = url; ava.appendChild(im); } else ava.textContent = s.ava || (s.username || '?').charAt(0).toUpperCase();
-            const who = document.createElement('span');
-            who.className = 'vp-acc-who';
-            const b = document.createElement('b'), i = document.createElement('i');
-            b.textContent = s.name || s.username;
-            i.textContent = '@' + s.username;
-            who.append(b, i);
+            const who = accEl('span', 'vp-acc-who');
+            who.append(accEl('b', '', s.name || s.username), accEl('i', '', '@' + s.username));
             row.append(ava, who);
             if (cur) {
-                const mark = document.createElement('span');
-                mark.className = 'vp-acc-mark';
+                const mark = accEl('span', 'vp-acc-mark');
                 mark.innerHTML = svgIcon('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 20);
                 row.appendChild(mark);
             } else {
-                const x = document.createElement('button');
-                x.className = 'vp-acc-x';
+                const x = accEl('button', 'vp-acc-x', '×');
                 x.type = 'button';
                 x.title = 'Забыть аккаунт';
-                x.textContent = '×';
-                x.onclick = e => { e.stopPropagation(); e.preventDefault(); accForget(s.id); accRender(); };
-                row.appendChild(x);
-                row.onclick = () => accSwitch(s.id);
+                x.onclick = e => { e.stopPropagation(); e.preventDefault(); accForget(s.id); accList(); };
+                row.append(x);
+                row.onclick = () => accRunView(s, s.username);
             }
             return row;
         }
-        function accRender() {
+        function accRunView(cred, title) {
+            accPop.textContent = '';
+            accHead(title ? 'Вход в @' + title : 'Вход');
+            const status = accEl('div', 'vp-acc-text', 'Подготовка…');
+            const box = accEl('div', 'vp-acc-ts');
+            accPop.append(status, box);
+            const ui = {
+                box,
+                say: t => { status.textContent = t; status.classList.remove('vp-bad'); accPlace(); },
+                fail: t => {
+                    status.textContent = t; status.classList.add('vp-bad');
+                    const btns = accEl('div', 'vp-acc-btns');
+                    const back = accEl('button', 'vp-acc-add', 'Назад'); back.onclick = accList;
+                    const login = accEl('button', 'vp-acc-add vp-acc-go', 'Открыть вход'); login.onclick = () => location.assign('/login');
+                    btns.append(back, login);
+                    accPop.appendChild(btns);
+                    accPlace();
+                }
+            };
+            accPlace();
+            accLogin(cred, ui);
+        }
+        function accForm() {
+            accPop.textContent = '';
+            accHead('Добавить аккаунт', accList);
+            const form = accEl('form', 'vp-acc-form');
+            form.autocomplete = 'on';
+            const mail = accEl('input'); mail.type = 'email'; mail.name = 'email'; mail.autocomplete = 'username'; mail.placeholder = 'Почта';
+            const pass = accEl('input'); pass.type = 'password'; pass.name = 'password'; pass.autocomplete = 'current-password'; pass.placeholder = 'Пароль';
+            const chk = accEl('label', 'vp-acc-chk');
+            const cb = accEl('input'); cb.type = 'checkbox'; cb.checked = true;
+            chk.append(cb, accEl('span', '', 'Запомнить на этом устройстве, чтобы менять аккаунт одним нажатием'));
+            const go = accEl('button', 'vp-acc-add vp-acc-go', 'Войти'); go.type = 'submit';
+            form.append(mail, pass, chk, go);
+            form.onsubmit = e => {
+                e.preventDefault();
+                if (!mail.value.trim() || !pass.value) return;
+                accRunView({ email: mail.value.trim(), password: pass.value, remember: cb.checked }, '');
+            };
+            accPop.appendChild(form);
+            accPlace();
+            mail.focus();
+        }
+        function accList() {
             if (!accPop) return;
             accPop.textContent = '';
-            const head = document.createElement('div');
-            head.className = 'vp-acc-head';
-            head.textContent = 'Аккаунты';
-            accPop.appendChild(head);
-            const text = t => { const d = document.createElement('div'); d.className = 'vp-acc-text'; d.textContent = t; accPop.appendChild(d); };
-            if (!accHas()) { text('Для быстрой смены нужен Tampermonkey: в твоём менеджере скриптов нет доступа к кукам сайта.'); return; }
+            accHead('Аккаунты');
+            const text = t => accPop.appendChild(accEl('div', 'vp-acc-text', t));
             if (!accOn()) {
-                text('Мод сохранит вход каждого аккаунта прямо в этом браузере, внутри менеджера скриптов, и никуда его не отправит. Пароли не сохраняются. Тогда аккаунты меняются одним нажатием.');
-                const btns = document.createElement('div');
-                btns.className = 'vp-acc-btns';
-                const no = document.createElement('button'), go = document.createElement('button');
-                no.className = 'vp-acc-add'; no.textContent = 'Не сейчас'; no.onclick = accClose;
-                go.className = 'vp-acc-add vp-acc-go'; go.textContent = 'Включить';
-                go.onclick = async () => { GM_setValue(ACC_ON, true); await accCapture(); accRender(); };
+                text('Мод запомнит почту и пароль аккаунтов прямо в этом браузере, в менеджере скриптов, и отправит их только на сайт ИТД при входе. Тогда аккаунт меняется одним нажатием: выход, вход и проверка Cloudflare идут сами. Не включай, если за этим компьютером сидят другие.');
+                const btns = accEl('div', 'vp-acc-btns');
+                const no = accEl('button', 'vp-acc-add', 'Не сейчас'); no.onclick = accClose;
+                const go = accEl('button', 'vp-acc-add vp-acc-go', 'Включить'); go.onclick = () => { GM_setValue(ACC_ON, true); accList(); };
                 btns.append(no, go);
                 accPop.appendChild(btns);
+                accPlace();
                 return;
             }
             const me = accMe(), slots = accSlots();
             if (me) accPop.appendChild(accRow({ id: me.id, username: me.username, name: me.name, ava: (slots[me.id] || {}).ava }, true));
             for (const s of Object.values(slots).sort((a, b) => (b.at || 0) - (a.at || 0))) if (!me || s.id !== me.id) accPop.appendChild(accRow(s, false));
-            const add = document.createElement('button');
-            add.className = 'vp-acc-add';
+            if (me && !slots[me.id]) {
+                const keep = accEl('button', 'vp-acc-add', 'Запомнить этот аккаунт');
+                keep.onclick = accForm;
+                accPop.appendChild(keep);
+            }
+            const add = accEl('button', 'vp-acc-add');
             add.innerHTML = svgIcon('<path d="M12 5v14M5 12h14"/>', 18) + '<span>Добавить аккаунт</span>';
-            add.onclick = accAdd;
+            add.onclick = accForm;
             accPop.appendChild(add);
-            const mine = me && slots[me.id];
-            if (mine && !mine.cookies.some(c => c.httpOnly)) text('Внимание: мод не видит закрытую куку входа сайта, поэтому смена может не сработать.');
-            if (Object.keys(slots).length < 2) text('Нажми «Добавить аккаунт», войди в другой, и он появится в этом списке.');
+            if (Object.keys(slots).length < 2) text('Добавь второй аккаунт: введи его почту и пароль один раз, дальше мод входит сам.');
+            accPlace();
         }
         function accOpen(btn) {
             accClose();
-            accPop = document.createElement('div');
-            accPop.className = 'vp-acc-pop';
+            accAnchor = btn;
+            accPop = accEl('div', 'vp-acc-pop');
             document.body.appendChild(accPop);
-            accRender();
-            const r = btn.getBoundingClientRect(), h = accPop.offsetHeight, w = accPop.offsetWidth;
-            const left = Math.max(12, Math.min(r.left, innerWidth - w - 12));
-            const top = r.top - h - 8 >= 8 ? r.top - h - 8 : Math.min(innerHeight - h - 8, r.bottom + 8);
-            accPop.style.left = left + 'px';
-            accPop.style.top = Math.max(8, top) + 'px';
+            accList();
             document.addEventListener('pointerdown', accOutside, true);
             document.addEventListener('keydown', accKey, true);
         }
@@ -6051,40 +6057,14 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 box.parentElement.insertBefore(wrap, box);
             } else box.insertBefore(b, lo);
         });
-        document.addEventListener('click', e => {
-            const lo = e.target.closest && e.target.closest('button');
-            if (!lo || lo.classList.contains('vp-acc-btn') || !LOGOUT_RE.test(lo.textContent.trim())) return;
-            const me = accMe();
-            if (me && accOn()) accForget(me.id);
-        }, true);
-
-        let accLast = 0, accLogin = false;
-        sched.add('acc', async function accTick() {
-            const me = accMe(), pend = GM_getValue(ACC_PENDING, null);
-            if (pend && pend.id) {
-                if (me && me.id === pend.id) GM_setValue(ACC_PENDING, null);
-                else if (Date.now() - (pend.at || 0) > 14000) {
-                    GM_setValue(ACC_PENDING, null);
-                    const s = accSlots()[pend.id];
-                    accLog('после смены аккаунт не открылся: путь ' + location.pathname + ', куки: ' + accNames(await accReadCookies()));
-                    if (s) { accForget(pend.id); accSay('Вход в @' + s.username + ' устарел, войди в него заново, и он снова появится в списке', true); }
-                }
-            }
-            if (!accOn() || !accHas()) return;
-            if (/^\/login/.test(location.pathname)) { accLogin = true; return; }
-            if (!me && !accLogin) return;
-            if (accLogin || Date.now() - accLast > 300000) { accLogin = false; accLast = Date.now(); await accCapture(); }
-        }, { every: 5000 });
-        pageWindow.itdvp.acc = async function () {
-            const cookies = await accReadCookies();
-            console.log('GM_cookie доступен:', accHas(), ' включено:', accOn());
-            console.table(cookies.map(c => ({ имя: c.name, домен: c.domain, путь: c.path, httpOnly: c.httpOnly, session: c.session, секунд_до_конца: c.expirationDate ? Math.round(c.expirationDate - Date.now() / 1000) : '' })));
-            console.table(Object.values(accSlots()).map(s => ({ ник: s.username, id: s.id, куки: accNames(s.cookies), сохранено: new Date(s.at).toLocaleString() })));
+        pageWindow.itdvp.acc = function () {
+            console.log('запоминание включено:', accOn(), ' текущий:', (accMe() || {}).username);
+            console.table(Object.values(accSlots()).map(s => ({ ник: s.username, id: s.id, почта_сохранена: !!s.email, пароль_сохранён: !!s.password, сохранено: new Date(s.at).toLocaleString() })));
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
             ['3.7.7', '26 октября 2026', [
-                'Быстрая смена аккаунта: кнопка над «Выйти» (на телефоне в настройках профиля), список твоих аккаунтов и вход в нужный одним нажатием. Пароли мод не хранит, сохраняется только вход, и только в этом браузере, после твоего согласия'
+                'Быстрая смена аккаунта: кнопка над «Выйти» (на телефоне в настройках профиля). Добавь аккаунт один раз, дальше мод сам выходит, проходит проверку Cloudflare и входит. Почта и пароль хранятся только в твоём браузере и только после твоего согласия'
             ]],
             ['3.7.6 – 3.7.6.9', '26 октября 2026', [
                 'Свечение ников и аватарок стало мягче: вдвое меньше по размеру и заметно прозрачнее, на тёмном фоне оно слишком разливалось',

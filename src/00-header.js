@@ -11,7 +11,6 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
-// @grant        GM_cookie
 // @grant        unsafeWindow
 // @connect      raw.githubusercontent.com
 // @connect      cdn.xn--d1ah4a.com
