@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.6.2
+// @version      3.7.6.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -5760,9 +5760,10 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             avatarEditor(own ? lookImgUrl(own) : img && img.src);
         }, true);
         const CHANGELOG = [
-            ['3.7.6 – 3.7.6.2', '26 октября 2026', [
+            ['3.7.6 – 3.7.6.3', '26 октября 2026', [
                 'Аватарка: нажми на свою аву в профиле, откроется редактор с кружком-примеркой, можно картинку, GIF или короткое видео, увидят все, у кого стоит ИТД X',
                 'Змейка снова открывается в играх',
+                'Свой профиль, открытый через клуб, подсвечивается в боковом меню',
                 'В уведомлениях у лайков в розовом кружке появилось сердечко, как значок у ответов'
             ]],
             ['3.7.4', '26 октября 2026', [
@@ -11337,12 +11338,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
 
         let msgsOpen = false;
         let galOpen = false;
+        const navPath = s => { try { return decodeURIComponent(s).toLowerCase(); } catch (e) { return String(s).toLowerCase(); } };
         function markActiveNav() {
-            const path = location.pathname;
+            const path = navPath(location.pathname);
             document.querySelectorAll('.' + SELECTORS.navLink).forEach(a => {
-                const href = a.getAttribute('href') || '';
+                const href = a.getAttribute('href') || '', hl = navPath(href);
                 const active = msgsOpen ? href === '#' : galOpen ? href === '#gallery'
-                    : href.startsWith('/') && (href === path || (href !== '/' && path.startsWith(href + '/')));
+                    : href.startsWith('/') && (hl === path || (hl !== '/' && path.startsWith(hl + '/')));
                 a.classList.toggle('vp-active', active);
             });
             msgsNavLook();
@@ -11350,9 +11352,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         function msgsNavLook() {
             const links = [...document.querySelectorAll('.' + SELECTORS.navLink)];
             if (!msgsOpen && !galOpen) { links.forEach(a => { if (a.classList.contains('vp-site-cur')) a.classList.remove('vp-site-cur'); }); return; }
-            const path = location.pathname;
-            const cur = links.find(a => { const h = a.getAttribute('href') || ''; return h.startsWith('/') && (h === path || (h !== '/' && path.startsWith(h + '/'))); });
-            const other = links.find(a => a !== cur && !/^#/.test(a.getAttribute('href') || '') && a.getAttribute('href') !== path);
+            const path = navPath(location.pathname);
+            const cur = links.find(a => { const h = navPath(a.getAttribute('href') || ''); return h.startsWith('/') && (h === path || (h !== '/' && path.startsWith(h + '/'))); });
+            const other = links.find(a => a !== cur && !/^#/.test(a.getAttribute('href') || '') && navPath(a.getAttribute('href')) !== path);
             const nav = (cur || other) && (cur || other).closest('nav');
             if (!nav || !other || (cur && cur.classList.contains('vp-site-cur'))) return;
             const look = (a, k) => { const g = getComputedStyle(a); nav.style.setProperty(`--vp-${k}-c`, g.color); nav.style.setProperty(`--vp-${k}-o`, g.opacity); nav.style.setProperty(`--vp-${k}-b`, g.backgroundColor); };
@@ -14593,6 +14595,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         const railClub = rail.querySelector('.vp-club');
         let clubShown = '';
         function openProfile(login) {
+            if (myUsername && login.toLowerCase() === myUsername.toLowerCase()) login = myUsername;
             history.pushState({}, '', '/@' + login);
             dispatchEvent(new PopStateEvent('popstate'));
         }

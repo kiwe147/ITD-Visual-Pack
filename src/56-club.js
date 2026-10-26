@@ -1,6 +1,7 @@
         const railClub = rail.querySelector('.vp-club');
         let clubShown = '';
         function openProfile(login) {
+            if (myUsername && login.toLowerCase() === myUsername.toLowerCase()) login = myUsername;
             history.pushState({}, '', '/@' + login);
             dispatchEvent(new PopStateEvent('popstate'));
         }
