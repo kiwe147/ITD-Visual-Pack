@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.5
+// @version      3.7.5.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -5524,7 +5524,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-ave-stage.vp-ave-drag { cursor: grabbing; }
         .vp-ave-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
         .vp-ave-mask { position: absolute; inset: 0; pointer-events: none;
-            background: radial-gradient(circle at 50% 50%, transparent 0, transparent calc(50% - 1px), rgba(255, 255, 255, .85) calc(50% - 1px), rgba(255, 255, 255, .85) 50%, rgba(0, 0, 0, .58) 50%); }
+            background: radial-gradient(circle closest-side at 50% 50%, transparent calc(100% - 2px), rgba(255, 255, 255, .9) calc(100% - 2px), rgba(255, 255, 255, .9) 100%, rgba(0, 0, 0, .58) 100%); }
         .vp-ave-zoom { display: flex; align-items: center; gap: 10px; color: var(--text-secondary, #9aa0b4); font-size: 13px; }
         .vp-ave-zoom input { flex: 1; accent-color: var(--accent-primary, #4f8cff); }
         .vp-ave-prev { display: flex; align-items: flex-end; justify-content: center; gap: 18px; padding: 4px 0; }
@@ -5724,7 +5724,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             avatarEditor(img && img.src);
         }, true);
         const CHANGELOG = [
-            ['3.7.5', '26 октября 2026', [
+            ['3.7.5 – 3.7.5.1', '26 октября 2026', [
                 'Аватарка: нажми на свою аву в профиле, откроется редактор с кружком-примеркой, там можно подвинуть, приблизить и загрузить свою картинку'
             ]],
             ['3.7.4', '26 октября 2026', [
