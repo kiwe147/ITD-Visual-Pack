@@ -269,12 +269,16 @@
             return new File([blob], 'img.' + (blob.type.split('/')[1] || 'png'), { type: blob.type });
         }
         async function msgUploadImage(file, raw) {
-            const fd = new FormData();
-            if (raw) fd.vpRaw = true;
-            fd.append('file', await msgPrepImage(file));
-            const res = await api('/api/files/upload', { method: 'POST', body: fd });
-            if (!res.ok) throw new Error('загрузка картинки: ' + res.status);
+            const send = async plain => {
+                const fd = new FormData();
+                if (plain) fd.vpRaw = true;
+                fd.append('file', plain && /^image\/(jpeg|png|gif)$/.test(file.type) ? file : await msgPrepImage(file));
+                return api('/api/files/upload', { method: 'POST', body: fd });
+            };
+            let res = await send(raw);
+            if (!res.ok && raw) res = await send(false);
             const j = await res.json().catch(() => null), d = j && (j.data || j);
+            if (!res.ok) throw new Error('загрузка картинки: ' + res.status + (j && (j.error && j.error.message || j.message) ? ', ' + (j.error && j.error.message || j.message) : ''));
             const m = String(d && d.url || '').match(MSG_IMG_RE), ext = m ? MSG_IMG_EXT.indexOf(m[2].toLowerCase()) : -1;
             if (!m || ext < 0) throw new Error('сервер вернул незнакомую ссылку');
             return { ext, id: m[1].toLowerCase() };
