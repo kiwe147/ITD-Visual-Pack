@@ -5770,7 +5770,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             ['3.7.6 – 3.7.6.6', '26 октября 2026', [
                 'Аватарка: нажми на свою аву в профиле, откроется редактор с кружком-примеркой, можно картинку, GIF или короткое видео, увидят все, у кого стоит ИТД X',
                 'Змейка снова открывается в играх',
-                'Баннер в профиле показывается целиком, как на сайте без мода, и больше не приближается при прокрутке',
+                'Баннер в профиле показывается целиком, как на сайте без мода, и не смещается и не приближается при прокрутке',
                 'Свой профиль, открытый через клуб, подсвечивается в боковом меню',
                 'В уведомлениях у лайков в розовом кружке появилось сердечко, как значок у ответов'
             ]],
@@ -13643,9 +13643,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const r = banner.getBoundingClientRect();
             if (r.bottom < -40 || r.top > innerHeight) return;
             const past = Math.max(0, -r.top);
-            const y = -Math.min(16, Math.round(past * .2));
             const glassEl = bannerGlassEl(banner), glass = !bannerNoGlass && glassEl;
-            const tf = calm ? '' : `translateY(${y}px)`, op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
+            const tf = '', op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
             for (const el of [img, banner.querySelector(':scope > .vp-banner-video'), glass].filter(Boolean)) {
                 if (el.style.transform !== tf) el.style.transform = tf;
                 if (el.style.opacity !== op) el.style.opacity = op;

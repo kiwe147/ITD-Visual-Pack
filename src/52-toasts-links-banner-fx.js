@@ -164,9 +164,8 @@
             const r = banner.getBoundingClientRect();
             if (r.bottom < -40 || r.top > innerHeight) return;
             const past = Math.max(0, -r.top);
-            const y = -Math.min(16, Math.round(past * .2));
             const glassEl = bannerGlassEl(banner), glass = !bannerNoGlass && glassEl;
-            const tf = calm ? '' : `translateY(${y}px)`, op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
+            const tf = '', op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
             for (const el of [img, banner.querySelector(':scope > .vp-banner-video'), glass].filter(Boolean)) {
                 if (el.style.transform !== tf) el.style.transform = tf;
                 if (el.style.opacity !== op) el.style.opacity = op;
