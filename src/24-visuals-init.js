@@ -68,11 +68,12 @@
         narrowScreen.addEventListener('change', placeNickWrapper);
         onDom(placeNickWrapper);
 
+        let visualsTry = 0;
         async function initVisuals() {
             try {
                 const me = siteAuth.me || await new Promise(done => { siteAuth.meWait.push(done); setTimeout(() => done(null), 1500); })
-                    || await (await api('/api/users/me')).json();
-                if (!me || !me.username) return;
+                    || await api('/api/users/me').then(r => r.json()).catch(() => null);
+                if (!me || !me.username) { if (visualsTry++ < 6) setTimeout(initVisuals, 4000 * visualsTry); return; }
                 meData = me;
                 myUsername = me.username;
                 reloadAutoLike();
@@ -82,8 +83,7 @@
 
                 createScrollTopButton();
 
-                checkAllComments().then(() => { markVerifiedUsers(); return verifyMyself(); }).then(verifyRequestAgain).then(publishLook);
-                sched.add('look', publishLook, { every: 60000, net: true });
+                checkAllComments().then(() => { markVerifiedUsers(); return verifyMyself(); }).then(verifyRequestAgain).catch(e => logErr('проверка', e)).then(publishLook);
                 sched.add('verify', () => checkAllComments(), { every: 10 * 60 * 1000, net: true, visible: true });
 
                 lbSyncFromServer();
@@ -333,7 +333,7 @@
                 });
 
                 const updateUrl = 'https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js?t=' + Date.now();
-                const UPDATE_EVERY = 10 * 60 * 1000;
+                const UPDATE_EVERY = 5 * 60 * 1000;
                 let updateAskedAt = 0;
                 function latestVersion(fresh) {
                     let cached = null;
@@ -342,6 +342,7 @@
                         return Promise.resolve(cached.v);
                     }
                     updateAskedAt = Date.now();
+                    GM_setValue('vp_upd_ask', updateAskedAt);
                     return new Promise(resolve => GM_xmlhttpRequest({
                         method: 'GET',
                         url: updateUrl.replace(/t=\d+$/, 't=' + Date.now()),
@@ -390,7 +391,7 @@
                 let updateTimer = 0;
                 function updatePoll() {
                     if (updateAvailable) { clearInterval(updateTimer); return; }
-                    if (document.hidden || Date.now() - updateAskedAt < UPDATE_EVERY - 5000) return;
+                    if (document.hidden || Date.now() - Math.max(updateAskedAt, +GM_getValue('vp_upd_ask', 0) || 0) < UPDATE_EVERY - 5000) return;
                     latestVersion(true).then(v => {
                         if (updateAvailable || !v || versionCompare(v, GM_info.script.version) <= 0) return;
                         updateAvailable = true;
@@ -562,6 +563,7 @@
         canvasRO.observe(canvas);
         resizeCanvas();
         initVisuals();
+        sched.add('look', publishLook, { every: 60000, net: true });
         initBanner();
 
         (function () {

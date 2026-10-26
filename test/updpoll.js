@@ -1,4 +1,4 @@
-// Проверка обновлений на открытом сайте (3.4.4.2): при загрузке — как раньше; дальше, пока вкладка открыта, раз в 10 минут мод
+// Проверка обновлений на открытом сайте (3.4.4.2): при загрузке — как раньше; дальше, пока вкладка открыта, раз в 5 минут мод
 // спрашивает GitHub. Вышла новая версия — кнопка «Обновить» у логотипа, и больше не спрашивает. В скрытой вкладке не спрашивает.
 // Часы страницы проматываются (page.clock).
 // Запуск:  node test/updpoll.js снимок-своего-профиля.html
@@ -45,12 +45,12 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   const gh = () => p.evaluate(() => ({ asks: window.__gh.asks, btn: !!document.querySelector('.itd-update-sidebar-btn') }));
   let s = await gh();
   check(s.asks === 1 && !s.btn, `при загрузке один вопрос к GitHub, новой версии нет — кнопки нет (${JSON.stringify(s)})`);
-  await p.clock.runFor(5 * 60e3);
+  await p.clock.runFor(4 * 60e3);
   s = await gh();
-  check(s.asks === 1, `через 5 минут ещё не спрашивал (${s.asks})`);
-  await p.clock.runFor(6 * 60e3);
+  check(s.asks === 1, `через 4 минуты ещё не спрашивал (${s.asks})`);
+  await p.clock.runFor(3 * 60e3);
   s = await gh();
-  check(s.asks === 2 && !s.btn, `через 10 минут спросил снова, всё ещё нет новой (${JSON.stringify(s)})`);
+  check(s.asks === 2 && !s.btn, `через 5 минут спросил снова, всё ещё нет новой (${JSON.stringify(s)})`);
   await p.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); });
   await p.clock.runFor(11 * 60e3);
   s = await gh();

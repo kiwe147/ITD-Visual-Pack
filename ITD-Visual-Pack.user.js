@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.2.2
+// @version      3.7.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2829,48 +2829,34 @@
             H = h;
             bgFit();
         }
-        const GL_STYLES = { aurora: 0.45 };
-        const GL_FRAG = `precision highp float;
-uniform vec2 uRes;
-uniform float uT;
-uniform vec3 uC0[3];
-uniform vec3 uC1[3];
-vec4 grad(float v, vec3 c0, vec3 c1) {
-    if (v <= 0.0 || v >= 1.0) return vec4(0.0);
-    if (v < 0.55) return vec4(c0, mix(0.0, 0.3, v / 0.55));
-    if (v < 0.9) { float k = (v - 0.55) / 0.35; return vec4(mix(c0, c1, k), mix(0.3, 1.0, k)); }
-    float k = (v - 0.9) / 0.1;
-    return vec4(mix(c1, c0, k), mix(1.0, 0.0, k));
-}
-vec4 col(float cc, float py, float base, float amp, float len, float dh, float a, float f, float sp, vec3 c0, vec3 c1) {
-    float y = uRes.y * (base + amp * sin(cc * f + uT * sp) + 0.025 * sin(cc * f * 3.1 - uT * 1.7 * sp));
-    float L = uRes.y * len * (0.6 + 0.4 * sin(cc * 0.011 + uT * 2.3 * sp));
-    float ga = a * (0.5 + 0.5 * sin(cc * 0.004 - uT * 1.3 + dh));
-    vec4 g = grad((py - (y - L)) / L, c0, c1);
-    return vec4(g.rgb * g.a * ga, g.a * ga);
-}
-vec4 band(float x, float py, float base, float amp, float len, float dh, float a, float f, float sp, vec3 c0, vec3 c1) {
-    float cx = floor(x / 6.0) * 6.0;
-    vec4 r = col(cx, py, base, amp, len, dh, a, f, sp, c0, c1);
-    if (x - cx < 1.0 && cx >= 6.0) r += col(cx - 6.0, py, base, amp, len, dh, a, f, sp, c0, c1);
-    return r;
-}
-void main() {
-    float x = floor(gl_FragCoord.x);
-    float py = uRes.y - gl_FragCoord.y;
-    vec4 r = band(x, py, 0.64, 0.08, 0.30, 0.0, 0.45, 0.0021, 1.0, uC0[0], uC1[0]);
-    r += band(x, py, 0.72, 0.06, 0.24, 45.0, 0.30, 0.0016, -0.7, uC0[1], uC1[1]);
-    r += band(x, py, 0.58, 0.05, 0.20, -40.0, 0.28, 0.0027, 0.55, uC0[2], uC1[2]);
-    gl_FragColor = min(r, vec4(1.0));
-}`;
-        const GL_DH = [0, 45, -40];
-        let bgGl = null, bgGlFail = false, glT = 0, glName = '', glLast = 0, glSlow = 0, glFrames = 0;
+        const GL_STYLES = {};
+        let bgGl = null, bgGlFail = false, glName = '', glSize = '', glLast = 0, glSlow = 0, glFrames = 0;
         function hslRgb(h, s, l) {
             h = (((h % 360) + 360) % 360) / 360; s /= 100; l /= 100;
             const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
             const f = t => { if (t < 0) t += 1; if (t > 1) t -= 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
             return [f(h + 1 / 3), f(h), f(h - 1 / 3)];
         }
+        const GLK = {
+            hslRgb,
+            vs: 'attribute vec2 aPos; void main() { gl_Position = vec4(aPos, 0.0, 1.0); }',
+            program(gl, vs, fs) {
+                const sh = (type, text) => { const o = gl.createShader(type); gl.shaderSource(o, text); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
+                const pr = gl.createProgram();
+                gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs));
+                gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs));
+                gl.linkProgram(pr);
+                if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
+                return pr;
+            },
+            bindFull(gl, pr) {
+                if (!gl.__full) { gl.__full = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, gl.__full); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW); }
+                gl.bindBuffer(gl.ARRAY_BUFFER, gl.__full);
+                const at = gl.getAttribLocation(pr, 'aPos');
+                gl.enableVertexAttribArray(at);
+                gl.vertexAttribPointer(at, 2, gl.FLOAT, false, 0, 0);
+            }
+        };
         function bgGlInit() {
             if (bgGlFail) return null;
             if (bgGl) return bgGl;
@@ -2879,22 +2865,9 @@ void main() {
                 if (!gl) throw new Error('нет WebGL');
                 const di = gl.getExtension('WEBGL_debug_renderer_info'), rn = di ? String(gl.getParameter(di.UNMASKED_RENDERER_WEBGL)) : '';
                 if (!GM_getValue('bgGlForce', false) && /swiftshader|llvmpipe|software|basic render/i.test(rn)) throw new Error('видеокарта программная: ' + rn);
-                const sh = (type, text) => { const o = gl.createShader(type); gl.shaderSource(o, text); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
-                const pr = gl.createProgram();
-                gl.attachShader(pr, sh(gl.VERTEX_SHADER, 'attribute vec2 aPos; void main() { gl_Position = vec4(aPos, 0.0, 1.0); }'));
-                gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, GL_FRAG));
-                gl.linkProgram(pr);
-                if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
-                gl.useProgram(pr);
-                const buf = gl.createBuffer();
-                gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-                const at = gl.getAttribLocation(pr, 'aPos');
-                gl.enableVertexAttribArray(at);
-                gl.vertexAttribPointer(at, 2, gl.FLOAT, false, 0, 0);
                 gl.clearColor(0, 0, 0, 0);
                 canvasGL.addEventListener('webglcontextlost', e => { e.preventDefault(); bgGlFail = true; bgGl = null; bgGlShown = false; bgSurface(); });
-                bgGl = { gl, uRes: gl.getUniformLocation(pr, 'uRes'), uT: gl.getUniformLocation(pr, 'uT'), uC0: gl.getUniformLocation(pr, 'uC0'), uC1: gl.getUniformLocation(pr, 'uC1') };
+                bgGl = { gl, insts: {} };
                 return bgGl;
             } catch (e) {
                 bgGlFail = true;
@@ -2903,6 +2876,8 @@ void main() {
             }
         }
         function bgGlDraw(name, dt) {
+            const def = GL_STYLES[name];
+            if (!def || def.broken) return false;
             const g = bgGlInit();
             if (!g) return false;
             const gl = g.gl;
@@ -2920,17 +2895,21 @@ void main() {
                     return false;
                 }
             }
-            if (glName !== name) { glName = name; glT = Math.random() * 100; canvasGL.style.opacity = GL_STYLES[name]; }
             if (canvasGL.width !== W || canvasGL.height !== H) { canvasGL.width = W; canvasGL.height = H; gl.viewport(0, 0, W, H); }
-            glT += 0.012 * dt;
-            const th = theme(), S = Math.min(100, th.s * 1.15), c0 = [], c1 = [];
-            for (const dh of GL_DH) { c0.push(...hslRgb(th.h + dh, S, 60)); c1.push(...hslRgb(th.h + dh, S, 70)); }
-            gl.uniform2f(g.uRes, W, H);
-            gl.uniform1f(g.uT, glT);
-            gl.uniform3fv(g.uC0, c0);
-            gl.uniform3fv(g.uC1, c1);
+            let inst = g.insts[name];
+            if (!inst) {
+                try { inst = g.insts[name] = def.create(gl, GLK); } catch (e) { def.broken = true; console.warn('[ITD VP] фон «' + name + '» на видеокарте не запустился, рисую обычным способом', e && e.message || e); return false; }
+            }
+            const size = W + 'x' + H;
+            if (glName !== name || glSize !== size) {
+                glName = name;
+                glSize = size;
+                canvasGL.style.opacity = def.opacity;
+                inst.enter(W, H);
+            }
+            gl.disable(gl.BLEND);
             gl.clear(gl.COLOR_BUFFER_BIT);
-            gl.drawArrays(gl.TRIANGLES, 0, 3);
+            inst.draw({ gl, dt, W, H, th: theme(), mouse });
             if (!bgGlShown) { bgGlShown = true; bgSurface(); }
             return true;
         }
@@ -3042,6 +3021,763 @@ void main() {
             lookStyleEl.textContent = out.join('\n');
             document.head.appendChild(lookStyleEl);
         })();
+        GL_STYLES.aurora = {
+            opacity: 0.45,
+            create(gl, K) {
+                const pr = K.program(gl, K.vs, `precision highp float;
+uniform vec2 uRes;
+uniform float uT;
+uniform vec3 uC0[3];
+uniform vec3 uC1[3];
+vec4 grad(float v, vec3 c0, vec3 c1) {
+    if (v <= 0.0 || v >= 1.0) return vec4(0.0);
+    if (v < 0.55) return vec4(c0, mix(0.0, 0.3, v / 0.55));
+    if (v < 0.9) { float k = (v - 0.55) / 0.35; return vec4(mix(c0, c1, k), mix(0.3, 1.0, k)); }
+    float k = (v - 0.9) / 0.1;
+    return vec4(mix(c1, c0, k), mix(1.0, 0.0, k));
+}
+vec4 col(float cc, float py, float base, float amp, float len, float dh, float a, float f, float sp, vec3 c0, vec3 c1) {
+    float y = uRes.y * (base + amp * sin(cc * f + uT * sp) + 0.025 * sin(cc * f * 3.1 - uT * 1.7 * sp));
+    float L = uRes.y * len * (0.6 + 0.4 * sin(cc * 0.011 + uT * 2.3 * sp));
+    float ga = a * (0.5 + 0.5 * sin(cc * 0.004 - uT * 1.3 + dh));
+    vec4 g = grad((py - (y - L)) / L, c0, c1);
+    return vec4(g.rgb * g.a * ga, g.a * ga);
+}
+vec4 band(float x, float py, float base, float amp, float len, float dh, float a, float f, float sp, vec3 c0, vec3 c1) {
+    float cx = floor(x / 6.0) * 6.0;
+    vec4 r = col(cx, py, base, amp, len, dh, a, f, sp, c0, c1);
+    if (x - cx < 1.0 && cx >= 6.0) r += col(cx - 6.0, py, base, amp, len, dh, a, f, sp, c0, c1);
+    return r;
+}
+void main() {
+    float x = floor(gl_FragCoord.x);
+    float py = uRes.y - gl_FragCoord.y;
+    vec4 r = band(x, py, 0.64, 0.08, 0.30, 0.0, 0.45, 0.0021, 1.0, uC0[0], uC1[0]);
+    r += band(x, py, 0.72, 0.06, 0.24, 45.0, 0.30, 0.0016, -0.7, uC0[1], uC1[1]);
+    r += band(x, py, 0.58, 0.05, 0.20, -40.0, 0.28, 0.0027, 0.55, uC0[2], uC1[2]);
+    gl_FragColor = min(r, vec4(1.0));
+}`);
+                const uRes = gl.getUniformLocation(pr, 'uRes'), uT = gl.getUniformLocation(pr, 'uT'), uC0 = gl.getUniformLocation(pr, 'uC0'), uC1 = gl.getUniformLocation(pr, 'uC1');
+                const DH = [0, 45, -40];
+                let t = 0;
+                return {
+                    enter() { t = Math.random() * 100; },
+                    draw(c) {
+                        const gl = c.gl;
+                        gl.useProgram(pr);
+                        K.bindFull(gl, pr);
+                        t += 0.012 * c.dt;
+                        const S = Math.min(100, c.th.s * 1.15), c0 = [], c1 = [];
+                        for (const dh of DH) { c0.push(...K.hslRgb(c.th.h + dh, S, 60)); c1.push(...K.hslRgb(c.th.h + dh, S, 70)); }
+                        gl.uniform2f(uRes, c.W, c.H);
+                        gl.uniform1f(uT, t);
+                        gl.uniform3fv(uC0, c0);
+                        gl.uniform3fv(uC1, c1);
+                        gl.drawArrays(gl.TRIANGLES, 0, 3);
+                    }
+                };
+            }
+        };
+        function glSprites(gl, K, cap) {
+            const pr = K.program(gl, `attribute vec2 aPos;
+attribute vec2 aL;
+attribute vec4 aC;
+attribute vec2 aQ;
+uniform vec2 uRes;
+varying vec2 vL;
+varying vec4 vC;
+varying vec2 vQ;
+void main() {
+    gl_Position = vec4(aPos.x / uRes.x * 2.0 - 1.0, 1.0 - aPos.y / uRes.y * 2.0, 0.0, 1.0);
+    vL = aL;
+    vC = aC;
+    vQ = aQ;
+}`, `precision highp float;
+varying vec2 vL;
+varying vec4 vC;
+varying vec2 vQ;
+void main() {
+    float d = length(vL);
+    float a;
+    if (vQ.y < 0.5) a = d < 0.72 ? mix(0.5, 0.6, d / 0.72) : d < 0.86 ? mix(0.6, 0.3, (d - 0.72) / 0.14) : mix(0.3, 0.0, clamp((d - 0.86) / 0.14, 0.0, 1.0));
+    else if (vQ.y < 1.5) a = d < 0.35 ? mix(1.0, 0.4, d / 0.35) : d < 0.7 ? mix(0.4, 0.08, (d - 0.35) / 0.35) : mix(0.08, 0.0, clamp((d - 0.7) / 0.3, 0.0, 1.0));
+    else a = clamp(vQ.x - 1.0 - d * vQ.x + 0.5, 0.0, 1.0);
+    a *= vC.a;
+    gl_FragColor = vec4(vC.rgb * a, a);
+}`);
+            const uRes = gl.getUniformLocation(pr, 'uRes');
+            const locs = ['aPos', 'aL', 'aC', 'aQ'].map(n => gl.getAttribLocation(pr, n));
+            const buf = gl.createBuffer();
+            const data = new Float32Array(cap * 60);
+            gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+            gl.bufferData(gl.ARRAY_BUFFER, data.byteLength, gl.DYNAMIC_DRAW);
+            const CORNERS = [-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1];
+            let n = 0;
+            return {
+                begin() { n = 0; },
+                quad(x, y, hs, kind, rgb, a) {
+                    if (n >= cap) return;
+                    for (let k = 0; k < 6; k++) {
+                        const lx = CORNERS[k * 2], ly = CORNERS[k * 2 + 1], o = (n * 6 + k) * 10;
+                        data[o] = x + lx * hs; data[o + 1] = y + ly * hs;
+                        data[o + 2] = lx; data[o + 3] = ly;
+                        data[o + 4] = rgb[0]; data[o + 5] = rgb[1]; data[o + 6] = rgb[2]; data[o + 7] = a;
+                        data[o + 8] = hs; data[o + 9] = kind;
+                    }
+                    n++;
+                },
+                flush(W, H, additive) {
+                    if (!n) return;
+                    gl.useProgram(pr);
+                    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+                    gl.bufferSubData(gl.ARRAY_BUFFER, 0, data.subarray(0, n * 60));
+                    const sizes = [2, 2, 4, 2], offs = [0, 2, 4, 8];
+                    locs.forEach((l, i) => { gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, sizes[i], gl.FLOAT, false, 40, offs[i] * 4); });
+                    gl.uniform2f(uRes, W, H);
+                    gl.enable(gl.BLEND);
+                    gl.blendFunc(gl.ONE, additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
+                    gl.drawArrays(gl.TRIANGLES, 0, n * 6);
+                    gl.disable(gl.BLEND);
+                    locs.forEach(l => gl.disableVertexAttribArray(l));
+                }
+            };
+        }
+        const glHsl = (K, h, s, l) => K.hslRgb(Math.round(h), Math.round(s), Math.round(l));
+        const glRand = (a, b) => a + Math.random() * (b - a);
+        GL_STYLES.waves = {
+            opacity: 0.3,
+            create(gl, K) {
+                const pr = K.program(gl, K.vs, `precision highp float;
+uniform vec2 uRes;
+uniform float uT;
+uniform float uK;
+uniform vec3 uS[4];
+uniform vec3 uF[4];
+vec4 wave(vec4 dst, float px, float py, float w, float a1, float f1, float s1, float a2, float f2, float s2, float a3, float f3, float s3, float al, float off, vec3 sc, vec3 fc) {
+    float mid = uRes.y * 0.5;
+    float p1 = px * f1 + uT * s1 + off;
+    float p2 = px * f2 + uT * s2 + off * 0.7;
+    float p3 = px * f3 + uT * s3 + off * 2.0;
+    float y = mid + (sin(p1) * a1 + sin(p2) * a2 + sin(p3) * a3) * uK;
+    float dy = (cos(p1) * a1 * f1 + cos(p2) * a2 * f2 + cos(p3) * a3 * f3) * uK;
+    float sd = (py - y) * inversesqrt(1.0 + dy * dy);
+    float ad = abs(sd);
+    float lw = 2.0 + w * 0.5;
+    vec4 r = dst;
+    float a = al * 0.14 * clamp(0.5 * (lw + 10.0 + w * 3.0) - ad + 0.5, 0.0, 1.0);
+    r = vec4(sc * a, a) + r * (1.0 - a);
+    a = al * clamp(0.5 * lw - ad + 0.5, 0.0, 1.0);
+    r = vec4(sc * a, a) + r * (1.0 - a);
+    float y0 = mid - 150.0 * uK;
+    a = 0.06 * (1.0 - clamp((py - y0) / (uRes.y - y0), 0.0, 1.0)) * clamp(sd + 0.5, 0.0, 1.0);
+    return vec4(fc * a, a) + r * (1.0 - a);
+}
+void main() {
+    float px = gl_FragCoord.x;
+    float py = uRes.y - gl_FragCoord.y;
+    vec4 r = vec4(0.0);
+    r = wave(r, px, py, 0.0, 100.0, 0.008, 0.4, 50.0, 0.018, 0.7, 70.0, 0.004, 0.25, 0.45, 0.0, uS[0], uF[0]);
+    r = wave(r, px, py, 1.0, 80.0, 0.009, 0.5, 40.0, 0.020, 0.8, 60.0, 0.005, 0.3, 0.35, 1.5, uS[1], uF[1]);
+    r = wave(r, px, py, 2.0, 60.0, 0.010, 0.6, 30.0, 0.022, 0.9, 50.0, 0.006, 0.35, 0.28, 3.0, uS[2], uF[2]);
+    r = wave(r, px, py, 3.0, 40.0, 0.011, 0.7, 20.0, 0.025, 1.0, 30.0, 0.007, 0.4, 0.20, 4.5, uS[3], uF[3]);
+    gl_FragColor = r;
+}`);
+                const uRes = gl.getUniformLocation(pr, 'uRes'), uT = gl.getUniformLocation(pr, 'uT'), uK = gl.getUniformLocation(pr, 'uK'), uS = gl.getUniformLocation(pr, 'uS'), uF = gl.getUniformLocation(pr, 'uF');
+                const DH = [0, 15, -15, 30], DL = [15, 10, 5, 0];
+                let time = 0;
+                return {
+                    enter() { time = glRand(0, 50); },
+                    draw(c) {
+                        const gl = c.gl;
+                        gl.useProgram(pr);
+                        K.bindFull(gl, pr);
+                        time += 0.01 * c.dt;
+                        const S = Math.min(100, c.th.s * 1.3), sc = [], fc = [];
+                        DH.forEach((dh, i) => { sc.push(...glHsl(K, c.th.h + dh, S, 75 + DL[i])); fc.push(...glHsl(K, c.th.h + dh, S, 75)); });
+                        gl.uniform2f(uRes, c.W, c.H);
+                        gl.uniform1f(uT, time);
+                        gl.uniform1f(uK, Math.min(200, Math.max(80, c.H * 0.15)) / 100);
+                        gl.uniform3fv(uS, sc);
+                        gl.uniform3fv(uF, fc);
+                        gl.drawArrays(gl.TRIANGLES, 0, 3);
+                    }
+                };
+            }
+        };
+        GL_STYLES.grid = {
+            opacity: 0.4,
+            create(gl, K) {
+                const pr = K.program(gl, K.vs, `precision highp float;
+uniform vec2 uRes;
+uniform vec4 uG;
+uniform float uM;
+uniform vec2 uHL[18];
+uniform vec3 uGl;
+uniform vec3 uSn0;
+uniform vec3 uSn1;
+uniform vec3 uFl0;
+uniform vec3 uFl1;
+uniform vec3 uLn;
+uniform vec3 uHr;
+float seg(float v, float lo, float hi) {
+    return clamp(min(v + 0.5, hi) - max(v - 0.5, lo), 0.0, 1.0);
+}
+void main() {
+    float px = gl_FragCoord.x;
+    float py = uRes.y - gl_FragCoord.y;
+    float cx = uG.x, cy = uG.y, R = uG.z, hor = uG.w;
+    float hh = uRes.y - hor;
+    float dist = length(vec2(px - cx, py - cy));
+    float t = dist / (R * 2.4);
+    float ga = (t < 0.35 ? mix(1.0, 0.4, t / 0.35) : t < 0.7 ? mix(0.4, 0.08, (t - 0.35) / 0.35) : mix(0.08, 0.0, clamp((t - 0.7) / 0.3, 0.0, 1.0))) * 0.35;
+    vec4 r = vec4(uGl * ga, ga);
+    float sa = 0.95 * clamp(R - dist + 0.5, 0.0, 1.0);
+    r = vec4(mix(uSn0, uSn1, clamp((py - (cy - R)) / (2.0 * R), 0.0, 1.0)) * sa, sa) + r * (1.0 - sa);
+    float keep = clamp(hor - py + 0.5, 0.0, 1.0);
+    float sx = seg(px, cx - R, cx + R);
+    if (sx > 0.0) {
+        for (int i = 0; i < 6; i++) {
+            float y0 = cy + R * (0.02 + float(i) * 0.105);
+            keep *= 1.0 - sx * seg(py, y0, y0 + 1.5 + float(i) * 1.2);
+        }
+    }
+    r *= keep;
+    float yy = py - hor;
+    float u = clamp(yy / hh, 0.0, 1.0);
+    float fa = 0.22 * (1.0 - u) * clamp(py + 0.5 - hor, 0.0, 1.0);
+    r = vec4(mix(uFl0, uFl1, u) * fa, fa) + r * (1.0 - fa);
+    float kl = 1.0;
+    if (yy > 0.0) {
+        float s = 6.0 + yy * uM;
+        float i0 = floor((px - cx) / s);
+        for (int k = -1; k <= 2; k++) {
+            float i = i0 + float(k);
+            if (abs(i) <= 18.0) {
+                float sl = i * uM;
+                float dd = abs(px - cx - i * s) * inversesqrt(1.0 + sl * sl);
+                kl *= 1.0 - 0.55 * clamp(1.1 - dd, 0.0, 1.0);
+            }
+        }
+    }
+    for (int j = 0; j < 18; j++) kl *= 1.0 - uHL[j].y * clamp(1.1 - abs(py - uHL[j].x), 0.0, 1.0);
+    float la = 1.0 - kl;
+    r = vec4(uLn * la, la) + r * kl;
+    float ha = 0.9 * clamp(1.5 - abs(py - hor), 0.0, 1.0);
+    r = vec4(uHr * ha, ha) + r * (1.0 - ha);
+    float hz = (1.0 - clamp(yy / (0.3 * hh), 0.0, 1.0)) * clamp(py + 0.5 - (hor + 1.0), 0.0, 1.0);
+    gl_FragColor = r * (1.0 - hz);
+}`);
+                const loc = n => gl.getUniformLocation(pr, n);
+                const uRes = loc('uRes'), uG = loc('uG'), uM = loc('uM'), uHL = loc('uHL'), uGl = loc('uGl'), uSn0 = loc('uSn0'), uSn1 = loc('uSn1'), uFl0 = loc('uFl0'), uFl1 = loc('uFl1'), uLn = loc('uLn'), uHr = loc('uHr');
+                const hl = new Float32Array(36);
+                let z = 0;
+                return {
+                    enter() { z = 0; },
+                    draw(c) {
+                        const gl = c.gl, W = c.W, H = c.H, h = c.th.h;
+                        gl.useProgram(pr);
+                        K.bindFull(gl, pr);
+                        z = (z + 0.012 * c.dt) % 1;
+                        const hor = H * 0.6, S = Math.min(100, Math.max(c.th.s, 25) * 1.1), cx = W / 2;
+                        const R = Math.min(W, H) * 0.18, cy = hor - R * 0.6;
+                        for (let i = 0; i < 18; i++) {
+                            const d = i + 1 - z, y = hor + (H - hor) * 0.9 / d;
+                            hl[i * 2] = y;
+                            hl[i * 2 + 1] = y > H ? 0 : Math.min(0.8, 1.2 / d);
+                        }
+                        gl.uniform2f(uRes, W, H);
+                        gl.uniform4f(uG, cx, cy, R, hor);
+                        gl.uniform1f(uM, ((W / 18) * 1.4 - 6) / (H - hor));
+                        gl.uniform2fv(uHL, hl);
+                        gl.uniform3fv(uGl, glHsl(K, h + 20, S, 60));
+                        gl.uniform3fv(uSn0, glHsl(K, h + 45, S, 72));
+                        gl.uniform3fv(uSn1, glHsl(K, h - 25, S, 55));
+                        gl.uniform3fv(uFl0, glHsl(K, h, S, 45));
+                        gl.uniform3fv(uFl1, glHsl(K, h, S, 30));
+                        gl.uniform3fv(uLn, glHsl(K, h, S, 68));
+                        gl.uniform3fv(uHr, glHsl(K, h + 20, S, 75));
+                        gl.drawArrays(gl.TRIANGLES, 0, 3);
+                    }
+                };
+            }
+        };
+        GL_STYLES.bokeh = {
+            opacity: 0.4,
+            create(gl, K) {
+                const sp = glSprites(gl, K, 45);
+                let W = 0, H = 0, b = [];
+                const spawn = y => {
+                    const d = Math.random();
+                    return { x: glRand(0, W), y, d, r: 12 + d * 80, vy: -(0.12 + d * 0.45), ph: glRand(0, 6.3), dh: glRand(-30, 30), a: 0.5 - d * 0.28 };
+                };
+                return {
+                    enter(w, h) {
+                        W = w; H = h;
+                        const n = Math.min(45, Math.floor(W * H / 38000));
+                        b = Array.from({ length: n }, () => spawn(glRand(0, H)));
+                    },
+                    draw(c) {
+                        const S = Math.min(100, c.th.s * 1.2);
+                        sp.begin();
+                        b.forEach((p, i) => {
+                            p.y += p.vy * c.dt;
+                            p.ph += 0.02 * c.dt;
+                            p.x += Math.sin(p.ph) * 0.25 * c.dt;
+                            if (p.y < -p.r) b[i] = spawn(H + p.r);
+                            sp.quad(p.x, p.y, p.r, 0, glHsl(K, c.th.h + p.dh, S, 62), Math.max(0, Math.min(1, p.a * (0.75 + 0.25 * Math.sin(p.ph * 1.7)))));
+                        });
+                        sp.flush(c.W, c.H, true);
+                    }
+                };
+            }
+        };
+        GL_STYLES.snow = {
+            opacity: 0.5,
+            create(gl, K) {
+                const sp = glSprites(gl, K, 520);
+                let W = 0, H = 0, f = [], windT = 0;
+                const spawn = y => {
+                    const d = Math.random() ** 1.5;
+                    return { x: glRand(0, W), y, d, r: 0.8 + d * 2.6, ph: glRand(0, 6.3) };
+                };
+                return {
+                    enter(w, h) {
+                        W = w; H = h;
+                        const n = Math.min(260, Math.floor(W * H / 6000));
+                        f = Array.from({ length: n }, () => spawn(glRand(0, H)));
+                        windT = glRand(0, 100);
+                    },
+                    draw(c) {
+                        windT += 0.004 * c.dt;
+                        const wind = Math.sin(windT) * 0.6 + Math.sin(windT * 2.7) * 0.3;
+                        const S = c.th.s * 0.4, glow = glHsl(K, c.th.h, S, 85), dot = glHsl(K, c.th.h, S, 90);
+                        const packs = [[], [], [], []];
+                        sp.begin();
+                        f.forEach((p, i) => {
+                            p.ph += 0.03 * c.dt;
+                            p.y += (0.35 + p.d * 1.4) * c.dt;
+                            p.x += (wind * (0.4 + p.d) + Math.sin(p.ph) * 0.3) * c.dt;
+                            if (p.y > H + 5) { f[i] = spawn(-5); return; }
+                            if (p.x > W + 5) p.x = -5; else if (p.x < -5) p.x = W + 5;
+                            if (p.d > 0.6) sp.quad(p.x, p.y, p.r * 3.5, 1, glow, 0.45);
+                            packs[Math.min(3, p.d * 4 | 0)].push(p);
+                        });
+                        packs.forEach((pack, i) => pack.forEach(p => sp.quad(p.x, p.y, p.r + 1, 2, dot, 0.45 + (i + 0.5) / 4 * 0.55)));
+                        sp.flush(c.W, c.H, false);
+                    }
+                };
+            }
+        };
+        const GLP_VS = `attribute vec2 aPos;
+attribute vec2 aLoc;
+attribute vec4 aCol;
+attribute vec4 aPar;
+uniform vec2 uRes;
+varying vec2 vL;
+varying vec4 vC;
+varying vec4 vP;
+void main() {
+    gl_Position = vec4(aPos.x / uRes.x * 2.0 - 1.0, 1.0 - aPos.y / uRes.y * 2.0, 0.0, 1.0);
+    vL = aLoc;
+    vC = aCol;
+    vP = aPar;
+}`;
+        const GLP_FS = `precision highp float;
+uniform vec4 uHead;
+uniform vec4 uTail;
+varying vec2 vL;
+varying vec4 vC;
+varying vec4 vP;
+float glow(float d) {
+    if (d >= 1.0) return 0.0;
+    if (d < 0.35) return mix(1.0, 0.4, d / 0.35);
+    if (d < 0.7) return mix(0.4, 0.08, (d - 0.35) / 0.35);
+    return mix(0.08, 0.0, (d - 0.7) / 0.3);
+}
+float cdf(float x, float a, float b) {
+    float p = (a + b) * 0.5, q = (a - b) * 0.5, ax = abs(x), r;
+    if (ax >= p) r = 1.0;
+    else if (ax > q) r = 1.0 - (p - ax) * (p - ax) / (2.0 * a * b);
+    else r = 0.5 + ax / a;
+    return x < 0.0 ? 1.0 - r : r;
+}
+float disc(vec2 l, float r) {
+    float s = 0.0;
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            vec2 o = vec2(float(i), float(j)) * 0.25 - 0.375;
+            s += step(length(l + o), r);
+        }
+    }
+    return s / 16.0;
+}
+void main() {
+    float a0 = vP.w, b0 = max(0.001, sqrt(max(0.0, 1.0 - a0 * a0)));
+    vec4 c = vC;
+    float a;
+    if (vP.x < 0.5) {
+        a = glow(length(vL));
+    } else if (vP.x < 1.5) {
+        a = disc(vL, vP.y * 0.97);
+    } else if (vP.x < 2.5) {
+        float d = length(vec2(vL.x - clamp(vL.x, 0.0, vP.y), vL.y));
+        a = cdf(d + vP.z, a0, b0) - cdf(d - vP.z, a0, b0);
+        c = mix(uHead, uTail, clamp(vL.x / vP.y, 0.0, 1.0));
+    } else {
+        a = clamp(1.0 - abs(vL.y) / a0, 0.0, 1.0) * clamp(vL.x * a0 + 0.5, 0.0, 1.0) * clamp((vP.y - vL.x) * a0 + 0.5, 0.0, 1.0);
+    }
+    a *= c.a;
+    gl_FragColor = vec4(c.rgb * a, a);
+}`;
+        const glRgb = (K, h, s, l) => K.hslRgb(Math.round(h), Math.round(s), Math.round(l));
+        function glPtsKit(gl, K) {
+            const pr = K.program(gl, GLP_VS, GLP_FS);
+            const buf = gl.createBuffer();
+            const at = ['aPos', 'aLoc', 'aCol', 'aPar'].map(n => gl.getAttribLocation(pr, n));
+            const sizes = [2, 2, 4, 4];
+            const uRes = gl.getUniformLocation(pr, 'uRes'), uHead = gl.getUniformLocation(pr, 'uHead'), uTail = gl.getUniformLocation(pr, 'uTail');
+            let data = new Float32Array(12 * 6 * 2048), n = 0, gpu = 0;
+            const put = (x, y, lx, ly, col, a, p0, p1, p2, p3) => {
+                if (n + 12 > data.length) { const bigger = new Float32Array(data.length * 2); bigger.set(data); data = bigger; }
+                data[n] = x; data[n + 1] = y; data[n + 2] = lx; data[n + 3] = ly;
+                data[n + 4] = col[0]; data[n + 5] = col[1]; data[n + 6] = col[2]; data[n + 7] = a;
+                data[n + 8] = p0; data[n + 9] = p1; data[n + 10] = p2; data[n + 11] = p3;
+                n += 12;
+            };
+            const rect = (cx, cy, e, l, col, a, p0, p1, p2, p3) => {
+                put(cx - e, cy - e, -l, -l, col, a, p0, p1, p2, p3);
+                put(cx + e, cy - e, l, -l, col, a, p0, p1, p2, p3);
+                put(cx + e, cy + e, l, l, col, a, p0, p1, p2, p3);
+                put(cx - e, cy - e, -l, -l, col, a, p0, p1, p2, p3);
+                put(cx + e, cy + e, l, l, col, a, p0, p1, p2, p3);
+                put(cx - e, cy + e, -l, l, col, a, p0, p1, p2, p3);
+            };
+            return {
+                glow(x, y, r, col, a) { rect(x, y, r, 1, col, Math.max(0, Math.min(1, a)), 0, 0, 0, 1); },
+                disc(x, y, r, col, a) { rect(x, y, r + 1, r + 1, col, a, 1, r, 0, 1); },
+                seg(kind, x1, y1, x2, y2, hw, ext, col, a) {
+                    const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy);
+                    if (len < 0.001) return;
+                    const ux = dx / len, uy = dy / len, nx = -uy, ny = ux, k = Math.max(Math.abs(ux), Math.abs(uy)), m = hw + 1.5, s0 = -ext, s1 = len + ext;
+                    const v = (s, t) => put(x1 + ux * s + nx * t, y1 + uy * s + ny * t, s, t, col, a, kind, len, hw, k);
+                    v(s0, -m); v(s0, m); v(s1, m);
+                    v(s0, -m); v(s1, m); v(s1, -m);
+                },
+                flush(W, H, head, tail) {
+                    if (n) {
+                        gl.useProgram(pr);
+                        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+                        if (data.length > gpu) { gpu = data.length; gl.bufferData(gl.ARRAY_BUFFER, gpu * 4, gl.DYNAMIC_DRAW); }
+                        gl.bufferSubData(gl.ARRAY_BUFFER, 0, data.subarray(0, n));
+                        let off = 0;
+                        at.forEach((loc, i) => {
+                            gl.enableVertexAttribArray(loc);
+                            gl.vertexAttribPointer(loc, sizes[i], gl.FLOAT, false, 48, off);
+                            off += sizes[i] * 4;
+                        });
+                        gl.uniform2f(uRes, W, H);
+                        gl.uniform4fv(uHead, head || [0, 0, 0, 0]);
+                        gl.uniform4fv(uTail, tail || [0, 0, 0, 0]);
+                        gl.enable(gl.BLEND);
+                        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+                        gl.drawArrays(gl.TRIANGLES, 0, n / 12);
+                        gl.disable(gl.BLEND);
+                        at.forEach(loc => gl.disableVertexAttribArray(loc));
+                    }
+                    n = 0;
+                }
+            };
+        }
+        GL_STYLES.stars = {
+            opacity: 0.4,
+            create(gl, K) {
+                const kit = glPtsKit(gl, K);
+                const packs = Array.from({ length: 8 }, () => []);
+                let stars = [], shoot = null, wait = 0;
+                return {
+                    enter(W, H) {
+                        const n = Math.min(600, Math.floor(W * H / 3500));
+                        stars = Array.from({ length: n }, () => {
+                            const d = Math.random() ** 2;
+                            return { x: glRand(0, W), y: glRand(0, H), d, r: 0.5 + d * 1.8, ph: glRand(0, 6.3), sp: glRand(0.03, 0.1) };
+                        });
+                        shoot = null;
+                        wait = glRand(40, 120);
+                    },
+                    draw(c) {
+                        const { W, H, dt } = c, h = c.th.h, S = Math.min(100, c.th.s * 1.2);
+                        const glowCol = glRgb(K, h, S, 70), dotCol = glRgb(K, h, S, 82);
+                        packs.forEach(p => { p.length = 0; });
+                        for (const st of stars) {
+                            st.ph += st.sp * dt;
+                            st.x -= (0.03 + st.d * 0.3) * dt;
+                            if (st.x < -5) { st.x = W + 5; st.y = glRand(0, H); }
+                            const a = 0.2 + 0.8 * (0.5 + 0.5 * Math.sin(st.ph));
+                            if (st.r > 1.4) kit.glow(st.x, st.y, st.r * 7, glowCol, a * 0.3);
+                            packs[Math.min(7, a * 8 | 0)].push(st.x, st.y, st.r);
+                        }
+                        packs.forEach((p, i) => {
+                            for (let j = 0; j < p.length; j += 3) kit.disc(p[j], p[j + 1], p[j + 2], dotCol, (i + 0.5) / 8);
+                        });
+                        wait -= dt;
+                        if (!shoot && wait <= 0) {
+                            shoot = { x: glRand(W * 0.3, W * 1.05), y: glRand(-20, H * 0.35), vx: -glRand(16, 24), vy: glRand(6, 10), life: 1 };
+                            wait = glRand(80, 220);
+                        }
+                        let head = null, tail = null;
+                        const p = shoot;
+                        if (p) {
+                            p.x += p.vx * dt; p.y += p.vy * dt; p.life -= 0.035 * dt;
+                            const tx = p.x - p.vx * 7, ty = p.y - p.vy * 7, life = Math.max(0, p.life);
+                            head = [...glRgb(K, h, S * 0.5, 95), life];
+                            tail = [...glRgb(K, h, S, 70), 0];
+                            kit.seg(2, p.x, p.y, tx, ty, 1, 2.5, glowCol, 1);
+                            kit.glow(p.x, p.y, 10, glRgb(K, h, S * 0.5, 90), p.life * 0.8);
+                            if (p.life <= 0 || p.x < -200 || p.y > H + 200) shoot = null;
+                        }
+                        kit.flush(W, H, head, tail);
+                    }
+                };
+            }
+        };
+        GL_STYLES.particles = {
+            opacity: 0.35,
+            create(gl, K) {
+                const kit = glPtsKit(gl, K);
+                const lines = Array.from({ length: 6 }, () => []);
+                let ps = [];
+                return {
+                    enter(W, H) {
+                        const n = Math.min(130, Math.floor(W * H / 14000));
+                        ps = Array.from({ length: n }, () => ({ x: glRand(0, W), y: glRand(0, H), vx: glRand(-0.6, 0.6), vy: glRand(-0.6, 0.6), r: glRand(1.2, 3), ph: glRand(0, 6.3) }));
+                    },
+                    draw(c) {
+                        const { W, H, dt, mouse } = c, h = c.th.h;
+                        const S = Math.min(100, c.th.s * 1.4), link = Math.max(110, Math.min(170, Math.min(W, H) * 0.14)), link2 = link * link;
+                        for (const p of ps) {
+                            const dx = mouse.x - p.x, dy = mouse.y - p.y, d2 = dx * dx + dy * dy;
+                            if (d2 < 48000 && d2 > 1) {
+                                const d = Math.sqrt(d2), f = (d < 90 ? -1.2 : 0.3) / d;
+                                p.vx += dx * f * 0.05 * dt; p.vy += dy * f * 0.05 * dt;
+                            }
+                            const sp = Math.hypot(p.vx, p.vy);
+                            if (sp > 1.3) { p.vx *= 1.3 / sp; p.vy *= 1.3 / sp; }
+                            if (sp < 0.15) { p.vx += glRand(-0.05, 0.05); p.vy += glRand(-0.05, 0.05); }
+                            p.x += p.vx * dt; p.y += p.vy * dt; p.ph += 0.05 * dt;
+                            if (p.x < 0 || p.x > W) { p.vx *= -1; p.x = Math.max(0, Math.min(W, p.x)); }
+                            if (p.y < 0 || p.y > H) { p.vy *= -1; p.y = Math.max(0, Math.min(H, p.y)); }
+                        }
+                        lines.forEach(l => { l.length = 0; });
+                        const add = (a, x1, y1, x2, y2) => { lines[Math.min(5, a * 6 | 0)].push(x1, y1, x2, y2); };
+                        for (let i = 0; i < ps.length; i++) {
+                            const a = ps[i];
+                            for (let j = i + 1; j < ps.length; j++) {
+                                const b = ps[j], dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy;
+                                if (d2 < link2) add(0.45 * (1 - Math.sqrt(d2) / link) / 0.7, a.x, a.y, b.x, b.y);
+                            }
+                            const mx = mouse.x - a.x, my = mouse.y - a.y, m2 = mx * mx + my * my;
+                            if (m2 < link2 * 1.7) add(1 - Math.sqrt(m2 / (link2 * 1.7)), a.x, a.y, mouse.x, mouse.y);
+                        }
+                        const lineCol = glRgb(K, h, S, 75), glowCol = glRgb(K, h, S, 70), dotCol = glRgb(K, h, S, 85);
+                        lines.forEach((l, i) => {
+                            for (let j = 0; j < l.length; j += 4) kit.seg(3, l[j], l[j + 1], l[j + 2], l[j + 3], 0.5, 1.5, lineCol, 0.7 * (i + 0.5) / 6);
+                        });
+                        for (const p of ps) kit.glow(p.x, p.y, p.r * (0.85 + 0.15 * Math.sin(p.ph)) * 5, glowCol, 0.4);
+                        for (const p of ps) kit.disc(p.x, p.y, p.r * (0.85 + 0.15 * Math.sin(p.ph)), dotCol, 1);
+                        kit.flush(W, H);
+                    }
+                };
+            }
+        };
+        const GLM_CHARS = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
+        GL_STYLES.matrix = {
+            opacity: 0.2,
+            create(gl, K) {
+                const probe = gl.createTexture(), probeFb = gl.createFramebuffer();
+                gl.bindTexture(gl.TEXTURE_2D, probe);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 4, 4, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, probeFb);
+                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, probe, 0);
+                const complete = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+                gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                gl.bindTexture(gl.TEXTURE_2D, null);
+                gl.deleteFramebuffer(probeFb);
+                gl.deleteTexture(probe);
+                if (!complete) throw new Error('нет рендера в текстуру');
+                if (Math.max(innerWidth, innerHeight) > gl.getParameter(gl.MAX_TEXTURE_SIZE)) throw new Error('экран больше предела текстуры');
+                const size = 15, cell = 24, pad = 4, per = 16, rows = Math.ceil(GLM_CHARS.length / per), tones = 8;
+                const art = document.createElement('canvas');
+                art.width = per * cell;
+                art.height = tones * rows * cell;
+                const ag = art.getContext('2d');
+                ag.font = `${size}px monospace`;
+                ag.textBaseline = 'top';
+                for (let k = 0; k < tones; k++) {
+                    const v = 16 + k * 32;
+                    ag.fillStyle = `rgb(${v}, ${v}, ${v})`;
+                    for (let i = 0; i < GLM_CHARS.length; i++) ag.fillText(GLM_CHARS[i], (i % per) * cell + pad, (k * rows + Math.floor(i / per)) * cell + pad);
+                }
+                const probe2 = document.createElement('canvas');
+                probe2.width = probe2.height = cell;
+                const pg = probe2.getContext('2d', { willReadFrequently: true });
+                pg.font = `${size}px monospace`;
+                pg.textBaseline = 'top';
+                const weight = style => {
+                    pg.clearRect(0, 0, cell, cell);
+                    pg.fillStyle = style;
+                    pg.fillText('ヨ', pad, pad);
+                    const d = pg.getImageData(0, 0, cell, cell).data;
+                    let t = 0;
+                    for (let i = 3; i < d.length; i += 4) t += d[i];
+                    return t;
+                };
+                const refs = Array.from({ length: tones }, (_, k) => weight(`rgb(${16 + k * 32}, ${16 + k * 32}, ${16 + k * 32})`));
+                const toneCache = new Map();
+                const toneOf = (h, s, l) => {
+                    const q = Math.round((((h % 360) + 360) % 360) / 6), key = q + ',' + s + ',' + l;
+                    let k = toneCache.get(key);
+                    if (k !== undefined) return k;
+                    if (toneCache.size > 600) toneCache.clear();
+                    const w = weight(`hsl(${q * 6}, ${s}%, ${l}%)`);
+                    k = 0;
+                    refs.forEach((r, i) => { if (Math.abs(r - w) < Math.abs(refs[k] - w)) k = i; });
+                    toneCache.set(key, k);
+                    return k;
+                };
+                const filter = () => [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]].forEach(([k, v]) => gl.texParameteri(gl.TEXTURE_2D, k, v));
+                const atlas = gl.createTexture();
+                gl.bindTexture(gl.TEXTURE_2D, atlas);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, art);
+                filter();
+                const tex = gl.createTexture(), fb = gl.createFramebuffer();
+                const prGlyph = K.program(gl, `attribute vec2 aPos;
+attribute vec2 aUv;
+attribute vec3 aCol;
+uniform vec2 uRes;
+varying vec2 vUv;
+varying vec3 vCol;
+void main() {
+    gl_Position = vec4(aPos.x / uRes.x * 2.0 - 1.0, 1.0 - aPos.y / uRes.y * 2.0, 0.0, 1.0);
+    vUv = aUv;
+    vCol = aCol;
+}`, `precision highp float;
+uniform sampler2D uTex;
+varying vec2 vUv;
+varying vec3 vCol;
+void main() {
+    float a = texture2D(uTex, vUv).a;
+    gl_FragColor = vec4(vCol * a, a);
+}`);
+                const prFade = K.program(gl, K.vs, `precision highp float;
+uniform float uA;
+void main() { gl_FragColor = vec4(0.0, 0.0, 0.0, uA); }`);
+                const prShow = K.program(gl, K.vs, `precision highp float;
+uniform sampler2D uTex;
+uniform vec2 uRes;
+void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
+                const gAt = ['aPos', 'aUv', 'aCol'].map(n => gl.getAttribLocation(prGlyph, n)), gSizes = [2, 2, 3];
+                const gRes = gl.getUniformLocation(prGlyph, 'uRes'), gTex = gl.getUniformLocation(prGlyph, 'uTex');
+                const fA = gl.getUniformLocation(prFade, 'uA');
+                const sTex = gl.getUniformLocation(prShow, 'uTex'), sRes = gl.getUniformLocation(prShow, 'uRes');
+                const buf = gl.createBuffer();
+                const clr = [], gly = [];
+                let cols = [], fadeAcc = 0, ok = false;
+                const quad = (out, x, y, w, h, idx, tone, c) => {
+                    const u = (idx % per) * cell / art.width, v = (tone * rows + Math.floor(idx / per)) * cell / art.height, u1 = u + cell / art.width, v1 = v + cell / art.height;
+                    const x1 = x + w, y1 = y + h;
+                    [[x, y, u, v], [x1, y, u1, v], [x1, y1, u1, v1], [x, y, u, v], [x1, y1, u1, v1], [x, y1, u, v1]].forEach(q => out.push(q[0], q[1], q[2], q[3], c[0], c[1], c[2]));
+                };
+                const drawList = list => {
+                    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(list), gl.DYNAMIC_DRAW);
+                    let off = 0;
+                    gAt.forEach((loc, i) => {
+                        gl.enableVertexAttribArray(loc);
+                        gl.vertexAttribPointer(loc, gSizes[i], gl.FLOAT, false, 28, off);
+                        off += gSizes[i] * 4;
+                    });
+                    gl.drawArrays(gl.TRIANGLES, 0, list.length / 7);
+                };
+                return {
+                    enter(W, H) {
+                        gl.bindTexture(gl.TEXTURE_2D, tex);
+                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, W, H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+                        filter();
+                        gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+                        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+                        ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+                        if (ok) gl.clear(gl.COLOR_BUFFER_BIT);
+                        else GL_STYLES.matrix.broken = true;
+                        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                        gl.bindTexture(gl.TEXTURE_2D, null);
+                        cols = Array.from({ length: Math.ceil(W / size) }, () => ({ y: glRand(-H / size, H / size), v: glRand(0.35, 1), prev: null }));
+                        fadeAcc = 0;
+                    },
+                    draw(c) {
+                        if (!ok) return;
+                        const { W, H, dt } = c, h = c.th.h, sat = c.th.s;
+                        gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+                        gl.enable(gl.BLEND);
+                        fadeAcc += dt;
+                        const fa = 1 - Math.pow(1 - 0.06, fadeAcc);
+                        if (fa >= 0.08) {
+                            fadeAcc = 0;
+                            gl.useProgram(prFade);
+                            K.bindFull(gl, prFade);
+                            gl.uniform1f(fA, fa);
+                            gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_ALPHA);
+                            gl.drawArrays(gl.TRIANGLES, 0, 3);
+                        }
+                        clr.length = 0;
+                        gly.length = 0;
+                        const headH = Math.round(h), headS = Math.round(Math.min(sat, 50)), headCol = K.hslRgb(headH, headS, 88), headTone = toneOf(headH, headS, 88), none = [0, 0, 0];
+                        cols.forEach((col, i) => {
+                            const cellY = Math.floor(col.y);
+                            col.y += col.v * dt;
+                            const next = Math.floor(col.y);
+                            if (next !== cellY) {
+                                const x = i * size;
+                                if (col.prev) {
+                                    const py = col.prev.y * size;
+                                    quad(clr, x, py, size, size, 0, 0, none);
+                                    const th = Math.round(h + glRand(-12, 12)), ts = Math.round(sat);
+                                    quad(gly, x - pad, py - pad, cell, cell, col.prev.ch, toneOf(th, ts, 45), K.hslRgb(th, ts, 45));
+                                }
+                                const ch = Math.random() * GLM_CHARS.length | 0;
+                                quad(gly, x - pad, next * size - pad, cell, cell, ch, headTone, headCol);
+                                col.prev = { ch, y: next };
+                            }
+                            if (col.y * size > H && Math.random() < 0.03 * dt) Object.assign(col, { y: glRand(-15, 0), v: glRand(0.35, 1), prev: null });
+                        });
+                        if (clr.length || gly.length) {
+                            gl.useProgram(prGlyph);
+                            gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+                            gl.uniform2f(gRes, W, H);
+                            gl.activeTexture(gl.TEXTURE0);
+                            gl.bindTexture(gl.TEXTURE_2D, atlas);
+                            gl.uniform1i(gTex, 0);
+                            if (clr.length) {
+                                gl.blendFunc(gl.ZERO, gl.ZERO);
+                                drawList(clr);
+                            }
+                            if (gly.length) {
+                                gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+                                drawList(gly);
+                            }
+                            gAt.forEach(loc => gl.disableVertexAttribArray(loc));
+                        }
+                        gl.disable(gl.BLEND);
+                        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                        gl.useProgram(prShow);
+                        K.bindFull(gl, prShow);
+                        gl.bindTexture(gl.TEXTURE_2D, tex);
+                        gl.uniform1i(sTex, 0);
+                        gl.uniform2f(sRes, W, H);
+                        gl.drawArrays(gl.TRIANGLES, 0, 3);
+                        gl.bindTexture(gl.TEXTURE_2D, null);
+                    }
+                };
+            }
+        };
         const LOOK_RE = /^ITDXL1 (.+)$/;
         const VER_RE = /^\d{1,3}(\.\d{1,4}){1,4}$/;
         const MOD_VER = (() => { try { const v = GM_info.script.version; return VER_RE.test(v) ? v : ''; } catch (e) { return ''; } })();
@@ -3109,7 +3845,9 @@ void main() {
             if (!m || !BANNER_VIDEO_RE.test(m[1])) throw new Error('сайт вернул не видео: ' + String(d && d.url || '—').slice(0, 90));
             return m[1];
         }
-        let lookBusy = false, lookSent = '', lookRetryAt = 0;
+        let lookBusy = false, lookSent = '', lookRetryAt = 0, lookFails = 0;
+        const LOOK_RETRY = [60000, 120000, 300000, 600000];
+        const lookLater = () => { lookRetryAt = Date.now() + LOOK_RETRY[Math.min(lookFails++, LOOK_RETRY.length - 1)]; };
         async function lookVer() {
             if (!MOD_VER) return '';
             const c = GM_getValue('vp_vx', null);
@@ -3135,9 +3873,9 @@ void main() {
                 const res = mine
                     ? await editComment(mine.id, content)
                     : await sendComment(VERIFICATION_POST_ID, content);
-                if (res.ok) { lookSent = text; GM_setValue(acctKey('vp_look_day'), day); if (day !== was) checkAllComments(true); }
-                else lookRetryAt = Date.now() + 10 * 60 * 1000;
-            } catch (e) { lookRetryAt = Date.now() + 10 * 60 * 1000; logErr('стиль', e); } finally { lookBusy = false; }
+                if (res.ok) { lookSent = text; lookFails = 0; GM_setValue(acctKey('vp_look_day'), day); if (day !== was) checkAllComments(true); }
+                else lookLater();
+            } catch (e) { lookLater(); logErr('стиль', e); } finally { lookBusy = false; }
         }
         let accentProbe = null;
         function onAccentFor(color, dark) {
@@ -4642,6 +5380,10 @@ void main() {
         }
 
         const CHANGELOG = [
+            ['3.7.3', '26 октября 2026', [
+                'Все анимированные фоны теперь считаются на видеокарте, если она есть: страница меньше тормозит, вид тот же',
+                'Кнопка «Обновить» появляется быстрее после выхода новой версии'
+            ]],
             ['3.7.2 – 3.7.2.2', '26 октября 2026', [
                 'Фон «Сияние» теперь считается на видеокарте, если она есть: заметно меньше нагрузка на процессор, вид тот же',
                 'Мягкие анимированные фоны (сияние, боке, волны, сетка, снег) стали легче для процессора и видеокарты при том же виде и плавности'
@@ -5352,11 +6094,12 @@ void main() {
         narrowScreen.addEventListener('change', placeNickWrapper);
         onDom(placeNickWrapper);
 
+        let visualsTry = 0;
         async function initVisuals() {
             try {
                 const me = siteAuth.me || await new Promise(done => { siteAuth.meWait.push(done); setTimeout(() => done(null), 1500); })
-                    || await (await api('/api/users/me')).json();
-                if (!me || !me.username) return;
+                    || await api('/api/users/me').then(r => r.json()).catch(() => null);
+                if (!me || !me.username) { if (visualsTry++ < 6) setTimeout(initVisuals, 4000 * visualsTry); return; }
                 meData = me;
                 myUsername = me.username;
                 reloadAutoLike();
@@ -5366,8 +6109,7 @@ void main() {
 
                 createScrollTopButton();
 
-                checkAllComments().then(() => { markVerifiedUsers(); return verifyMyself(); }).then(verifyRequestAgain).then(publishLook);
-                sched.add('look', publishLook, { every: 60000, net: true });
+                checkAllComments().then(() => { markVerifiedUsers(); return verifyMyself(); }).then(verifyRequestAgain).catch(e => logErr('проверка', e)).then(publishLook);
                 sched.add('verify', () => checkAllComments(), { every: 10 * 60 * 1000, net: true, visible: true });
 
                 lbSyncFromServer();
@@ -5617,7 +6359,7 @@ void main() {
                 });
 
                 const updateUrl = 'https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/ITD-Visual-Pack.user.js?t=' + Date.now();
-                const UPDATE_EVERY = 10 * 60 * 1000;
+                const UPDATE_EVERY = 5 * 60 * 1000;
                 let updateAskedAt = 0;
                 function latestVersion(fresh) {
                     let cached = null;
@@ -5626,6 +6368,7 @@ void main() {
                         return Promise.resolve(cached.v);
                     }
                     updateAskedAt = Date.now();
+                    GM_setValue('vp_upd_ask', updateAskedAt);
                     return new Promise(resolve => GM_xmlhttpRequest({
                         method: 'GET',
                         url: updateUrl.replace(/t=\d+$/, 't=' + Date.now()),
@@ -5674,7 +6417,7 @@ void main() {
                 let updateTimer = 0;
                 function updatePoll() {
                     if (updateAvailable) { clearInterval(updateTimer); return; }
-                    if (document.hidden || Date.now() - updateAskedAt < UPDATE_EVERY - 5000) return;
+                    if (document.hidden || Date.now() - Math.max(updateAskedAt, +GM_getValue('vp_upd_ask', 0) || 0) < UPDATE_EVERY - 5000) return;
                     latestVersion(true).then(v => {
                         if (updateAvailable || !v || versionCompare(v, GM_info.script.version) <= 0) return;
                         updateAvailable = true;
@@ -5846,6 +6589,7 @@ void main() {
         canvasRO.observe(canvas);
         resizeCanvas();
         initVisuals();
+        sched.add('look', publishLook, { every: 60000, net: true });
         initBanner();
 
         (function () {
