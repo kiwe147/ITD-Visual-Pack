@@ -19,6 +19,7 @@
 20-calls.js
 21-banner.js
 21b-avatar-editor.js
+21c-account-switch.js
 22-changelog.js
 23-api-verification.js
 24-visuals-init.js
