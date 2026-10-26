@@ -278,7 +278,7 @@
                 const copy = freeze(el, fixed);
                 copy.style.cssText += fixed
                     ? `;position:absolute;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;right:auto;bottom:auto;margin:0;transform:none;animation:none;z-index:auto`
-                    : `;position:absolute;left:${r.left}px;top:${r.top}px;width:${r.width}px;margin:0;transform:none`;
+                    : `;position:absolute;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;margin:0;transform:none`;
                 const wrap = document.createElement('div');
                 wrap.className = 'vp-sw-ghost ' + cls;
                 wrap.appendChild(copy);

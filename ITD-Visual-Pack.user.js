@@ -6228,7 +6228,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         };
         const CHANGELOG = [
             ['3.7.7.6', '27 октября 2026', [
-                'Листание вкладок на телефоне: страницы сдвигаются влево и вправо по порядку пунктов меню'
+                'Листание вкладок на телефоне: страницы сдвигаются влево и вправо по порядку пунктов меню',
+                'Листание вкладок: надпись на «Ивенте» больше не прыгает сверху к центру'
             ]],
             ['3.7.7.5', '27 октября 2026', [
                 'Галерея на телефоне: кнопки под картинкой, больше её не закрывают'
@@ -12054,7 +12055,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const copy = freeze(el, fixed);
                 copy.style.cssText += fixed
                     ? `;position:absolute;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;right:auto;bottom:auto;margin:0;transform:none;animation:none;z-index:auto`
-                    : `;position:absolute;left:${r.left}px;top:${r.top}px;width:${r.width}px;margin:0;transform:none`;
+                    : `;position:absolute;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;margin:0;transform:none`;
                 const wrap = document.createElement('div');
                 wrap.className = 'vp-sw-ghost ' + cls;
                 wrap.appendChild(copy);
