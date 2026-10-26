@@ -20,8 +20,8 @@ void main() {
     float d = length(vL);
     float a;
     if (vQ.y < 0.5) a = d < 0.72 ? mix(0.5, 0.6, d / 0.72) : d < 0.86 ? mix(0.6, 0.3, (d - 0.72) / 0.14) : mix(0.3, 0.0, clamp((d - 0.86) / 0.14, 0.0, 1.0));
-    else if (vQ.y < 1.5) a = d < 0.35 ? mix(1.0, 0.4, d / 0.35) : d < 0.7 ? mix(0.4, 0.08, (d - 0.35) / 0.35) : mix(0.08, 0.0, clamp((d - 0.7) / 0.3, 0.0, 1.0));
-    else a = clamp(vQ.x - 1.0 - d * vQ.x + 0.5, 0.0, 1.0);
+    else if (vQ.y < 1.5) a = clamp(vQ.x - 1.0 - d * vQ.x + 0.5, 0.0, 1.0);
+    else a = d < 0.35 ? mix(1.0, 0.55, d / 0.35) : mix(0.55, 0.0, clamp((d - 0.35) / 0.65, 0.0, 1.0));
     a *= vC.a;
     gl_FragColor = vec4(vC.rgb * a, a);
 }`);
@@ -252,37 +252,127 @@ void main() {
             }
         };
         GL_STYLES.snow = {
-            opacity: 0.5,
+            opacity: 0.6,
             create(gl, K) {
-                const sp = glSprites(gl, K, 520);
-                let W = 0, H = 0, f = [], windT = 0;
-                const spawn = y => {
-                    const d = Math.random() ** 1.5;
-                    return { x: glRand(0, W), y, d, r: 0.8 + d * 2.6, ph: glRand(0, 6.3) };
-                };
+                const sp = glSprites(gl, K, 600);
+                const cr = K.program(gl, `attribute vec2 aPos;
+attribute vec2 aL;
+attribute vec4 aA;
+uniform vec2 uRes;
+varying vec2 vL;
+varying vec4 vA;
+void main() {
+    gl_Position = vec4(aPos.x / uRes.x * 2.0 - 1.0, 1.0 - aPos.y / uRes.y * 2.0, 0.0, 1.0);
+    vL = aL * (aA.x + 2.0);
+    vA = aA;
+}`, `precision highp float;
+uniform vec3 uCol;
+varying vec2 vL;
+varying vec4 vA;
+float seg(vec2 p, vec2 a, vec2 b) {
+    vec2 pa = p - a, ba = b - a;
+    return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0));
+}
+void main() {
+    float r = vA.x;
+    float dm = 1000.0;
+    for (int i = 0; i < 6; i++) {
+        float an = vA.y + float(i) * 1.0471975512;
+        vec2 c = vec2(cos(an), sin(an));
+        vec2 b = c * r * 0.55;
+        dm = min(dm, seg(vL, vec2(0.0), c * r));
+        float b0 = an - 1.05, b1 = an + 1.05;
+        dm = min(dm, seg(vL, b, b + vec2(cos(b0), sin(b0)) * r * 0.34));
+        dm = min(dm, seg(vL, b, b + vec2(cos(b1), sin(b1)) * r * 0.34));
+    }
+    float a = clamp(vA.z * 0.5 - dm + 0.5, 0.0, 1.0) * vA.w;
+    gl_FragColor = vec4(uCol * a, a);
+}`);
+                const cRes = gl.getUniformLocation(cr, 'uRes'), cCol = gl.getUniformLocation(cr, 'uCol');
+                const cLocs = ['aPos', 'aL', 'aA'].map(n => gl.getAttribLocation(cr, n));
+                const cBuf = gl.createBuffer();
+                const CCAP = 32, cData = new Float32Array(CCAP * 48);
+                gl.bindBuffer(gl.ARRAY_BUFFER, cBuf);
+                gl.bufferData(gl.ARRAY_BUFFER, cData.byteLength, gl.DYNAMIC_DRAW);
+                const CORNERS = [-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1];
+                let W = 0, H = 0, t = 0, far = [], mid = [], near = [], crs = [];
                 return {
                     enter(w, h) {
                         W = w; H = h;
-                        const n = Math.min(260, Math.floor(W * H / 6000));
-                        f = Array.from({ length: n }, () => spawn(glRand(0, H)));
-                        windT = glRand(0, 100);
+                        const k = Math.min(2.2, Math.max(0.5, Math.sqrt(W * H / 196000)));
+                        const mk = (n, rmin, rmax, vmin, vmax, amax) => Array.from({ length: Math.round(n * k) }, () => {
+                            const g = Math.random() * 4 | 0;
+                            return { x: glRand(0, W), y: glRand(0, H), r: glRand(rmin, rmax), v: glRand(vmin, vmax), g, a: amax * (0.6 + g * 0.4 / 3), ph: glRand(0, 6.3) };
+                        });
+                        far = mk(150, 0.5, 1.1, 0.5, 0.9, 0.5);
+                        mid = mk(70, 1.2, 2.1, 1.1, 1.8, 0.7);
+                        near = mk(10, 9, 26, 2.2, 3.6, 0.2);
+                        crs = Array.from({ length: Math.round(12 * k) }, () => {
+                            const r = glRand(5, 14);
+                            return { x: glRand(0, W), y: glRand(0, H), r, v: 0.5 + r * 0.07, ph: glRand(0, 6.3), rot: glRand(0, Math.PI * 2), rs: glRand(-0.02, 0.02) };
+                        });
+                        t = glRand(0, 100);
                     },
                     draw(c) {
-                        windT += 0.004 * c.dt;
-                        const wind = Math.sin(windT) * 0.6 + Math.sin(windT * 2.7) * 0.3;
-                        const S = c.th.s * 0.4, glow = glHsl(K, c.th.h, S, 85), dot = glHsl(K, c.th.h, S, 90);
-                        const packs = [[], [], [], []];
+                        const gl = c.gl, h = c.th.h;
+                        const u = c.dt * 3, S = c.th.s * 0.4;
+                        t += 0.016 * u;
+                        const gust = Math.max(0, Math.sin(t * 0.7)) ** 3, wind = 1.1 + Math.sin(t * 0.4) * 0.6 + gust * 3.2;
+                        const dot = glHsl(K, h, S, 92);
                         sp.begin();
-                        f.forEach((p, i) => {
-                            p.ph += 0.03 * c.dt;
-                            p.y += (0.35 + p.d * 1.4) * c.dt;
-                            p.x += (wind * (0.4 + p.d) + Math.sin(p.ph) * 0.3) * c.dt;
-                            if (p.y > H + 5) { f[i] = spawn(-5); return; }
-                            if (p.x > W + 5) p.x = -5; else if (p.x < -5) p.x = W + 5;
-                            if (p.d > 0.6) sp.quad(p.x, p.y, p.r * 3.5, 1, glow, 0.45);
-                            packs[Math.min(3, p.d * 4 | 0)].push(p);
-                        });
-                        packs.forEach((pack, i) => pack.forEach(p => sp.quad(p.x, p.y, p.r + 1, 2, dot, 0.45 + (i + 0.5) / 4 * 0.55)));
+                        for (const [arr, kk] of [[far, 0.5], [mid, 1]]) {
+                            const packs = [[], [], [], []];
+                            for (const p of arr) {
+                                const vx = wind * kk * (0.7 + p.r * 0.2);
+                                p.ph += 0.02 * u;
+                                p.x += (vx + Math.sin(p.ph) * 0.2) * u; p.y += p.v * u;
+                                if (p.y > H + 4) { p.y = -4; p.x = glRand(0, W); }
+                                if (p.x > W + 6) p.x = -6;
+                                packs[p.g].push(p);
+                            }
+                            const am = arr === far ? 0.5 : 0.7;
+                            packs.forEach((pack, g) => pack.forEach(p => sp.quad(p.x, p.y, p.r * 0.8 + 1, 1, dot, am * (0.6 + g * 0.4 / 3))));
+                        }
+                        sp.flush(c.W, c.H, false);
+                        let n = 0;
+                        for (const p of crs) {
+                            p.ph += 0.02 * u; p.rot += p.rs * u * (1 + gust * 2);
+                            p.x += (wind * 0.9 + Math.sin(p.ph) * 0.3) * u; p.y += p.v * u;
+                            if (p.y > H + 20) { p.y = -20; p.x = glRand(-20, W); }
+                            if (p.x > W + 20) p.x = -20;
+                            if (n >= CCAP) continue;
+                            const hs = p.r + 2, al = 0.6 + p.r / 14 * 0.35, lw = p.r > 9 ? 1.3 : 1;
+                            for (let q = 0; q < 6; q++) {
+                                const lx = CORNERS[q * 2], ly = CORNERS[q * 2 + 1], o = (n * 6 + q) * 8;
+                                cData[o] = p.x + lx * hs; cData[o + 1] = p.y + ly * hs;
+                                cData[o + 2] = lx; cData[o + 3] = ly;
+                                cData[o + 4] = p.r; cData[o + 5] = p.rot; cData[o + 6] = lw; cData[o + 7] = al;
+                            }
+                            n++;
+                        }
+                        if (n) {
+                            gl.useProgram(cr);
+                            gl.bindBuffer(gl.ARRAY_BUFFER, cBuf);
+                            gl.bufferSubData(gl.ARRAY_BUFFER, 0, cData.subarray(0, n * 48));
+                            const sizes = [2, 2, 4], offs = [0, 2, 4];
+                            cLocs.forEach((l, i) => { gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, sizes[i], gl.FLOAT, false, 32, offs[i] * 4); });
+                            gl.uniform2f(cRes, c.W, c.H);
+                            gl.uniform3fv(cCol, glHsl(K, h, S, 94));
+                            gl.enable(gl.BLEND);
+                            gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+                            gl.drawArrays(gl.TRIANGLES, 0, n * 6);
+                            gl.disable(gl.BLEND);
+                            cLocs.forEach(l => gl.disableVertexAttribArray(l));
+                        }
+                        const haze = glHsl(K, h, S, 90);
+                        sp.begin();
+                        for (const p of near) {
+                            p.ph += 0.01 * u;
+                            p.x += (wind * 1.6 + Math.sin(p.ph) * 0.4) * u; p.y += p.v * u;
+                            if (p.y > H + 30) { p.y = -30; p.x = glRand(-20, W); }
+                            if (p.x > W + 30) p.x = -30;
+                            sp.quad(p.x, p.y, p.r, 2, haze, Math.max(0, Math.min(1, p.a)));
+                        }
                         sp.flush(c.W, c.H, false);
                     }
                 };

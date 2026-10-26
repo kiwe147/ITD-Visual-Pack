@@ -363,6 +363,12 @@
             .vp-banner:hover .vp-banner-buttons, .vp-banner-buttons:has(:focus-visible) { opacity: 1; clip-path: inset(0 0 0 0); visibility: visible;
                 transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s, visibility 0s; }
         }
+        @media not ((hover: hover) and (pointer: fine)) {
+            .vp-banner-buttons:not(.vp-banner-editing) { opacity: 0; clip-path: inset(0 0 100% 0); visibility: hidden;
+                transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s, visibility 0s linear .25s; }
+            .vp-banner.vp-bar-open > .vp-banner-buttons:not(.vp-banner-editing) { opacity: 1; clip-path: inset(0 0 0 0); visibility: visible;
+                transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s, visibility 0s; }
+        }
         .toggle-switch.vp-tri { width: 58px !important; }
         .toggle-switch.vp-tri[data-s="1"]::after { left: 20px !important; }
         .toggle-switch.vp-tri { background: rgba(0, 0, 0, 0.5) !important; }

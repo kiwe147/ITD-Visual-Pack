@@ -391,7 +391,6 @@
             for (const d of msgPeople.values()) if (!MSG_DIALOGS.includes(d)) MSG_DIALOGS.push(d);
             const seen = msgSeen();
             for (const d of MSG_DIALOGS) {
-                if (d.bot) continue;
                 const t = msgTarget(d), list = msgThread(t);
                 if (!list.length) continue;
                 const last = list[list.length - 1];

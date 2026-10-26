@@ -236,6 +236,14 @@
             if (vb.title !== t) vb.title = t;
         }
         onDom(bannerFx);
+        document.addEventListener('click', e => {
+            if (matchMedia('(hover: hover) and (pointer: fine)').matches || !e.target.closest) return;
+            const banner = e.target.closest('.' + SELECTORS.banner), open = document.querySelector('.vp-banner.vp-bar-open');
+            if (open && open !== banner) open.classList.remove('vp-bar-open');
+            if (!banner || banner.classList.contains('vp-banner-editing') || !banner.querySelector(':scope > .' + SELECTORS.bannerButtons)) return;
+            if (e.target.closest('.' + SELECTORS.bannerButtons)) banner.classList.remove('vp-bar-open');
+            else banner.classList.toggle('vp-bar-open');
+        }, true);
         function bannerVideoWant() {
             const m = location.pathname.match(/^\/@([\w.]+)\/?$/);
             if (!m) return '';
