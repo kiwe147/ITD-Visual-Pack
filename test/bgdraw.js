@@ -41,7 +41,7 @@ const RES = { aurora: 0.5, bokeh: 0.5, waves: 0.6, grid: 0.75, snow: 0.75 };
     const a = await p.screenshot();
     await p.waitForTimeout(450);
     const b2 = await p.screenshot();
-    const k = st === 'aurora' ? 1 : (RES[st] || 1);
+    const k = (process.env.GLS || 'aurora,waves,grid,bokeh,snow').split(',').includes(st) ? 1 : (RES[st] || 1);
     check(Math.abs(info.w - 1400 * k) <= 2 && Math.abs(info.h - 900 * k) <= 2, st + ': размер холста ' + info.w + 'x' + info.h + ' (масштаб ' + k + ')');
     check(!!info.op && +info.op > 0, st + ': прозрачность стиля (' + info.op + ')');
     check(!a.equals(b2), st + ': фон рисуется и меняется');

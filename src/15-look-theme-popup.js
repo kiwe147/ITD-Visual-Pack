@@ -65,7 +65,9 @@
             if (!m || !BANNER_VIDEO_RE.test(m[1])) throw new Error('сайт вернул не видео: ' + String(d && d.url || '—').slice(0, 90));
             return m[1];
         }
-        let lookBusy = false, lookSent = '', lookRetryAt = 0;
+        let lookBusy = false, lookSent = '', lookRetryAt = 0, lookFails = 0;
+        const LOOK_RETRY = [60000, 120000, 300000, 600000];
+        const lookLater = () => { lookRetryAt = Date.now() + LOOK_RETRY[Math.min(lookFails++, LOOK_RETRY.length - 1)]; };
         async function lookVer() {
             if (!MOD_VER) return '';
             const c = GM_getValue('vp_vx', null);
@@ -91,9 +93,9 @@
                 const res = mine
                     ? await editComment(mine.id, content)
                     : await sendComment(VERIFICATION_POST_ID, content);
-                if (res.ok) { lookSent = text; GM_setValue(acctKey('vp_look_day'), day); if (day !== was) checkAllComments(true); }
-                else lookRetryAt = Date.now() + 10 * 60 * 1000;
-            } catch (e) { lookRetryAt = Date.now() + 10 * 60 * 1000; logErr('стиль', e); } finally { lookBusy = false; }
+                if (res.ok) { lookSent = text; lookFails = 0; GM_setValue(acctKey('vp_look_day'), day); if (day !== was) checkAllComments(true); }
+                else lookLater();
+            } catch (e) { lookLater(); logErr('стиль', e); } finally { lookBusy = false; }
         }
         let accentProbe = null;
         function onAccentFor(color, dark) {
