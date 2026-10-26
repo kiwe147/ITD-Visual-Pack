@@ -220,7 +220,7 @@
                         v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true;
                         v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
                         v.addEventListener('playing', () => v.classList.add('vp-live'));
-                        el.appendChild(v);
+                        el.prepend(v);
                     }
                     if (v.getAttribute('src') !== src) { v.classList.remove('vp-live'); v.src = src; v.play().catch(() => { }); }
                 }

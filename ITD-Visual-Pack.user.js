@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.5.6
+// @version      3.7.5.7
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -5520,7 +5520,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         addCss(`
         .vp-ava-edit { cursor: pointer; }
         [data-vp-ava] { position: relative; }
-        [data-vp-ava]::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--vp-ava-url) center / cover no-repeat; z-index: 1; pointer-events: none; }
+        [data-vp-ava]::before { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--vp-ava-url) center / cover no-repeat; pointer-events: none; }
         html.vp-ave-lock, html.vp-ave-lock body { overflow: hidden !important; }
         .vp-ave { position: fixed; inset: 0; z-index: 100000; display: flex; align-items: center; justify-content: center; padding: 16px;
             background: rgba(0, 0, 0, .62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: vp-ave-in .18s ease-out; }
@@ -5546,7 +5546,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-ave-btns button { all: unset; box-sizing: border-box; flex: 1; text-align: center; cursor: pointer; padding: 12px 10px; border-radius: 14px; font-weight: 600; font-size: 15px;
             background: rgba(128, 128, 128, .2); color: var(--text-primary, #fff); }
         .vp-ave-btns button:hover { background: rgba(128, 128, 128, .32); }
-        .vp-ava-vid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; z-index: 2; pointer-events: none; opacity: 0; transition: opacity .2s; }
+        .vp-ava-vid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; pointer-events: none; opacity: 0; transition: opacity .2s; }
         .vp-ava-vid.vp-live { opacity: 1; }
         .vp-ave-btns .vp-ave-del { background: transparent; color: var(--text-secondary, #9aa0b4); font-weight: 500; font-size: 14px; }
         .vp-ave-btns .vp-ave-ok { background: var(--accent-primary, #4f8cff); color: #fff; }
@@ -5759,7 +5759,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             avatarEditor(own ? lookImgUrl(own) : img && img.src);
         }, true);
         const CHANGELOG = [
-            ['3.7.5 – 3.7.5.6', '26 октября 2026', [
+            ['3.7.5 – 3.7.5.7', '26 октября 2026', [
                 'Аватарка: нажми на свою аву в профиле, откроется редактор с кружком-примеркой, можно картинку, GIF или короткое видео, увидят все, у кого стоит ИТД X',
                 'Змейка снова открывается в играх'
             ]],
@@ -6634,7 +6634,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                         v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true;
                         v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
                         v.addEventListener('playing', () => v.classList.add('vp-live'));
-                        el.appendChild(v);
+                        el.prepend(v);
                     }
                     if (v.getAttribute('src') !== src) { v.classList.remove('vp-live'); v.src = src; v.play().catch(() => { }); }
                 }
