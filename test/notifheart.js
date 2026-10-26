@@ -1,4 +1,4 @@
-// Лайки в уведомлениях: сердечко внутри розового кружка белое (в ванили оно того же цвета, что и кружок, и не видно).
+// Лайки в уведомлениях: сердечко внутри розового кружка контурное, как значок ответа (в ванили оно того же цвета, что и кружок, и не видно).
 // Запуск:  node test/notifheart.js снимок-уведомлений.html
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -30,9 +30,9 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   await p.addInitScript('(function () { const run = () => {' + src + String.fromCharCode(10) + '}; if (document.documentElement) run(); else { const mo = new MutationObserver(() => { if (document.documentElement) { mo.disconnect(); run(); } }); mo.observe(document, { childList: true }); } })();');
   await p.goto(ORIGIN + '/notifications');
   await p.waitForTimeout(2500);
-  const fill = await p.evaluate(() => { const e = document.querySelector('.vp-notif [data-icon="liked"] svg path'); return e ? getComputedStyle(e).fill : null; });
-  check(fill === 'rgb(255, 255, 255)', 'сердечко в лайке белое (' + fill + ')');
-  const box = await p.evaluate(() => { const n = document.querySelector('.vp-notif [data-icon="liked"]'); const r = n.closest('.vp-avatar').getBoundingClientRect(); return { x: Math.max(0, r.x - 12), y: Math.max(0, r.y - 12), width: r.width + 28, height: r.height + 28 }; });
+  const st = await p.evaluate(() => { const e = document.querySelector('.vp-notif [data-icon="liked"] svg path'), c = document.querySelector('.vp-notif [data-icon="comment"] svg path'); const g = x => x ? { fill: getComputedStyle(x).fill, stroke: getComputedStyle(x).stroke } : null; return { like: g(e), comment: g(c) }; });
+  check(st.like && st.like.fill === 'none' && st.like.stroke === st.comment.stroke && st.like.stroke !== 'none', 'сердечко в лайке контурное того же цвета, что значок ответа: ' + JSON.stringify(st));
+  const box = await p.evaluate(() => { const l = document.querySelector('.vp-notif [data-icon="liked"]').closest('.vp-notif'), c = document.querySelector('.vp-notif [data-icon="comment"]').closest('.vp-notif'); const a = l.getBoundingClientRect(), z = c.getBoundingClientRect(), top = Math.min(a.y, z.y), bot = Math.max(a.bottom, z.bottom); return { x: Math.max(0, a.x), y: Math.max(0, top), width: 520, height: Math.min(800, bot - top) }; });
   await p.screenshot({ path: path.join(__dirname, 'out', 'notifheart.png'), clip: box });
   check(!errors.length, 'ошибок страницы нет' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await b.close();

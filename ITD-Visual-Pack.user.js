@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.5.8
+// @version      3.7.5.9
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2192,7 +2192,7 @@
         .vp-post header .vp-nick-row:not(:last-child) { padding-right: 50px; }
         @media (max-width: ${PHONE_MAX}px) { .vp-post header .vp-nick-row:not(:last-child) { padding-right: 42px; } }
         .vp-notif .vp-nick-row > a { max-width: 100%; }
-        .vp-notif [data-icon="liked"] svg path { fill: #fff !important; stroke: #fff !important; }
+        .vp-notif [data-icon="liked"] svg path { fill: none !important; stroke: currentColor !important; stroke-width: 2 !important; }
         .vp-notif .vp-nick-row .vp-nick:not(.vp-nick-large *) { display: flex; flex-wrap: nowrap; align-items: center; }
         article .vp-nick-row time { flex-shrink: 0; }
         .vp-clamp::after { display: none !important; }
@@ -5760,10 +5760,10 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             avatarEditor(own ? lookImgUrl(own) : img && img.src);
         }, true);
         const CHANGELOG = [
-            ['3.7.5 – 3.7.5.8', '26 октября 2026', [
+            ['3.7.5 – 3.7.5.9', '26 октября 2026', [
                 'Аватарка: нажми на свою аву в профиле, откроется редактор с кружком-примеркой, можно картинку, GIF или короткое видео, увидят все, у кого стоит ИТД X',
                 'Змейка снова открывается в играх',
-                'В уведомлениях у лайков в розовом кружке появилось белое сердечко'
+                'В уведомлениях у лайков в розовом кружке появилось сердечко, как значок у ответов'
             ]],
             ['3.7.4', '26 октября 2026', [
                 'Фон «Снег» стал метелью: порывы ветра, снежинки-кристаллы и размытые хлопья вблизи',
