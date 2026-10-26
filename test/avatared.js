@@ -74,8 +74,12 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     check(await p.evaluate(() => !document.querySelector('.vp-ave')), tag + ': редактор закрылся');
     const own = await p.evaluate(() => [...document.querySelectorAll('.vp-avatar[data-vp-ava]')].length);
     check(own > 0, tag + ': своя аватарка на странице заменена (' + own + ')');
-    const css = await p.evaluate(() => { const a = document.querySelector('.vp-avatar[data-vp-ava]'); return a ? getComputedStyle(a, '::after').backgroundImage.slice(0, 90) : ''; });
+    const css = await p.evaluate(() => { const a = document.querySelector('.vp-avatar[data-vp-ava]'); return a ? getComputedStyle(a, '::before').backgroundImage.slice(0, 90) : ''; });
     check(/images\/1111/.test(css) || /UUID/.test(css) || css.includes(UUID), tag + ': картинка подставлена поверх (' + css + ')');
+    const dot = await p.evaluate(() => { const d = document.querySelector('.vp-avatar[data-vp-ava] > span:not([class*="vASP"])'); if (!d) return null; const r = d.getBoundingClientRect(), e = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return { top: e === d, w: Math.round(r.width) }; });
+    check(dot && dot.top, tag + ': точка «в сети» поверх аватарки (' + JSON.stringify(dot) + ')');
+    const big = await p.evaluate(() => { const a = document.querySelector('.vp-avatar.vp-ava-edit'); const r = a.getBoundingClientRect(); return { x: Math.max(0, r.x - 20), y: Math.max(0, r.y - 20), width: r.width + 40, height: r.height + 40 }; });
+    await p.screenshot({ path: path.join(__dirname, 'out', 'avatared-dot-' + (phone ? 'phone' : 'desk') + '.png'), clip: big });
     check(!errors.length, tag + ': ошибок страницы нет' + (errors.length ? ': ' + errors.join(' | ') : ''));
     await ctx.close();
   }

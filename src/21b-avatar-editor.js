@@ -6,7 +6,7 @@
         addCss(`
         .vp-ava-edit { cursor: pointer; }
         [data-vp-ava] { position: relative; }
-        [data-vp-ava]::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--vp-ava-url) center / cover no-repeat; z-index: 1; pointer-events: none; }
+        [data-vp-ava]::before { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--vp-ava-url) center / cover no-repeat; pointer-events: none; }
         html.vp-ave-lock, html.vp-ave-lock body { overflow: hidden !important; }
         .vp-ave { position: fixed; inset: 0; z-index: 100000; display: flex; align-items: center; justify-content: center; padding: 16px;
             background: rgba(0, 0, 0, .62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: vp-ave-in .18s ease-out; }
@@ -32,7 +32,7 @@
         .vp-ave-btns button { all: unset; box-sizing: border-box; flex: 1; text-align: center; cursor: pointer; padding: 12px 10px; border-radius: 14px; font-weight: 600; font-size: 15px;
             background: rgba(128, 128, 128, .2); color: var(--text-primary, #fff); }
         .vp-ave-btns button:hover { background: rgba(128, 128, 128, .32); }
-        .vp-ava-vid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; z-index: 2; pointer-events: none; opacity: 0; transition: opacity .2s; }
+        .vp-ava-vid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; pointer-events: none; opacity: 0; transition: opacity .2s; }
         .vp-ava-vid.vp-live { opacity: 1; }
         .vp-ave-btns .vp-ave-del { background: transparent; color: var(--text-secondary, #9aa0b4); font-weight: 500; font-size: 14px; }
         .vp-ave-btns .vp-ave-ok { background: var(--accent-primary, #4f8cff); color: #fff; }
