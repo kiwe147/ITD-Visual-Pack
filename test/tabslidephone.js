@@ -12,7 +12,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
 const COLORS = { '/': '#27ae60', '/shop': '#2980b9', '/event': '#c0392b', '/notifications': '#d35400', '/@NeuroSFW': '#8e44ad' };
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
-  async function fresh(off) {
+  async function fresh(off, real) {
     const ctx = await b.newContext({ viewport: { width: 392, height: 812 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
     const p = await ctx.newPage();
     const errors = [];
@@ -52,7 +52,7 @@ const COLORS = { '/': '#27ae60', '/shop': '#2980b9', '/event': '#c0392b', '/noti
     await p.evaluate(() => document.querySelectorAll('.vp-rail, .vp-fab, .vp-gal-btn, .vp-itdx-btn, .vp-msgs').forEach(e => e.remove()));
     await p.addScriptTag({ content: src });
     await p.waitForTimeout(2200);
-    await p.evaluate(() => {
+    if (!real) await p.evaluate(() => {
       const nav = document.querySelector('nav.vp-nav'), root = nav.parentElement.parentElement;
       const c = [...root.children].find(x => !x.contains(nav));
       c.innerHTML = '<div id="fakepage" data-page="/" style="height:1800px;background:#27ae60;color:#fff;font:700 34px sans-serif;padding:40px">PAGE /</div>';
@@ -117,6 +117,25 @@ const COLORS = { '/': '#27ae60', '/shop': '#2980b9', '/event': '#c0392b', '/noti
 
   check(errors.length === 0, 'нет ошибок страницы ' + errors.join('|'));
   await ctx.close();
+
+
+  for (const y of [0, 400]) {
+    const r = await fresh(false, true);
+    await r.p.evaluate(yy => { history.replaceState({ site: '/' }, '', '/'); window.scrollTo(0, yy); }, y);
+    await r.p.waitForTimeout(400);
+    const tops = () => r.p.evaluate(() => {
+      const q = (root, sel) => { const e = root.querySelector(sel); return e ? Math.round(e.getBoundingClientRect().top * 10) / 10 : null; };
+      const old = document.querySelector('.vp-sw-old');
+      return { bar: q(old || document, '.vp-feed-bar'), body: q(old || document, '.PCPB'), scroll: Math.round(scrollY) };
+    });
+    const before = await tops();
+    await r.p.dispatchEvent('nav a[href="/event"]', 'click');
+    await running(r.p); await r.p.waitForTimeout(60);
+    const during = await tops();
+    check(before.bar !== null && during.bar !== null && Math.abs(before.bar - during.bar) < 1.5, 'прокрутка ' + y + ': верхняя панель ленты в уходящем снимке на месте (' + before.bar + ' → ' + during.bar + ')');
+    check(before.body !== null && Math.abs(before.body - during.body) < 1.5, 'прокрутка ' + y + ': посты под панелью не поднялись (' + before.body + ' → ' + during.body + ')');
+    await r.ctx.close();
+  }
 
   const off = await fresh(true);
   await off.p.evaluate(() => history.replaceState({ site: '/' }, '', '/'));

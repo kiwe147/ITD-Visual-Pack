@@ -196,12 +196,15 @@
                 const g = el.cloneNode(true);
                 g.removeAttribute('data-vp-sw');
                 if (phone()) {
-                    const all = el.querySelectorAll('*'), copy = g.querySelectorAll('*'), er = el.getBoundingClientRect();
+                    const all = el.querySelectorAll('*'), copy = g.querySelectorAll('*');
                     all.forEach((n, i) => {
                         const p1 = n.parentElement, p2 = p1 && p1.parentElement, p3 = p2 && p2.parentElement;
                         if ((p1 !== el && p2 !== el && p3 !== el) || getComputedStyle(n).position !== 'sticky') return;
-                        const r = n.getBoundingClientRect();
-                        copy[i].style.cssText += `;position:absolute;top:${r.top - er.top}px;left:${r.left - er.left}px;width:${r.width}px;margin:0`;
+                        const r = n.getBoundingClientRect(), was = n.style.position;
+                        n.style.position = 'static';
+                        const home = n.getBoundingClientRect().top;
+                        n.style.position = was;
+                        if (Math.abs(r.top - home) > 0.5) copy[i].style.cssText += `;position:relative;top:${r.top - home}px`;
                     });
                 }
                 const vs = el.querySelectorAll('video'), gs = g.querySelectorAll('video');
