@@ -13035,48 +13035,50 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         pageWindow.itdvp.slots = function (sec = 20) {
             if (pageWindow.itdvp._slotsOn) return 'замер уже идёт';
             pageWindow.itdvp._slotsOn = true;
-            const t0 = performance.now(), end = t0 + sec * 1000, recent = new WeakMap(), last = new WeakMap(), rows = [];
+            const t0 = performance.now(), end = t0 + sec * 1000, st = new WeakMap(), rows = [];
             const desc = n => n.nodeType === 1 ? n.tagName.toLowerCase() + (typeof n.className === 'string' && n.className.trim() ? '.' + n.className.trim().split(/\s+/).slice(0, 3).join('.') : '') : '#text';
-            const slotOf = n => { const e = n.nodeType === 1 ? n : n.parentElement; return e && e.closest('.vp-post-slot'); };
+            const slotOf = n => { const e = n.nodeType === 1 ? n : n.parentElement; const a = e && e.closest('article'); return a && a.parentElement; };
+            const watch = slot => {
+                if (st.has(slot)) return;
+                const now = performance.now();
+                st.set(slot, { h: slot.getBoundingClientRect().height, born: now, muts: [] });
+                ro.observe(slot);
+            };
             const mo = new MutationObserver(ms => {
                 const t = performance.now();
                 for (const m of ms) {
+                    for (const n of m.addedNodes) if (n.nodeType === 1) (n.matches('article') ? [n] : [...n.querySelectorAll('article')]).forEach(a => a.parentElement && watch(a.parentElement));
                     const slot = slotOf(m.target);
-                    if (!slot) continue;
+                    const s = slot && st.get(slot);
+                    if (!s) continue;
                     if (m.type === 'attributes' && m.attributeName === 'style' && m.target.matches('article')) continue;
-                    let arr = recent.get(slot);
-                    if (!arr) recent.set(slot, arr = []);
-                    arr.push([t, m.type === 'attributes' ? m.attributeName + ' @' + desc(m.target) : '+' + [...m.addedNodes].map(desc).join(',') + ' -' + [...m.removedNodes].map(desc).join(',') + ' @' + desc(m.target)]);
-                    if (arr.length > 12) arr.shift();
+                    s.muts.push([Math.round(t - s.born), m.type === 'attributes' ? m.attributeName + ' @' + desc(m.target) : '+' + [...m.addedNodes].map(desc).join(',') + ' -' + [...m.removedNodes].map(desc).join(',') + ' @' + desc(m.target)]);
+                    if (s.muts.length > 14) s.muts.shift();
                 }
             });
-            mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'width', 'height'] });
             const ro = new ResizeObserver(es => es.forEach(e => {
-                const h = e.borderBoxSize && e.borderBoxSize[0] ? e.borderBoxSize[0].blockSize : e.contentRect.height, prev = last.get(e.target), now = performance.now();
-                last.set(e.target, h);
-                if (prev === undefined || Math.abs(h - prev) < 0.5) return;
+                const s = st.get(e.target), now = performance.now();
+                if (!s || !e.target.isConnected) return;
+                const h = e.borderBoxSize && e.borderBoxSize[0] ? e.borderBoxSize[0].blockSize : e.contentRect.height;
+                if (!h || Math.abs(h - s.h) < 0.5) return;
                 const art = e.target.querySelector('article');
-                rows.push({
-                    мс: Math.round(now - t0), было: Math.round(prev * 10) / 10, стало: Math.round(h * 10) / 10, разница: Math.round((h - prev) * 10) / 10,
-                    пост: ((art && art.textContent) || '').trim().slice(0, 22),
-                    перед: (recent.get(e.target) || []).filter(x => now - x[0] < 200).map(x => x[1]).slice(-5)
-                });
+                rows.push({ мс: Math.round(now - t0), черезМсПослеПоявления: Math.round(now - s.born), было: Math.round(s.h * 10) / 10, стало: Math.round(h * 10) / 10, разница: Math.round((h - s.h) * 10) / 10, пост: ((art && art.textContent) || '').trim().slice(0, 22), правки: s.muts.slice(-6) });
+                s.h = h;
+                s.muts = [];
             }));
-            const scan = () => {
-                document.querySelectorAll('.vp-post-slot').forEach(sl => ro.observe(sl));
-                if (performance.now() < end) return requestAnimationFrame(scan);
+            document.querySelectorAll('article').forEach(a => a.parentElement && watch(a.parentElement));
+            mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'width', 'height'] });
+            setTimeout(() => {
                 mo.disconnect(); ro.disconnect();
                 pageWindow.itdvp._slotsOn = false;
                 pageWindow.itdvp._slotRows = rows;
-                const withMod = rows.filter(r => r.перед.some(x => /vp-/.test(x))).length;
-                console.info('[ITD VP] замер высот закончен: изменений высоты постов ' + rows.length + ', из них после правок мода ' + withMod);
+                const withMod = rows.filter(r => r.правки.some(x => /vp-/.test(x[1]))).length;
+                console.info('[ITD VP] замер высот закончен: у показанных постов высота менялась ' + rows.length + ' раз, из них после правок мода ' + withMod);
                 if (rows.length) console.table(rows.slice(0, 40));
                 console.info('[ITD VP] скопируй вот это и пришли:', JSON.stringify(rows.slice(0, 30)));
-            };
-            requestAnimationFrame(scan);
+            }, sec * 1000);
             return 'идёт замер высот ' + sec + ' с: листай ленту вверх, потом смотри консоль';
         };
-
         const galIcon = size => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="10" rx="2.5"/><rect x="13" y="3" width="8" height="6" rx="2.5"/><rect x="3" y="15" width="8" height="6" rx="2.5"/><rect x="13" y="11" width="8" height="10" rx="2.5"/></svg>`;
         const GAL_TABS = [['popular', 'Популярное'], ['clan', 'Кланы'], ['following', 'Подписки']];
         const gal = { acts: new Map(), el: null, tab: 'popular', cursor: null, loading: false, done: false, cols: [], heights: [], seen: new Set(), hist: false };
