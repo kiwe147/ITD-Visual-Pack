@@ -5862,12 +5862,21 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const now = await accReadCookies();
                 accLog('после записи: ' + accNames(now) + '; записаны все нужные: ' + t.cookies.every(c => now.some(n => n.name === c.name && n.value === c.value)));
                 const r = await fetch('/api/v1/auth/refresh', { method: 'POST', credentials: 'include' }).catch(() => null);
-                accLog('проверка входа: ' + (r ? r.status : 'нет ответа'));
-                if (!r || !r.ok) {
+                let nowId = '';
+                if (r && r.ok) {
+                    try {
+                        const tk = (await r.json()).accessToken;
+                        const m = await fetch('/api/users/me', { credentials: 'include', headers: { Authorization: 'Bearer ' + tk } });
+                        nowId = m.ok ? String((await m.json()).id || '') : '';
+                    } catch (e) { }
+                }
+                accLog('проверка входа: ' + (r ? r.status : 'нет ответа') + ', открыт аккаунт ' + (nowId || '?') + ', нужен ' + id);
+                if (nowId !== id) {
                     await accWipe();
                     await accApply(before);
                     accBusy = false;
-                    accSay('Вход в @' + t.username + ' не подошёл (сервер ответил ' + (r ? r.status : 'ничего') + '). Вернул прежний аккаунт. Выбери «×» у этого аккаунта и добавь его заново', true);
+                    const hidden = !t.cookies.some(c => c.httpOnly);
+                    accSay(hidden ? 'Не получилось: Tampermonkey не отдаёт мод закрытую куку входа сайта, поэтому сессию подменить нельзя. Прежний аккаунт оставил' : 'Вход в @' + t.username + ' не подошёл (сервер открыл другой аккаунт). Прежний оставил. Нажми «×» у этого аккаунта и добавь его заново', true);
                     return;
                 }
                 GM_setValue(ACC_PENDING, { id, at: Date.now() });
@@ -6004,6 +6013,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             add.innerHTML = svgIcon('<path d="M12 5v14M5 12h14"/>', 18) + '<span>Добавить аккаунт</span>';
             add.onclick = accAdd;
             accPop.appendChild(add);
+            const mine = me && slots[me.id];
+            if (mine && !mine.cookies.some(c => c.httpOnly)) text('Внимание: мод не видит закрытую куку входа сайта, поэтому смена может не сработать.');
             if (Object.keys(slots).length < 2) text('Нажми «Добавить аккаунт», войди в другой, и он появится в этом списке.');
         }
         function accOpen(btn) {
