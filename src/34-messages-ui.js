@@ -23,7 +23,7 @@
                 const d = await hcData(n).catch(() => null), p = msgPeople.get(n);
                 if (!d || !p) return;
                 p.name = pick(d.displayName, d.display_name, n);
-                p.ava = pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl, d.emoji, '👤');
+                p.ava = avaUrlOf(n) || pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl, d.emoji, '👤');
                 p.online = !!d.online; p.lastSeen = d.lastSeen || null;
             }));
             onUpdate();

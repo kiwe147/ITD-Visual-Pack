@@ -224,6 +224,12 @@
                     }
                     if (v.getAttribute('src') !== src) { v.classList.remove('vp-live'); v.src = src; v.play().catch(() => { }); }
                 }
+                avaLookOf = u => {
+                    const own = (GM_getValue(acctKey('vp_ava'), null) || {}).ref || '';
+                    if (u === (myUsername || '').toLowerCase()) return own ? lookImgUrl(own) : '';
+                    const r = showLooks && lookBy.get(u);
+                    return r && r.a ? lookImgUrl(r.a) : '';
+                };
                 function markAvatars(me, pu, others) {
                     const own = GM_getValue(acctKey('vp_ava'), null) || {};
                     const refOf = u => u === me ? { a: own.ref || '', va: own.vid || '' } : others && lookBy.get(u) || {};
@@ -239,6 +245,7 @@
                     if (pu) document.querySelectorAll('.' + SELECTORS.avatar).forEach(av => {
                         if (!av.closest(PROFILE_LINK) && !av.closest('.' + SELECTORS.post) && nearLargeNick(av)) put(av, pu);
                     });
+                    document.querySelectorAll('.' + SELECTORS.avatar + '.my-avatar-glow').forEach(av => { if (!av.closest(PROFILE_LINK) && !(pu && nearLargeNick(av))) put(av, me); });
                 }
                 function markLooks() {
                     const me = (myUsername || '').toLowerCase();

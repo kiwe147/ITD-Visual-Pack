@@ -25,7 +25,7 @@
             const el = document.createElement('div');
             el.className = 'vp-hc';
             const banner = pick(d.banner && (d.banner.url || d.banner), d.bannerUrl, d.banner_url, d.cover && (d.cover.url || d.cover));
-            const ava = pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl, d.emoji, '👤');
+            const ava = avaUrlOf(user) || pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl, d.emoji, '👤');
             const followers = pick(d.followersCount, d.followers_count, d.stats && d.stats.followers, typeof d.followers === 'number' ? d.followers : undefined);
             const following = pick(d.followingCount, d.following_count, d.stats && d.stats.following, typeof d.following === 'number' ? d.following : undefined);
             const bio = pick(d.bio, d.description, d.about, '');
