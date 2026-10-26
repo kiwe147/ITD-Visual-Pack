@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.7.5
+// @version      3.7.7.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2474,7 +2474,7 @@
         }
         updateBackgroundVisibility();
         const MATRIX_CHARS = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
-        const BG_KEYS = ['matrix', 'stars', 'particles', 'waves', 'aurora', 'bokeh', 'grid', 'snow', 'rain'];
+        const BG_KEYS = ['matrix', 'stars', 'particles', 'waves', 'aurora', 'bokeh', 'grid', 'snow'];
         function bgEngine(mkCanvas) {
             let ctx = null, W = 0, H = 0, bg = null, bgName = '';
             const mouse = { x: -1e4, y: -1e4 };
@@ -2858,28 +2858,6 @@
                             drawSprite('haze', p.x, p.y, p.r, h, S, 90, p.a);
                         }
                         ctx.globalAlpha = 1;
-                    }
-                },
-                rain: {
-                    opacity: 0.85,
-                    init() {
-                        const area = W * H;
-                        const mk = (n, len, v, a, w) => ({ a, w, p: Array.from({ length: Math.round(n) }, () => ({ x: rand(-120, W + 120), y: rand(-100, H), len: rand(len[0], len[1]), v: rand(v[0], v[1]) })) });
-                        return [mk(area / 2600, [8, 16], [620, 820], 0.15, 0.8), mk(area / 5000, [16, 30], [950, 1200], 0.26, 1.1), mk(area / 24000, [50, 86], [1500, 1900], 0.2, 1.8)];
-                    },
-                    draw(s, dt, { h, s: sat }) {
-                        ctx.clearRect(0, 0, W, H);
-                        const sec = dt * 0.05, wind = -0.2;
-                        ctx.lineCap = 'round';
-                        for (const l of s) {
-                            const path = new Path2D();
-                            for (const p of l.p) {
-                                p.y += p.v * sec; p.x += p.v * wind * sec;
-                                if (p.y - p.len > H) { p.y = -rand(0, H * 0.15); p.x = rand(-80, W + 160); }
-                                path.moveTo(p.x, p.y); path.lineTo(p.x - wind * p.len, p.y - p.len);
-                            }
-                            ctx.strokeStyle = hsla(h, sat * 0.3, 88, l.a); ctx.lineWidth = l.w; ctx.stroke(path);
-                        }
                     }
                 }
             };
@@ -4265,7 +4243,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             bokeh: { name: 'Боке', icon: svgIcon('<circle cx="8" cy="9" r="4"/><circle cx="16.5" cy="15.5" r="4.5"/><circle cx="17" cy="6" r="1.5"/>') },
             grid: { name: 'Неон-сетка', icon: svgIcon('<path d="M8 8a4 4 0 0 1 8 0"/><path d="M2 12h20"/><path d="M12 12v9M12 12l-8 9M12 12l8 9M5 17h14"/>') },
             snow: { name: 'Снегопад', icon: svgIcon('<path d="M12 2v20M3.3 7l17.4 10M3.3 17 20.7 7"/><path d="m9 4 3 2 3-2M9 20l3-2 3 2"/>') },
-            rain: { name: 'Дождь', icon: svgIcon('<path d="M9 3 7 10M15 3l-2 7M21 4l-2 6M6 14l-2 6M13 14l-2 6M20 14l-2 6"/>') },
             custom: { name: 'Своя картинка', icon: svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>') }
         };
         function renderAutoLikeUsers(list, footer, usersData) {
@@ -6250,9 +6227,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
-            ['3.7.7.5', '27 октября 2026', [
-                'Новый фон «Дождь»'
-            ]],
             ['3.7.7.3', '26 октября 2026', [
                 'Лента меньше дёргается при прокрутке вверх',
                 'Клуб ИТД X: аватарки-картинки больше не остаются эмодзи'

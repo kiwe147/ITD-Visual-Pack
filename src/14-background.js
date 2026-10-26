@@ -129,7 +129,7 @@
         }
         updateBackgroundVisibility();
         const MATRIX_CHARS = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
-        const BG_KEYS = ['matrix', 'stars', 'particles', 'waves', 'aurora', 'bokeh', 'grid', 'snow', 'rain'];
+        const BG_KEYS = ['matrix', 'stars', 'particles', 'waves', 'aurora', 'bokeh', 'grid', 'snow'];
         function bgEngine(mkCanvas) {
             let ctx = null, W = 0, H = 0, bg = null, bgName = '';
             const mouse = { x: -1e4, y: -1e4 };
@@ -513,28 +513,6 @@
                             drawSprite('haze', p.x, p.y, p.r, h, S, 90, p.a);
                         }
                         ctx.globalAlpha = 1;
-                    }
-                },
-                rain: {
-                    opacity: 0.85,
-                    init() {
-                        const area = W * H;
-                        const mk = (n, len, v, a, w) => ({ a, w, p: Array.from({ length: Math.round(n) }, () => ({ x: rand(-120, W + 120), y: rand(-100, H), len: rand(len[0], len[1]), v: rand(v[0], v[1]) })) });
-                        return [mk(area / 2600, [8, 16], [620, 820], 0.15, 0.8), mk(area / 5000, [16, 30], [950, 1200], 0.26, 1.1), mk(area / 24000, [50, 86], [1500, 1900], 0.2, 1.8)];
-                    },
-                    draw(s, dt, { h, s: sat }) {
-                        ctx.clearRect(0, 0, W, H);
-                        const sec = dt * 0.05, wind = -0.2;
-                        ctx.lineCap = 'round';
-                        for (const l of s) {
-                            const path = new Path2D();
-                            for (const p of l.p) {
-                                p.y += p.v * sec; p.x += p.v * wind * sec;
-                                if (p.y - p.len > H) { p.y = -rand(0, H * 0.15); p.x = rand(-80, W + 160); }
-                                path.moveTo(p.x, p.y); path.lineTo(p.x - wind * p.len, p.y - p.len);
-                            }
-                            ctx.strokeStyle = hsla(h, sat * 0.3, 88, l.a); ctx.lineWidth = l.w; ctx.stroke(path);
-                        }
                     }
                 }
             };

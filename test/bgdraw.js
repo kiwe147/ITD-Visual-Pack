@@ -1,4 +1,4 @@
-// Фон мода: каждый из 9 стилей рисуется и меняется, мягкие стили рисуются в уменьшенном разрешении (60 кадров не режем),
+// Фон мода: каждый из 8 стилей рисуется и меняется, мягкие стили рисуются в уменьшенном разрешении (60 кадров не режем),
 // разбор чужого стиля профиля знает имена фонов (раньше падало: «BACKGROUNDS is not defined»).
 // Запуск:  node test/bgdraw.js снимок-ленты.html
 const { chromium } = require('playwright');
@@ -10,7 +10,7 @@ const meta = src.slice(0, src.indexOf('==/UserScript=='));
 const ORIGIN = 'https://xn--d1ah4a.com';
 const fails = [];
 const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + what); if (!ok) fails.push(what); };
-const STYLES = ['matrix', 'stars', 'particles', 'waves', 'aurora', 'bokeh', 'grid', 'snow', 'rain'];
+const STYLES = ['matrix', 'stars', 'particles', 'waves', 'aurora', 'bokeh', 'grid', 'snow'];
 const RES = { aurora: 0.5, bokeh: 0.5, waves: 0.6, grid: 0.75, snow: 0.75 };
 (async () => {
   const b = await chromium.launch();
