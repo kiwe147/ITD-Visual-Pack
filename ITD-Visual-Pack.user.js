@@ -6233,7 +6233,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 'Сообщения: аватарки-картинки собеседников показываются в списке и в шапке чата',
                 'Сообщения: дата дня плашкой по центру, как в Telegram, у сообщения только время',
                 'Возврат в ленту и профиль: страница возвращается на то же место без бесконечной прокрутки, а сайт и мод больше не тянут её каждый в свою сторону',
-                'Профиль: посты больше не дёргаются на определённой высоте прокрутки, панель «Новые / Старые / Популярные» не переезжает в середину списка'
+                'Профиль: посты больше не дёргаются на определённой высоте прокрутки, панель «Новые / Старые / Популярные» не переезжает в середину списка',
+                'Лента и профиль: при прокрутке вверх страница больше не дёргается, когда сайт подгружает посты сверху и пересчитывает их высоту'
             ]],
             ['3.7.7.6', '27 октября 2026', [
                 'Листание вкладок на телефоне: страницы сдвигаются влево и вправо по порядку пунктов меню',
@@ -12984,6 +12985,31 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             });
         });
 
+        let holdEl = null, holdTop = 0, holdQueued = false;
+        function holdPick() {
+            for (const s of document.querySelectorAll('.vp-post-slot')) {
+                if (s.closest('article')) continue;
+                const r = s.getBoundingClientRect();
+                if (r.height > 0 && r.bottom > 1) { holdEl = s; holdTop = r.top + scrollY; return; }
+            }
+            holdEl = null;
+        }
+        function holdKeep() {
+            if (feedJob || document.hidden) { holdEl = null; return; }
+            if (!holdEl || !holdEl.isConnected) { holdPick(); return; }
+            const top = holdEl.getBoundingClientRect().top + scrollY, d = top - holdTop;
+            holdTop = top;
+            if (Math.abs(d) > 0.5 && Math.abs(d) < 3000) scrollBy({ top: d, behavior: 'instant' });
+        }
+        new MutationObserver(muts => {
+            for (const m of muts) if (m.target.classList && m.target.classList.contains('vp-post-slot')) return holdKeep();
+        }).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['style'] });
+        addEventListener('scroll', () => {
+            if (holdQueued) return;
+            holdQueued = true;
+            requestAnimationFrame(() => { holdQueued = false; holdKeep(); if (!feedJob) holdPick(); });
+        }, { passive: true });
+        addEventListener('resize', () => { holdEl = null; });
         const hcCache = new Map();
         let hc = null, hcTimer = 0, hcHide = 0, hcUser = null, hcLink = null;
         const loginOf = href => ((href || '').match(/^\/@([\w.]+)/) || [])[1] || null;

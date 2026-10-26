@@ -34,6 +34,7 @@
 43-design-nav-tabs.js
 44-glass-overlay.js
 45-nav-blob-scene-feed.js
+45d-list-hold.js
 46-hover-card.js
 46c-event-wait.js
 50-gallery.js
