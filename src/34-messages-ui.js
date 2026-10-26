@@ -256,6 +256,8 @@
         .vp-msgs-feed { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; overscroll-behavior: contain; }
         .vp-msgs-note { align-self: center; margin: 2px 0 8px; padding: 6px 12px; border-radius: 999px; font-size: 12px;
             background: var(--block-bg); color: var(--text-secondary); text-align: center; }
+        .vp-msgs-day { align-self: center; margin: 10px 0 4px; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; line-height: 1.3;
+            background: color-mix(in srgb, var(--block-bg) 88%, transparent); color: var(--text-secondary); text-align: center; user-select: none; -webkit-user-select: none; }
         .vp-msgs-b { max-width: 78%; padding: 9px 13px 7px; border-radius: 20px; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere;
             animation: vpMsgsPop .2s ease-out; }
         .vp-msgs-b.vp-in { align-self: flex-start; background: var(--block-bg); border-bottom-left-radius: 6px; }
@@ -416,6 +418,8 @@
             let current = null, botTimer = 0;
             const SUP_AVA = svgIcon('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.6"/><path d="m5.6 5.6 3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>', 28);
             const avaHtml = a => a === '🛟' ? SUP_AVA : isUrl(a) ? `<img src="${esc(a)}" alt="">` : esc(a);
+            const msgAva = d => d.login && d.ava !== '🛟' && !d.support ? clubAvaOf(d.login, d.ava) : d.ava;
+            const headAva = () => { const h = current && $('.vp-msgs-chead .vp-msgs-ava'); if (h) h.innerHTML = avaHtml(msgAva(current)); };
 
             let supDir = false;
             function renderList() {
@@ -440,7 +444,7 @@
                 $('.vp-msgs-sub').textContent = supDir && sups.length && !q ? 'Все, кто писал в поддержку' : people ? `Поддержка и ${people} ${plural(people, 'человек', 'человека', 'человек')} с ИТД X` : 'Пока никого с ИТД X — список обновится сам';
                 list.innerHTML = rows.length ? rows.map(d => `
                 <div class="vp-msgs-row${pins.includes(d.id) ? ' vp-pinned' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}" data-id="${d.id}">
-                    <div class="vp-msgs-ava${d.online ? ' vp-online' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}">${avaHtml(d.ava)}</div>
+                    <div class="vp-msgs-ava${d.online ? ' vp-online' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}">${avaHtml(msgAva(d))}</div>
                     <div class="vp-msgs-mid"><div class="vp-msgs-name"><span>${esc(d.name)}</span></div>
                         <div class="vp-msgs-last">${d.lastImg ? `<img class="vp-msgs-lthumb" src="${esc(d.lastImg)}" alt="" loading="lazy">` : ''}${esc(d.last)}</div></div>
                     <div class="vp-msgs-side"><span>${d.tick ? `<i class="vp-msgs-tick${d.tick === 2 ? ' vp-read' : ''}" title="${d.tick === 2 ? 'Прочитано' : 'Доставлено'}">${d.tick === 2 ? MSG_ICON.tick2 : MSG_ICON.tick1}</i>` : ''}${esc(d.time)}</span>${d.unread ? `<span class="vp-msgs-badge">${d.unread}</span>`
@@ -531,6 +535,7 @@
                 b.appendChild(i);
                 feed.appendChild(b);
                 feed.scrollTop = feed.scrollHeight;
+                scheduleDays();
                 return b;
             }
             let chatBackPending = false;
@@ -548,7 +553,7 @@
                 selEnd(); clearReply(); closeFwd(); pinEl.hidden = true; pinIdx = 0;
                 d.unread = 0;
                 msgMarkOpened(d.id);
-                $('.vp-msgs-chead .vp-msgs-ava').innerHTML = avaHtml(d.ava);
+                $('.vp-msgs-chead .vp-msgs-ava').innerHTML = avaHtml(msgAva(d));
                 $('.vp-msgs-chead .vp-msgs-ava').classList.toggle('vp-online', !!d.online);
                 $('.vp-msgs-chead .vp-msgs-ava').classList.toggle('vp-sup', d.ava === '🛟');
                 $('.vp-msgs-who b').textContent = d.name;
@@ -600,13 +605,38 @@
                 });
                 paintCalls(t);
                 paintPin(t);
+                paintDays(true);
                 d.shown = list.length; d.sig = chatSig(t.uid);
                 input.disabled = false; input.focus();
                 stickEnd();
                 msgReadNow(d, t, list);
                 blockUi(d, t);
             }
-            const msgMetaText = (t, m) => msgTime(m.at || m.ts) + (m.dir === 'out' ? (readUpTo(t.uid, t.sup, 'them') >= m.ts ? ' ✓✓' : ' ✓') : '');
+            const dayLabel = ts => {
+                const d = new Date(ts * 1000), now = new Date(), yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+                if (d.toDateString() === now.toDateString()) return 'Сегодня';
+                if (d.toDateString() === yest.toDateString()) return 'Вчера';
+                return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) + (d.getFullYear() !== now.getFullYear() ? ' ' + d.getFullYear() : '');
+            };
+            function paintDays(keep) {
+                const near = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
+                feed.querySelectorAll(':scope > .vp-msgs-day').forEach(e => e.remove());
+                let last = '';
+                feed.querySelectorAll(':scope > .vp-msgs-b, :scope > .vp-msgs-callrow').forEach(b => {
+                    const ts = +(b._m && (b._m.at || b._m.ts)) || +b.dataset.ts || +b.dataset.cts || Date.now() / 1000, key = new Date(ts * 1000).toDateString();
+                    if (key === last) return;
+                    last = key;
+                    const n = document.createElement('div');
+                    n.className = 'vp-msgs-day';
+                    n.textContent = dayLabel(ts);
+                    b.before(n);
+                });
+                if (!keep && near) feed.scrollTop = feed.scrollHeight;
+            }
+            let daysRaf = 0;
+            const scheduleDays = () => { if (!daysRaf) daysRaf = requestAnimationFrame(() => { daysRaf = 0; paintDays(); }); };
+            const msgClock = ts => new Date(ts * 1000).toTimeString().slice(0, 5);
+            const msgMetaText = (t, m) => msgClock(m.at || m.ts) + (m.dir === 'out' ? (readUpTo(t.uid, t.sup, 'them') >= m.ts ? ' ✓✓' : ' ✓') : '');
             function msgRefreshChat(d) {
                 const t = msgTarget(d);
                 if (input.dataset.vpBlocked && t.uid) blockUi(d, t);
@@ -616,6 +646,7 @@
                 const list = msgThread(t), have = new Map();
                 feed.querySelectorAll(':scope > .vp-msgs-b[data-ts]').forEach(b => { const k = b.dataset.dir + '|' + b.dataset.ts; if (!have.has(k)) have.set(k, []); have.get(k).push(b); });
                 const nearEnd = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80, keep = feed.scrollTop;
+                feed.querySelectorAll(':scope > .vp-msgs-day').forEach(e => e.remove());
                 let prev = null, added = 0;
                 for (const m of list) {
                     let b = (have.get(m.dir + '|' + m.ts) || []).shift();
@@ -638,6 +669,8 @@
                 downSync();
                 paintCalls(t);
                 paintPin(t);
+                paintDays(true);
+                feed.scrollTop = nearEnd ? feed.scrollHeight : keep;
                 d.shown = list.length; d.sig = chatSig(t.uid);
                 msgReadNow(d, t, list);
             }
@@ -681,6 +714,10 @@
                 if (list.length !== current.shown || chatSig(tt.uid) !== current.sig) msgRefreshChat(current);
             }, { every: 20000, net: true });
             root.refreshList = () => { if (!current) { msgFillDialogs(); renderList(); } };
+            document.addEventListener('vp-looks-ready', () => {
+                if (!root.isConnected) return;
+                if (current) headAva(); else renderList();
+            });
             const onSynced = () => {
                 if (!root.isConnected) return document.removeEventListener('vp-msg-synced', onSynced);
                 if (!msgsOpen || !current || !msgNet.me) return;
@@ -852,7 +889,7 @@
                 const t = msgTarget(current);
                 if (!msgNet.me || !isApprovedId(msgMyId())) return note('Звонки откроются вместе с перепиской', 'phone');
                 if (!t.uid) return note(t.missing);
-                callStart(t.uid, current.name, current.ava);
+                callStart(t.uid, current.name, msgAva(current));
             };
             search.addEventListener('input', renderList);
             $('.vp-msgs-back').onclick = closeChat;
@@ -882,8 +919,9 @@
                     row.title = 'Позвонить';
                     row.innerHTML = svgIcon(GLYPH.phone, 15) + '<span></span><time></time>';
                     row.querySelector('span').textContent = text;
-                    row.querySelector('time').textContent = msgTime(e.ts);
-                    row.onclick = () => { if (current) callStart(t.uid, current.name, current.ava); };
+                    row.querySelector('time').textContent = msgClock(e.ts);
+                    row.dataset.cts = e.ts;
+                    row.onclick = () => { if (current) callStart(t.uid, current.name, msgAva(current)); };
                     const next = bs.find(b => +b.dataset.ts > e.ts);
                     if (next) feed.insertBefore(row, next); else feed.appendChild(row);
                 }
@@ -1128,7 +1166,7 @@
                     const row = document.createElement('button');
                     row.type = 'button';
                     row.className = 'vp-msgs-fwd-r';
-                    row.innerHTML = '<span class="vp-msgs-ava vp-sm">' + avaHtml(x.ava) + '</span><span></span>';
+                    row.innerHTML = '<span class="vp-msgs-ava vp-sm">' + avaHtml(msgAva(x)) + '</span><span></span>';
                     row.lastChild.textContent = x.name;
                     row.addEventListener('click', () => forwardTo(x, ms));
                     box.appendChild(row);
@@ -1523,7 +1561,7 @@
                 openPath = location.pathname;
                 msgsOpen = true;
                 closeChat();
-                loadMsgPeople(() => { if (!current) renderList(); });
+                loadMsgPeople(() => { if (!current) renderList(); else headAva(); });
                 msgSync().then(() => { msgFillDialogs(); if (!current) renderList(); }).catch(() => { });
                 place();
                 placeSidebar(); placeRail();

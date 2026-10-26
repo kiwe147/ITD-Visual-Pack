@@ -261,13 +261,13 @@
         function feedRestore(k, s) {
             const job = { k }, t0 = performance.now(), stops = ['wheel', 'touchstart', 'keydown', 'mousedown'];
             feedJob = job;
-            let count = -1, grewAt = t0, calm = 0;
+            let calm = 0, jumps = 0, hunts = 0, tried = false;
             const quit = () => { if (feedJob === job) feedJob = null; };
             stops.forEach(t => addEventListener(t, quit, { capture: true, passive: true }));
-            const go = y => scrollTo({ top: y, behavior: 'instant' });
+            const go = y => { jumps++; scrollTo({ top: y, behavior: 'instant' }); };
             const step = () => {
                 const now = performance.now();
-                if (feedJob !== job || feedPath() !== k || now - t0 > 15000) {
+                if (feedJob !== job || feedPath() !== k || now - t0 > 6000 || jumps > 30) {
                     if (feedJob === job) feedJob = null;
                     return stops.forEach(t => removeEventListener(t, quit, true));
                 }
@@ -278,9 +278,11 @@
                     if (Math.abs(scrollY - y) > 1) { go(y); calm = now; } else if (!calm) calm = now;
                     if (now - calm > 800) feedJob = null;
                 } else if (posts.length) {
-                    if (posts.length !== count) { count = posts.length; grewAt = now; }
-                    if (now - grewAt > 3000 || posts.length > s.idx + 60) { go(s.y); feedJob = null; }
-                    else go(document.documentElement.scrollHeight);
+                    if (!tried) { tried = true; go(s.y); }
+                    else if (now - t0 > 600) {
+                        if (hunts < 6) { hunts++; go(document.documentElement.scrollHeight); }
+                        else { go(s.y); feedJob = null; }
+                    }
                 }
                 setTimeout(step, 100);
             };
