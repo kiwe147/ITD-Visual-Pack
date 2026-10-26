@@ -221,9 +221,9 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   const order = await A.p.$$eval('.vp-msgs-row', rs => rs.map(r => r.dataset.id));
   console.log('—    порядок у NeuroSFW: ' + order.join(', '));
   check(order[0] === 'u:bob', 'последний открытый чат (и последнее сообщение) — наверху');
-  await chatWith(A.p, 'bot', 1); await A.p.$eval('.vp-msgs-back', b => b.click()); await A.p.waitForTimeout(500);
+  await chatWith(A.p, 'u:dan', 1); await A.p.$eval('.vp-msgs-back', b => b.click()); await A.p.waitForTimeout(500);
   const order2 = await A.p.$$eval('.vp-msgs-row', rs => rs.map(r => r.dataset.id));
-  check(order2[0] === 'bot', `зашёл к боту — бот поднялся наверх (${order2.slice(0, 3).join(', ')})`);
+  check(order2[0] === 'u:dan', `зашёл к dan — dan поднялся наверх (${order2.slice(0, 3).join(', ')})`);
   // альбом: bob выбирает 3 картинки разом
   await chatWith(B2.p, 'u:NeuroSFW', 1);
   const up0 = uploads;
@@ -319,7 +319,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR
   await A2.p.$eval('.vp-msgs-back', b => b.click()).catch(() => { }); await A2.p.waitForTimeout(2500);
   const u2 = await unreadOf(A2.p);
   console.log('—    непрочитанные: ' + JSON.stringify(u1) + ' / второе устройство ' + JSON.stringify(u2));
-  check(Object.keys(u1).length > 2 && JSON.stringify(u1) === JSON.stringify(u2) && Object.keys(u2).some(k => k === '@sup') && Object.values(u2).every(n => n === 0), 'второе устройство: непрочитанные как на первом (и «Поддержка», которую там не открывали)');
+  check(Object.keys(u1).length > 2 && JSON.stringify(Object.entries(u1).sort()) === JSON.stringify(Object.entries(u2).sort()) && Object.keys(u2).some(k => k === '@sup') && Object.values(u2).every(n => n === 0), 'второе устройство: непрочитанные как на первом (и «Поддержка», которую там не открывали)');
   A2.p.errors.length && check(false, 'A2 ошибки: ' + A2.p.errors.join(' | '));
   for (const x of [A.p, B2.p, C2.p]) check(!x.errors.length, 'ошибок нет' + (x.errors.length ? ': ' + x.errors.join(' | ') : ''));
   await b.close();

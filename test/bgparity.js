@@ -9,7 +9,7 @@ const snap = fs.readFileSync(process.argv[2], 'utf8');
 const src = fs.readFileSync(process.env.MOD || path.join(__dirname, '..', 'ITD-Visual-Pack.user.js'), 'utf8');
 const meta = src.slice(0, src.indexOf('==/UserScript=='));
 const ORIGIN = 'https://xn--d1ah4a.com';
-const OPS = { aurora: 0.45, waves: 0.3, bokeh: 0.4, grid: 0.4, snow: 0.5, stars: 0.4, particles: 0.35, matrix: 0.2 };
+const OPS = { aurora: 0.45, waves: 0.3, bokeh: 0.4, grid: 0.4, snow: 0.6, stars: 0.4, particles: 0.35, matrix: 0.2 };
 const fails = [];
 const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + what); if (!ok) fails.push(what); };
 function png(buf) {

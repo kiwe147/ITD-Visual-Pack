@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.3
+// @version      3.7.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2211,6 +2211,12 @@
             .vp-banner:hover .vp-banner-buttons, .vp-banner-buttons:has(:focus-visible) { opacity: 1; clip-path: inset(0 0 0 0); visibility: visible;
                 transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s, visibility 0s; }
         }
+        @media not ((hover: hover) and (pointer: fine)) {
+            .vp-banner-buttons:not(.vp-banner-editing) { opacity: 0; clip-path: inset(0 0 100% 0); visibility: hidden;
+                transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s, visibility 0s linear .25s; }
+            .vp-banner.vp-bar-open > .vp-banner-buttons:not(.vp-banner-editing) { opacity: 1; clip-path: inset(0 0 0 0); visibility: visible;
+                transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s, visibility 0s; }
+        }
         .toggle-switch.vp-tri { width: 58px !important; }
         .toggle-switch.vp-tri[data-s="1"]::after { left: 20px !important; }
         .toggle-switch.vp-tri { background: rgba(0, 0, 0, 0.5) !important; }
@@ -2452,7 +2458,7 @@
                     const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
                     const stops = kind === 'disc'
                         ? [[0, 0.5], [0.72, 0.6], [0.86, 0.3], [1, 0]]
-                        : [[0, 1], [0.35, 0.4], [0.7, 0.08], [1, 0]];
+                        : kind === 'haze' ? [[0, 1], [0.35, 0.55], [1, 0]] : [[0, 1], [0.35, 0.4], [0.7, 0.08], [1, 0]];
                     stops.forEach(([o, a]) => grad.addColorStop(o, hsla(h, s, l, a)));
                     g.fillStyle = grad;
                     g.fillRect(0, 0, 64, 64);
@@ -2749,34 +2755,65 @@
                     }
                 },
                 snow: {
-                    opacity: 0.5,
+                    opacity: 0.6,
                     init() {
-                        const n = Math.min(260, Math.floor(W * H / 6000));
-                        return { f: Array.from({ length: n }, () => this.spawn(rand(0, H))), windT: rand(0, 100) };
-                    },
-                    spawn(y) {
-                        const d = Math.random() ** 1.5;
-                        return { x: rand(0, W), y, d, r: 0.8 + d * 2.6, ph: rand(0, 6.3) };
+                        const k = Math.min(2.2, Math.max(0.5, Math.sqrt(W * H / 196000)));
+                        const mk = (n, rmin, rmax, vmin, vmax, amax) => Array.from({ length: Math.round(n * k) }, () => {
+                            const g = Math.random() * 4 | 0;
+                            return { x: rand(0, W), y: rand(0, H), r: rand(rmin, rmax), v: rand(vmin, vmax), g, a: amax * (0.6 + g * 0.4 / 3), ph: rand(0, 6.3) };
+                        });
+                        const far = mk(150, 0.5, 1.1, 0.5, 0.9, 0.5), mid = mk(70, 1.2, 2.1, 1.1, 1.8, 0.7), near = mk(10, 9, 26, 2.2, 3.6, 0.2);
+                        const cr = Array.from({ length: Math.round(12 * k) }, () => {
+                            const r = rand(5, 14);
+                            return { x: rand(0, W), y: rand(0, H), r, v: 0.5 + r * 0.07, ph: rand(0, 6.3), rot: rand(0, Math.PI * 2), rs: rand(-0.02, 0.02) };
+                        });
+                        return { t: rand(0, 100), far, mid, near, cr };
                     },
                     draw(s, dt, { h, s: sat }) {
                         ctx.clearRect(0, 0, W, H);
-                        s.windT += 0.004 * dt;
-                        const wind = Math.sin(s.windT) * 0.6 + Math.sin(s.windT * 2.7) * 0.3;
-                        const S = sat * 0.4;
-                        const packs = Array.from({ length: 4 }, () => new Path2D());
-                        s.f.forEach((p, i) => {
-                            p.ph += 0.03 * dt;
-                            p.y += (0.35 + p.d * 1.4) * dt;
-                            p.x += (wind * (0.4 + p.d) + Math.sin(p.ph) * 0.3) * dt;
-                            if (p.y > H + 5) { s.f[i] = this.spawn(-5); return; }
-                            if (p.x > W + 5) p.x = -5; else if (p.x < -5) p.x = W + 5;
-                            if (p.d > 0.6) drawSprite('glow', p.x, p.y, p.r * 3.5, h, S, 85, 0.45);
-                            const pack = packs[Math.min(3, p.d * 4 | 0)];
-                            pack.moveTo(p.x + p.r, p.y);
-                            pack.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-                        });
-                        ctx.fillStyle = hsla(h, S, 90, 1);
-                        packs.forEach((pack, i) => { ctx.globalAlpha = 0.45 + (i + 0.5) / 4 * 0.55; ctx.fill(pack); });
+                        const u = dt * 3, S = sat * 0.4;
+                        s.t += 0.016 * u;
+                        const gust = Math.max(0, Math.sin(s.t * 0.7)) ** 3, wind = 1.1 + Math.sin(s.t * 0.4) * 0.6 + gust * 3.2;
+                        ctx.fillStyle = hsla(h, S, 92, 1);
+                        for (const [arr, k] of [[s.far, 0.5], [s.mid, 1]]) {
+                            const packs = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
+                            for (const p of arr) {
+                                const vx = wind * k * (0.7 + p.r * 0.2);
+                                p.ph += 0.02 * u;
+                                p.x += (vx + Math.sin(p.ph) * 0.2) * u; p.y += p.v * u;
+                                if (p.y > H + 4) { p.y = -4; p.x = rand(0, W); }
+                                if (p.x > W + 6) p.x = -6;
+                                packs[p.g].moveTo(p.x + p.r * 0.8, p.y);
+                                packs[p.g].arc(p.x, p.y, p.r * 0.8, 0, Math.PI * 2);
+                            }
+                            const am = arr === s.far ? 0.5 : 0.7;
+                            packs.forEach((pack, g) => { ctx.globalAlpha = am * (0.6 + g * 0.4 / 3); ctx.fill(pack); });
+                        }
+                        ctx.lineCap = 'round';
+                        ctx.strokeStyle = hsla(h, S, 94, 1);
+                        for (const p of s.cr) {
+                            p.ph += 0.02 * u; p.rot += p.rs * u * (1 + gust * 2);
+                            p.x += (wind * 0.9 + Math.sin(p.ph) * 0.3) * u; p.y += p.v * u;
+                            if (p.y > H + 20) { p.y = -20; p.x = rand(-20, W); }
+                            if (p.x > W + 20) p.x = -20;
+                            ctx.globalAlpha = 0.6 + p.r / 14 * 0.35;
+                            ctx.lineWidth = p.r > 9 ? 1.3 : 1;
+                            ctx.beginPath();
+                            for (let i = 0; i < 6; i++) {
+                                const an = p.rot + i * Math.PI / 3, c = Math.cos(an), sn = Math.sin(an);
+                                ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + c * p.r, p.y + sn * p.r);
+                                const bx = p.x + c * p.r * 0.55, by = p.y + sn * p.r * 0.55;
+                                for (const d of [-1, 1]) { const bb = an + d * 1.05; ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(bb) * p.r * 0.34, by + Math.sin(bb) * p.r * 0.34); }
+                            }
+                            ctx.stroke();
+                        }
+                        for (const p of s.near) {
+                            p.ph += 0.01 * u;
+                            p.x += (wind * 1.6 + Math.sin(p.ph) * 0.4) * u; p.y += p.v * u;
+                            if (p.y > H + 30) { p.y = -30; p.x = rand(-20, W); }
+                            if (p.x > W + 30) p.x = -30;
+                            drawSprite('haze', p.x, p.y, p.r, h, S, 90, p.a);
+                        }
                         ctx.globalAlpha = 1;
                     }
                 }
@@ -3100,8 +3137,8 @@ void main() {
     float d = length(vL);
     float a;
     if (vQ.y < 0.5) a = d < 0.72 ? mix(0.5, 0.6, d / 0.72) : d < 0.86 ? mix(0.6, 0.3, (d - 0.72) / 0.14) : mix(0.3, 0.0, clamp((d - 0.86) / 0.14, 0.0, 1.0));
-    else if (vQ.y < 1.5) a = d < 0.35 ? mix(1.0, 0.4, d / 0.35) : d < 0.7 ? mix(0.4, 0.08, (d - 0.35) / 0.35) : mix(0.08, 0.0, clamp((d - 0.7) / 0.3, 0.0, 1.0));
-    else a = clamp(vQ.x - 1.0 - d * vQ.x + 0.5, 0.0, 1.0);
+    else if (vQ.y < 1.5) a = clamp(vQ.x - 1.0 - d * vQ.x + 0.5, 0.0, 1.0);
+    else a = d < 0.35 ? mix(1.0, 0.55, d / 0.35) : mix(0.55, 0.0, clamp((d - 0.35) / 0.65, 0.0, 1.0));
     a *= vC.a;
     gl_FragColor = vec4(vC.rgb * a, a);
 }`);
@@ -3332,37 +3369,127 @@ void main() {
             }
         };
         GL_STYLES.snow = {
-            opacity: 0.5,
+            opacity: 0.6,
             create(gl, K) {
-                const sp = glSprites(gl, K, 520);
-                let W = 0, H = 0, f = [], windT = 0;
-                const spawn = y => {
-                    const d = Math.random() ** 1.5;
-                    return { x: glRand(0, W), y, d, r: 0.8 + d * 2.6, ph: glRand(0, 6.3) };
-                };
+                const sp = glSprites(gl, K, 600);
+                const cr = K.program(gl, `attribute vec2 aPos;
+attribute vec2 aL;
+attribute vec4 aA;
+uniform vec2 uRes;
+varying vec2 vL;
+varying vec4 vA;
+void main() {
+    gl_Position = vec4(aPos.x / uRes.x * 2.0 - 1.0, 1.0 - aPos.y / uRes.y * 2.0, 0.0, 1.0);
+    vL = aL * (aA.x + 2.0);
+    vA = aA;
+}`, `precision highp float;
+uniform vec3 uCol;
+varying vec2 vL;
+varying vec4 vA;
+float seg(vec2 p, vec2 a, vec2 b) {
+    vec2 pa = p - a, ba = b - a;
+    return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0));
+}
+void main() {
+    float r = vA.x;
+    float dm = 1000.0;
+    for (int i = 0; i < 6; i++) {
+        float an = vA.y + float(i) * 1.0471975512;
+        vec2 c = vec2(cos(an), sin(an));
+        vec2 b = c * r * 0.55;
+        dm = min(dm, seg(vL, vec2(0.0), c * r));
+        float b0 = an - 1.05, b1 = an + 1.05;
+        dm = min(dm, seg(vL, b, b + vec2(cos(b0), sin(b0)) * r * 0.34));
+        dm = min(dm, seg(vL, b, b + vec2(cos(b1), sin(b1)) * r * 0.34));
+    }
+    float a = clamp(vA.z * 0.5 - dm + 0.5, 0.0, 1.0) * vA.w;
+    gl_FragColor = vec4(uCol * a, a);
+}`);
+                const cRes = gl.getUniformLocation(cr, 'uRes'), cCol = gl.getUniformLocation(cr, 'uCol');
+                const cLocs = ['aPos', 'aL', 'aA'].map(n => gl.getAttribLocation(cr, n));
+                const cBuf = gl.createBuffer();
+                const CCAP = 32, cData = new Float32Array(CCAP * 48);
+                gl.bindBuffer(gl.ARRAY_BUFFER, cBuf);
+                gl.bufferData(gl.ARRAY_BUFFER, cData.byteLength, gl.DYNAMIC_DRAW);
+                const CORNERS = [-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1];
+                let W = 0, H = 0, t = 0, far = [], mid = [], near = [], crs = [];
                 return {
                     enter(w, h) {
                         W = w; H = h;
-                        const n = Math.min(260, Math.floor(W * H / 6000));
-                        f = Array.from({ length: n }, () => spawn(glRand(0, H)));
-                        windT = glRand(0, 100);
+                        const k = Math.min(2.2, Math.max(0.5, Math.sqrt(W * H / 196000)));
+                        const mk = (n, rmin, rmax, vmin, vmax, amax) => Array.from({ length: Math.round(n * k) }, () => {
+                            const g = Math.random() * 4 | 0;
+                            return { x: glRand(0, W), y: glRand(0, H), r: glRand(rmin, rmax), v: glRand(vmin, vmax), g, a: amax * (0.6 + g * 0.4 / 3), ph: glRand(0, 6.3) };
+                        });
+                        far = mk(150, 0.5, 1.1, 0.5, 0.9, 0.5);
+                        mid = mk(70, 1.2, 2.1, 1.1, 1.8, 0.7);
+                        near = mk(10, 9, 26, 2.2, 3.6, 0.2);
+                        crs = Array.from({ length: Math.round(12 * k) }, () => {
+                            const r = glRand(5, 14);
+                            return { x: glRand(0, W), y: glRand(0, H), r, v: 0.5 + r * 0.07, ph: glRand(0, 6.3), rot: glRand(0, Math.PI * 2), rs: glRand(-0.02, 0.02) };
+                        });
+                        t = glRand(0, 100);
                     },
                     draw(c) {
-                        windT += 0.004 * c.dt;
-                        const wind = Math.sin(windT) * 0.6 + Math.sin(windT * 2.7) * 0.3;
-                        const S = c.th.s * 0.4, glow = glHsl(K, c.th.h, S, 85), dot = glHsl(K, c.th.h, S, 90);
-                        const packs = [[], [], [], []];
+                        const gl = c.gl, h = c.th.h;
+                        const u = c.dt * 3, S = c.th.s * 0.4;
+                        t += 0.016 * u;
+                        const gust = Math.max(0, Math.sin(t * 0.7)) ** 3, wind = 1.1 + Math.sin(t * 0.4) * 0.6 + gust * 3.2;
+                        const dot = glHsl(K, h, S, 92);
                         sp.begin();
-                        f.forEach((p, i) => {
-                            p.ph += 0.03 * c.dt;
-                            p.y += (0.35 + p.d * 1.4) * c.dt;
-                            p.x += (wind * (0.4 + p.d) + Math.sin(p.ph) * 0.3) * c.dt;
-                            if (p.y > H + 5) { f[i] = spawn(-5); return; }
-                            if (p.x > W + 5) p.x = -5; else if (p.x < -5) p.x = W + 5;
-                            if (p.d > 0.6) sp.quad(p.x, p.y, p.r * 3.5, 1, glow, 0.45);
-                            packs[Math.min(3, p.d * 4 | 0)].push(p);
-                        });
-                        packs.forEach((pack, i) => pack.forEach(p => sp.quad(p.x, p.y, p.r + 1, 2, dot, 0.45 + (i + 0.5) / 4 * 0.55)));
+                        for (const [arr, kk] of [[far, 0.5], [mid, 1]]) {
+                            const packs = [[], [], [], []];
+                            for (const p of arr) {
+                                const vx = wind * kk * (0.7 + p.r * 0.2);
+                                p.ph += 0.02 * u;
+                                p.x += (vx + Math.sin(p.ph) * 0.2) * u; p.y += p.v * u;
+                                if (p.y > H + 4) { p.y = -4; p.x = glRand(0, W); }
+                                if (p.x > W + 6) p.x = -6;
+                                packs[p.g].push(p);
+                            }
+                            const am = arr === far ? 0.5 : 0.7;
+                            packs.forEach((pack, g) => pack.forEach(p => sp.quad(p.x, p.y, p.r * 0.8 + 1, 1, dot, am * (0.6 + g * 0.4 / 3))));
+                        }
+                        sp.flush(c.W, c.H, false);
+                        let n = 0;
+                        for (const p of crs) {
+                            p.ph += 0.02 * u; p.rot += p.rs * u * (1 + gust * 2);
+                            p.x += (wind * 0.9 + Math.sin(p.ph) * 0.3) * u; p.y += p.v * u;
+                            if (p.y > H + 20) { p.y = -20; p.x = glRand(-20, W); }
+                            if (p.x > W + 20) p.x = -20;
+                            if (n >= CCAP) continue;
+                            const hs = p.r + 2, al = 0.6 + p.r / 14 * 0.35, lw = p.r > 9 ? 1.3 : 1;
+                            for (let q = 0; q < 6; q++) {
+                                const lx = CORNERS[q * 2], ly = CORNERS[q * 2 + 1], o = (n * 6 + q) * 8;
+                                cData[o] = p.x + lx * hs; cData[o + 1] = p.y + ly * hs;
+                                cData[o + 2] = lx; cData[o + 3] = ly;
+                                cData[o + 4] = p.r; cData[o + 5] = p.rot; cData[o + 6] = lw; cData[o + 7] = al;
+                            }
+                            n++;
+                        }
+                        if (n) {
+                            gl.useProgram(cr);
+                            gl.bindBuffer(gl.ARRAY_BUFFER, cBuf);
+                            gl.bufferSubData(gl.ARRAY_BUFFER, 0, cData.subarray(0, n * 48));
+                            const sizes = [2, 2, 4], offs = [0, 2, 4];
+                            cLocs.forEach((l, i) => { gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, sizes[i], gl.FLOAT, false, 32, offs[i] * 4); });
+                            gl.uniform2f(cRes, c.W, c.H);
+                            gl.uniform3fv(cCol, glHsl(K, h, S, 94));
+                            gl.enable(gl.BLEND);
+                            gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+                            gl.drawArrays(gl.TRIANGLES, 0, n * 6);
+                            gl.disable(gl.BLEND);
+                            cLocs.forEach(l => gl.disableVertexAttribArray(l));
+                        }
+                        const haze = glHsl(K, h, S, 90);
+                        sp.begin();
+                        for (const p of near) {
+                            p.ph += 0.01 * u;
+                            p.x += (wind * 1.6 + Math.sin(p.ph) * 0.4) * u; p.y += p.v * u;
+                            if (p.y > H + 30) { p.y = -30; p.x = glRand(-20, W); }
+                            if (p.x > W + 30) p.x = -30;
+                            sp.quad(p.x, p.y, p.r, 2, haze, Math.max(0, Math.min(1, p.a)));
+                        }
                         sp.flush(c.W, c.H, false);
                     }
                 };
@@ -5380,6 +5507,11 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
 
         const CHANGELOG = [
+            ['3.7.4', '26 октября 2026', [
+                'Фон «Снег» стал метелью: порывы ветра, снежинки-кристаллы и размытые хлопья вблизи',
+                'На телефоне шторка с кнопками на баннере открывается и закрывается нажатием на баннер',
+                'В сообщениях больше нет бота «Сервер ИТД»'
+            ]],
             ['3.7.3', '26 октября 2026', [
                 'Все анимированные фоны теперь считаются на видеокарте, если она есть: страница меньше тормозит, вид тот же',
                 'Кнопка «Обновить» появляется быстрее после выхода новой версии'
@@ -8069,7 +8201,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             for (const d of msgPeople.values()) if (!MSG_DIALOGS.includes(d)) MSG_DIALOGS.push(d);
             const seen = msgSeen();
             for (const d of MSG_DIALOGS) {
-                if (d.bot) continue;
                 const t = msgTarget(d), list = msgThread(t);
                 if (!list.length) continue;
                 const last = list[list.length - 1];
@@ -8578,53 +8709,12 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
 
         let messagesOverlay = null;
 
-        const MESSAGE_JOKES = [
-            ['🔥', 'Сообщение получил. Сервер тоже получил — и перегрелся'],
-            ['🐹', 'Сервер работает на хомяке в колесе. Хомяк ушёл на обед'],
-            ['⏳', 'Лента грузится. Не трогай — спугнёшь'],
-            ['🧱', '502 Bad Gateway — это не ошибка, это стиль жизни'],
-            ['🔄', 'Переподключаюсь… Переподключаюсь… О, опять ты'],
-            ['❤️', 'Лайк засчитан. Наверное. Обнови страницу — узнаем вместе'],
-            ['🔔', 'Уведомление о твоём сообщении придёт завтра. Или вчера. Как повезёт'],
-            ['🖼️', 'Картинка не загрузилась? Она стесняется. Дай ей минутку'],
-            ['🛠️', 'Ведутся технические работы. Какие — сами не знаем, но ведутся'],
-            ['🎲', 'Шанс, что пост опубликуется с первого раза: сегодня 50 на 50'],
-            ['🧯', 'Если сайт упал — это не баг, это он прилёг отдохнуть'],
-            ['📉', 'Онлайн растёт, сервер — нет. Держимся'],
-            ['🐛', 'Это не баг, это фича. Вот этот — точно фича. Наверное'],
-            ['🌀', 'Крутилка крутится — значит, я жив. Логика железная'],
-            ['🥔', 'Сервер у нас надёжный: картофельный, отечественный'],
-            ['🔌', 'Кто-то снова задел провод. Ставим табличку «не трогать»'],
-            ['🧊', 'Подморозил ленту, чтобы ты отдохнул от прокрутки. Забота'],
-            ['📦', 'Твоё сообщение в очереди. Перед ним ещё 4000 лайков'],
-            ['🤐', 'Отправлено в обработку. Обработка отправлена в отпуск'],
-            ['🕳️', 'Комментарий исчез? Он в лучшем мире, там где старые посты'],
-            ['📶', 'Сайт открылся с первого раза? Сделай скрин — никто не поверит'],
-            ['⚙️', 'Обновили сайт. Что сломали — узнаем от пользователей'],
-            ['🧪', 'Ты тестируешь ИТД в прямом эфире. Спасибо за вклад в науку'],
-            ['🐌', 'Сервер думает. Не торопи, он в первый раз'],
-            ['🔢', 'Счётчик подписчиков немного устал считать. Он не врёт, он округляет'],
-            ['🕰️', 'Прочитано «только что» — по серверному времени это час назад'],
-            ['👻', 'Пост висит, но его нет. Или есть, но не висит. Квантовая лента'],
-            ['🎰', 'Обнови страницу — вдруг выпадет рабочая версия'],
-            ['🧹', 'Кеш почистили. Вместе с частью ленты. Бывает'],
-            ['🫡', 'Все системы в норме. Кроме тех, что не в норме'],
-            ['🚧', 'Ошибка загрузки. Попробуйте позже. Позже тоже попробуйте'],
-            ['🛸', 'Запрос улетел и не вернулся. Ждём сигнала из космоса'],
-        ];
-        const BOT_HELLO = [['👋', 'Привет! Я Сервер ИТД. Сегодня почти работаю'], ['🫡', 'На связи! Пока связь есть — пиши быстрее']];
-        const BOT_ASK = [['🤔', 'Хороший вопрос. Отвечу после перезагрузки. Своей'], ['🔮', 'Шар предсказаний говорит: «ошибка 500, спроси позже»']];
-
-        const MSG_BOT = {
-            id: 'bot', ava: '🤖', name: 'Сервер ИТД', login: '', last: 'Напиши что-нибудь — отвечу, если не упаду', time: 'сейчас', unread: 1, online: true, bot: true,
-            msgs: [['in', 'Привет! Я — Сервер ИТД 🤖 Иногда работаю, иногда отдыхаю'], ['in', 'Напиши что угодно — расскажу, как у меня дела. Спойлер: грузятся 😏']]
-        };
         const MSG_SUPPORT = {
             id: 'support', ava: '🛟', name: 'Поддержка ИТД X', login: '', last: 'Нашёл баг или есть идея — пиши сюда', time: '', unread: 0, online: true, support: true,
             msgs: [['in', 'Привет! Это поддержка ИТД X 👋'], ['in', 'Нашёл баг или есть идея — опиши здесь, ответ придёт в этот чат']]
         };
         let supportTicket = 0;
-        let MSG_DIALOGS = [MSG_BOT, MSG_SUPPORT];
+        let MSG_DIALOGS = [MSG_SUPPORT];
         const msgPins = () => GM_getValue(acctKey('msgPins'), []);
         const msgOpened = () => { const o = GM_getValue(acctKey('msgOpened'), {}); return o && typeof o === 'object' ? o : {}; };
         function msgMarkOpened(id) { const o = msgOpened(); o[id] = Math.floor(Date.now() / 1000); GM_setValue(acctKey('msgOpened'), o); }
@@ -8638,7 +8728,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         async function loadMsgPeople(onUpdate) {
             const names = verifiedNames().filter(n => !myUsername || n.toLowerCase() !== myUsername.toLowerCase()).sort((a, b) => a.localeCompare(b));
             names.forEach(n => { if (!msgPeople.has(n)) msgPeople.set(n, { id: 'u:' + n, login: n, ava: '👤', name: n, last: 'Тоже с ИТД X · напиши первым', time: '', unread: 0, msgs: [] }); });
-            MSG_DIALOGS = [MSG_BOT, MSG_SUPPORT, ...names.map(n => msgPeople.get(n))];
+            MSG_DIALOGS = [MSG_SUPPORT, ...names.map(n => msgPeople.get(n))];
             onUpdate();
             await Promise.all(names.map(async n => {
                 const d = await hcData(n).catch(() => null), p = msgPeople.get(n);
@@ -9034,7 +9124,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 countEl.textContent = `${n} / ${max}`;
                 countEl.classList.toggle('vp-warn', n >= max * 0.9);
             };
-            let current = null, botTimer = 0, lastJoke = -1;
+            let current = null, botTimer = 0;
             const SUP_AVA = svgIcon('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.6"/><path d="m5.6 5.6 3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>', 28);
             const avaHtml = a => a === '🛟' ? SUP_AVA : isUrl(a) ? `<img src="${esc(a)}" alt="">` : esc(a);
 
@@ -9058,7 +9148,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     }
                 }
                 if (!sups.length) supDir = false;
-                $('.vp-msgs-sub').textContent = supDir && sups.length && !q ? 'Все, кто писал в поддержку' : people ? `Сервер ИТД, поддержка и ${people} ${plural(people, 'человек', 'человека', 'человек')} с ИТД X` : 'Пока никого с ИТД X — список обновится сам';
+                $('.vp-msgs-sub').textContent = supDir && sups.length && !q ? 'Все, кто писал в поддержку' : people ? `Поддержка и ${people} ${plural(people, 'человек', 'человека', 'человек')} с ИТД X` : 'Пока никого с ИТД X — список обновится сам';
                 list.innerHTML = rows.length ? rows.map(d => `
                 <div class="vp-msgs-row${pins.includes(d.id) ? ' vp-pinned' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}" data-id="${d.id}">
                     <div class="vp-msgs-ava${d.online ? ' vp-online' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}">${avaHtml(d.ava)}</div>
@@ -9163,7 +9253,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (current !== d) clearPending();
                 blockUi(null);
                 $('.vp-msgs-hmenu').hidden = true;
-                $('.vp-msgs-more').hidden = !d.login || !!d.support || !!d.supUid || !!d.bot;
+                $('.vp-msgs-more').hidden = !d.login || !!d.support || !!d.supUid;
                 current = d;
                 downNew = 0;
                 selEnd(); clearReply(); closeFwd(); pinEl.hidden = true; pinIdx = 0;
@@ -9177,12 +9267,11 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     const d0 = new Date(t); if (isNaN(d0)) return ''; const h = d0.toTimeString().slice(0, 5);
                     return d0.toDateString() === new Date().toDateString() ? 'в ' + h : `${d0.getDate()}.${String(d0.getMonth() + 1).padStart(2, '0')} в ${h}`;
                 };
-                $('.vp-msgs-who small').textContent = d.bot ? 'бот · всегда в сети' : d.support ? 'поддержка · на связи' : d.supUid ? 'обращение в поддержку'
+                $('.vp-msgs-who small').textContent = d.support ? 'поддержка · на связи' : d.supUid ? 'обращение в поддержку'
                     : '@' + d.login + ' · ' + (d.online ? 'в сети' : d.lastSeen && seenAgo(d.lastSeen) ? 'был(а) в сети ' + seenAgo(d.lastSeen) : 'с ИТД X');
-                $('.vp-msgs-call').hidden = !d.login || !!d.support || !!d.supUid || !!d.bot;
+                $('.vp-msgs-call').hidden = !d.login || !!d.support || !!d.supUid;
                 if (d.login || d.support || d.supUid) { home.hidden = true; chat.hidden = false; input.value = ''; send.disabled = true; msgCount(); msgOpenPerson(d); return; }
-                feed.innerHTML = `<div class="vp-msgs-note">🤖 Бот-шутник: сообщения ему никуда не уходят и не сохраняются</div>`
-                    + (d.msgs.length ? '<div class="vp-msgs-note">Сегодня</div>' : `<div class="vp-msgs-note">Это начало переписки с ${esc(d.name)}</div>`);
+                feed.innerHTML = (d.msgs.length ? '<div class="vp-msgs-note">Сегодня</div>' : `<div class="vp-msgs-note">Это начало переписки с ${esc(d.name)}</div>`);
                 d.msgs.forEach(([dir, text]) => bubble(dir, text, dir === 'out' ? now() + ' ✓✓' : now()));
                 home.hidden = true; chat.hidden = false;
                 input.value = ''; send.disabled = true; msgCount();
@@ -9299,14 +9388,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (Date.now() - callNet.lastSync > 12000) { callNet.lastSync = Date.now(); try { await msgSync(); } catch (e) { return; } }
                 msgFillDialogs();
                 if (!current) return renderList();
-                if (current.bot) return;
                 const tt = msgTarget(current), list = msgThread(tt);
                 if (list.length !== current.shown || chatSig(tt.uid) !== current.sig) msgRefreshChat(current);
             }, { every: 20000, net: true });
             root.refreshList = () => { if (!current) { msgFillDialogs(); renderList(); } };
             const onSynced = () => {
                 if (!root.isConnected) return document.removeEventListener('vp-msg-synced', onSynced);
-                if (!msgsOpen || !current || current.bot || !msgNet.me) return;
+                if (!msgsOpen || !current || !msgNet.me) return;
                 msgFillDialogs();
                 const tt = msgTarget(current);
                 if (!tt.uid) return;
@@ -9314,12 +9402,12 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             };
             document.addEventListener('vp-msg-synced', onSynced);
             document.addEventListener('visibilitychange', () => {
-                if (document.hidden || !root.isConnected || !msgsOpen || !current || current.bot || !msgNet.me) return;
+                if (document.hidden || !root.isConnected || !msgsOpen || !current || !msgNet.me) return;
                 const tt = msgTarget(current);
                 if (tt.uid) msgReadNow(current, tt, msgThread(tt));
             });
             root.refreshCalls = () => {
-                if (!current || current.bot || current.support || current.supUid || !msgNet.me) return;
+                if (!current || current.support || current.supUid || !msgNet.me) return;
                 const t = msgTarget(current);
                 if (!t.uid) return;
                 blockUi(current, t);
@@ -9334,7 +9422,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const d = MSG_DIALOGS.find(x => x.id === id) || (id.startsWith('u:') && msgPeople.get(id.slice(2)));
                 if (d) openChat(d, fromHistory);
             };
-            root.currentTarget = () => current && !current.bot ? msgTarget(current) : null;
+            root.currentTarget = () => current ? msgTarget(current) : null;
             function closeChat(fromHistory) {
                 clearPending();
                 closeImg(true, true);
@@ -9347,27 +9435,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 chat.hidden = true; home.hidden = false;
                 renderList();
             }
-            function botReply() {
-                const typing = document.createElement('div');
-                typing.className = 'vp-msgs-b vp-in vp-msgs-typing';
-                typing.innerHTML = '<span></span><span></span><span></span>';
-                feed.appendChild(typing);
-                feed.scrollTop = feed.scrollHeight;
-                botTimer = setTimeout(() => {
-                    typing.remove();
-                    const q = (current && current.msgs.length ? current.msgs[current.msgs.length - 1][1] : '').toLowerCase();
-                    let e, t;
-                    if (/(^|\s)(прив|здаров|здрав|хай|ку|йоу|салам)/.test(q)) [e, t] = BOT_HELLO[Math.random() * BOT_HELLO.length | 0];
-                    else if (q.includes('?') && Math.random() < .5) [e, t] = BOT_ASK[Math.random() * BOT_ASK.length | 0];
-                    else {
-                        let i; do i = Math.floor(Math.random() * MESSAGE_JOKES.length); while (i === lastJoke && MESSAGE_JOKES.length > 1);
-                        lastJoke = i;
-                        [e, t] = MESSAGE_JOKES[i];
-                    }
-                    bubble('in', e + ' ' + t);
-                }, 700 + Math.random() * 600);
-            }
-
             function supportReply() {
                 const typing = document.createElement('div');
                 typing.className = 'vp-msgs-b vp-in vp-msgs-typing';
@@ -9439,7 +9506,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             function blockUi(d, t) {
                 const ok = !!(d && t && t.uid && !t.sup), mine = ok && msgIsBlocked(t.uid), them = ok && !mine && msgBlockedMe(t.uid);
                 const kind = mine ? 'mine' : them ? 'them' : '', old = feed.querySelector(':scope > .vp-msgs-blocked');
-                if (d) $('.vp-msgs-call').hidden = !!kind || !d.login || !!d.support || !!d.supUid || !!d.bot;
+                if (d) $('.vp-msgs-call').hidden = !!kind || !d.login || !!d.support || !!d.supUid;
                 if (old && old.dataset.kind === kind && old === feed.lastElementChild) return;
                 feed.querySelectorAll(':scope > .vp-msgs-blocked').forEach(x => x.remove());
                 if (!kind) {
@@ -9478,7 +9545,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             $('.vp-msgs-more').onclick = e => {
                 e.stopPropagation();
                 if (!blockMenu.hidden) { blockMenu.hidden = true; return; }
-                if (!current || !current.login || current.support || current.supUid || current.bot) return;
+                if (!current || !current.login || current.support || current.supUid) return;
                 const t = msgTarget(current), d = current;
                 if (!t.uid) return note(t.missing);
                 const on = msgIsBlocked(t.uid);
@@ -9492,7 +9559,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             };
             root.addEventListener('click', e => { if (!blockMenu.hidden && !e.target.closest('.vp-msgs-hmenu, .vp-msgs-more')) blockMenu.hidden = true; });
             $('.vp-msgs-call').onclick = () => {
-                if (!current || !current.login || current.support || current.bot) return;
+                if (!current || !current.login || current.support) return;
                 const t = msgTarget(current);
                 if (!msgNet.me || !isApprovedId(msgMyId())) return note('Звонки откроются вместе с перепиской', 'phone');
                 if (!t.uid) return note(t.missing);
@@ -9763,7 +9830,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             function openFwd(ms) {
                 closeFwd();
                 msgFillDialogs();
-                const targets = sortDialogs(MSG_DIALOGS.filter(x => !x.bot && !x.supUid && (x.login || x.support)));
+                const targets = sortDialogs(MSG_DIALOGS.filter(x => !x.supUid && (x.login || x.support)));
                 fwdEl = document.createElement('div');
                 fwdEl.className = 'vp-msgs-fwd';
                 fwdEl.innerHTML = '<div class="vp-msgs-fwd-card"><div class="vp-msgs-fwd-h"><b>Переслать</b><button type="button" class="vp-msgs-ib" title="Закрыть">' + uiIcon('close', 18) + '</button></div><div class="vp-msgs-fwd-l"></div></div>';
@@ -9842,7 +9909,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             function openMenu(b, x, y) {
                 if (sel) { openSelMenu(x, y); return; }
                 closeMenu();
-                const m = b._m, real = m && current && !current.bot && msgNet.me && msgTarget(current).uid;
+                const m = b._m, real = m && current && msgNet.me && msgTarget(current).uid;
                 const text = m ? plainText(m.text) : (b.querySelector('.vp-msgs-cap') || b.firstChild || {}).textContent || '';
                 const imgs = [...b.querySelectorAll('.vp-msgs-img')].map(i => i.src);
                 const under = document.elementFromPoint(x, y), hit = under && under.closest ? under.closest('.vp-msgs-img') : null;
@@ -10017,7 +10084,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             function setPending(files) {
                 files = (Array.isArray(files) ? files : [files]).filter(f => f && /^image\//.test(f.type));
                 if (!files.length) return;
-                const t = current && msgNet.me && !current.bot ? msgTarget(current) : null;
+                const t = current && msgNet.me ? msgTarget(current) : null;
                 if (!t || !t.uid) { note('Картинки можно отправлять в переписке с людьми и поддержкой'); return; }
                 pendingImg = pendingImg || [];
                 const room = MSG_ALBUM_MAX - pendingImg.length;
@@ -10048,7 +10115,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             }
             function sendImages(files) {
                 if (!files.length || !current) return;
-                const t = msgNet.me && !current.bot ? msgTarget(current) : null;
+                const t = msgNet.me ? msgTarget(current) : null;
                 if (!t || !t.uid) { note('Картинки можно отправлять в переписке с людьми и поддержкой'); return; }
                 const caption = takeReply(input.value.trim()), d = current, locals = files.map(f => URL.createObjectURL(f));
                 input.value = ''; send.disabled = true; msgCount();
@@ -10081,8 +10148,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 input.value = ''; send.disabled = true; msgCount();
                 current.msgs.push(['out', text]);
                 current.last = 'Ты: ' + text; current.time = now();
-                if (current.bot) { bubble('out', text, now() + ' ✓'); botReply(); }
-                else if (current.support && !(msgNet.me && msgTarget(current).uid)) { bubble('out', text, now() + ' ✓'); supportReply(); }
+                if (current.support && !(msgNet.me && msgTarget(current).uid)) { bubble('out', text, now() + ' ✓'); supportReply(); }
                 else if (msgNet.me && msgTarget(current).uid) {
                     const full = takeReply(text), b = bubble('out', full, now() + ' · отправка…'), d = current, t = msgTarget(d);
                     msgSend(t.uid, full, t.sup).then(ts => msgSentOk(b, d, ts),
@@ -13332,6 +13398,14 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (vb.title !== t) vb.title = t;
         }
         onDom(bannerFx);
+        document.addEventListener('click', e => {
+            if (matchMedia('(hover: hover) and (pointer: fine)').matches || !e.target.closest) return;
+            const banner = e.target.closest('.' + SELECTORS.banner), open = document.querySelector('.vp-banner.vp-bar-open');
+            if (open && open !== banner) open.classList.remove('vp-bar-open');
+            if (!banner || banner.classList.contains('vp-banner-editing') || !banner.querySelector(':scope > .' + SELECTORS.bannerButtons)) return;
+            if (e.target.closest('.' + SELECTORS.bannerButtons)) banner.classList.remove('vp-bar-open');
+            else banner.classList.toggle('vp-bar-open');
+        }, true);
         function bannerVideoWant() {
             const m = location.pathname.match(/^\/@([\w.]+)\/?$/);
             if (!m) return '';

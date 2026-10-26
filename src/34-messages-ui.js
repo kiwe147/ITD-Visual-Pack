@@ -1,16 +1,9 @@
-        const BOT_HELLO = [['👋', 'Привет! Я Сервер ИТД. Сегодня почти работаю'], ['🫡', 'На связи! Пока связь есть — пиши быстрее']];
-        const BOT_ASK = [['🤔', 'Хороший вопрос. Отвечу после перезагрузки. Своей'], ['🔮', 'Шар предсказаний говорит: «ошибка 500, спроси позже»']];
-
-        const MSG_BOT = {
-            id: 'bot', ava: '🤖', name: 'Сервер ИТД', login: '', last: 'Напиши что-нибудь — отвечу, если не упаду', time: 'сейчас', unread: 1, online: true, bot: true,
-            msgs: [['in', 'Привет! Я — Сервер ИТД 🤖 Иногда работаю, иногда отдыхаю'], ['in', 'Напиши что угодно — расскажу, как у меня дела. Спойлер: грузятся 😏']]
-        };
         const MSG_SUPPORT = {
             id: 'support', ava: '🛟', name: 'Поддержка ИТД X', login: '', last: 'Нашёл баг или есть идея — пиши сюда', time: '', unread: 0, online: true, support: true,
             msgs: [['in', 'Привет! Это поддержка ИТД X 👋'], ['in', 'Нашёл баг или есть идея — опиши здесь, ответ придёт в этот чат']]
         };
         let supportTicket = 0;
-        let MSG_DIALOGS = [MSG_BOT, MSG_SUPPORT];
+        let MSG_DIALOGS = [MSG_SUPPORT];
         const msgPins = () => GM_getValue(acctKey('msgPins'), []);
         const msgOpened = () => { const o = GM_getValue(acctKey('msgOpened'), {}); return o && typeof o === 'object' ? o : {}; };
         function msgMarkOpened(id) { const o = msgOpened(); o[id] = Math.floor(Date.now() / 1000); GM_setValue(acctKey('msgOpened'), o); }
@@ -24,7 +17,7 @@
         async function loadMsgPeople(onUpdate) {
             const names = verifiedNames().filter(n => !myUsername || n.toLowerCase() !== myUsername.toLowerCase()).sort((a, b) => a.localeCompare(b));
             names.forEach(n => { if (!msgPeople.has(n)) msgPeople.set(n, { id: 'u:' + n, login: n, ava: '👤', name: n, last: 'Тоже с ИТД X · напиши первым', time: '', unread: 0, msgs: [] }); });
-            MSG_DIALOGS = [MSG_BOT, MSG_SUPPORT, ...names.map(n => msgPeople.get(n))];
+            MSG_DIALOGS = [MSG_SUPPORT, ...names.map(n => msgPeople.get(n))];
             onUpdate();
             await Promise.all(names.map(async n => {
                 const d = await hcData(n).catch(() => null), p = msgPeople.get(n);
@@ -420,7 +413,7 @@
                 countEl.textContent = `${n} / ${max}`;
                 countEl.classList.toggle('vp-warn', n >= max * 0.9);
             };
-            let current = null, botTimer = 0, lastJoke = -1;
+            let current = null, botTimer = 0;
             const SUP_AVA = svgIcon('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.6"/><path d="m5.6 5.6 3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>', 28);
             const avaHtml = a => a === '🛟' ? SUP_AVA : isUrl(a) ? `<img src="${esc(a)}" alt="">` : esc(a);
 
@@ -444,7 +437,7 @@
                     }
                 }
                 if (!sups.length) supDir = false;
-                $('.vp-msgs-sub').textContent = supDir && sups.length && !q ? 'Все, кто писал в поддержку' : people ? `Сервер ИТД, поддержка и ${people} ${plural(people, 'человек', 'человека', 'человек')} с ИТД X` : 'Пока никого с ИТД X — список обновится сам';
+                $('.vp-msgs-sub').textContent = supDir && sups.length && !q ? 'Все, кто писал в поддержку' : people ? `Поддержка и ${people} ${plural(people, 'человек', 'человека', 'человек')} с ИТД X` : 'Пока никого с ИТД X — список обновится сам';
                 list.innerHTML = rows.length ? rows.map(d => `
                 <div class="vp-msgs-row${pins.includes(d.id) ? ' vp-pinned' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}" data-id="${d.id}">
                     <div class="vp-msgs-ava${d.online ? ' vp-online' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}">${avaHtml(d.ava)}</div>
@@ -549,7 +542,7 @@
                 if (current !== d) clearPending();
                 blockUi(null);
                 $('.vp-msgs-hmenu').hidden = true;
-                $('.vp-msgs-more').hidden = !d.login || !!d.support || !!d.supUid || !!d.bot;
+                $('.vp-msgs-more').hidden = !d.login || !!d.support || !!d.supUid;
                 current = d;
                 downNew = 0;
                 selEnd(); clearReply(); closeFwd(); pinEl.hidden = true; pinIdx = 0;
@@ -563,12 +556,11 @@
                     const d0 = new Date(t); if (isNaN(d0)) return ''; const h = d0.toTimeString().slice(0, 5);
                     return d0.toDateString() === new Date().toDateString() ? 'в ' + h : `${d0.getDate()}.${String(d0.getMonth() + 1).padStart(2, '0')} в ${h}`;
                 };
-                $('.vp-msgs-who small').textContent = d.bot ? 'бот · всегда в сети' : d.support ? 'поддержка · на связи' : d.supUid ? 'обращение в поддержку'
+                $('.vp-msgs-who small').textContent = d.support ? 'поддержка · на связи' : d.supUid ? 'обращение в поддержку'
                     : '@' + d.login + ' · ' + (d.online ? 'в сети' : d.lastSeen && seenAgo(d.lastSeen) ? 'был(а) в сети ' + seenAgo(d.lastSeen) : 'с ИТД X');
-                $('.vp-msgs-call').hidden = !d.login || !!d.support || !!d.supUid || !!d.bot;
+                $('.vp-msgs-call').hidden = !d.login || !!d.support || !!d.supUid;
                 if (d.login || d.support || d.supUid) { home.hidden = true; chat.hidden = false; input.value = ''; send.disabled = true; msgCount(); msgOpenPerson(d); return; }
-                feed.innerHTML = `<div class="vp-msgs-note">🤖 Бот-шутник: сообщения ему никуда не уходят и не сохраняются</div>`
-                    + (d.msgs.length ? '<div class="vp-msgs-note">Сегодня</div>' : `<div class="vp-msgs-note">Это начало переписки с ${esc(d.name)}</div>`);
+                feed.innerHTML = (d.msgs.length ? '<div class="vp-msgs-note">Сегодня</div>' : `<div class="vp-msgs-note">Это начало переписки с ${esc(d.name)}</div>`);
                 d.msgs.forEach(([dir, text]) => bubble(dir, text, dir === 'out' ? now() + ' ✓✓' : now()));
                 home.hidden = true; chat.hidden = false;
                 input.value = ''; send.disabled = true; msgCount();
@@ -685,14 +677,13 @@
                 if (Date.now() - callNet.lastSync > 12000) { callNet.lastSync = Date.now(); try { await msgSync(); } catch (e) { return; } }
                 msgFillDialogs();
                 if (!current) return renderList();
-                if (current.bot) return;
                 const tt = msgTarget(current), list = msgThread(tt);
                 if (list.length !== current.shown || chatSig(tt.uid) !== current.sig) msgRefreshChat(current);
             }, { every: 20000, net: true });
             root.refreshList = () => { if (!current) { msgFillDialogs(); renderList(); } };
             const onSynced = () => {
                 if (!root.isConnected) return document.removeEventListener('vp-msg-synced', onSynced);
-                if (!msgsOpen || !current || current.bot || !msgNet.me) return;
+                if (!msgsOpen || !current || !msgNet.me) return;
                 msgFillDialogs();
                 const tt = msgTarget(current);
                 if (!tt.uid) return;
@@ -700,12 +691,12 @@
             };
             document.addEventListener('vp-msg-synced', onSynced);
             document.addEventListener('visibilitychange', () => {
-                if (document.hidden || !root.isConnected || !msgsOpen || !current || current.bot || !msgNet.me) return;
+                if (document.hidden || !root.isConnected || !msgsOpen || !current || !msgNet.me) return;
                 const tt = msgTarget(current);
                 if (tt.uid) msgReadNow(current, tt, msgThread(tt));
             });
             root.refreshCalls = () => {
-                if (!current || current.bot || current.support || current.supUid || !msgNet.me) return;
+                if (!current || current.support || current.supUid || !msgNet.me) return;
                 const t = msgTarget(current);
                 if (!t.uid) return;
                 blockUi(current, t);
@@ -720,7 +711,7 @@
                 const d = MSG_DIALOGS.find(x => x.id === id) || (id.startsWith('u:') && msgPeople.get(id.slice(2)));
                 if (d) openChat(d, fromHistory);
             };
-            root.currentTarget = () => current && !current.bot ? msgTarget(current) : null;
+            root.currentTarget = () => current ? msgTarget(current) : null;
             function closeChat(fromHistory) {
                 clearPending();
                 closeImg(true, true);
@@ -733,27 +724,6 @@
                 chat.hidden = true; home.hidden = false;
                 renderList();
             }
-            function botReply() {
-                const typing = document.createElement('div');
-                typing.className = 'vp-msgs-b vp-in vp-msgs-typing';
-                typing.innerHTML = '<span></span><span></span><span></span>';
-                feed.appendChild(typing);
-                feed.scrollTop = feed.scrollHeight;
-                botTimer = setTimeout(() => {
-                    typing.remove();
-                    const q = (current && current.msgs.length ? current.msgs[current.msgs.length - 1][1] : '').toLowerCase();
-                    let e, t;
-                    if (/(^|\s)(прив|здаров|здрав|хай|ку|йоу|салам)/.test(q)) [e, t] = BOT_HELLO[Math.random() * BOT_HELLO.length | 0];
-                    else if (q.includes('?') && Math.random() < .5) [e, t] = BOT_ASK[Math.random() * BOT_ASK.length | 0];
-                    else {
-                        let i; do i = Math.floor(Math.random() * MESSAGE_JOKES.length); while (i === lastJoke && MESSAGE_JOKES.length > 1);
-                        lastJoke = i;
-                        [e, t] = MESSAGE_JOKES[i];
-                    }
-                    bubble('in', e + ' ' + t);
-                }, 700 + Math.random() * 600);
-            }
-
             function supportReply() {
                 const typing = document.createElement('div');
                 typing.className = 'vp-msgs-b vp-in vp-msgs-typing';
@@ -825,7 +795,7 @@
             function blockUi(d, t) {
                 const ok = !!(d && t && t.uid && !t.sup), mine = ok && msgIsBlocked(t.uid), them = ok && !mine && msgBlockedMe(t.uid);
                 const kind = mine ? 'mine' : them ? 'them' : '', old = feed.querySelector(':scope > .vp-msgs-blocked');
-                if (d) $('.vp-msgs-call').hidden = !!kind || !d.login || !!d.support || !!d.supUid || !!d.bot;
+                if (d) $('.vp-msgs-call').hidden = !!kind || !d.login || !!d.support || !!d.supUid;
                 if (old && old.dataset.kind === kind && old === feed.lastElementChild) return;
                 feed.querySelectorAll(':scope > .vp-msgs-blocked').forEach(x => x.remove());
                 if (!kind) {
@@ -864,7 +834,7 @@
             $('.vp-msgs-more').onclick = e => {
                 e.stopPropagation();
                 if (!blockMenu.hidden) { blockMenu.hidden = true; return; }
-                if (!current || !current.login || current.support || current.supUid || current.bot) return;
+                if (!current || !current.login || current.support || current.supUid) return;
                 const t = msgTarget(current), d = current;
                 if (!t.uid) return note(t.missing);
                 const on = msgIsBlocked(t.uid);
@@ -878,7 +848,7 @@
             };
             root.addEventListener('click', e => { if (!blockMenu.hidden && !e.target.closest('.vp-msgs-hmenu, .vp-msgs-more')) blockMenu.hidden = true; });
             $('.vp-msgs-call').onclick = () => {
-                if (!current || !current.login || current.support || current.bot) return;
+                if (!current || !current.login || current.support) return;
                 const t = msgTarget(current);
                 if (!msgNet.me || !isApprovedId(msgMyId())) return note('Звонки откроются вместе с перепиской', 'phone');
                 if (!t.uid) return note(t.missing);
@@ -1149,7 +1119,7 @@
             function openFwd(ms) {
                 closeFwd();
                 msgFillDialogs();
-                const targets = sortDialogs(MSG_DIALOGS.filter(x => !x.bot && !x.supUid && (x.login || x.support)));
+                const targets = sortDialogs(MSG_DIALOGS.filter(x => !x.supUid && (x.login || x.support)));
                 fwdEl = document.createElement('div');
                 fwdEl.className = 'vp-msgs-fwd';
                 fwdEl.innerHTML = '<div class="vp-msgs-fwd-card"><div class="vp-msgs-fwd-h"><b>Переслать</b><button type="button" class="vp-msgs-ib" title="Закрыть">' + uiIcon('close', 18) + '</button></div><div class="vp-msgs-fwd-l"></div></div>';
@@ -1228,7 +1198,7 @@
             function openMenu(b, x, y) {
                 if (sel) { openSelMenu(x, y); return; }
                 closeMenu();
-                const m = b._m, real = m && current && !current.bot && msgNet.me && msgTarget(current).uid;
+                const m = b._m, real = m && current && msgNet.me && msgTarget(current).uid;
                 const text = m ? plainText(m.text) : (b.querySelector('.vp-msgs-cap') || b.firstChild || {}).textContent || '';
                 const imgs = [...b.querySelectorAll('.vp-msgs-img')].map(i => i.src);
                 const under = document.elementFromPoint(x, y), hit = under && under.closest ? under.closest('.vp-msgs-img') : null;
@@ -1403,7 +1373,7 @@
             function setPending(files) {
                 files = (Array.isArray(files) ? files : [files]).filter(f => f && /^image\//.test(f.type));
                 if (!files.length) return;
-                const t = current && msgNet.me && !current.bot ? msgTarget(current) : null;
+                const t = current && msgNet.me ? msgTarget(current) : null;
                 if (!t || !t.uid) { note('Картинки можно отправлять в переписке с людьми и поддержкой'); return; }
                 pendingImg = pendingImg || [];
                 const room = MSG_ALBUM_MAX - pendingImg.length;
@@ -1434,7 +1404,7 @@
             }
             function sendImages(files) {
                 if (!files.length || !current) return;
-                const t = msgNet.me && !current.bot ? msgTarget(current) : null;
+                const t = msgNet.me ? msgTarget(current) : null;
                 if (!t || !t.uid) { note('Картинки можно отправлять в переписке с людьми и поддержкой'); return; }
                 const caption = takeReply(input.value.trim()), d = current, locals = files.map(f => URL.createObjectURL(f));
                 input.value = ''; send.disabled = true; msgCount();
@@ -1467,8 +1437,7 @@
                 input.value = ''; send.disabled = true; msgCount();
                 current.msgs.push(['out', text]);
                 current.last = 'Ты: ' + text; current.time = now();
-                if (current.bot) { bubble('out', text, now() + ' ✓'); botReply(); }
-                else if (current.support && !(msgNet.me && msgTarget(current).uid)) { bubble('out', text, now() + ' ✓'); supportReply(); }
+                if (current.support && !(msgNet.me && msgTarget(current).uid)) { bubble('out', text, now() + ' ✓'); supportReply(); }
                 else if (msgNet.me && msgTarget(current).uid) {
                     const full = takeReply(text), b = bubble('out', full, now() + ' · отправка…'), d = current, t = msgTarget(d);
                     msgSend(t.uid, full, t.sup).then(ts => msgSentOk(b, d, ts),

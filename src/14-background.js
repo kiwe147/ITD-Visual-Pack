@@ -156,7 +156,7 @@
                     const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
                     const stops = kind === 'disc'
                         ? [[0, 0.5], [0.72, 0.6], [0.86, 0.3], [1, 0]]
-                        : [[0, 1], [0.35, 0.4], [0.7, 0.08], [1, 0]];
+                        : kind === 'haze' ? [[0, 1], [0.35, 0.55], [1, 0]] : [[0, 1], [0.35, 0.4], [0.7, 0.08], [1, 0]];
                     stops.forEach(([o, a]) => grad.addColorStop(o, hsla(h, s, l, a)));
                     g.fillStyle = grad;
                     g.fillRect(0, 0, 64, 64);
@@ -453,34 +453,65 @@
                     }
                 },
                 snow: {
-                    opacity: 0.5,
+                    opacity: 0.6,
                     init() {
-                        const n = Math.min(260, Math.floor(W * H / 6000));
-                        return { f: Array.from({ length: n }, () => this.spawn(rand(0, H))), windT: rand(0, 100) };
-                    },
-                    spawn(y) {
-                        const d = Math.random() ** 1.5;
-                        return { x: rand(0, W), y, d, r: 0.8 + d * 2.6, ph: rand(0, 6.3) };
+                        const k = Math.min(2.2, Math.max(0.5, Math.sqrt(W * H / 196000)));
+                        const mk = (n, rmin, rmax, vmin, vmax, amax) => Array.from({ length: Math.round(n * k) }, () => {
+                            const g = Math.random() * 4 | 0;
+                            return { x: rand(0, W), y: rand(0, H), r: rand(rmin, rmax), v: rand(vmin, vmax), g, a: amax * (0.6 + g * 0.4 / 3), ph: rand(0, 6.3) };
+                        });
+                        const far = mk(150, 0.5, 1.1, 0.5, 0.9, 0.5), mid = mk(70, 1.2, 2.1, 1.1, 1.8, 0.7), near = mk(10, 9, 26, 2.2, 3.6, 0.2);
+                        const cr = Array.from({ length: Math.round(12 * k) }, () => {
+                            const r = rand(5, 14);
+                            return { x: rand(0, W), y: rand(0, H), r, v: 0.5 + r * 0.07, ph: rand(0, 6.3), rot: rand(0, Math.PI * 2), rs: rand(-0.02, 0.02) };
+                        });
+                        return { t: rand(0, 100), far, mid, near, cr };
                     },
                     draw(s, dt, { h, s: sat }) {
                         ctx.clearRect(0, 0, W, H);
-                        s.windT += 0.004 * dt;
-                        const wind = Math.sin(s.windT) * 0.6 + Math.sin(s.windT * 2.7) * 0.3;
-                        const S = sat * 0.4;
-                        const packs = Array.from({ length: 4 }, () => new Path2D());
-                        s.f.forEach((p, i) => {
-                            p.ph += 0.03 * dt;
-                            p.y += (0.35 + p.d * 1.4) * dt;
-                            p.x += (wind * (0.4 + p.d) + Math.sin(p.ph) * 0.3) * dt;
-                            if (p.y > H + 5) { s.f[i] = this.spawn(-5); return; }
-                            if (p.x > W + 5) p.x = -5; else if (p.x < -5) p.x = W + 5;
-                            if (p.d > 0.6) drawSprite('glow', p.x, p.y, p.r * 3.5, h, S, 85, 0.45);
-                            const pack = packs[Math.min(3, p.d * 4 | 0)];
-                            pack.moveTo(p.x + p.r, p.y);
-                            pack.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-                        });
-                        ctx.fillStyle = hsla(h, S, 90, 1);
-                        packs.forEach((pack, i) => { ctx.globalAlpha = 0.45 + (i + 0.5) / 4 * 0.55; ctx.fill(pack); });
+                        const u = dt * 3, S = sat * 0.4;
+                        s.t += 0.016 * u;
+                        const gust = Math.max(0, Math.sin(s.t * 0.7)) ** 3, wind = 1.1 + Math.sin(s.t * 0.4) * 0.6 + gust * 3.2;
+                        ctx.fillStyle = hsla(h, S, 92, 1);
+                        for (const [arr, k] of [[s.far, 0.5], [s.mid, 1]]) {
+                            const packs = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
+                            for (const p of arr) {
+                                const vx = wind * k * (0.7 + p.r * 0.2);
+                                p.ph += 0.02 * u;
+                                p.x += (vx + Math.sin(p.ph) * 0.2) * u; p.y += p.v * u;
+                                if (p.y > H + 4) { p.y = -4; p.x = rand(0, W); }
+                                if (p.x > W + 6) p.x = -6;
+                                packs[p.g].moveTo(p.x + p.r * 0.8, p.y);
+                                packs[p.g].arc(p.x, p.y, p.r * 0.8, 0, Math.PI * 2);
+                            }
+                            const am = arr === s.far ? 0.5 : 0.7;
+                            packs.forEach((pack, g) => { ctx.globalAlpha = am * (0.6 + g * 0.4 / 3); ctx.fill(pack); });
+                        }
+                        ctx.lineCap = 'round';
+                        ctx.strokeStyle = hsla(h, S, 94, 1);
+                        for (const p of s.cr) {
+                            p.ph += 0.02 * u; p.rot += p.rs * u * (1 + gust * 2);
+                            p.x += (wind * 0.9 + Math.sin(p.ph) * 0.3) * u; p.y += p.v * u;
+                            if (p.y > H + 20) { p.y = -20; p.x = rand(-20, W); }
+                            if (p.x > W + 20) p.x = -20;
+                            ctx.globalAlpha = 0.6 + p.r / 14 * 0.35;
+                            ctx.lineWidth = p.r > 9 ? 1.3 : 1;
+                            ctx.beginPath();
+                            for (let i = 0; i < 6; i++) {
+                                const an = p.rot + i * Math.PI / 3, c = Math.cos(an), sn = Math.sin(an);
+                                ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + c * p.r, p.y + sn * p.r);
+                                const bx = p.x + c * p.r * 0.55, by = p.y + sn * p.r * 0.55;
+                                for (const d of [-1, 1]) { const bb = an + d * 1.05; ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(bb) * p.r * 0.34, by + Math.sin(bb) * p.r * 0.34); }
+                            }
+                            ctx.stroke();
+                        }
+                        for (const p of s.near) {
+                            p.ph += 0.01 * u;
+                            p.x += (wind * 1.6 + Math.sin(p.ph) * 0.4) * u; p.y += p.v * u;
+                            if (p.y > H + 30) { p.y = -30; p.x = rand(-20, W); }
+                            if (p.x > W + 30) p.x = -30;
+                            drawSprite('haze', p.x, p.y, p.r, h, S, 90, p.a);
+                        }
                         ctx.globalAlpha = 1;
                     }
                 }
