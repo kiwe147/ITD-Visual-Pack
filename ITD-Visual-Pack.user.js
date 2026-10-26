@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.7.5
+// @version      3.7.7.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6227,6 +6227,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.7.6', '27 октября 2026', [
+                'Листание вкладок на телефоне: страницы сдвигаются влево и вправо по порядку пунктов меню'
+            ]],
             ['3.7.7.5', '27 октября 2026', [
                 'Галерея на телефоне: кнопки под картинкой, больше её не закрывают'
             ]],
@@ -11910,17 +11913,18 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         addEventListener('popstate', markActiveNav);
 
         const tabSlide = (() => {
-            const MS = 560, EASE = 'cubic-bezier(.25, .8, .25, 1)', MAX_WAIT = 900, SETTLE = 90;
+            const MS = 560, PHONE_MS = 400, EASE = 'cubic-bezier(.25, .8, .25, 1)', MAX_WAIT = 900, SETTLE = 90;
             addCss(`
-            html.vp-sw .${SELECTORS.sidebar} ~ :not(aside):not(.vp-sw-stage) { visibility: hidden !important; }
+            html.vp-sw .${SELECTORS.sidebar} ~ :not(aside):not(.vp-sw-stage), html.vp-sw [data-vp-sw] { visibility: hidden !important; }
             html.vp-sw .vp-msgs.vp-open, html.vp-sw .vp-gal { animation-duration: 1ms !important; }
             html.vp-sw .vp-msgs, html.vp-sw .vp-gal-card { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
             html.vp-sw-pin aside.${SELECTORS.sidebar} { left: var(--vp-pin-side) !important; }
             html.vp-sw-pin .vp-rail { left: var(--vp-pin-rail) !important; width: var(--vp-pin-railw) !important; }
             .vp-sw-stage { position: fixed; z-index: 3; overflow: hidden; pointer-events: none; contain: layout paint; }
             .vp-sw-ghost { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; will-change: transform; }`);
+            const phone = () => innerWidth <= PHONE_MAX;
             const enabled = () => GM_getValue('tabSlide', true) && !matchMedia('(prefers-reduced-motion: reduce)').matches
-                && matchMedia('(hover: hover) and (pointer: fine)').matches && innerWidth > PHONE_MAX;
+                && (phone() || matchMedia('(hover: hover) and (pointer: fine)').matches);
             const hrefOf = a => a.getAttribute('href') || '';
             const isRoute = a => /^\/(?!\/)/.test(hrefOf(a));
             const curLink = () => F('navLink').find(a => {
@@ -11928,6 +11932,10 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 return isRoute(a) && (h === location.pathname || (h !== '/' && location.pathname.startsWith(h + '/')));
             });
             const centerOf = () => {
+                if (phone()) {
+                    const nav = F('nav')[0], root = nav && nav.parentElement && nav.parentElement.parentElement;
+                    return root && [...root.children].find(c => !c.contains(nav) && !c.classList.contains('vp-sw-stage') && c.getBoundingClientRect().width > 300) || null;
+                }
                 const side = document.querySelector('aside.' + SELECTORS.sidebar);
                 const box = side && side.parentElement;
                 return box && [...box.children].find(c => c.tagName !== 'ASIDE' && !c.classList.contains('vp-sw-stage') && c.getBoundingClientRect().width > 300) || null;
@@ -11962,6 +11970,16 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             };
             const freeze = (el, scrolls) => {
                 const g = el.cloneNode(true);
+                g.removeAttribute('data-vp-sw');
+                if (phone()) {
+                    const all = el.querySelectorAll('*'), copy = g.querySelectorAll('*'), er = el.getBoundingClientRect();
+                    all.forEach((n, i) => {
+                        const p1 = n.parentElement, p2 = p1 && p1.parentElement, p3 = p2 && p2.parentElement;
+                        if ((p1 !== el && p2 !== el && p3 !== el) || getComputedStyle(n).position !== 'sticky') return;
+                        const r = n.getBoundingClientRect();
+                        copy[i].style.cssText += `;position:absolute;top:${r.top - er.top}px;left:${r.left - er.left}px;width:${r.width}px;margin:0`;
+                    });
+                }
                 const vs = el.querySelectorAll('video'), gs = g.querySelectorAll('video');
                 vs.forEach((v, i) => {
                     gs[i].removeAttribute('autoplay');
@@ -12055,6 +12073,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 c.stage.remove();
                 unpin();
                 document.documentElement.classList.remove('vp-sw');
+                document.querySelectorAll('[data-vp-sw]').forEach(e => e.removeAttribute('data-vp-sw'));
             };
             const safe = fn => { try { fn(); } catch (e) { end(); } };
             const frames = (n, fn) => { const step = k => { cur && (k ? requestAnimationFrame(() => step(k - 1)) : fn()); }; step(n); };
@@ -12072,12 +12091,12 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 c.anims.push(e.animate([{ transform: `translateX(${d}px)` }, { transform: 'translateX(0)' }], { duration: MS, easing: EASE }));
             });
             const run = (c, incoming) => {
-                const H = innerHeight, sign = c.down ? 1 : -1;
+                const H = c.phone ? innerWidth : innerHeight, sign = c.down ? 1 : -1, ax = c.phone ? 'X' : 'Y', ms = c.phone ? PHONE_MS : MS;
                 glide(c);
                 incoming.style.opacity = c.hold ? c.hold.opacity : '';
                 c.anims.push(
-                    c.ghost.animate([{ transform: 'translateY(0)' }, { transform: `translateY(${sign * H}px)` }], { duration: MS, easing: EASE, fill: 'forwards' }),
-                    incoming.animate([{ transform: `translateY(${-sign * H}px)` }, { transform: 'translateY(0)' }], { duration: MS, easing: EASE, fill: c.hold ? 'none' : 'forwards' })
+                    c.ghost.animate([{ transform: `translate${ax}(0)` }, { transform: `translate${ax}(${sign * H}px)` }], { duration: ms, easing: EASE, fill: 'forwards' }),
+                    incoming.animate([{ transform: `translate${ax}(${-sign * H}px)` }, { transform: `translate${ax}(0)` }], { duration: ms, easing: EASE, fill: c.hold ? 'none' : 'forwards' })
                 );
                 Promise.all(c.anims.map(x => x.finished)).then(() => {
                     if (cur !== c) return;
@@ -12147,7 +12166,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 document.documentElement.classList.add('vp-sw');
                 const t0 = performance.now(), path = location.pathname + location.search;
                 let last = t0;
-                const c = cur = { stage, ghost, down, pre, anims: [], raf: 0, guard: setTimeout(end, 4000), ov: scene.kind !== 'route', t0 };
+                const c = cur = { stage, ghost, down, pre, anims: [], raf: 0, guard: setTimeout(end, 4000), ov: scene.kind !== 'route', t0, phone: phone(), w: innerWidth };
+                const hideLive = () => { if (!c.phone) return; const ce = centerOf(); if (ce && !ce.hasAttribute('data-vp-sw')) ce.setAttribute('data-vp-sw', ''); };
+                hideLive();
                 if (mode === 'lead') return c;
                 c.glide = scene.kind !== 'route';
                 const mo = new MutationObserver(ms => {
@@ -12159,6 +12180,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 c.mo = mo;
                 const tick = () => {
                     if (cur !== c) return;
+                    hideLive();
                     const now = performance.now(), moved = location.pathname + location.search !== path;
                     if (c.glide && !c.glided && !document.querySelector('.vp-gal:not(.vp-sw-stage *), .vp-msgs.vp-open:not(.vp-sw-stage *)')) {
                         c.glided = true;
@@ -12191,7 +12213,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 start(to < from, s, s.kind !== 'route' && hrefOf(a) === location.pathname ? 'now' : 'wait');
             }, true);
             addEventListener('popstate', () => { if (cur && cur.ov && performance.now() - cur.t0 < 500) return; end(); });
-            addEventListener('resize', end);
+            addEventListener('resize', () => { if (cur && cur.phone && innerWidth === cur.w) return; end(); });
             return { end, lead, arrive };
         })();
 
