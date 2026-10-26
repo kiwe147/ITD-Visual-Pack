@@ -89,6 +89,9 @@
 
         addCss(`
         .vp-acc-btn { position: relative; }
+        .vp-side-bottom { gap: 0 !important; }
+        .vp-side-bottom > button { min-height: 56px; padding: 16px !important; gap: 18px !important; border-radius: 18px !important; font-size: 16px !important; font-weight: 600 !important; }
+        .vp-side-bottom > button svg { width: 24px !important; height: 24px !important; flex: none; }
         .vp-acc-wrap .vp-acc-btn { color: var(--text-primary, #fff) !important; border-color: var(--border-color, rgba(255, 255, 255, .22)) !important; }
         .vp-acc-pop { position: fixed; z-index: 99990; width: min(330px, calc(100vw - 24px)); box-sizing: border-box; padding: 10px; border-radius: 22px; display: flex; flex-direction: column; gap: 4px;
             background: var(--block-bg, #15151b); color: var(--text-primary, #fff); border: 1px solid var(--border-color, rgba(255, 255, 255, .12)); box-shadow: 0 18px 50px rgba(0, 0, 0, .55);
@@ -258,6 +261,7 @@
             const lo = [...document.querySelectorAll('button')].find(b => !b.closest('.vp-acc-pop') && !b.classList.contains('vp-acc-btn') && LOGOUT_RE.test(b.textContent.trim()));
             if (!lo || !lo.parentElement) return;
             const box = lo.parentElement, alone = box.children.length === 1;
+            if (!alone && box.closest('aside') && !box.classList.contains('vp-side-bottom')) box.classList.add('vp-side-bottom');
             const mine = document.querySelectorAll('.vp-acc-btn');
             if (mine.length === 1 && (alone ? mine[0].parentElement.nextElementSibling === box : mine[0].nextElementSibling === lo)) return;
             document.querySelectorAll('.vp-acc-btn, .vp-acc-wrap').forEach(x => x.remove());
