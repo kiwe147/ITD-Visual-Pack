@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.5.1
+// @version      3.7.5.5
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2430,6 +2430,7 @@
             if (backgroundEnabled && custom && !bgMedia.firstChild) showBgMedia();
         }
         updateBackgroundVisibility();
+        const MATRIX_CHARS = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
         const BG_KEYS = ['matrix', 'stars', 'particles', 'waves', 'aurora', 'bokeh', 'grid', 'snow'];
         function bgEngine(mkCanvas) {
             let ctx = null, W = 0, H = 0, bg = null, bgName = '';
@@ -2483,7 +2484,6 @@
                 ctx.globalCompositeOperation = 'source-over';
             }
 
-            const MATRIX_CHARS = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
             const WAVES = [
                 { amp1: 100, freq1: 0.008, speed1: 0.4, amp2: 50, freq2: 0.018, speed2: 0.7, amp3: 70, freq3: 0.004, speed3: 0.25, alpha: 0.45, offset: 0, dh: 0, dl: 15 },
                 { amp1: 80, freq1: 0.009, speed1: 0.5, amp2: 40, freq2: 0.020, speed2: 0.8, amp3: 60, freq3: 0.005, speed3: 0.3, alpha: 0.35, offset: 1.5, dh: 15, dl: 10 },
@@ -3920,6 +3920,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (look.b === 'custom') look.i = o.i;
             if (look.b === 'custom' && BANNER_VIDEO_RE.test(o.bv || '')) look.bv = o.bv;
             if (BANNER_VIDEO_RE.test(o.v || '')) look.v = o.v;
+            if (/^[0-4][0-9a-f]{32}$/.test(o.a || '')) look.a = o.a;
+            if (BANNER_VIDEO_RE.test(o.va || '')) look.va = o.va;
             if (VER_RE.test(o.ver || '')) look.ver = o.ver;
             if (/^\d{5,6}$/.test(o.t || '')) look.t = +o.t;
             return look;
@@ -3989,9 +3991,11 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             try {
                 const b = backgroundEnabled ? backgroundStyle : '-';
                 const today = Math.floor(srvNow() / 864e5), was = GM_getValue(acctKey('vp_look_day'), 0), day = today - was < 7 && today >= was ? was : today;
+                const own = GM_getValue(acctKey('vp_ava'), null) || {}, ownAva = own.ref || '', ownVid = ownAva && own.vid || '';
                 let img = '', bv = '';
                 if (b === 'custom') ({ ref: img = '', vid: bv = '' } = await customBgCdn().then(x => x || {}).catch(e => { logErr('свой фон на сервер', e); return {}; }));
-                const text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (img && bv ? ' bv=' + bv : '') + (bannerVideoOwn() ? ' v=' + bannerVideoOwn() : '') + await lookVer().then(x => x ? ' vx=' + x : '') + ' t=' + day;
+                let text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (img && bv ? ' bv=' + bv : '') + (bannerVideoOwn() ? ' v=' + bannerVideoOwn() : '') + (ownAva ? ' a=' + ownAva : '') + (ownVid ? ' va=' + ownVid : '') + await lookVer().then(x => x ? ' vx=' + x : '') + ' t=' + day;
+                for (const k of ['va', 'bv', 'v', 'a']) { if (sealText(text).length <= 990) break; text = text.split(' ').filter(t => !t.startsWith(k + '=')).join(' '); }
                 if (text === lookSent) return;
                 const all = await loadVerificationComments();
                 const mine = all.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
@@ -5506,10 +5510,15 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             onDom(function bannerButtons() { createAllButtons(); });
         }
 
+        let avatarRefresh = () => { };
         const AVE_OUT = 512;
+        const AVE_GIF_MAX = 3 * 1024 * 1024;
+        const AVE_VID_MAX = 5 * 1024 * 1024;
         const AVE_PREVIEWS = [96, 56, 32];
         addCss(`
         .vp-ava-edit { cursor: pointer; }
+        [data-vp-ava] { position: relative; }
+        [data-vp-ava]::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--vp-ava-url) center / cover no-repeat; z-index: 1; pointer-events: none; }
         html.vp-ave-lock, html.vp-ave-lock body { overflow: hidden !important; }
         .vp-ave { position: fixed; inset: 0; z-index: 100000; display: flex; align-items: center; justify-content: center; padding: 16px;
             background: rgba(0, 0, 0, .62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: vp-ave-in .18s ease-out; }
@@ -5535,12 +5544,16 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-ave-btns button { all: unset; box-sizing: border-box; flex: 1; text-align: center; cursor: pointer; padding: 12px 10px; border-radius: 14px; font-weight: 600; font-size: 15px;
             background: rgba(128, 128, 128, .2); color: var(--text-primary, #fff); }
         .vp-ave-btns button:hover { background: rgba(128, 128, 128, .32); }
+        .vp-ava-vid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; z-index: 2; pointer-events: none; opacity: 0; transition: opacity .2s; }
+        .vp-ava-vid.vp-live { opacity: 1; }
+        .vp-ave-btns .vp-ave-del { background: transparent; color: var(--text-secondary, #9aa0b4); font-weight: 500; font-size: 14px; }
         .vp-ave-btns .vp-ave-ok { background: var(--accent-primary, #4f8cff); color: #fff; }
         .vp-ave-btns .vp-ave-ok:hover { filter: brightness(1.1); }
         .vp-ave-btns button:disabled { opacity: .45; cursor: default; pointer-events: none; }
         @media (prefers-reduced-motion: reduce) { .vp-ave { animation: none; } }
     `);
 
+        const aveOwnRef = () => { const o = GM_getValue(acctKey('vp_ava'), null); return o && o.ref || ''; };
         const aveOwnPage = () => {
             const m = location.pathname.match(/^\/@([^/]+)\/?$/);
             return !!(m && myUsername && decodeURIComponent(m[1]).toLowerCase() === myUsername.toLowerCase());
@@ -5566,16 +5579,17 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 <div class="vp-ave-stage"><canvas></canvas><div class="vp-ave-mask"></div></div>
                 <label class="vp-ave-zoom"><span>Масштаб</span><input type="range" min="100" max="500" value="100" disabled></label>
                 <div class="vp-ave-prev">${AVE_PREVIEWS.map(s => `<canvas data-s="${s}"></canvas>`).join('')}</div>
-                <div class="vp-ave-msg">Выбери картинку, подвинь и приблизь её внутри кружка</div>
+                <div class="vp-ave-msg">Картинка, GIF или короткое видео. Увидят все, у кого стоит ИТД X</div>
                 <div class="vp-ave-btns"><button type="button" class="vp-ave-pick">Выбрать картинку</button><button type="button" class="vp-ave-ok" disabled>Применить</button></div>
-                <input type="file" accept="image/*" hidden>
+                <div class="vp-ave-btns"><button type="button" class="vp-ave-del" hidden>Вернуть обычную аватарку</button></div>
+                <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" hidden>
             </div>`;
             document.body.appendChild(root);
             document.documentElement.classList.add('vp-ave-lock');
             const $ = s => root.querySelector(s);
-            const stage = $('.vp-ave-stage'), cv = stage.querySelector('canvas'), zoom = $('.vp-ave-zoom input'), msg = $('.vp-ave-msg'), ok = $('.vp-ave-ok'), pick = $('.vp-ave-pick'), file = $('input[type=file]');
+            const stage = $('.vp-ave-stage'), cv = stage.querySelector('canvas'), zoom = $('.vp-ave-zoom input'), msg = $('.vp-ave-msg'), ok = $('.vp-ave-ok'), pick = $('.vp-ave-pick'), del = $('.vp-ave-del'), file = $('input[type=file]');
             const prevs = [...root.querySelectorAll('.vp-ave-prev canvas')];
-            const st = { img: null, iw: 0, ih: 0, z: 1, cx: 0, cy: 0, picked: false, busy: false };
+            const st = { img: null, iw: 0, ih: 0, z: 1, cx: 0, cy: 0, picked: false, busy: false, kind: 'image', file: null, still: null };
             const say = (t, bad) => { msg.textContent = t; msg.classList.toggle('vp-bad', !!bad); };
             const close = () => {
                 document.removeEventListener('keydown', onKey, true);
@@ -5617,10 +5631,22 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 zoom.value = 100; zoom.disabled = !picked; ok.disabled = !picked;
                 render();
             };
-            const loadFile = f => {
-                if (!f || !/^image\//.test(f.type)) { say('Это не картинка', true); return; }
-                const url = URL.createObjectURL(f), img = new Image();
-                img.onload = () => { if (!img.naturalWidth) { say('Картинка не открылась', true); return; } setImage(img, url, true); say('Двигай картинку пальцем или мышью, колесо или ползунок — масштаб'); };
+            const loadFile = async f => {
+                if (!f) return;
+                const video = /^video\//.test(f.type), gif = f.type === 'image/gif';
+                if (!video && !/^image\//.test(f.type)) { say('Это не картинка и не видео', true); return; }
+                if (gif && f.size > AVE_GIF_MAX) { say('GIF больше 3 МБ, возьми полегче', true); return; }
+                if (video && f.size > AVE_VID_MAX) { say('Видео больше 5 МБ, возьми покороче или сожми', true); return; }
+                let still = f;
+                if (video) { try { still = await videoFrame(f); } catch (e) { say('Видео не открылось', true); return; } }
+                const url = URL.createObjectURL(still), img = new Image();
+                img.onload = () => {
+                    if (!img.naturalWidth) { say('Картинка не открылась', true); return; }
+                    setImage(img, url, true);
+                    st.kind = video ? 'video' : gif ? 'gif' : 'image'; st.file = f; st.still = still;
+                    zoom.disabled = st.kind !== 'image';
+                    say(st.kind === 'image' ? 'Двигай картинку пальцем или мышью, колесо или ползунок: масштаб' : 'Анимация будет по центру кружка');
+                };
                 img.onerror = () => { URL.revokeObjectURL(url); say('Картинка не открылась', true); };
                 img.src = url;
             };
@@ -5629,12 +5655,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 img.onload = () => { if (!st.picked && img.naturalWidth) { st.img = img; st.iw = img.naturalWidth; st.ih = img.naturalHeight; st.cx = st.iw / 2; st.cy = st.ih / 2; render(); } };
                 img.src = startSrc;
             }
+            del.hidden = !aveOwnRef();
             requestAnimationFrame(render);
             addEventListener('resize', render);
             const pointers = new Map();
             let pinch = null;
             stage.addEventListener('pointerdown', e => {
-                if (!st.picked) return;
+                if (!st.picked || st.kind !== 'image') return;
                 stage.setPointerCapture(e.pointerId);
                 pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
                 stage.classList.add('vp-ave-drag');
@@ -5663,7 +5690,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             stage.addEventListener('pointerup', up);
             stage.addEventListener('pointercancel', up);
             stage.addEventListener('wheel', e => {
-                if (!st.picked) return;
+                if (!st.picked || st.kind !== 'image') return;
                 e.preventDefault();
                 st.z = Math.min(5, Math.max(1, st.z * (e.deltaY < 0 ? 1.08 : 1 / 1.08)));
                 zoom.value = Math.round(st.z * 100);
@@ -5675,6 +5702,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             pick.addEventListener('click', () => file.click());
             stage.addEventListener('click', () => { if (!st.picked) file.click(); });
             file.addEventListener('change', () => { loadFile(file.files[0]); file.value = ''; });
+            del.addEventListener('click', () => {
+                if (st.busy) return;
+                GM_setValue(acctKey('vp_ava'), null);
+                avatarRefresh();
+                publishLook();
+                close();
+            });
             $('.vp-ave-x').addEventListener('click', () => { if (!st.busy) close(); });
             root.addEventListener('pointerdown', e => { if (e.target === root && !st.busy) close(); });
             ok.addEventListener('click', async () => {
@@ -5682,33 +5716,32 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 st.busy = true; ok.disabled = true; pick.disabled = true;
                 say('Загружаю…');
                 try {
-                    const out = document.createElement('canvas');
-                    out.width = out.height = AVE_OUT;
-                    const g = out.getContext('2d');
-                    g.fillStyle = '#101014';
-                    g.fillRect(0, 0, AVE_OUT, AVE_OUT);
-                    paint(out);
-                    const blob = await new Promise(r => out.toBlob(r, 'image/jpeg', 0.92));
-                    if (!blob) throw new Error('не удалось подготовить картинку');
-                    const fd = new FormData();
-                    fd.append('file', blob, 'avatar.jpg');
-                    const res = await api('/api/files/avatar', { method: 'POST', body: fd });
-                    const text = await res.text();
-                    let j = null;
-                    try { j = JSON.parse(text); } catch (e) { }
-                    console.log('[ITD VP] аватарка: ответ сервера', res.status, text.slice(0, 400));
-                    if (!res.ok) throw new Error((j && (j.error && j.error.message || j.message)) || 'сайт ответил ' + res.status);
-                    const d = j && (j.data || j), url = d && (typeof d.url === 'string' ? d.url : typeof d.avatar === 'string' ? d.avatar : d.avatar && d.avatar.url) || '';
-                    const mine = await api('/api/users/me').then(r => r.json()).catch(() => null), md = mine && (mine.data || mine), now = md && (md.avatar && md.avatar.url || md.avatar);
-                    if (url && String(now || '') !== url) {
-                        const r2 = await api('/api/users/me', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ avatar: url }) });
-                        console.log('[ITD VP] аватарка: привязка к профилю', r2.status);
+                    const toRef = up => up.ext + up.id.replace(/-/g, '');
+                    let ref, vid = '';
+                    if (st.kind === 'image') {
+                        const out = document.createElement('canvas');
+                        out.width = out.height = AVE_OUT;
+                        const g = out.getContext('2d');
+                        g.fillStyle = '#101014';
+                        g.fillRect(0, 0, AVE_OUT, AVE_OUT);
+                        paint(out);
+                        const blob = await new Promise(r => out.toBlob(r, 'image/jpeg', 0.92));
+                        if (!blob) throw new Error('не удалось подготовить картинку');
+                        ref = toRef(await msgUploadImage(new File([blob], 'avatar.jpg', { type: 'image/jpeg' })));
+                    } else if (st.kind === 'gif') {
+                        ref = toRef(await msgUploadImage(st.file));
+                    } else {
+                        ref = toRef(await msgUploadImage(st.still));
+                        vid = await uploadVideo(st.file);
                     }
-                    say('Готово, обновляю страницу…');
-                    setTimeout(() => location.reload(), 700);
+                    GM_setValue(acctKey('vp_ava'), vid ? { ref, vid, at: Date.now() } : { ref, at: Date.now() });
+                    avatarRefresh();
+                    publishLook();
+                    say('Готово');
+                    setTimeout(close, 500);
                 } catch (error) {
                     const m = String(error && error.message || error);
-                    say(/модерац|MODERATION|запрещ/i.test(m) ? 'Картинка не прошла модерацию — возьми другую' : /сети|network|fetch/i.test(m) ? 'Нет связи с сайтом, попробуй ещё раз' : 'Не вышло: ' + m, true);
+                    say(/модерац|MODERATION|запрещ|незнакомую/i.test(m) ? 'Картинка не прошла модерацию — возьми другую' : /сети|network|fetch/i.test(m) ? 'Нет связи с сайтом, попробуй ещё раз' : 'Не вышло: ' + m, true);
                     logErr('аватарка', error);
                     st.busy = false; ok.disabled = false; pick.disabled = false;
                 }
@@ -5720,12 +5753,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
-            const img = av.querySelector('img');
-            avatarEditor(img && img.src);
+            const img = av.querySelector('img'), own = aveOwnRef();
+            avatarEditor(own ? lookImgUrl(own) : img && img.src);
         }, true);
         const CHANGELOG = [
-            ['3.7.5 – 3.7.5.1', '26 октября 2026', [
-                'Аватарка: нажми на свою аву в профиле, откроется редактор с кружком-примеркой, там можно подвинуть, приблизить и загрузить свою картинку'
+            ['3.7.5 – 3.7.5.5', '26 октября 2026', [
+                'Аватарка: нажми на свою аву в профиле, откроется редактор с кружком-примеркой, можно картинку, GIF или короткое видео, увидят все, у кого стоит ИТД X',
+                'Змейка снова открывается в играх'
             ]],
             ['3.7.4', '26 октября 2026', [
                 'Фон «Снег» стал метелью: порывы ветра, снежинки-кристаллы и размытые хлопья вблизи',
@@ -6583,10 +6617,45 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 }
 
                 let lookRaw = null, lookBy = new Map();
+                function avaPut(el, ref, vid) {
+                    if ((el.getAttribute('data-vp-ava') || '') !== ref) {
+                        if (ref) { el.setAttribute('data-vp-ava', ref); el.style.setProperty('--vp-ava-url', `url("${lookImgUrl(ref)}")`); }
+                        else { el.removeAttribute('data-vp-ava'); el.style.removeProperty('--vp-ava-url'); }
+                    }
+                    let v = el.querySelector(':scope > .vp-ava-vid');
+                    const want = ref && vid && el.getBoundingClientRect().width >= 60 ? vid : '';
+                    if (!want) { if (v) v.remove(); return; }
+                    const src = 'https://cdn.xn--d1ah4a.com/' + want;
+                    if (!v) {
+                        v = document.createElement('video');
+                        v.className = 'vp-ava-vid';
+                        v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true;
+                        v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+                        v.addEventListener('playing', () => v.classList.add('vp-live'));
+                        el.appendChild(v);
+                    }
+                    if (v.getAttribute('src') !== src) { v.classList.remove('vp-live'); v.src = src; v.play().catch(() => { }); }
+                }
+                function markAvatars(me, pu, others) {
+                    const own = GM_getValue(acctKey('vp_ava'), null) || {};
+                    const refOf = u => u === me ? { a: own.ref || '', va: own.vid || '' } : others && lookBy.get(u) || {};
+                    const put = (av, u) => { const r = refOf(u); avaPut(av, r.a || '', r.va || ''); };
+                    document.querySelectorAll(PROFILE_LINK).forEach(link => {
+                        const av = link.querySelector('.' + SELECTORS.avatar);
+                        if (av) put(av, userOf(link.getAttribute('href')));
+                    });
+                    loneNicks().forEach(({ el, u }) => {
+                        const av = [...(el.parentElement || el).children].find(x => x.matches('.' + SELECTORS.avatar));
+                        if (av) put(av, u);
+                    });
+                    if (pu) document.querySelectorAll('.' + SELECTORS.avatar).forEach(av => {
+                        if (!av.closest(PROFILE_LINK) && !av.closest('.' + SELECTORS.post) && nearLargeNick(av)) put(av, pu);
+                    });
+                }
                 function markLooks() {
                     const me = (myUsername || '').toLowerCase();
                     const pm = location.pathname.match(/^\/@([\w.]+)(\/.*)?$/), pu = pm && !/\/post\//.test(pm[2] || '') ? pm[1].toLowerCase() : '';
-                    if (!showLooks) { setBgGuest(null); return; }
+                    if (!showLooks) { setBgGuest(null); markAvatars(me, pu, false); return; }
                     const raw = localStorage.getItem(VERIFICATION_STORAGE_KEY) || '{}';
                     if (raw !== lookRaw) {
                         lookRaw = raw;
@@ -6596,6 +6665,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                         for (const [name, info] of Object.entries(parsed)) if (info && info.look) lookBy.set(name.toLowerCase(), info.look);
                     }
                     setBgGuest(pu && pu !== me ? lookBy.get(pu) : null);
+                    markAvatars(me, pu, true);
                     if (!lookBy.size) return;
                     const put = (el, attr, val) => {
                         if (!el) return;
@@ -6637,6 +6707,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 findAllMyNicks();
 
                 markVerifiedUsers();
+                avatarRefresh = markLooks;
                 markLooks();
                 onDom(function myNickAndAvatar() {
                     findAllMyAvatars();
@@ -8302,8 +8373,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const fd = new FormData();
             fd.append('file', await msgPrepImage(file));
             const res = await api('/api/files/upload', { method: 'POST', body: fd });
-            if (!res.ok) throw new Error('загрузка картинки: ' + res.status);
             const j = await res.json().catch(() => null), d = j && (j.data || j);
+            if (!res.ok) throw new Error('загрузка картинки: ' + res.status + (j && (j.error && j.error.message || j.message) ? ', ' + (j.error && j.error.message || j.message) : ''));
             const m = String(d && d.url || '').match(MSG_IMG_RE), ext = m ? MSG_IMG_EXT.indexOf(m[2].toLowerCase()) : -1;
             if (!m || ext < 0) throw new Error('сервер вернул незнакомую ссылку');
             return { ext, id: m[1].toLowerCase() };
@@ -10953,7 +11024,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         function gifOnPick(e) {
             const input = e.target;
-            if (!(input instanceof HTMLInputElement) || input.type !== 'file') return;
+            if (!(input instanceof HTMLInputElement) || input.type !== 'file' || input.closest('.vp-ave')) return;
             if (!/\.(jpe?g|png|gif|webp)|image\//i.test(input.accept || '')) return;
             const dt = gifTransfer(input.files);
             if (dt) input.files = dt.files;
@@ -10961,6 +11032,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         document.addEventListener('input', gifOnPick, true);
         document.addEventListener('change', gifOnPick, true);
         document.addEventListener('drop', function (e) {
+            if (e.target.closest && e.target.closest('.vp-ave')) return;
             const dt = gifTransfer(e.dataTransfer && e.dataTransfer.files);
             if (!dt) return;
             e.preventDefault();

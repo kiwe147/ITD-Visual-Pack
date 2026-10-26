@@ -272,8 +272,8 @@
             const fd = new FormData();
             fd.append('file', await msgPrepImage(file));
             const res = await api('/api/files/upload', { method: 'POST', body: fd });
-            if (!res.ok) throw new Error('загрузка картинки: ' + res.status);
             const j = await res.json().catch(() => null), d = j && (j.data || j);
+            if (!res.ok) throw new Error('загрузка картинки: ' + res.status + (j && (j.error && j.error.message || j.message) ? ', ' + (j.error && j.error.message || j.message) : ''));
             const m = String(d && d.url || '').match(MSG_IMG_RE), ext = m ? MSG_IMG_EXT.indexOf(m[2].toLowerCase()) : -1;
             if (!m || ext < 0) throw new Error('сервер вернул незнакомую ссылку');
             return { ext, id: m[1].toLowerCase() };

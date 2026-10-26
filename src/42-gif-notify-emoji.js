@@ -10,7 +10,7 @@
         }
         function gifOnPick(e) {
             const input = e.target;
-            if (!(input instanceof HTMLInputElement) || input.type !== 'file') return;
+            if (!(input instanceof HTMLInputElement) || input.type !== 'file' || input.closest('.vp-ave')) return;
             if (!/\.(jpe?g|png|gif|webp)|image\//i.test(input.accept || '')) return;
             const dt = gifTransfer(input.files);
             if (dt) input.files = dt.files;
@@ -18,6 +18,7 @@
         document.addEventListener('input', gifOnPick, true);
         document.addEventListener('change', gifOnPick, true);
         document.addEventListener('drop', function (e) {
+            if (e.target.closest && e.target.closest('.vp-ave')) return;
             const dt = gifTransfer(e.dataTransfer && e.dataTransfer.files);
             if (!dt) return;
             e.preventDefault();

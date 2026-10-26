@@ -128,6 +128,7 @@
             if (backgroundEnabled && custom && !bgMedia.firstChild) showBgMedia();
         }
         updateBackgroundVisibility();
+        const MATRIX_CHARS = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
         const BG_KEYS = ['matrix', 'stars', 'particles', 'waves', 'aurora', 'bokeh', 'grid', 'snow'];
         function bgEngine(mkCanvas) {
             let ctx = null, W = 0, H = 0, bg = null, bgName = '';
@@ -181,7 +182,6 @@
                 ctx.globalCompositeOperation = 'source-over';
             }
 
-            const MATRIX_CHARS = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
             const WAVES = [
                 { amp1: 100, freq1: 0.008, speed1: 0.4, amp2: 50, freq2: 0.018, speed2: 0.7, amp3: 70, freq3: 0.004, speed3: 0.25, alpha: 0.45, offset: 0, dh: 0, dl: 15 },
                 { amp1: 80, freq1: 0.009, speed1: 0.5, amp2: 40, freq2: 0.020, speed2: 0.8, amp3: 60, freq3: 0.005, speed3: 0.3, alpha: 0.35, offset: 1.5, dh: 15, dl: 10 },
