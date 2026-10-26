@@ -8,21 +8,34 @@
         const cookieList = d => new Promise(ok => { try { GM_cookie.list(d, (r, e) => ok(e || !Array.isArray(r) ? [] : r)); } catch (e) { ok([]); } });
         const cookieSet = d => new Promise(ok => { try { GM_cookie.set(d, e => ok(!e)); } catch (e) { ok(false); } });
         const cookieDel = d => new Promise(ok => { try { GM_cookie.delete(d, () => ok(true)); } catch (e) { ok(false); } });
+        const ACC_SKIP = /^(__?cf|cf_|_ga|_gid|_ym|_fbp|_gcl)/i;
+        async function accWho() {
+            try {
+                const t = await getAccessToken();
+                const r = await fetch('/api/users/me', { credentials: 'include', headers: { Authorization: 'Bearer ' + t } });
+                const u = r.ok ? await r.json() : null;
+                return u && u.id && u.username ? u : null;
+            } catch (e) { return null; }
+        }
         async function accReadCookies() {
             const seen = new Map();
             for (const d of [{ domain: ACC_HOST }, { url: location.origin + '/' }, { url: location.origin + '/api/v1/auth/refresh' }]) {
-                for (const c of await cookieList(d)) seen.set([c.name, c.domain, c.path].join('|'), c);
+                for (const c of await cookieList(d)) if (!ACC_SKIP.test(c.name)) seen.set([c.name, c.domain, c.path].join('|'), c);
             }
             return [...seen.values()];
         }
         const accCookieUrl = c => 'https://' + String(c.domain || ACC_HOST).replace(/^\./, '') + (c.path || '/');
         async function accCapture() {
-            const me = accMe();
-            if (!me || !accHas() || !accOn()) return false;
+            if (!accHas() || !accOn()) return false;
+            const who = await accWho();
+            if (!who) return false;
+            const me = { id: String(who.id), username: who.username, name: who.displayName || who.username };
             const cookies = (await accReadCookies()).map(c => ({ name: c.name, value: c.value, domain: c.domain, hostOnly: !!c.hostOnly, path: c.path || '/', secure: !!c.secure, httpOnly: !!c.httpOnly, sameSite: c.sameSite, session: !!c.session, expirationDate: c.expirationDate }));
             if (!cookies.length) return false;
             const slots = accSlots();
-            const ava = typeof meData.avatar === 'string' && meData.avatar.length <= 8 ? meData.avatar : '';
+            const sig = cs => cs.filter(c => c.httpOnly).map(c => c.name + '=' + c.value).join('|');
+            for (const [k, v] of Object.entries(slots)) if (k !== me.id && sig(v.cookies || []) && sig(v.cookies) === sig(cookies)) delete slots[k];
+            const ava = typeof who.avatar === 'string' && who.avatar.length <= 8 ? who.avatar : '';
             slots[me.id] = { id: me.id, username: me.username, name: me.name, ava, cookies, at: Date.now() };
             accSave(slots);
             return true;
@@ -43,6 +56,8 @@
         async function accSwitch(id) {
             const slots = accSlots(), t = slots[id], me = accMe();
             if (accBusy || !t || !accHas() || (me && me.id === id)) return;
+            const who = await accWho();
+            if (who && String(who.id) === id) { accSay('Этот аккаунт уже открыт'); return; }
             accBusy = true;
             accSay('Меняю аккаунт…');
             try {
@@ -220,7 +235,7 @@
             if (me && accOn()) accForget(me.id);
         }, true);
 
-        let accChecked = false;
+        let accLast = 0, accLogin = false;
         sched.add('acc', async function accTick() {
             const me = accMe(), pend = GM_getValue(ACC_PENDING, null);
             if (pend && pend.id) {
@@ -231,7 +246,10 @@
                     if (s) { accForget(pend.id); accSay('Вход в @' + s.username + ' устарел, войди в него заново, и он снова появится в списке', true); }
                 }
             }
-            if (me && accOn() && (!accChecked || Date.now() % 300000 < 6000)) { accChecked = true; await accCapture(); }
+            if (!accOn() || !accHas()) return;
+            if (/^\/login/.test(location.pathname)) { accLogin = true; return; }
+            if (!me && !accLogin) return;
+            if (accLogin || Date.now() - accLast > 300000) { accLogin = false; accLast = Date.now(); await accCapture(); }
         }, { every: 5000 });
         pageWindow.itdvp.acc = async function () {
             const cookies = await accReadCookies();

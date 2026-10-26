@@ -303,6 +303,7 @@
             placeRail();
             if (fromHistory !== true && overlayAt('vpMenu')) history.back();
         }
+        document.addEventListener('vp-loc', () => { setTimeout(placeRail, 60); setTimeout(placeRail, 400); });
         addEventListener('popstate', () => {
             if (overlayAt('vpMenu') && !mobileMenuOpen) openMobileMenu(true);
             else if (mobileMenuOpen && !overlayAt('vpMenu')) closeMobileMenu(true);
@@ -333,7 +334,7 @@
             const right = side ? side.getBoundingClientRect().left : innerWidth;
             const gap = right - edge;
             let box = null, adj = false, sideW = 0;
-            const on = railEnabled && !!myUsername && !!rail.querySelector(':scope > .vp-rail-card:not([hidden])');
+            const on = railEnabled && !!myUsername && !/^\/(login|register|signup|forgot|reset)/.test(location.pathname) && !!rail.querySelector(':scope > .vp-rail-card:not([hidden])');
             const sideEl = siteEl('sidebar');
             if (on && galOpen && sideEl && innerWidth > PHONE_MAX) {
                 const margin = Math.max(12, Math.round(baseLeft(sideEl))), width = 250;

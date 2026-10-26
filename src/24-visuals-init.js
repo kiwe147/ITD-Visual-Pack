@@ -192,6 +192,7 @@
                     if (!allNames.size) return;
                     const stateOf = u => verifiedSet.has(u) ? 'approved' : 'quarantine';
                     document.querySelectorAll(PROFILE_LINK).forEach(link => {
+                        if (link.closest('nav')) { link.querySelectorAll('.' + SELECTORS.badgeVerify).forEach(x => x.remove()); return; }
                         const u = userOf(link.getAttribute('href'));
                         if (allNames.has(u)) addVerifyBadge(nickLeaf(link), 16, stateOf(u));
                     });

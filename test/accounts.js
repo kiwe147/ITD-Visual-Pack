@@ -22,6 +22,7 @@ const IDB = '99999999-2222-4333-8444-555555555555';
     const soon = Math.floor(Date.now() / 1000) + 86400 * 30;
     await ctx.addCookies([
       { name: 'refresh_token', value: 'AAA-OWNER', domain: 'xn--d1ah4a.com', path: '/api/v1/auth', httpOnly: true, secure: true, sameSite: 'Lax', expires: soon },
+      { name: 'cf_clearance', value: 'CF-KEEP', domain: 'xn--d1ah4a.com', path: '/', httpOnly: true, secure: true, sameSite: 'None', expires: soon },
       { name: 'theme', value: 'dark', domain: 'xn--d1ah4a.com', path: '/', secure: true, sameSite: 'Lax', expires: soon }
     ]);
     const toTm = c => ({ name: c.name, value: c.value, domain: c.domain, hostOnly: !String(c.domain).startsWith('.'), path: c.path, secure: c.secure, httpOnly: c.httpOnly, sameSite: String(c.sameSite).toLowerCase(), session: c.expires <= 0, expirationDate: c.expires > 0 ? c.expires : undefined });
@@ -77,9 +78,14 @@ const IDB = '99999999-2222-4333-8444-555555555555';
     const ck = await ctx.cookies();
     check(ck.some(c => c.name === 'refresh_token' && c.value === 'BBB-SECOND') && !ck.some(c => c.value === 'AAA-OWNER'), 'куки подменены на второй аккаунт, старая убрана: ' + ck.map(c => c.name + '=' + c.value).join(', '));
     const slots2 = await p.evaluate(() => JSON.parse(sessionStorage.getItem('__gm')).vp_accounts);
+    check(ck.some(c => c.name === 'cf_clearance' && c.value === 'CF-KEEP'), 'кука Cloudflare не тронута (иначе на входе просят «подтвердите, что вы человек»)');
     check(Object.values(slots2).find(s => s.username === 'NeuroSFW').cookies.some(c => c.value === 'AAA-OWNER'), 'вход первого аккаунта остался в списке на потом');
     check(await p.evaluate(() => !!JSON.parse(sessionStorage.getItem('__gm')).vp_acc_pending), 'отмечено, что смена идёт (для проверки после перезагрузки)');
     check(!errors.length, 'ошибок страницы нет' + (errors.length ? ': ' + errors.join(' | ') : ''));
+    if (!phone) {
+      const q = await ctx.newPage();
+      await q.route('**/*', r => { const t = r.request().resourceType(); if (t === 'document') return r.fulfill({ contentType: 'text/html; charset=utf-8', body: snap }); return r.fulfill({ status: 404, body: '' }); });
+    }
     await ctx.close();
   }
   await b.close();
