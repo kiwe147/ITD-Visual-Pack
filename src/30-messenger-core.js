@@ -270,7 +270,7 @@
         }
         async function msgUploadImage(file, asis) {
             const fd = new FormData();
-            fd.append('file', asis && /^image\/(jpeg|png)$/.test(file.type) ? file : await msgPrepImage(file));
+            fd.append('file', asis && /^image\/(jpeg|png)$/.test(file.type) ? (antiCensorshipEnabled ? gifFile(file) : file) : await msgPrepImage(file));
             const res = await api('/api/files/upload', { method: 'POST', body: fd });
             const j = await res.json().catch(() => null), d = j && (j.data || j);
             if (!res.ok) console.log('[ITD VP] загрузка картинки: ответ сервера', res.status, JSON.stringify(j).slice(0, 300));

@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.6.1
+// @version      3.7.6.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -5760,7 +5760,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             avatarEditor(own ? lookImgUrl(own) : img && img.src);
         }, true);
         const CHANGELOG = [
-            ['3.7.6 – 3.7.6.1', '26 октября 2026', [
+            ['3.7.6 – 3.7.6.2', '26 октября 2026', [
                 'Аватарка: нажми на свою аву в профиле, откроется редактор с кружком-примеркой, можно картинку, GIF или короткое видео, увидят все, у кого стоит ИТД X',
                 'Змейка снова открывается в играх',
                 'В уведомлениях у лайков в розовом кружке появилось сердечко, как значок у ответов'
@@ -8382,7 +8382,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         async function msgUploadImage(file, asis) {
             const fd = new FormData();
-            fd.append('file', asis && /^image\/(jpeg|png)$/.test(file.type) ? file : await msgPrepImage(file));
+            fd.append('file', asis && /^image\/(jpeg|png)$/.test(file.type) ? (antiCensorshipEnabled ? gifFile(file) : file) : await msgPrepImage(file));
             const res = await api('/api/files/upload', { method: 'POST', body: fd });
             const j = await res.json().catch(() => null), d = j && (j.data || j);
             if (!res.ok) console.log('[ITD VP] загрузка картинки: ответ сервера', res.status, JSON.stringify(j).slice(0, 300));

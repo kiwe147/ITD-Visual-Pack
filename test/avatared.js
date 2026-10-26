@@ -42,9 +42,11 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
       window.GM_xmlhttpRequest = o => setTimeout(() => o.onerror && o.onerror('x'), 0);
       window.GM_info = { script: { version: 't' }, scriptMetaStr: m }; window.unsafeWindow = window;
     }, [src.slice(0, src.indexOf('==/UserScript=='))]);
+    await p.addInitScript(() => { window.__nativeFetch = window.fetch; });
     await p.addInitScript('(function () { const run = () => {' + src + String.fromCharCode(10) + '}; if (document.documentElement) run(); else { const mo = new MutationObserver(() => { if (document.documentElement) { mo.disconnect(); run(); } }); mo.observe(document, { childList: true }); } })();');
         await p.goto(ORIGIN + '/@NeuroSFW');
     await p.waitForTimeout(2500);
+    if (process.env.NOHOOK) await p.evaluate(() => { window.fetch = window.__nativeFetch; });
     const tag = phone ? 'телефон' : 'компьютер';
     const spot = await p.evaluate(() => { const av = [...document.querySelectorAll('.vp-avatar.vp-ava-edit')][0]; if (!av) return null; const r = av.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width }; });
     check(!!spot, tag + ': своя большая ава помечена для нажатия' + (spot ? ' (' + Math.round(spot.w) + ' px)' : ''));
