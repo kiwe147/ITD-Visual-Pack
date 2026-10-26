@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.7.6
+// @version      3.7.7.7
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6227,6 +6227,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.7.7', '27 октября 2026', [
+                'Посты с размытой картинкой: заливка точно по скруглению, обводка идёт по самому краю'
+            ]],
             ['3.7.7.6', '27 октября 2026', [
                 'Листание вкладок на телефоне: страницы сдвигаются влево и вправо по порядку пунктов меню',
                 'Листание вкладок: надпись на «Ивенте» больше не прыгает сверху к центру',
@@ -11514,6 +11517,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 box.innerHTML = '<div class="vp-blur-img"></div><div class="vp-blur-dim"></div>';
                 card.insertBefore(box, card.firstChild);
             }
+            const cs = getComputedStyle(card);
+            box.style.clipPath = `inset(0 round ${cs.borderTopLeftRadius} ${cs.borderTopRightRadius} ${cs.borderBottomRightRadius} ${cs.borderBottomLeftRadius})`;
             const layer = box.firstChild;
             layer.style.backgroundImage = `url("${img.src}")`;
             blurCards.set(card, { img, layer });

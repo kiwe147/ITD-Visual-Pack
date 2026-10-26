@@ -152,6 +152,8 @@
                 box.innerHTML = '<div class="vp-blur-img"></div><div class="vp-blur-dim"></div>';
                 card.insertBefore(box, card.firstChild);
             }
+            const cs = getComputedStyle(card);
+            box.style.clipPath = `inset(0 round ${cs.borderTopLeftRadius} ${cs.borderTopRightRadius} ${cs.borderBottomRightRadius} ${cs.borderBottomLeftRadius})`;
             const layer = box.firstChild;
             layer.style.backgroundImage = `url("${img.src}")`;
             blurCards.set(card, { img, layer });
