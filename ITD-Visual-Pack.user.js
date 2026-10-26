@@ -6232,7 +6232,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 'Быстрые кнопки «скопировать ссылку» и «скопировать картинку» снова у всех постов, в том числе с видео',
                 'Сообщения: аватарки-картинки собеседников показываются в списке и в шапке чата',
                 'Сообщения: дата дня плашкой по центру, как в Telegram, у сообщения только время',
-                'Возврат в ленту и профиль: страница возвращается на то же место без бесконечной прокрутки, а сайт и мод больше не тянут её каждый в свою сторону'
+                'Возврат в ленту и профиль: страница возвращается на то же место без бесконечной прокрутки, а сайт и мод больше не тянут её каждый в свою сторону',
+                'Профиль: посты больше не дёргаются на определённой высоте прокрутки, панель «Новые / Старые / Популярные» не переезжает в середину списка'
             ]],
             ['3.7.7.6', '27 октября 2026', [
                 'Листание вкладок на телефоне: страницы сдвигаются влево и вправо по порядку пунктов меню',
@@ -15649,10 +15650,15 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             for (let i = 0; i < 2 && t.parentElement && t.parentElement.children.length === 1; i++) t = t.parentElement;
             return t;
         }
+        function psortDeep(art) {
+            const slot = art.parentElement, ty = slot && parseFloat((String(slot.style.transform).match(/translateY\(\s*(-?[\d.]+)/) || [])[1]);
+            return ty > 1;
+        }
         function profileSort() {
             const m = location.pathname.match(/^\/@([\w.]+)\/?$/), old = document.querySelector('.vp-psort');
             const anchor = m && psortAnchor();
-            const art = anchor && anchor !== 'likes' && document.querySelector('article.' + SELECTORS.post);
+            let art = anchor && anchor !== 'likes' && document.querySelector('article.' + SELECTORS.post);
+            if (art && psortDeep(art)) art = null;
             if (!art || !art.querySelector('a[href="/@' + m[1] + '"]')) {
                 if (!old) return;
                 if (!m || anchor === 'likes' || old.dataset.login.toLowerCase() !== m[1].toLowerCase()) { psortLeave(old); return; }

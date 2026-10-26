@@ -172,10 +172,15 @@
             for (let i = 0; i < 2 && t.parentElement && t.parentElement.children.length === 1; i++) t = t.parentElement;
             return t;
         }
+        function psortDeep(art) {
+            const slot = art.parentElement, ty = slot && parseFloat((String(slot.style.transform).match(/translateY\(\s*(-?[\d.]+)/) || [])[1]);
+            return ty > 1;
+        }
         function profileSort() {
             const m = location.pathname.match(/^\/@([\w.]+)\/?$/), old = document.querySelector('.vp-psort');
             const anchor = m && psortAnchor();
-            const art = anchor && anchor !== 'likes' && document.querySelector('article.' + SELECTORS.post);
+            let art = anchor && anchor !== 'likes' && document.querySelector('article.' + SELECTORS.post);
+            if (art && psortDeep(art)) art = null;
             if (!art || !art.querySelector('a[href="/@' + m[1] + '"]')) {
                 if (!old) return;
                 if (!m || anchor === 'likes' || old.dataset.login.toLowerCase() !== m[1].toLowerCase()) { psortLeave(old); return; }
