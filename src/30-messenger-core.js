@@ -268,11 +268,12 @@
             if (blob.size > 5 * 1024 * 1024) throw new Error('картинка больше 5 МБ');
             return new File([blob], 'img.' + (blob.type.split('/')[1] || 'png'), { type: blob.type });
         }
-        async function msgUploadImage(file) {
+        async function msgUploadImage(file, asis) {
             const fd = new FormData();
-            fd.append('file', await msgPrepImage(file));
+            fd.append('file', asis && /^image\/(jpeg|png)$/.test(file.type) ? file : await msgPrepImage(file));
             const res = await api('/api/files/upload', { method: 'POST', body: fd });
             const j = await res.json().catch(() => null), d = j && (j.data || j);
+            if (!res.ok) console.log('[ITD VP] загрузка картинки: ответ сервера', res.status, JSON.stringify(j).slice(0, 300));
             if (!res.ok) throw new Error('загрузка картинки: ' + res.status + (j && (j.error && j.error.message || j.message) ? ', ' + (j.error && j.error.message || j.message) : ''));
             const m = String(d && d.url || '').match(MSG_IMG_RE), ext = m ? MSG_IMG_EXT.indexOf(m[2].toLowerCase()) : -1;
             if (!m || ext < 0) throw new Error('сервер вернул незнакомую ссылку');

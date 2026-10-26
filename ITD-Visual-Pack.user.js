@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.6
+// @version      3.7.6.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -5730,7 +5730,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                         paint(out);
                         const blob = await new Promise(r => out.toBlob(r, 'image/jpeg', 0.92));
                         if (!blob) throw new Error('не удалось подготовить картинку');
-                        ref = toRef(await msgUploadImage(new File([blob], 'avatar.jpg', { type: 'image/jpeg' })));
+                        ref = toRef(await msgUploadImage(new File([blob], 'avatar.jpg', { type: 'image/jpeg' }), true));
                     } else if (st.kind === 'gif') {
                         ref = toRef(await msgUploadImage(st.file));
                     } else {
@@ -5744,7 +5744,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     setTimeout(close, 500);
                 } catch (error) {
                     const m = String(error && error.message || error);
-                    say(/модерац|MODERATION|запрещ|незнакомую/i.test(m) ? 'Картинка не прошла модерацию — возьми другую' : /сети|network|fetch/i.test(m) ? 'Нет связи с сайтом, попробуй ещё раз' : 'Не вышло: ' + m, true);
+                    say((/модерац|MODERATION|запрещ/i.test(m) ? 'Сайт не пропустил картинку: ' : /сети|network|fetch/i.test(m) ? 'Нет связи с сайтом: ' : 'Не вышло: ') + m, true);
                     logErr('аватарка', error);
                     st.busy = false; ok.disabled = false; pick.disabled = false;
                 }
@@ -5760,7 +5760,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             avatarEditor(own ? lookImgUrl(own) : img && img.src);
         }, true);
         const CHANGELOG = [
-            ['3.7.6', '26 октября 2026', [
+            ['3.7.6 – 3.7.6.1', '26 октября 2026', [
                 'Аватарка: нажми на свою аву в профиле, откроется редактор с кружком-примеркой, можно картинку, GIF или короткое видео, увидят все, у кого стоит ИТД X',
                 'Змейка снова открывается в играх',
                 'В уведомлениях у лайков в розовом кружке появилось сердечко, как значок у ответов'
@@ -8380,11 +8380,12 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (blob.size > 5 * 1024 * 1024) throw new Error('картинка больше 5 МБ');
             return new File([blob], 'img.' + (blob.type.split('/')[1] || 'png'), { type: blob.type });
         }
-        async function msgUploadImage(file) {
+        async function msgUploadImage(file, asis) {
             const fd = new FormData();
-            fd.append('file', await msgPrepImage(file));
+            fd.append('file', asis && /^image\/(jpeg|png)$/.test(file.type) ? file : await msgPrepImage(file));
             const res = await api('/api/files/upload', { method: 'POST', body: fd });
             const j = await res.json().catch(() => null), d = j && (j.data || j);
+            if (!res.ok) console.log('[ITD VP] загрузка картинки: ответ сервера', res.status, JSON.stringify(j).slice(0, 300));
             if (!res.ok) throw new Error('загрузка картинки: ' + res.status + (j && (j.error && j.error.message || j.message) ? ', ' + (j.error && j.error.message || j.message) : ''));
             const m = String(d && d.url || '').match(MSG_IMG_RE), ext = m ? MSG_IMG_EXT.indexOf(m[2].toLowerCase()) : -1;
             if (!m || ext < 0) throw new Error('сервер вернул незнакомую ссылку');
