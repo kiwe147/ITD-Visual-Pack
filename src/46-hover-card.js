@@ -71,10 +71,11 @@
             hcPlace(hc, link);
         }
         function hcClose() { if (hc) { hc.remove(); hc = null; hcUser = null; } }
+        function hcOff() { clearTimeout(hcTimer); clearTimeout(hcHide); hcClose(); }
         function hcScheduleHide() { clearTimeout(hcHide); hcHide = setTimeout(hcClose, 220); }
         document.addEventListener('pointerover', e => {
             const a = e.target.closest && e.target.closest(PROFILE_LINK);
-            if (!a || a.closest('nav, .' + SELECTORS.sidebar + ', .vp-hc, .nick-controls-panel')) return;
+            if (!a || !GM_getValue('hoverCard', true) || a.closest('nav, .' + SELECTORS.sidebar + ', .vp-hc, .nick-controls-panel')) return;
             const user = loginOf(a.getAttribute('href'));
             if (!user) return;
             clearTimeout(hcHide);
