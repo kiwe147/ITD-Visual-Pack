@@ -5871,8 +5871,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             accSave(s);
         }
 
+        const ACC_ICON_USERS = 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z';
+        const ACC_ICON_OUT = 'M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z';
+        const accMask = d => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="${d}"/></svg>`)}")`;
         addCss(`
         .vp-acc-btn { position: relative; }
+        .vp-side-bottom > button.vp-side-out > svg { display: none !important; }
+        .vp-side-bottom > button.vp-side-out::before { content: ''; flex: none; width: 24px; height: 24px; background: currentColor; -webkit-mask: ${accMask(ACC_ICON_OUT)} center / contain no-repeat; mask: ${accMask(ACC_ICON_OUT)} center / contain no-repeat; }
         .vp-side-bottom { gap: 0 !important; }
         .vp-side-bottom > button { min-height: 56px; padding: 16px !important; gap: 18px !important; border-radius: 18px !important; font-size: 16px !important; font-weight: 600 !important; }
         .vp-side-bottom > button svg { width: 24px !important; height: 24px !important; flex: none; }
@@ -6045,14 +6050,17 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const lo = [...document.querySelectorAll('button')].find(b => !b.closest('.vp-acc-pop') && !b.classList.contains('vp-acc-btn') && LOGOUT_RE.test(b.textContent.trim()));
             if (!lo || !lo.parentElement) return;
             const box = lo.parentElement, alone = box.children.length === 1;
-            if (!alone && box.closest('aside') && !box.classList.contains('vp-side-bottom')) box.classList.add('vp-side-bottom');
+            if (!alone && box.closest('aside')) {
+                box.classList.add('vp-side-bottom');
+                lo.classList.add('vp-side-out');
+            }
             const mine = document.querySelectorAll('.vp-acc-btn');
             if (mine.length === 1 && (alone ? mine[0].parentElement.nextElementSibling === box : mine[0].nextElementSibling === lo)) return;
             document.querySelectorAll('.vp-acc-btn, .vp-acc-wrap').forEach(x => x.remove());
             const b = document.createElement('button');
-            b.className = lo.className + ' vp-acc-btn';
+            b.className = lo.className.split(' ').filter(c => c !== 'vp-side-out').join(' ') + ' vp-acc-btn';
             b.type = 'button';
-            b.innerHTML = svgIcon('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.4-3 2.6-4.8 5.5-4.8s5.1 1.8 5.5 4.8"/><path d="M16.5 5.2a3.2 3.2 0 0 1 0 5.6M18 14.4c1.6.6 2.8 2 3.1 4.6"/>', 20) + '<span>Сменить аккаунт</span>';
+            b.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="${ACC_ICON_USERS}"/></svg><span>Сменить аккаунт</span>`;
             b.onclick = e => { e.preventDefault(); e.stopPropagation(); accPop ? accClose() : accOpen(b); };
             if (alone) {
                 const wrap = document.createElement('div');
