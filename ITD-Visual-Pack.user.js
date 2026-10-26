@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.7.4
+// @version      3.7.7.5
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6227,6 +6227,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.7.5', '27 октября 2026', [
+                'Галерея на телефоне: кнопки под картинкой, больше её не закрывают'
+            ]],
             ['3.7.7.3', '26 октября 2026', [
                 'Лента меньше дёргается при прокрутке вверх',
                 'Клуб ИТД X: аватарки-картинки больше не остаются эмодзи'
@@ -13145,6 +13148,14 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             .vp-gal-acts { opacity: 0; }
             .vp-gal-tile:hover .vp-gal-acts, .vp-gal-acts:has(:focus-visible) { opacity: 1; }
         }
+        .vp-gal-bar { display: contents; }
+        @media not ((hover: hover) and (pointer: fine)) {
+            .vp-gal-tile { display: flex; flex-direction: column; aspect-ratio: auto !important; }
+            .vp-gal-tile .vp-gal-strip { flex: 0 0 auto; height: calc(100cqw * var(--vp-r, 1)); }
+            .vp-gal-bar { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px; }
+            .vp-gal-bar .vp-gal-acts { position: static; padding: 0; background: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+            .vp-gal-act { color: var(--text-primary, #fff); }
+        }
         .vp-gal-badge { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 10px; font-size: 12px; font-weight: 600;
             color: #fff; pointer-events: none; background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4);
             box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset; }
@@ -13199,7 +13210,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             let k = 0;
             gal.heights.forEach((h, i) => { if (h < gal.heights[k]) k = i; });
             gal.cols[k].appendChild(tile);
-            gal.heights[k] += tile._vpRatio + .05;
+            gal.heights[k] += tile._vpRatio + .05 + (matchMedia('(hover: hover) and (pointer: fine)').matches ? 0 : .17);
         }
         const GAL_ICONS = {
             like: '<path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 4.6a3.7 3.7 0 0 0-5.2-.9C3.2 5 2.4 7.6 3.6 10.2 4.8 12.7 10 17 10 17s5.3-4.3 6.5-6.8c1.2-2.6 0-5.2-1.6-6.5s-4-.8-4.9.9"/>',
@@ -13313,9 +13324,10 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 });
             const user = post.author && post.author.username;
             if (user) copyBtn('link', 'Скопировать ссылку', () => copyText(`${location.origin}/@${user}/post/${post.id}`));
-            const out = document.createDocumentFragment();
-            out.append(row, right);
-            return out;
+            const bar = document.createElement('div');
+            bar.className = 'vp-gal-bar';
+            bar.append(row, right);
+            return bar;
         }
         document.addEventListener('vp-post-act', e => {
             const { id, act, on } = e.detail || {};
@@ -13364,6 +13376,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             tile._vpRatio = Math.min(2.2, Math.max(.45, h / w));
             tile._vpN = galN++;
             tile.style.aspectRatio = `1 / ${tile._vpRatio}`;
+            tile.style.setProperty('--vp-r', tile._vpRatio);
             const strip = document.createElement('div');
             strip.className = 'vp-gal-strip';
             media.forEach(att => {
