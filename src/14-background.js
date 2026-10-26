@@ -685,6 +685,7 @@
             paintKey = key;
             const [nick, nickBox, avatar, post, navIcon, tab, root, selection] = [...paintStyle.sheet.cssRules].map(r => r.style);
             const hsl = `hsl(${h}, 100%, ${dark ? 55 : 42}%)`;
+            const hslA = al => `hsl(${h} 100% ${dark ? 55 : 42}% / ${al})`;
             if (rainbow) {
                 nick.cssText = `color: ${hsl} !important;${neonEnabled ? ` text-shadow: 0 0 5px ${hsl} !important;` : ''}`;
             } else if (style.nickCss) {
@@ -694,7 +695,7 @@
                     : currentStyle === 'white' ? 'linear-gradient(270deg, #1a1a1a, #4a4a4a, #262626)' : style.gradientLight;
                 nick.cssText = `background: ${gradient} !important; -webkit-background-clip: text !important; background-clip: text !important; -webkit-text-fill-color: transparent !important;`;
             }
-            const glow = rainbow ? `drop-shadow(0 0 3px ${hsl}) drop-shadow(0 0 6px ${hsl})`
+            const glow = rainbow ? `drop-shadow(0 0 3px ${hslA(.6)}) drop-shadow(0 0 6px ${hslA(.3)})`
                 : dark ? style.glow
                     : currentStyle === 'white' ? 'drop-shadow(0 0 5px rgba(0, 0, 0, 0.25))'
                         : `brightness(0.8) saturate(1.3) drop-shadow(0 0 5px color-mix(in srgb, ${accentOf(style)} 55%, transparent))`;
@@ -702,8 +703,8 @@
                 : `filter: ${glow} !important;`;
             const ah = style.avatarHue || 210, as = style.avatarSat ?? 100;
             avatar.cssText = !avatarGlowOn ? '' : `filter: ${rainbow
-                ? `drop-shadow(0 0 3px ${hsl}) drop-shadow(0 0 6px ${hsl})`
-                : `drop-shadow(0 0 3px hsl(${ah}, ${as}%, 60%)) drop-shadow(0 0 6px hsl(${ah}, ${as}%, 60%))`} !important;`;
+                ? `drop-shadow(0 0 3px ${hslA(.6)}) drop-shadow(0 0 6px ${hslA(.3)})`
+                : `drop-shadow(0 0 3px hsl(${ah} ${as}% 60% / .6)) drop-shadow(0 0 6px hsl(${ah} ${as}% 60% / .3))`} !important;`;
             post.cssText = '';
             document.documentElement.classList.toggle('vp-post-hl', neonEnabled && postBorderEnabled);
 
@@ -730,7 +731,7 @@
                     let nick, glow;
                     if (key === 'rainbow') {
                         nick = 'animation: vp-look-rb 8s linear infinite !important; background: none !important; -webkit-text-fill-color: currentColor !important;';
-                        glow = 'drop-shadow(0 0 3px hsl(300, 100%, 60%)) drop-shadow(0 0 5px hsl(200, 100%, 60%))';
+                        glow = 'drop-shadow(0 0 3px hsl(300 100% 60% / .6)) drop-shadow(0 0 5px hsl(200 100% 60% / .3))';
                     } else {
                         if (st.nickCss) nick = st.nickCss(dark);
                         else {
@@ -745,8 +746,8 @@
                 }
                 const ah = st.avatarHue || 210, as = st.avatarSat ?? 100;
                 out.push(key === 'rainbow'
-                    ? `html.vp-looks [data-vp-look-av="${key}"] { filter: drop-shadow(0 0 3px hsl(300, 100%, 60%)) drop-shadow(0 0 5px hsl(190, 100%, 55%)) !important; }`
-                    : `html.vp-looks [data-vp-look-av="${key}"] { filter: drop-shadow(0 0 3px hsl(${ah}, ${as}%, 60%)) drop-shadow(0 0 6px hsl(${ah}, ${as}%, 60%)) !important; }`);
+                    ? `html.vp-looks [data-vp-look-av="${key}"] { filter: drop-shadow(0 0 3px hsl(300 100% 60% / .6)) drop-shadow(0 0 5px hsl(190 100% 55% / .3)) !important; }`
+                    : `html.vp-looks [data-vp-look-av="${key}"] { filter: drop-shadow(0 0 3px hsl(${ah} ${as}% 60% / .6)) drop-shadow(0 0 6px hsl(${ah} ${as}% 60% / .3)) !important; }`);
             }
             out.push('html.vp-no-neon .vp-my-nick, html.vp-no-neon [data-vp-look], html.vp-no-neon [data-vp-look] * { text-shadow: none !important; }',
                 'html.vp-no-neon.vp-no-neon [data-vp-look-glow], html.vp-no-neon.vp-no-neon [data-vp-look-av] { filter: none !important; }',

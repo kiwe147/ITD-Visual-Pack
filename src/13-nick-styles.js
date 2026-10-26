@@ -159,9 +159,19 @@
             }
         };
 
-        const GLOW_K = 0.5;
+        const GLOW_K = 0.5, GLOW_ALPHA = [0.6, 0.3];
+        const glowRgb = col => {
+            if (col[0] !== '#') return col.match(/[\d.]+/g).slice(0, 3).map(Number).concat(col.startsWith('rgba') ? [+col.match(/[\d.]+/g)[3]] : [1]);
+            const h = col.length === 4 ? col.replace(/#(.)(.)(.)/, '#$1$1$2$2$3$3') : col;
+            return [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)).concat([1]);
+        };
         for (const st of Object.values(nickStyles)) {
-            if (st.glow) st.glow = st.glow.replace(/drop-shadow\(0 0 ([\d.]+)px/g, (m, n) => `drop-shadow(0 0 ${+n * GLOW_K}px`);
+            if (!st.glow) continue;
+            let layer = 0;
+            st.glow = st.glow.replace(/drop-shadow\(0 0 ([\d.]+)px (#[0-9a-fA-F]{3,6}|rgba?\([^)]*\))\)/g, (m, n, col) => {
+                const [r, g, b, a] = glowRgb(col), cap = GLOW_ALPHA[Math.min(layer++, GLOW_ALPHA.length - 1)];
+                return `drop-shadow(0 0 ${+n * GLOW_K}px rgba(${r}, ${g}, ${b}, ${Math.min(a, cap)}))`;
+            });
         }
 
         const hueOf = hex => {
