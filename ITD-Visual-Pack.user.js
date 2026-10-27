@@ -2288,8 +2288,8 @@
         .vp-pals { position: fixed; inset: 0; z-index: 9000; pointer-events: none; overflow: hidden; }
         .vp-pal { position: absolute; bottom: 0; box-sizing: content-box; padding: 24px; margin: -24px; width: auto; height: min(var(--vp-pal-h, 45vh), calc(48vw * var(--vp-pal-r, 1))); pointer-events: none;
             user-select: none; -webkit-user-drag: none; animation: vpPalIn .7s cubic-bezier(.2, .9, .3, 1.15) both; }
-        .vp-pal-miku { right: 0; transform: translate(6%, 5%); }
-        .vp-pal-teto { left: 0; transform: scaleX(-1) translate(6%, 5%); }
+        .vp-pal-miku { right: 0; transform: translate(var(--vp-pal-dx, 6%), 5%); }
+        .vp-pal-teto { left: 0; transform: scaleX(-1) translate(var(--vp-pal-dx, 6%), 5%); }
         .vp-pals[data-look="neon"] .vp-pal-miku { filter: drop-shadow(0 0 1.5px rgba(120, 255, 245, .9)) drop-shadow(0 0 10px rgba(57, 197, 187, .55)); }
         .vp-pals[data-look="neon"] .vp-pal-teto { filter: drop-shadow(0 0 1.5px rgba(255, 150, 170, .9)) drop-shadow(0 0 10px rgba(255, 77, 109, .55)); }
         .vp-pals[data-look="dim"] .vp-pal { filter: brightness(.82) saturate(.85) contrast(1.05) drop-shadow(0 10px 28px rgba(0, 0, 0, .65)); }
@@ -4294,11 +4294,11 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         let palsOn = GM_getValue('palsEnabled', false);
         const PALS = {
-            miku: { key: 'palMiku', skins: { old: { file: 'miku.webp', r: 800 / 790, cache: 'pal-miku@8' }, new: { file: 'miku2.webp', r: 675 / 728, cache: 'pal-miku-2@1' } } },
-            teto: { key: 'palTeto', skins: { old: { file: 'teto.webp', r: 776 / 734, cache: 'pal-teto@8' }, new: { file: 'teto2.webp', r: 675 / 566, cache: 'pal-teto-2@1' } } }
+            miku: { key: 'palMiku', skins: { old: { file: 'miku.webp', r: 800 / 790, dx: '6%', cache: 'pal-miku@8' }, new: { file: 'miku2.webp', r: 675 / 728, dx: '6%', cache: 'pal-miku-2@2' } } },
+            teto: { key: 'palTeto', skins: { old: { file: 'teto.webp', r: 776 / 734, dx: '6%', cache: 'pal-teto@8' }, new: { file: 'teto2.webp', r: 675 / 565, dx: '0%', cache: 'pal-teto-2@2' } } }
         };
-        const PAL_SKINS = [['old', 'Прежняя'], ['new', 'Новая, 52 к/с']];
-        const palSkin = () => GM_getValue('palSkin', 'new') === 'old' ? 'old' : 'new';
+        const PAL_SKINS = [['old', 'Прыгают'], ['new', 'Кивают']];
+        const palSkin = () => GM_getValue('palSkin', 'old') === 'new' ? 'new' : 'old';
         const palCfg = id => PALS[id].skins[palSkin()];
         const PAL_LOOKS = [
             ['plain', 'Как есть', '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="12" cy="11" r="3"/><path d="M7 20c.8-2.6 2.8-4 5-4s4.2 1.4 5 4"/>'],
@@ -4351,6 +4351,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     img.className = 'vp-pal vp-pal-' + id;
                     img.alt = '';
                     img.style.setProperty('--vp-pal-r', palCfg(id).r);
+                    img.style.setProperty('--vp-pal-dx', palCfg(id).dx);
                     palsBox.appendChild(img);
                     fresh = true;
                 }

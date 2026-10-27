@@ -404,8 +404,8 @@
         .vp-pals { position: fixed; inset: 0; z-index: 9000; pointer-events: none; overflow: hidden; }
         .vp-pal { position: absolute; bottom: 0; box-sizing: content-box; padding: 24px; margin: -24px; width: auto; height: min(var(--vp-pal-h, 45vh), calc(48vw * var(--vp-pal-r, 1))); pointer-events: none;
             user-select: none; -webkit-user-drag: none; animation: vpPalIn .7s cubic-bezier(.2, .9, .3, 1.15) both; }
-        .vp-pal-miku { right: 0; transform: translate(6%, 5%); }
-        .vp-pal-teto { left: 0; transform: scaleX(-1) translate(6%, 5%); }
+        .vp-pal-miku { right: 0; transform: translate(var(--vp-pal-dx, 6%), 5%); }
+        .vp-pal-teto { left: 0; transform: scaleX(-1) translate(var(--vp-pal-dx, 6%), 5%); }
         .vp-pals[data-look="neon"] .vp-pal-miku { filter: drop-shadow(0 0 1.5px rgba(120, 255, 245, .9)) drop-shadow(0 0 10px rgba(57, 197, 187, .55)); }
         .vp-pals[data-look="neon"] .vp-pal-teto { filter: drop-shadow(0 0 1.5px rgba(255, 150, 170, .9)) drop-shadow(0 0 10px rgba(255, 77, 109, .55)); }
         .vp-pals[data-look="dim"] .vp-pal { filter: brightness(.82) saturate(.85) contrast(1.05) drop-shadow(0 10px 28px rgba(0, 0, 0, .65)); }

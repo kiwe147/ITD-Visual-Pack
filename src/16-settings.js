@@ -44,11 +44,11 @@
         }
         let palsOn = GM_getValue('palsEnabled', false);
         const PALS = {
-            miku: { key: 'palMiku', skins: { old: { file: 'miku.webp', r: 800 / 790, cache: 'pal-miku@8' }, new: { file: 'miku2.webp', r: 675 / 728, cache: 'pal-miku-2@1' } } },
-            teto: { key: 'palTeto', skins: { old: { file: 'teto.webp', r: 776 / 734, cache: 'pal-teto@8' }, new: { file: 'teto2.webp', r: 675 / 566, cache: 'pal-teto-2@1' } } }
+            miku: { key: 'palMiku', skins: { old: { file: 'miku.webp', r: 800 / 790, dx: '6%', cache: 'pal-miku@8' }, new: { file: 'miku2.webp', r: 675 / 728, dx: '6%', cache: 'pal-miku-2@2' } } },
+            teto: { key: 'palTeto', skins: { old: { file: 'teto.webp', r: 776 / 734, dx: '6%', cache: 'pal-teto@8' }, new: { file: 'teto2.webp', r: 675 / 565, dx: '0%', cache: 'pal-teto-2@2' } } }
         };
-        const PAL_SKINS = [['old', 'Прежняя'], ['new', 'Новая, 52 к/с']];
-        const palSkin = () => GM_getValue('palSkin', 'new') === 'old' ? 'old' : 'new';
+        const PAL_SKINS = [['old', 'Прыгают'], ['new', 'Кивают']];
+        const palSkin = () => GM_getValue('palSkin', 'old') === 'new' ? 'new' : 'old';
         const palCfg = id => PALS[id].skins[palSkin()];
         const PAL_LOOKS = [
             ['plain', 'Как есть', '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="12" cy="11" r="3"/><path d="M7 20c.8-2.6 2.8-4 5-4s4.2 1.4 5 4"/>'],
@@ -101,6 +101,7 @@
                     img.className = 'vp-pal vp-pal-' + id;
                     img.alt = '';
                     img.style.setProperty('--vp-pal-r', palCfg(id).r);
+                    img.style.setProperty('--vp-pal-dx', palCfg(id).dx);
                     palsBox.appendChild(img);
                     fresh = true;
                 }
