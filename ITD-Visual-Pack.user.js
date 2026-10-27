@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.8.3
+// @version      3.7.8.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6277,6 +6277,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.8.4', '28 октября 2026', [
+                'Кнопка «Ивент» после окончания ивента остаётся с иконкой ИТД X, а не с картинкой сайта'
+            ]],
             ['3.7.8.3', '28 октября 2026', [
                 'Ивент: Мику и Тето на его странице прячутся'
             ]],
@@ -11340,7 +11343,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         });
         let eventMaskN = 0;
         onDom(function eventIcon() {
-            document.querySelectorAll('a[href^="/event"] img').forEach(img => {
+            document.querySelectorAll('a[href^="/event"] img, img[src*="/assets/portal/"]').forEach(img => {
                 const own = [...img.classList].filter(c => !c.startsWith('vp-'));
                 const state = own.length > 1 || (/portal/.test(img.src) && !/inactive/.test(img.src)) ? 'live' : 'idle';
                 if (!img.classList.contains('vp-portal-img')) img.classList.add('vp-portal-img');

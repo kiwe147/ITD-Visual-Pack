@@ -113,7 +113,7 @@
         });
         let eventMaskN = 0;
         onDom(function eventIcon() {
-            document.querySelectorAll('a[href^="/event"] img').forEach(img => {
+            document.querySelectorAll('a[href^="/event"] img, img[src*="/assets/portal/"]').forEach(img => {
                 const own = [...img.classList].filter(c => !c.startsWith('vp-'));
                 const state = own.length > 1 || (/portal/.test(img.src) && !/inactive/.test(img.src)) ? 'live' : 'idle';
                 if (!img.classList.contains('vp-portal-img')) img.classList.add('vp-portal-img');
