@@ -487,7 +487,12 @@
             backdrop-filter: var(--vp-glass-filter, blur(16px)); -webkit-backdrop-filter: var(--vp-glass-filter, blur(16px)); }
         .vp-bump-bg .vp-bump-fill { fill: var(--glass-bg); }
         a[href^="/event"] img[src*="/portal/"], img.vp-portal-img { display: none !important; }
-        .vp-nav-has-blob .vp-nav-link:has(> svg.vp-portal[data-state="live"]) { border-radius: 18px !important; background: color-mix(in srgb, #9a63ff 11%, transparent) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, #9a63ff 30%, transparent); }
+        .vp-nav-link:has(> svg.vp-portal[data-state="live"])::after { display: none !important; }
+        .vp-nav-link:has(> svg.vp-portal[data-state="live"]) > span { color: color-mix(in srgb, #b58cff 62%, var(--text-primary)); }
+        .vp-nav-link:has(> svg.vp-portal[data-state="live"]) > span::after { content: ''; display: inline-block; width: 7px; height: 7px; margin-left: 9px; border-radius: 50%; vertical-align: middle;
+            background: #b58cff; box-shadow: 0 0 8px #b58cff; animation: vpLiveDot 2s ease-in-out infinite; }
+        @keyframes vpLiveDot { 50% { opacity: .35; transform: scale(.7); } }
+        @media (prefers-reduced-motion: reduce) { .vp-nav-link > span::after { animation: none !important; } }
         .vp-itdx-btn { background: color-mix(in srgb, var(--vp-accent) 16%, var(--block-bg)) !important;
             color: color-mix(in srgb, var(--vp-accent) 75%, #fff) !important; border-color: transparent !important;
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent) 40%, transparent) !important; transition: background-color .15s ease; }
