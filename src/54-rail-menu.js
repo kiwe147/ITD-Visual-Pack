@@ -365,6 +365,7 @@
         addEventListener('resize', placeRail);
 
         function placeSidebar() {
+            document.documentElement.classList.toggle('vp-ev-scene', /^\/event\/[^/]/.test(location.pathname));
             if (galOpen || /^\/event\/[^/]/.test(location.pathname)) { document.documentElement.classList.remove('vp-side-moved'); return; }
             const side = siteEl('sidebar');
             const cb = contentBox() || lastCb;
