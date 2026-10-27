@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.9.3
+// @version      3.7.9.10
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6285,6 +6285,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.9.10', '28 октября 2026', [
+                'Мур'
+            ]],
             ['3.7.9.3', '28 октября 2026', [
                 'Миу'
             ]],
@@ -16055,7 +16058,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         onDom(profileSort);
         // Маскот ИТД X на странице ивента: арт сидит на полу справа от камина, по клику говорит случайную фразу.
         // Рисуется внутри окна ивента (оно того же сайта), поэтому двигается и масштабируется вместе с комнатой.
-        const MASCOT = { file: 'mascot2.webp', cache: 'mascot-2@1', ratio: 800 / 736 };
+        const MASCOT = { file: 'mascot3.webp', cache: 'mascot-3@1', ratio: 800 / 737 };
         const MASCOT_SAYS = ['Арра-Ара~', 'Миу', 'Мяу', 'Мь?', 'Мя', 'Мур'];
         const MASCOT_CSS = `
         .vp-mas { position: absolute; left: 62%; bottom: 3%; width: 36%; aspect-ratio: ${MASCOT.ratio}; z-index: 6; pointer-events: none; user-select: none; -webkit-tap-highlight-color: transparent; animation: vpMasIn .9s cubic-bezier(.2, .9, .3, 1.1) both; }
