@@ -156,11 +156,14 @@
                 const nav = siteEl('nav');
                 if (!nav || navIsRow(nav)) return;
                 const r = nav.getBoundingClientRect();
-                const inside = e.clientX >= r.left - 24 && e.clientX <= r.right + 40 && e.clientY >= r.top - 60 && e.clientY <= r.bottom + 60;
+                const inside = !(e.target && e.target.tagName === 'IFRAME') && e.clientX >= r.left - 24 && e.clientX <= r.right + 40 && e.clientY >= r.top - 60 && e.clientY <= r.bottom + 60;
                 const y = inside ? e.clientY : null;
                 if (y !== proxY) { proxY = y; proxKick(); }
             }, { passive: true });
             document.addEventListener('pointerleave', () => { proxY = null; proxKick(); });
+            // Вложенное окно (сцена ивента) съедает движения мыши: страница больше не получает pointermove, и кнопки так и остаются «притянутыми».
+            document.addEventListener('pointerover', e => { if (e.target && e.target.tagName === 'IFRAME' && proxY !== null) { proxY = null; proxKick(); } }, { passive: true });
+            addEventListener('blur', () => { if (proxY !== null) { proxY = null; proxKick(); } });
         }
 
         let sceneEnabled = GM_getValue('sceneEnabled', true) && !calm;

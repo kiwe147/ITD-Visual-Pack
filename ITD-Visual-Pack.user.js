@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.8.5
+// @version      3.7.8.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6285,6 +6285,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.8.6', '28 октября 2026', [
+                'Ивент: меню слева больше не «залипает» тянущимся к мыши, когда курсор уходит на сцену ивента'
+            ]],
             ['3.7.8.5', '28 октября 2026', [
                 'Ивент: когда сайт на несколько секунд тушит свет («Свет вырубило»), Мику и Тето прячутся и потом возвращаются'
             ]],
@@ -12853,11 +12856,14 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const nav = siteEl('nav');
                 if (!nav || navIsRow(nav)) return;
                 const r = nav.getBoundingClientRect();
-                const inside = e.clientX >= r.left - 24 && e.clientX <= r.right + 40 && e.clientY >= r.top - 60 && e.clientY <= r.bottom + 60;
+                const inside = !(e.target && e.target.tagName === 'IFRAME') && e.clientX >= r.left - 24 && e.clientX <= r.right + 40 && e.clientY >= r.top - 60 && e.clientY <= r.bottom + 60;
                 const y = inside ? e.clientY : null;
                 if (y !== proxY) { proxY = y; proxKick(); }
             }, { passive: true });
             document.addEventListener('pointerleave', () => { proxY = null; proxKick(); });
+            // Вложенное окно (сцена ивента) съедает движения мыши: страница больше не получает pointermove, и кнопки так и остаются «притянутыми».
+            document.addEventListener('pointerover', e => { if (e.target && e.target.tagName === 'IFRAME' && proxY !== null) { proxY = null; proxKick(); } }, { passive: true });
+            addEventListener('blur', () => { if (proxY !== null) { proxY = null; proxKick(); } });
         }
 
         let sceneEnabled = GM_getValue('sceneEnabled', true) && !calm;
