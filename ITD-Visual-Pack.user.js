@@ -11291,6 +11291,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         });
 
         const postDesignStyle = addCss(`
+        html { overflow-anchor: none; }
         article[data-alice-water-anchor-kind="post"] { margin-bottom: 16px !important; }
         article.vp-post {
             background: var(--block-bg);
