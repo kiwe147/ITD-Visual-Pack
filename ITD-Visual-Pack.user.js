@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.9.4
+// @version      3.7.9.5
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6285,6 +6285,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.9.5', '28 октября 2026', [
+                'Мур'
+            ]],
             ['3.7.9.4', '28 октября 2026', [
                 'Мяу'
             ]],
@@ -16071,12 +16074,12 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             -webkit-mask: var(--vp-mas-img) center / 100% 100% no-repeat; mask: var(--vp-mas-img) center / 100% 100% no-repeat;
             background: linear-gradient(90deg, rgba(255, 150, 55, .75), rgba(255, 150, 55, 0) 62%), linear-gradient(180deg, rgba(125, 80, 200, .35), rgba(70, 35, 120, .5)); }
         .vp-mas-say { position: absolute; left: 42%; bottom: 96%; translate: -50% 0; padding: .45cqw 1.1cqw; border: max(1.5px, .16cqw) solid #2a170f; border-radius: 1.2cqw; background: #fff1d6; color: #3a2210; font-weight: 700; font-size: max(12px, 1.7cqw); line-height: 1.2; white-space: nowrap; pointer-events: none;
-            box-shadow: 0 .3cqw .8cqw rgba(0, 0, 0, .35); opacity: 0; transform: translateY(30%) scale(.7); transform-origin: 50% 100%; transition: opacity .18s ease, transform .22s cubic-bezier(.3, 1.5, .5, 1); }
+            box-shadow: 0 .3cqw .8cqw rgba(0, 0, 0, .35); opacity: 0; transform: translateY(30%) scale(.7); transform-origin: 50% 100%; transition: opacity .35s ease, transform .5s cubic-bezier(.2, .9, .3, 1.15); }
         .vp-mas-say::after { content: ""; position: absolute; left: 50%; top: 100%; width: .9cqw; height: .9cqw; translate: -50% -55%; rotate: 45deg; background: #fff1d6; border: max(1.5px, .16cqw) solid #2a170f; border-top: 0; border-left: 0; }
         .vp-mas-say.vp-on { opacity: 1; transform: none; }
-        .vp-mas.vp-hop .vp-mas-pic { animation: vpMasHop .38s cubic-bezier(.3, 1.4, .5, 1); }
+        .vp-mas.vp-hop .vp-mas-pic { animation: vpMasHop .8s ease-in-out; }
         @keyframes vpMasIn { from { opacity: 0; translate: 0 8%; } }
-        @keyframes vpMasHop { 40% { transform: translateY(-4%) scale(1.03, .97); } 70% { transform: scale(.98, 1.02); } }
+        @keyframes vpMasHop { 0%, 100% { transform: none; } 30% { transform: translateY(-4%) scale(.985, 1.015); } 62% { transform: translateY(0) scale(1.015, .985); } 82% { transform: scale(.998, 1.004); } }
         @keyframes vpMasFlick { from { opacity: .8; } to { opacity: 1; } }
         @media (orientation: portrait), (prefers-reduced-motion: reduce) { .vp-mas { animation: none; } .vp-mas-tint { animation: none; } }
         @media (orientation: portrait) { .vp-mas { display: none; } }`;
