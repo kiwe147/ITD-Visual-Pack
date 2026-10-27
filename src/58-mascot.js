@@ -3,7 +3,7 @@
         const MASCOT = { file: 'mascot2.webp', cache: 'mascot-2@1', ratio: 800 / 736 };
         const MASCOT_SAYS = ['Арра-Ара~', 'Миу', 'Мяу', 'Мь?', 'Мя', 'Мур'];
         const MASCOT_CSS = `
-        .vp-mas { position: absolute; left: 68%; bottom: 5%; width: 29%; aspect-ratio: ${MASCOT.ratio}; z-index: 6; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; animation: vpMasIn .9s cubic-bezier(.2, .9, .3, 1.1) both; }
+        .vp-mas { position: absolute; left: 62%; bottom: 3%; width: 36%; aspect-ratio: ${MASCOT.ratio}; z-index: 6; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; animation: vpMasIn .9s cubic-bezier(.2, .9, .3, 1.1) both; }
         .vp-mas-shadow { position: absolute; left: 4%; right: -4%; bottom: -2%; height: 13%; border-radius: 50%; background: radial-gradient(closest-side, rgba(12, 4, 24, .6), rgba(12, 4, 24, 0)); pointer-events: none; }
         .vp-mas-pic { position: relative; width: 100%; height: 100%; background: var(--vp-mas-img) center / 100% 100% no-repeat; filter: brightness(.84) saturate(.8) contrast(1.05); transform-origin: 55% 100%; }
         .vp-mas-tint { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: soft-light; animation: vpMasFlick 3.4s ease-in-out infinite alternate;
