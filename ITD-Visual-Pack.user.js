@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.9.1
+// @version      3.7.9.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6285,6 +6285,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.9.2', '28 октября 2026', [
+                'Сообщения: аватарка в шапке чата снова с картинкой и не налезает на открытую картинку'
+            ]],
             ['3.7.9.1', '28 октября 2026', [
                 'Ивент: под плашкой «Сообщений» больше нет прямоугольной подсветки у кнопки «Ивент»'
             ]],
@@ -9891,6 +9894,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-msgs-ava { position: relative; width: 50px; height: 50px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
             font-size: 26px; background: var(--block-bg); }
         .vp-msgs-ava.vp-sm { width: 38px; height: 38px; font-size: 20px; }
+        html.vp-glass .vp-msgs-chead .vp-msgs-ava { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
         .vp-msgs-ava.vp-sup { color: #fff; background: linear-gradient(145deg, #ff5a5f, #d0202a); box-shadow: 0 0 0 2px rgba(255, 90, 95, .28), 0 4px 14px rgba(208, 32, 42, .4); }
         .vp-msgs-ava.vp-sup svg { width: 58%; height: 58%; stroke-width: 2.1; }
         .vp-msgs-row.vp-sup { background: linear-gradient(90deg, rgba(255, 70, 76, .2), rgba(255, 70, 76, .06)); box-shadow: inset 0 0 0 1px rgba(255, 90, 95, .32); }
