@@ -207,7 +207,7 @@
         a[href^="/@"], a[href*="/@"] { text-decoration: none !important; }
         a[href^="/@"] .vp-nick-text { font-weight: 600 !important; }
         a[href^="/@"]:hover .vp-nick-text { filter: brightness(0.85) !important; }
-        a[href^="/@"] svg, a[href*="/@"] svg, a[href^="/@"] img, a[href*="/@"] img,
+        a[href^="/@"] svg:not([data-halloween-pumpkin] svg), a[href*="/@"] svg:not([data-halloween-pumpkin] svg), a[href^="/@"] img, a[href*="/@"] img,
         a[href^="/@"] .mod-badge-voronoi, a[href*="/@"] .mod-badge-voronoi,
         a[href^="/@"] .vp-nick-badges {
             filter: none !important;

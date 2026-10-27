@@ -6278,7 +6278,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         };
         const CHANGELOG = [
             ['3.7.8.4', '28 октября 2026', [
-                'Кнопка «Ивент» после окончания ивента остаётся с иконкой ИТД X, а не с картинкой сайта'
+                'Кнопка «Ивент» после окончания ивента остаётся с иконкой ИТД X, а не с картинкой сайта',
+                'Тыква у ника на ивенте сидит ровно, как на сайте, а не ниже строки'
             ]],
             ['3.7.8.3', '28 октября 2026', [
                 'Ивент: Мику и Тето на его странице прячутся'
@@ -11437,7 +11438,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         a[href^="/@"], a[href*="/@"] { text-decoration: none !important; }
         a[href^="/@"] .vp-nick-text { font-weight: 600 !important; }
         a[href^="/@"]:hover .vp-nick-text { filter: brightness(0.85) !important; }
-        a[href^="/@"] svg, a[href*="/@"] svg, a[href^="/@"] img, a[href*="/@"] img,
+        a[href^="/@"] svg:not([data-halloween-pumpkin] svg), a[href*="/@"] svg:not([data-halloween-pumpkin] svg), a[href^="/@"] img, a[href*="/@"] img,
         a[href^="/@"] .mod-badge-voronoi, a[href*="/@"] .mod-badge-voronoi,
         a[href^="/@"] .vp-nick-badges {
             filter: none !important;
@@ -12396,7 +12397,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             backdrop-filter: var(--vp-glass-filter, blur(16px)); -webkit-backdrop-filter: var(--vp-glass-filter, blur(16px)); }
         .vp-bump-bg .vp-bump-fill { fill: var(--glass-bg); }
         a[href^="/event"] img[src*="/portal/"], img.vp-portal-img { display: none !important; }
-        .vp-nav-has-blob .vp-nav-link.OfVj.FkqR { background: color-mix(in srgb, #9a63ff 11%, transparent) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, #9a63ff 30%, transparent); }
+        .vp-nav-has-blob .vp-nav-link:has(> svg.vp-portal[data-state="live"]) { border-radius: 18px !important; background: color-mix(in srgb, #9a63ff 11%, transparent) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, #9a63ff 30%, transparent); }
         .vp-itdx-btn { background: color-mix(in srgb, var(--vp-accent) 16%, var(--block-bg)) !important;
             color: color-mix(in srgb, var(--vp-accent) 75%, #fff) !important; border-color: transparent !important;
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent) 40%, transparent) !important; transition: background-color .15s ease; }
