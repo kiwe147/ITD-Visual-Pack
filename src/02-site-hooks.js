@@ -21,6 +21,7 @@
     const postIndex = { byMedia: new Map(), byUser: new Map(), byRepost: new Map(), original: new Map() };
     const normText = t => String(t || '').replace(/\s+/g, ' ').trim();
     const POSTS_URL = /\/api\/posts(?:\/user\/[^/?#]+(?:\/liked)?|\/[0-9a-f-]{36})?\/?(?:[?#]|$)/;
+    let clubSeen = null;
     const POST_INDEX_MAX = 4000;
     const trimMap = m => { if (m.size > POST_INDEX_MAX) { const it = m.keys(); for (let n = m.size - POST_INDEX_MAX * 0.75; n > 0; n--) m.delete(it.next().value); } };
     function keepSitePosts(body) {
@@ -30,6 +31,7 @@
             for (const p of list) {
                 if (!p || !p.id || !p.author) continue;
                 (p.attachments || []).forEach(a => a && a.url && postIndex.byMedia.set(a.url, p.id));
+                if (clubSeen) clubSeen(p.author);
                 const user = String(p.author.username || '').toLowerCase(), text = normText(p.content);
                 const o = p.originalPost;
                 if (o && o.id) { postIndex.original.set(p.id, o.id); trimMap(postIndex.original); }
@@ -56,6 +58,7 @@
             const d = j && (j.data || j.user || j);
             if (!d || !d.username) return;
             const key = d.username.toLowerCase();
+            if (clubSeen) clubSeen(d);
             siteUsers.set(key, d);
             (siteUsersWait.get(key) || []).forEach(done => done(d));
             siteUsersWait.delete(key);

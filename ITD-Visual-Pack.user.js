@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.8
+// @version      3.7.8.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -215,6 +215,7 @@
     const postIndex = { byMedia: new Map(), byUser: new Map(), byRepost: new Map(), original: new Map() };
     const normText = t => String(t || '').replace(/\s+/g, ' ').trim();
     const POSTS_URL = /\/api\/posts(?:\/user\/[^/?#]+(?:\/liked)?|\/[0-9a-f-]{36})?\/?(?:[?#]|$)/;
+    let clubSeen = null;
     const POST_INDEX_MAX = 4000;
     const trimMap = m => { if (m.size > POST_INDEX_MAX) { const it = m.keys(); for (let n = m.size - POST_INDEX_MAX * 0.75; n > 0; n--) m.delete(it.next().value); } };
     function keepSitePosts(body) {
@@ -224,6 +225,7 @@
             for (const p of list) {
                 if (!p || !p.id || !p.author) continue;
                 (p.attachments || []).forEach(a => a && a.url && postIndex.byMedia.set(a.url, p.id));
+                if (clubSeen) clubSeen(p.author);
                 const user = String(p.author.username || '').toLowerCase(), text = normText(p.content);
                 const o = p.originalPost;
                 if (o && o.id) { postIndex.original.set(p.id, o.id); trimMap(postIndex.original); }
@@ -250,6 +252,7 @@
             const d = j && (j.data || j.user || j);
             if (!d || !d.username) return;
             const key = d.username.toLowerCase();
+            if (clubSeen) clubSeen(d);
             siteUsers.set(key, d);
             (siteUsersWait.get(key) || []).forEach(done => done(d));
             siteUsersWait.delete(key);
@@ -6227,6 +6230,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.8.1', '27 октября 2026', [
+                'Клуб ИТД X: статус «в сети» обновляется заметно быстрее'
+            ]],
             ['3.7.8', '27 октября 2026', [
                 'Мяу'
             ]],
@@ -15556,7 +15562,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             paintClub();
             paintOnline();
         }
-        const CLUB_TTL = 5 * 60 * 1000, CLUB_OFF_TTL = 20 * 60 * 1000, CLUB_GAP = 30e3, CLUB_LIVE = 30 * 60e3;
+        const CLUB_TTL = 3 * 60 * 1000, CLUB_OFF_TTL = 10 * 60 * 1000, CLUB_GAP = 12e3, CLUB_LIVE = 30 * 60e3;
         const clubOnline = new Map();
         function clubOnlineLoad() {
             const s = GM_getValue('vp_club_online', {}) || {};
@@ -15590,6 +15596,15 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (cnt.title !== tip) cnt.title = tip;
         }
         let clubPolling = false, clubPolledAt = 0, clubFirst = true;
+        let clubPaintT = 0;
+        clubSeen = u => {
+            if (!u || !u.username || (typeof u.online !== 'boolean' && !u.lastSeen) || !railClub.isConnected) return;
+            const lc = String(u.username).toLowerCase(), row = [...railClub.querySelectorAll('.vp-club-row')].find(r => r.dataset.login.toLowerCase() === lc);
+            if (!row || row.dataset.login === myUsername) return;
+            const prev = clubOnline.get(row.dataset.login), on = !!u.online;
+            clubOnline.set(row.dataset.login, { on, seen: u.lastSeen || (prev && prev.seen) || null, at: Date.now() });
+            if (!prev || prev.on !== on) { cancelAnimationFrame(clubPaintT); clubPaintT = requestAnimationFrame(paintOnline); }
+        };
         async function clubCheck(n) {
             const r = await api('/api/users/' + encodeURIComponent(n)).catch(() => null);
             if (!r || !r.ok) return;
@@ -15625,7 +15640,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         const clubTick = () => Promise.resolve(renderClub()).then(() => clubPollOnline()).catch(e => logErr('клуб: в сети', e));
         setTimeout(() => Promise.resolve(renderClub()).catch(e => logErr('клуб', e)), 2500);
-        setTimeout(() => clubPollOnline(), 14000);
+        setTimeout(() => clubPollOnline(), 6000);
         sched.add('clubRender', clubTick, { every: 60 * 1000, net: true });
         sched.add('clubPoll', () => clubPollOnline(), { every: 5000, net: true });
         let clubScrollT = 0;

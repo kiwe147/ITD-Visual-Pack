@@ -67,7 +67,7 @@
             paintClub();
             paintOnline();
         }
-        const CLUB_TTL = 5 * 60 * 1000, CLUB_OFF_TTL = 20 * 60 * 1000, CLUB_GAP = 30e3, CLUB_LIVE = 30 * 60e3;
+        const CLUB_TTL = 3 * 60 * 1000, CLUB_OFF_TTL = 10 * 60 * 1000, CLUB_GAP = 12e3, CLUB_LIVE = 30 * 60e3;
         const clubOnline = new Map();
         function clubOnlineLoad() {
             const s = GM_getValue('vp_club_online', {}) || {};
@@ -101,6 +101,15 @@
             if (cnt.title !== tip) cnt.title = tip;
         }
         let clubPolling = false, clubPolledAt = 0, clubFirst = true;
+        let clubPaintT = 0;
+        clubSeen = u => {
+            if (!u || !u.username || (typeof u.online !== 'boolean' && !u.lastSeen) || !railClub.isConnected) return;
+            const lc = String(u.username).toLowerCase(), row = [...railClub.querySelectorAll('.vp-club-row')].find(r => r.dataset.login.toLowerCase() === lc);
+            if (!row || row.dataset.login === myUsername) return;
+            const prev = clubOnline.get(row.dataset.login), on = !!u.online;
+            clubOnline.set(row.dataset.login, { on, seen: u.lastSeen || (prev && prev.seen) || null, at: Date.now() });
+            if (!prev || prev.on !== on) { cancelAnimationFrame(clubPaintT); clubPaintT = requestAnimationFrame(paintOnline); }
+        };
         async function clubCheck(n) {
             const r = await api('/api/users/' + encodeURIComponent(n)).catch(() => null);
             if (!r || !r.ok) return;
@@ -136,7 +145,7 @@
         }
         const clubTick = () => Promise.resolve(renderClub()).then(() => clubPollOnline()).catch(e => logErr('клуб: в сети', e));
         setTimeout(() => Promise.resolve(renderClub()).catch(e => logErr('клуб', e)), 2500);
-        setTimeout(() => clubPollOnline(), 14000);
+        setTimeout(() => clubPollOnline(), 6000);
         sched.add('clubRender', clubTick, { every: 60 * 1000, net: true });
         sched.add('clubPoll', () => clubPollOnline(), { every: 5000, net: true });
         let clubScrollT = 0;
