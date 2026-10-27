@@ -4295,7 +4295,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         let palsOn = GM_getValue('palsEnabled', false);
         const PALS = {
             miku: { key: 'palMiku', skinKey: 'palSkinMiku', skins: { old: { file: 'miku.webp', r: 800 / 790, dx: '6%', cache: 'pal-miku@8' }, new: { file: 'miku2.webp', r: 675 / 728, dx: '6%', cache: 'pal-miku-2@2' } } },
-            teto: { key: 'palTeto', skinKey: 'palSkinTeto', skins: { old: { file: 'teto.webp', r: 776 / 734, dx: '6%', cache: 'pal-teto@8' }, new: { file: 'teto2.webp', r: 675 / 565, dx: '0%', k: 1.15, cache: 'pal-teto-2@2' } } }
+            teto: { key: 'palTeto', skinKey: 'palSkinTeto', skins: { old: { file: 'teto.webp', r: 776 / 734, dx: '6%', cache: 'pal-teto@8' }, new: { file: 'teto2.webp', r: 675 / 565, dx: '0%', cache: 'pal-teto-2@2' } } }
         };
         const PAL_SKINS = [['old', 'Прыгают'], ['new', 'Кивают']];
         // у каждого персонажа своя анимация; общая палитра palSkin (прошлая сборка) используется, пока свою не выбрали
