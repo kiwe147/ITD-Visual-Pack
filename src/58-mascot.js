@@ -1,6 +1,6 @@
         // Маскот ИТД X на странице ивента: арт сидит на полу справа от камина, по клику говорит случайную фразу.
         // Рисуется внутри окна ивента (оно того же сайта), поэтому двигается и масштабируется вместе с комнатой.
-        const MASCOT = { file: 'mascot.webp', cache: 'mascot@1', ratio: 640 / 585 };
+        const MASCOT = { file: 'mascot2.webp', cache: 'mascot-2@1', ratio: 800 / 736 };
         const MASCOT_SAYS = ['Арра-Ара~', 'Миу', 'Мяу', 'Мь?', 'Мя', 'Мур'];
         const MASCOT_CSS = `
         .vp-mas { position: absolute; left: 68%; bottom: 5%; width: 29%; aspect-ratio: ${MASCOT.ratio}; z-index: 6; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; animation: vpMasIn .9s cubic-bezier(.2, .9, .3, 1.1) both; }
