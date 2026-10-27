@@ -46,6 +46,7 @@
 55-stats-card.js
 56-club.js
 57-profile-sort.js
+58-mascot.js
 60-games.js
 61-leaderboard.js
 90-boot-tail.js
