@@ -102,7 +102,7 @@
                     img.className = 'vp-pal vp-pal-' + id;
                     img.alt = '';
                     img.style.setProperty('--vp-pal-r', palCfg(id).r);
-                    img.style.setProperty('--vp-pal-dx', palCfg(id).dx);
+                    img.style.setProperty('--vp-pal-dx', parseFloat(palCfg(id).dx) / 100);
                     img.style.setProperty('--vp-pal-k', palCfg(id).k || 1);
                     palsBox.appendChild(img);
                     fresh = true;

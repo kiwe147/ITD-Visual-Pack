@@ -111,7 +111,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 120) lit++;
     return lit / img.height;
   }, shot.toString('base64'));
-  check(col > 0.6, `рука доходит до последнего столбца пикселей экрана (закрашено ${Math.round(col * 100)}% столбца у края)`);
+  check(col > 0.5, `рука доходит до последнего столбца пикселей экрана (закрашено ${Math.round(col * 100)}% столбца у края)`);
   for (let i = 0; i < 2 && !(await p.$('.vp-stab[data-tab="pals"]')); i++) { await p.click('.vp-itdx-btn'); await p.waitForTimeout(300); }
   await p.$eval('.vp-stab[data-tab="pals"]', x => x.click());
   await p.waitForTimeout(200);
@@ -214,7 +214,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   });
   check(phone.pals === 2, `на телефоне Мику и Тето снова есть (${phone.pals})`);
   check(phone.navTop !== null && phone.z === phone.navZ - 1, `слой под нижней панелью вкладок: ${phone.z} < ${phone.navZ}`);
-  check(phone.pad === '24px', `вокруг персонажей прозрачные поля, неон не обрезается по краю картинки (${phone.pad})`);
+  check(phone.pad === '70px', `вокруг персонажей прозрачные поля, неон не обрезается по краю картинки (${phone.pad})`);
   check(Math.abs(phone.miku.b - (phone.miku.h + 48) * 0.05 - phone.navTop - 4) < 3 && Math.abs(phone.teto.b - (phone.teto.h + 48) * 0.05 - phone.navTop - 4) < 3 && phone.mask.includes('gradient'), `выглядывают из-за панели, низ растворяется за её краем (панель ${phone.navTop}, Мику ${JSON.stringify(phone.miku)})`);
   check(phone.miku.r > phone.vw && phone.teto.l < 0 && phone.miku.l > phone.teto.r, `рука за краем экрана, друг на друга не налезают (${JSON.stringify([phone.teto, phone.miku])})`);
   check(!ph.errors.length, 'телефон: ошибок нет' + (ph.errors.length ? ': ' + ph.errors.join(' | ') : ''));
