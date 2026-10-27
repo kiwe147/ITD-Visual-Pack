@@ -124,7 +124,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
     if (!(await p.$('.vp-stab[data-tab="pals"]'))) { await p.click('.vp-itdx-btn'); await p.waitForTimeout(300); await p.$eval('.vp-stab[data-tab="pals"]', x => x.click()); await p.waitForTimeout(200); }
     await p.$$eval('.vp-tab-body .nick-style-option', (rs, n) => rs.find(r => r.textContent.trim() === n).click(), name);
     await p.waitForTimeout(200);
-    fx[name] = await p.evaluate(() => ({ f: getComputedStyle(document.querySelector('.vp-pal-miku')).filter, on: [...document.querySelectorAll('.vp-tab-body .nick-style-option.vp-active')].map(r => r.textContent.trim()).join() }));
+    fx[name] = await p.evaluate(() => ({ f: getComputedStyle(document.querySelector('.vp-pal-miku')).filter, on: [...(([...document.querySelectorAll('.vp-tab-body .vp-pick-grid')].pop() || document).querySelectorAll('.nick-style-option.vp-active'))].map(r => r.textContent.trim()).join() }));
     if (name === 'Неон') await p.screenshot({ path: path.join(__dirname, 'out', 'pals-neon.png'), clip: { x: 900, y: 400, width: 500, height: 500 } });
     if (name === 'Неон') { const m = await p.$('.settings-dropdown'); if (m) await m.screenshot({ path: path.join(__dirname, 'out', 'pals-tab.png') }); }
   }
@@ -140,6 +140,36 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(s.length === 1 && s[0].loaded && asked.length === n, `после перезагрузки Мику на месте, повторно не качалась (запросов было ${n}, стало ${asked.length})`);
   check(asked.every(u => /\/main\/assets\//.test(u)), 'качается из папки assets репозитория');
   check(!p.errors.length, 'ошибок нет' + (p.errors.length ? ': ' + p.errors.join(' | ') : ''));
+  // выбор анимации: «Прежняя» / «Новая, 52 к/с»
+  const pickSkin = async (pg, name) => {
+    for (let i = 0; i < 2 && !(await pg.$('.vp-stab[data-tab="pals"]')); i++) { await pg.click('.vp-itdx-btn'); await pg.waitForTimeout(300); }
+    await pg.$eval('.vp-stab[data-tab="pals"]', x => x.click()); await pg.waitForTimeout(200);
+    await pg.$$eval('.vp-tab-body .nick-style-option', (rs, n) => rs.find(r => r.textContent.trim() === n).click(), name);
+    await pg.waitForTimeout(300); await waitLoaded(pg); await pg.waitForTimeout(300);
+  };
+  const sizes = pg => pg.evaluate(() => [...document.querySelectorAll('.vp-pal')].map(i => ({ id: i.className.match(/vp-pal-(\w+)/)[1], w: i.naturalWidth, h: i.naturalHeight })));
+  s = await sizes(p);
+  const skinNow = pg => pg.evaluate(() => { const g = document.querySelector('.vp-tab-body .vp-pick-grid'), a = g && g.querySelector('.nick-style-option.vp-active'); return a ? a.textContent.trim() : null; });
+  check(s.length === 1 && s[0].w === 728 && s[0].h === 675, `по умолчанию новая анимация Мику (${s[0] && s[0].w}×${s[0] && s[0].h})`);
+  await p.screenshot({ path: path.join(__dirname, 'out', 'pals-new.png') });
+  await pickSkin(p, 'Прежняя');
+  s = await sizes(p);
+  check(s.length === 1 && s[0].w === 790 && await skinNow(p) === 'Прежняя', `выбрал «Прежняя»: Мику сменилась на прежнюю ${s[0] && s[0].w}×${s[0] && s[0].h}, выбор сохранён (${await skinNow(p)})`);
+  await p.close();
+  p = await open(); await waitLoaded(p);
+  s = await sizes(p);
+  check(s.length === 1 && s[0].w === 790, 'после перезагрузки осталась прежняя анимация');
+  await pickSkin(p, 'Новая, 52 к/с');
+  s = await sizes(p);
+  check(s.length === 1 && s[0].w === 728 && await skinNow(p) === 'Новая, 52 к/с', `вернул «Новая»: ${s[0] && s[0].w}×${s[0] && s[0].h}`);
+  check(!p.errors.length, 'выбор анимации: ошибок нет' + (p.errors.length ? ': ' + p.errors.join(' | ') : ''));
+  await pickSkin(p, 'Новая, 52 к/с');
+  await p.$$eval('.vp-tab-body .settings-option', rs => rs.find(r => /Тето слева/.test(r.textContent)).click());
+  await p.waitForTimeout(400); await waitLoaded(p); await p.waitForTimeout(700);
+  s = await sizes(p);
+  check(s.length === 2 && s.every(x => x.h === 675) && (s.find(x => x.id === 'teto') || {}).w === 566, `обе в новой анимации: ${s.map(x => x.id + ' ' + x.w + '×' + x.h).join(', ')}`);
+  await p.keyboard.press('Escape'); await p.mouse.click(700, 80); await p.waitForTimeout(400);
+  await p.screenshot({ path: path.join(__dirname, 'out', 'pals-new-both.png') });
   const phSnap = process.argv[3] ? fs.readFileSync(process.argv[3], 'utf8') : snap;
   const phUrl = (phSnap.match(/"url": "([^"]+)"/) || [, ORIGIN + '/'])[1];
   const phCtx = await b.newContext({ viewport: { width: 412, height: 892 }, isMobile: true, hasTouch: !process.env.FINE, deviceScaleFactor: 2 });

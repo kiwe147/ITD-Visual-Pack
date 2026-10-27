@@ -4293,8 +4293,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             colorizePosts();
         }
         let palsOn = GM_getValue('palsEnabled', false);
-        const PALS = { miku: { key: 'palMiku', file: 'miku.webp', r: 800 / 790 }, teto: { key: 'palTeto', file: 'teto.webp', r: 776 / 734 } };
-        const PAL_VER = 8;
+        const PALS = {
+            miku: { key: 'palMiku', skins: { old: { file: 'miku.webp', r: 800 / 790, cache: 'pal-miku@8' }, new: { file: 'miku2.webp', r: 675 / 728, cache: 'pal-miku-2@1' } } },
+            teto: { key: 'palTeto', skins: { old: { file: 'teto.webp', r: 776 / 734, cache: 'pal-teto@8' }, new: { file: 'teto2.webp', r: 675 / 566, cache: 'pal-teto-2@1' } } }
+        };
+        const PAL_SKINS = [['old', 'Прежняя'], ['new', 'Новая, 52 к/с']];
+        const palSkin = () => GM_getValue('palSkin', 'new') === 'old' ? 'old' : 'new';
+        const palCfg = id => PALS[id].skins[palSkin()];
         const PAL_LOOKS = [
             ['plain', 'Как есть', '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="12" cy="11" r="3"/><path d="M7 20c.8-2.6 2.8-4 5-4s4.2 1.4 5 4"/>'],
             ['neon', 'Неон', '<circle cx="12" cy="10" r="3.5"/><path d="M5.5 20c1-3.3 3.5-5 6.5-5s5.5 1.7 6.5 5"/><path d="M12 2.5v2M4.6 5.6l1.4 1.4M19.4 5.6 18 7"/>'],
@@ -4316,14 +4321,18 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             }));
         }
         async function palBlob(id) {
-            const key = `pal-${id}@${PAL_VER}`;
+            const cfg = palCfg(id), key = cfg.cache;
             const have = await palStore(key).catch(() => null);
             if (have) return have;
             for (const branch of ['claude/github-script-access-ihd9ne', 'main']) {
-                const b = await palFetch(`https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/${branch}/assets/${PALS[id].file}`).catch(() => null);
+                const b = await palFetch(`https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/${branch}/assets/${cfg.file}`).catch(() => null);
                 if (b) { await palStore(key, b).catch(() => { }); return b; }
             }
             return null;
+        }
+        function palsReset() {
+            if (!palsBox) return;
+            palsBox.querySelectorAll('.vp-pal').forEach(i => { if (i.src) URL.revokeObjectURL(i.src); i.remove(); });
         }
         function palsApply() {
             if (!palsBox) { palsBox = document.createElement('div'); palsBox.className = 'vp-pals'; }
@@ -4341,7 +4350,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     img = document.createElement('img');
                     img.className = 'vp-pal vp-pal-' + id;
                     img.alt = '';
-                    img.style.setProperty('--vp-pal-r', pal.r);
+                    img.style.setProperty('--vp-pal-r', palCfg(id).r);
                     palsBox.appendChild(img);
                     fresh = true;
                 }
@@ -4692,6 +4701,18 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (id === 'icon') body.appendChild(iconPicker());
                 else for (const label of tab.items) body.appendChild(settingItem(label, redraw, id === 'bg' || id === 'nick' || id === 'pals' ? redraw : null));
                 if (id === 'pals') {
+                    body.appendChild(secTitle('Анимация'));
+                    const skins = document.createElement('div');
+                    skins.className = 'vp-pick-grid' + (palsOn ? '' : ' vp-dim');
+                    const skin = palSkin();
+                    PAL_SKINS.forEach(([key, name]) => {
+                        const icon = document.createElement('div');
+                        icon.className = 'vp-menu-icon';
+                        icon.innerHTML = svgIcon(PAL_LOOKS[0][2]);
+                        skins.appendChild(pickRow(icon, name, key === skin, () => { GM_setValue('palSkin', key); palsReset(); palsApply(); }, redraw));
+                    });
+                    skins.style.gridTemplateRows = `repeat(${Math.ceil(skins.children.length / 2)}, auto)`;
+                    body.appendChild(skins);
                     body.appendChild(secTitle('Вид'));
                     const grid = document.createElement('div');
                     grid.className = 'vp-pick-grid' + (palsOn ? '' : ' vp-dim');
