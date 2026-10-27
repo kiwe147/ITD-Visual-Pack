@@ -271,7 +271,8 @@
                     }
                     avaReady = true;
                     document.dispatchEvent(new Event('vp-looks-ready'));
-                    setBgGuest(pu && pu !== me ? lookBy.get(pu) : null);
+                    const cover = document.documentElement.classList.contains('vp-gal-open') || document.documentElement.classList.contains('vp-msgs-open');
+                    setBgGuest(pu && pu !== me && !cover ? lookBy.get(pu) : null);
                     markAvatars(me, pu, true);
                     if (!lookBy.size) return;
                     const put = (el, attr, val) => {

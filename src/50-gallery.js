@@ -749,6 +749,7 @@
             addEventListener('resize', galPosition);
             document.documentElement.classList.add('vp-gal-open');
             galOpen = true;
+            avatarRefresh();
             galHideFeed(true);
             markActiveNav(); moveNavBlob();
             if (fromHistory !== true) overlayEnter('vpGal');
@@ -787,6 +788,7 @@
             removeEventListener('resize', galPosition);
             document.documentElement.classList.remove('vp-gal-open');
             galOpen = false;
+            avatarRefresh();
             galHideFeed(false);
             placeSidebar(); placeRail();
             document.querySelectorAll('.vp-gal-navwrap').forEach(w => w.classList.remove('vp-gal-navwrap'));

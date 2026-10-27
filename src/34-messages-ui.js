@@ -1517,6 +1517,7 @@
                 document.removeEventListener('keydown', onKey, true);
                 removeEventListener('resize', place);
                 msgsOpen = false;
+                avatarRefresh();
                 placeSidebar(); placeRail();
                 if (!galOpen) galHideFeed(false);
                 markActiveNav(); moveNavBlob();
@@ -1567,6 +1568,7 @@
                 placeSidebar(); placeRail();
                 root.classList.add('vp-open');
                 document.documentElement.classList.add('vp-msgs-open');
+                avatarRefresh();
                 document.addEventListener('keydown', onKey, true);
                 addEventListener('resize', place);
                 if (fromHistory !== true) overlayEnter('vpMsgs');
