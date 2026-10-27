@@ -85,6 +85,12 @@
             if (!palsBox) return;
             palsBox.querySelectorAll(id ? '.vp-pal-' + id : '.vp-pal').forEach(i => { if (i.src) URL.revokeObjectURL(i.src); i.remove(); });
         }
+        // «Свет вырубило» (ивент): сайт на ~12 с затемняет весь экран фонариком, Мику и Тето на это время прячем.
+        // Признак без хэш-классов сайта: подпись внутри aria-hidden-слоя
+        onDom(function palsBlackout() {
+            const on = [...document.querySelectorAll('div[aria-hidden="true"] > p')].some(p => /вырубило|свети фонарик/i.test(p.textContent));
+            if (on !== document.documentElement.classList.contains('vp-blackout')) document.documentElement.classList.toggle('vp-blackout', on);
+        });
         function palsApply() {
             if (!palsBox) { palsBox = document.createElement('div'); palsBox.className = 'vp-pals'; }
             if (!palsBox.isConnected) document.body.appendChild(palsBox);

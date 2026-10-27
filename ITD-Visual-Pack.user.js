@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.8.4
+// @version      3.7.8.5
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2287,6 +2287,8 @@
         .vp-settings-tabs .settings-option.vp-dim { opacity: .4; pointer-events: none; }
         .vp-pals { position: fixed; inset: 0; z-index: 9000; pointer-events: none; overflow: hidden; }
         html.vp-ev-scene .vp-pals { display: none !important; }
+        .vp-pals { transition: opacity .3s ease, visibility 0s; }
+        html.vp-blackout .vp-pals { opacity: 0; visibility: hidden; transition: opacity .3s ease, visibility 0s .3s; }
         .vp-pal { position: absolute; bottom: 0; box-sizing: content-box; padding: 70px; margin: -70px; width: auto; height: calc(min(var(--vp-pal-h, 45vh), calc(48vw * var(--vp-pal-r, 1))) * var(--vp-pal-k, 1)); pointer-events: none;
             user-select: none; -webkit-user-drag: none; animation: vpPalIn .7s cubic-bezier(.2, .9, .3, 1.15) both; }
         .vp-pal-miku { right: 0; transform: translate(calc((100% - 92px) * var(--vp-pal-dx, .06)), calc((100% - 92px) * .05)); }
@@ -4336,6 +4338,12 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (!palsBox) return;
             palsBox.querySelectorAll(id ? '.vp-pal-' + id : '.vp-pal').forEach(i => { if (i.src) URL.revokeObjectURL(i.src); i.remove(); });
         }
+        // «Свет вырубило» (ивент): сайт на ~12 с затемняет весь экран фонариком, Мику и Тето на это время прячем.
+        // Признак без хэш-классов сайта: подпись внутри aria-hidden-слоя
+        onDom(function palsBlackout() {
+            const on = [...document.querySelectorAll('div[aria-hidden="true"] > p')].some(p => /вырубило|свети фонарик/i.test(p.textContent));
+            if (on !== document.documentElement.classList.contains('vp-blackout')) document.documentElement.classList.toggle('vp-blackout', on);
+        });
         function palsApply() {
             if (!palsBox) { palsBox = document.createElement('div'); palsBox.className = 'vp-pals'; }
             if (!palsBox.isConnected) document.body.appendChild(palsBox);
@@ -6277,6 +6285,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.8.5', '28 октября 2026', [
+                'Ивент: когда сайт на несколько секунд тушит свет («Свет вырубило»), Мику и Тето прячутся и потом возвращаются'
+            ]],
             ['3.7.8.4', '28 октября 2026', [
                 'Кнопка «Ивент» после окончания ивента остаётся с иконкой ИТД X, а не с картинкой сайта',
                 'Тыква у ника на ивенте сидит ровно, как на сайте, а не ниже строки'

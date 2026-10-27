@@ -73,6 +73,14 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   await waitLoaded(p);
   await p.evaluate(() => document.querySelectorAll('.settings-dropdown').forEach(e => e.remove()));
   await p.waitForTimeout(900);
+  await p.evaluate(() => { const d = document.createElement('div'); d.id = 'fakeBlackout'; d.setAttribute('aria-hidden', 'true'); d.innerHTML = '<div></div><p>Свет вырубило. Свети фонариком</p>'; document.body.appendChild(d); });
+  await p.waitForTimeout(900);
+  const hid = await p.evaluate(() => { const e = document.querySelector('.vp-pals'); return e && [getComputedStyle(e).visibility, getComputedStyle(e).opacity, document.documentElement.classList.contains('vp-blackout')]; });
+  check(hid && hid[0] === 'hidden' && hid[2], 'во время затемнения «Свет вырубило» Мику и Тето спрятаны (' + JSON.stringify(hid) + ')');
+  await p.evaluate(() => document.getElementById('fakeBlackout').remove());
+  await p.waitForTimeout(700);
+  const back = await p.evaluate(() => { const e = document.querySelector('.vp-pals'); return e && [getComputedStyle(e).visibility, getComputedStyle(e).opacity, document.documentElement.classList.contains('vp-blackout')]; });
+  check(back && back[0] === 'visible' && back[1] === '1' && !back[2], 'после затемнения Мику и Тето вернулись (' + JSON.stringify(back) + ')');
   let s = await pals(p);
   console.log('—    ' + JSON.stringify(s));
   const mk = s.find(x => x.id === 'miku'), tt = s.find(x => x.id === 'teto');
