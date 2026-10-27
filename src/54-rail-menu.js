@@ -181,14 +181,18 @@
         const RAIL_TOP = 36;
         const baseLeft = el => el.getBoundingClientRect().left - new DOMMatrix(getComputedStyle(el).transform).m41;
         let cbCached;
+        let cbMsgs = false;
         function contentBox() {
-            if (cbCached === undefined) {
+            if (cbCached === undefined || cbMsgs !== msgsOpen) {
+                cbMsgs = msgsOpen;
                 cbCached = contentBoxNow();
                 queueMicrotask(() => { cbCached = undefined; });
             }
             return cbCached;
         }
         function contentBoxNow() {
+            // страница ивента: сцена живёт во вложенном окне, окно сообщений ставим обычной колонкой, а не по размеру сцены
+            if (msgsOpen && /^\/event\/[^/]/.test(location.pathname)) return frameColumn();
             const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail';
             let left = Infinity, right = 0;
             const memo = new Map(), tops = new Set();

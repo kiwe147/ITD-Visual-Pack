@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.8.7
+// @version      3.7.8.8
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6285,6 +6285,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.8.8', '28 октября 2026', [
+                'Ивент: окно «Сообщений» не растягивается на всю страницу, а встаёт обычной колонкой'
+            ]],
             ['3.7.8.7', '28 октября 2026', [
                 'Кнопка «Ивент»: вместо постоянной рамки, похожей на залипание, вся кнопка теперь в паутине',
                 'Ивент: при открытых «Сообщениях» меню слева встаёт рядом с окном, как на других страницах, а правая панель на месте'
@@ -15130,14 +15133,18 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         const RAIL_TOP = 36;
         const baseLeft = el => el.getBoundingClientRect().left - new DOMMatrix(getComputedStyle(el).transform).m41;
         let cbCached;
+        let cbMsgs = false;
         function contentBox() {
-            if (cbCached === undefined) {
+            if (cbCached === undefined || cbMsgs !== msgsOpen) {
+                cbMsgs = msgsOpen;
                 cbCached = contentBoxNow();
                 queueMicrotask(() => { cbCached = undefined; });
             }
             return cbCached;
         }
         function contentBoxNow() {
+            // страница ивента: сцена живёт во вложенном окне, окно сообщений ставим обычной колонкой, а не по размеру сцены
+            if (msgsOpen && /^\/event\/[^/]/.test(location.pathname)) return frameColumn();
             const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail';
             let left = Infinity, right = 0;
             const memo = new Map(), tops = new Set();
