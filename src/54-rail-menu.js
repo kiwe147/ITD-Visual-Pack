@@ -381,6 +381,9 @@
             if (on) document.documentElement.style.setProperty('--vp-side-left', want + 'px');
         }
         addEventListener('resize', placeSidebar);
+        // смена адреса без перерисовки страницы (ивент ↔ сообщения): положение меню и панели пересчитываем сами
+        document.addEventListener('vp-loc', () => { placeSidebar(); placeRail(); });
+        addEventListener('popstate', () => setTimeout(() => { placeSidebar(); placeRail(); }, 0));
         onDom(glidePlace);
         placeSidebar();
 

@@ -127,7 +127,7 @@
                 const portal = a.querySelector(':scope > svg.vp-portal');
                 const icon = a.querySelector('.' + SELECTORS.navIcon) || portal;
                 if (icon) icon.style.transform = k ? `scale(${(1 + 0.12 * k).toFixed(3)})` : '';
-                if (portal) a.style.setProperty('--vp-k', k ? k.toFixed(3) : '0');
+                if (portal) a.style.setProperty('--vp-k', k && a.matches(':hover') ? k.toFixed(3) : '0');
                 if (a.classList.contains('vp-active')) activeK = k;
                 rows.push([a.offsetTop + a.offsetHeight / 2, k]);
             });

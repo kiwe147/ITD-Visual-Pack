@@ -6287,6 +6287,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         const CHANGELOG = [
             ['3.7.8.8', '28 октября 2026', [
                 'Ивент: окно «Сообщений» не растягивается на всю страницу, а встаёт обычной колонкой',
+                'Ивент: при открытых «Сообщениях» кнопки меню больше не перекрываются сценой и нажимаются; лишней подсветки под «Сообщениями» нет',
                 'Кнопка «Ивент»: при наведении увеличивается и светится, как остальные; больше не отключается на секунды, когда сайт временно теряет связь с ивентом'
             ]],
             ['3.7.8.7', '28 октября 2026', [
@@ -12413,6 +12414,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-nav-has-blob { position: relative; }
         .vp-nav-has-blob .vp-nav-link { position: relative; z-index: 1; transition: background-color .2s ease, opacity .2s ease !important; }
         .vp-nav-has-blob .vp-nav-link .vp-nav-icon { transition: none; }
+        .vp-nav-has-blob .vp-nav-link:not(.vp-active):not(:hover) { background-color: transparent !important; }
+        html.vp-ev-scene .vp-sidebar, html.vp-ev-scene .vp-rail { z-index: 30 !important; }
         .vp-nav-has-blob .vp-nav-link.vp-active { background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
         .vp-nav-has-blob > div:not(.vp-nav-blob):not(:has(a)) { opacity: 0 !important; }
         .vp-post-slot { border-bottom: none !important; }
@@ -12847,7 +12850,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const portal = a.querySelector(':scope > svg.vp-portal');
                 const icon = a.querySelector('.' + SELECTORS.navIcon) || portal;
                 if (icon) icon.style.transform = k ? `scale(${(1 + 0.12 * k).toFixed(3)})` : '';
-                if (portal) a.style.setProperty('--vp-k', k ? k.toFixed(3) : '0');
+                if (portal) a.style.setProperty('--vp-k', k && a.matches(':hover') ? k.toFixed(3) : '0');
                 if (a.classList.contains('vp-active')) activeK = k;
                 rows.push([a.offsetTop + a.offsetHeight / 2, k]);
             });
@@ -15344,6 +15347,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (on) document.documentElement.style.setProperty('--vp-side-left', want + 'px');
         }
         addEventListener('resize', placeSidebar);
+        // смена адреса без перерисовки страницы (ивент ↔ сообщения): положение меню и панели пересчитываем сами
+        document.addEventListener('vp-loc', () => { placeSidebar(); placeRail(); });
+        addEventListener('popstate', () => setTimeout(() => { placeSidebar(); placeRail(); }, 0));
         onDom(glidePlace);
         placeSidebar();
 
