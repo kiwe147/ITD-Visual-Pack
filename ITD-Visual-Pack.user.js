@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.8.1
+// @version      3.7.8.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6257,6 +6257,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.8.2', '28 октября 2026', [
+                'Мику и Тето: у каждой своя анимация на выбор — «Прыгает» или «Кивает» (52 кадра в секунду)'
+            ]],
             ['3.7.8.1', '27 октября 2026', [
                 'Клуб ИТД X: статус «в сети» обновляется заметно быстрее',
                 'Фон чужого профиля больше не остаётся на экране, когда открываешь галерею или сообщения'
