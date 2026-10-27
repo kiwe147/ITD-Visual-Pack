@@ -171,6 +171,8 @@
             color: #fff; pointer-events: none; background: rgba(0,0,0,.45); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4);
             box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset; }
         .vp-gal-more { text-align: center; padding: 18px; color: var(--text-secondary); font-size: 14px; }
+        .vp-gal-tile.vp-gal-new { animation: vpGalIn .5s cubic-bezier(.2, .7, .2, 1) var(--vp-d, 0ms) backwards; }
+        @keyframes vpGalIn { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
         .vp-gal-btn svg { pointer-events: none; }
         @media (min-width: ${PHONE_MAX + 1}px) { .vp-gal-btn { display: none !important; } }
         @media (max-width: ${PHONE_MAX}px) { .vp-gal-nav { display: none !important; } }
@@ -376,7 +378,7 @@
                         galImgIO.unobserve(i);
                         if (!i.getAttribute('src')) i.src = i.dataset.src;
                     });
-                }), { root: body || null, rootMargin: '1200px 0px' });
+                }), { root: body || null, rootMargin: '2700px 0px' });
             }
             return galImgIO;
         }
@@ -493,10 +495,12 @@
             tile.addEventListener('click', () => { if (!tile._vpDragged) galOpenPost(post); });
             return tile;
         }
-        function galNeedMore() {
+        const GAL_NEED = 3, GAL_AHEAD = 6;
+        function galNear(screens) {
             const b = gal.el && gal.el.querySelector('.vp-gal-body');
-            return !!b && b.clientHeight > 0 && b.scrollTop + b.clientHeight > b.scrollHeight - 1200;
+            return !!b && b.clientHeight > 0 && b.scrollTop + b.clientHeight > b.scrollHeight - Math.max(screens * 900, b.clientHeight * screens);
         }
+        function galNeedMore() { return galNear(GAL_NEED); }
         const GAL_CHAIN = 2, GAL_CACHE_MS = 10 * 60 * 1000, GAL_GAP = 700;
         const galCacheKey = tab => 'vpGalCache:' + tab;
         function galCacheRead(tab) {
@@ -515,7 +519,13 @@
             gal.seen.add(post.id);
             const media = (post.attachments || []).filter(att => att && att.url && (!att.type || /image|video/.test(att.type))).slice(0, 10);
             if (!media.length) return false;
-            galPlace(galTile(post, media));
+            const tile = galTile(post, media);
+            if (gal.fresh && !calm) {
+                tile.classList.add('vp-gal-new');
+                tile.style.setProperty('--vp-d', (galN % 8) * 40 + 'ms');
+                tile.addEventListener('animationend', () => tile.classList.remove('vp-gal-new'), { once: true });
+            }
+            galPlace(tile);
             const st = gal.acts.get(post.id);
             gal.cachePosts.push({
                 id: post.id, author: post.author && { username: post.author.username },
@@ -524,48 +534,83 @@
             });
             return true;
         }
+        async function galFetchPage(cursor, tab) {
+            const url = lim => `/api/posts?limit=${lim}&tab=${tab}` + (cursor ? '&cursor=' + encodeURIComponent(cursor) : '');
+            let res = await api(url(gal.lim || 50));
+            if (res.status === 400 && (gal.lim || 50) !== 20) { gal.lim = 20; res = await api(url(20)); }
+            if (res.status === 429) { const e = new Error('лента: 429'); e.retry = +res.headers.get('Retry-After') || 0; throw e; }
+            if (!res.ok) throw new Error('лента: ' + res.status);
+            const j = await res.json(), d = j.data || j;
+            keepSitePosts(j);
+            const posts = d.posts || [], next = (d.pagination && d.pagination.nextCursor) || d.nextCursor || d.cursor || null;
+            return { posts, cursor: next, done: !next || !posts.length };
+        }
+        function galApply(page, after) {
+            const gen = gal.gen;
+            gal.fails = 0;
+            if (!gal.cacheT) gal.cacheT = Date.now();
+            gal.fresh = true;
+            let i = 0;
+            const step = () => {
+                if (!gal.el || gen !== gal.gen) return;
+                const t0 = performance.now();
+                while (i < page.posts.length && performance.now() - t0 < 8) galAdd(page.posts[i++]);
+                if (i < page.posts.length) return requestAnimationFrame(step);
+                gal.fresh = false;
+                gal.cursor = page.cursor;
+                gal.done = page.done;
+                galCacheSave();
+                gal.el.querySelector('.vp-gal-more').textContent = gal.done ? (gal.seen.size ? 'Это всё' : 'Пусто') : '';
+                gal.loading = false;
+                after();
+            };
+            step();
+        }
+        function galWait(e, gen) {
+            gal.fails = (gal.fails || 0) + 1;
+            const wait = Math.min(60, e.retry || 2 ** gal.fails * 2);
+            gal.waitUntil = Date.now() + wait * 1000;
+            const more = gal.el && gal.el.querySelector('.vp-gal-more');
+            if (more) more.textContent = `Сайт просит подождать — ещё раз через ${wait} с`;
+            clearTimeout(gal.waitT);
+            gal.waitT = setTimeout(() => { gal.waitUntil = 0; if (gal.el && gen === gal.gen) galLoad(); }, wait * 1000);
+        }
+        function galPrefetch() {
+            if (!gal.el || gal.loading || gal.done || gal.buf || gal.pre || (gal.waitUntil || 0) > Date.now() || !galNear(GAL_AHEAD)) return;
+            const gen = gal.gen, gap = (gal.lastReq || 0) + GAL_GAP - Date.now();
+            if (gap > 0) { clearTimeout(gal.preT); gal.preT = setTimeout(() => { if (gen === gal.gen) galPrefetch(); }, gap); return; }
+            gal.lastReq = Date.now();
+            const tab = gal.tab, cursor = gal.cursor;
+            gal.pre = galFetchPage(cursor, tab)
+                .then(page => { if (gen === gal.gen && cursor === gal.cursor) gal.buf = page; })
+                .catch(e => { if (gen === gal.gen && e.retry !== undefined) galWait(e, gen); })
+                .finally(() => {
+                    if (gen !== gal.gen) return;
+                    gal.pre = null;
+                    if (gal.buf && galNeedMore()) galLoad(true);
+                });
+        }
         async function galLoad(auto) {
             if (!gal.el || gal.loading || gal.done || (gal.waitUntil || 0) > Date.now()) return;
             if (!auto) gal.chain = 0;
+            const more = gal.el.querySelector('.vp-gal-more'), after = () => { galPrefetch(); galMore(); };
+            if (gal.buf) { const page = gal.buf; gal.buf = null; gal.loading = true; galApply(page, after); return; }
+            if (gal.pre) { more.textContent = 'Загрузка…'; return; }
             const gap = (gal.lastReq || 0) + GAL_GAP - Date.now();
             if (gap > 0) { clearTimeout(gal.gapT); const g0 = gal.gen; gal.gapT = setTimeout(() => { if (g0 === gal.gen) galLoad(true); }, gap); return; }
             gal.lastReq = Date.now();
             gal.loading = true;
             const gen = gal.gen, tab = gal.tab;
-            const more = gal.el.querySelector('.vp-gal-more');
             more.onclick = null;
             more.textContent = 'Загрузка…';
-            const url = lim => `/api/posts?limit=${lim}&tab=${tab}` + (gal.cursor ? '&cursor=' + encodeURIComponent(gal.cursor) : '');
             try {
-                let res = await api(url(gal.lim || 50));
-                if (res.status === 400 && (gal.lim || 50) !== 20) { gal.lim = 20; res = await api(url(20)); }
-                if (res.status === 429) { const e = new Error('лента: 429'); e.retry = +res.headers.get('Retry-After') || 0; throw e; }
-                if (!res.ok) throw new Error('лента: ' + res.status);
-                const j = await res.json(), d = j.data || j;
+                const page = await galFetchPage(gal.cursor, tab);
                 if (!gal.el || gen !== gal.gen) return;
-                const posts = d.posts || [];
-                keepSitePosts(j);
-                gal.fails = 0;
-                if (!gal.cacheT) gal.cacheT = Date.now();
-                posts.forEach(galAdd);
-                gal.cursor = (d.pagination && d.pagination.nextCursor) || d.nextCursor || d.cursor || null;
-                gal.done = !gal.cursor || !posts.length;
-                galCacheSave();
-                more.textContent = gal.done ? (gal.seen.size ? 'Это всё' : 'Пусто') : '';
-                gal.loading = false;
-                galMore();
+                galApply(page, after);
             } catch (e) {
                 if (gen !== gal.gen) return;
                 gal.loading = false;
-                if (e.retry !== undefined) {
-                    gal.fails = (gal.fails || 0) + 1;
-                    const wait = Math.min(60, e.retry || 2 ** gal.fails * 2);
-                    gal.waitUntil = Date.now() + wait * 1000;
-                    more.textContent = `Сайт просит подождать — ещё раз через ${wait} с`;
-                    clearTimeout(gal.waitT);
-                    gal.waitT = setTimeout(() => { gal.waitUntil = 0; if (gal.el && gen === gal.gen) galLoad(); }, wait * 1000);
-                    return;
-                }
+                if (e.retry !== undefined) return galWait(e, gen);
                 logErr('галерея', e);
                 more.textContent = 'Не загрузилось — нажми, чтобы повторить';
                 more.onclick = () => galLoad();
@@ -573,6 +618,7 @@
         }
         function galMore() {
             if (!gal.el || gal.done || gal.loading || !galNeedMore()) return;
+            if (gal.buf) return galLoad(true);
             if ((gal.chain = (gal.chain || 0) + 1) < GAL_CHAIN) return galLoad(true);
             const more = gal.el.querySelector('.vp-gal-more');
             more.textContent = 'Показать ещё';
@@ -586,6 +632,7 @@
         function galSwitch(tab, fresh) {
             gal.tab = tab; gal.cursor = null; gal.done = false; gal.seen.clear(); gal.acts.clear(); galN = 0;
             gal.gen = (gal.gen || 0) + 1; gal.loading = false; gal.chain = 0; gal.cachePosts = []; gal.cacheT = 0;
+            gal.buf = null; gal.pre = null; clearTimeout(gal.preT);
             clearTimeout(gal.waitT); gal.waitUntil = 0;
             gal.el.querySelectorAll('.vp-gal-tab').forEach(b => b.classList.toggle('vp-on', b.dataset.tab === tab));
             galInd();
@@ -607,6 +654,7 @@
             more.textContent = gal.done ? (gal.seen.size ? 'Это всё' : 'Пусто') : '';
             gal.chain = GAL_CHAIN;
             galMore();
+            galPrefetch();
         }
         function galPosition() {
             if (!gal.el) return;
@@ -721,7 +769,7 @@
             }
             el.querySelectorAll('.vp-gal-tab').forEach(b => b.onclick = () => { if (b.dataset.tab !== gal.tab || !gal.seen.size) galSwitch(b.dataset.tab); });
             galVolUi(top);
-            body.addEventListener('scroll', () => { if (galNeedMore()) galLoad(); }, { passive: true });
+            body.addEventListener('scroll', () => { if (galNeedMore()) galLoad(); else galPrefetch(); }, { passive: true });
             for (const t of ['wheel', 'touchmove']) el.addEventListener(t, e => e.stopPropagation(), { passive: true });
             galSwitch(gal.tab);
         }
