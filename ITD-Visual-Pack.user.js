@@ -6286,7 +6286,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         };
         const CHANGELOG = [
             ['3.7.8.7', '28 октября 2026', [
-                'Кнопка «Ивент»: вместо постоянной рамки, похожей на залипание, теперь фиолетовая надпись с мигающей точкой; паутина сайта у кнопки убрана'
+                'Кнопка «Ивент»: вместо постоянной рамки, похожей на залипание, теперь фиолетовая надпись с мигающей точкой; паутина сайта у кнопки убрана',
+                'Ивент: при открытых «Сообщениях» или галерее правая панель снова на месте'
             ]],
             ['3.7.8.6', '28 октября 2026', [
                 'Ивент: меню слева больше не «залипает» тянущимся к мыши, когда курсор уходит на сцену ивента'
@@ -15283,7 +15284,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const right = side ? side.getBoundingClientRect().left : innerWidth;
             const gap = right - edge;
             let box = null, adj = false, sideW = 0;
-            const on = railEnabled && !!myUsername && !/^\/(login|register|signup|forgot|reset)/.test(location.pathname) && !/^\/event\/[^/]/.test(location.pathname) && !!rail.querySelector(':scope > .vp-rail-card:not([hidden])');
+            const on = railEnabled && !!myUsername && !/^\/(login|register|signup|forgot|reset)/.test(location.pathname) && (!/^\/event\/[^/]/.test(location.pathname) || msgsOpen || galOpen) && !!rail.querySelector(':scope > .vp-rail-card:not([hidden])');
             const sideEl = siteEl('sidebar');
             if (on && galOpen && sideEl && innerWidth > PHONE_MAX) {
                 const margin = Math.max(12, Math.round(baseLeft(sideEl))), width = 250;
