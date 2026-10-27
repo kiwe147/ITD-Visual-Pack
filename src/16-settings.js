@@ -336,6 +336,18 @@
         .vp-sm .vp-setting-label > span[data-hint]::after { content: attr(data-hint); display: block; margin-top: 1px; font-size: 12px; font-weight: 400; line-height: 1.3; color: var(--text-secondary); }
         .vp-sm .vp-setting-label > span[data-hint] { display: block; }
         .vp-sm .settings-option { padding: 11px 12px !important; }
+        .vp-sm .settings-option { position: relative; }
+        .vp-sm .settings-option + .settings-option::before, .vp-sm .vp-sub + .settings-option::before { content: ''; position: absolute; left: 12px; right: 12px; top: 0; height: 1px; background: var(--border-color, rgba(255, 255, 255, .1)); opacity: .7; }
+        .vp-sm .settings-option.vp-child, .vp-sm .vp-sub { margin-left: 22px; padding-left: 14px !important; border-left: 2px solid color-mix(in srgb, var(--vp-accent, #0080ff) 45%, transparent); border-radius: 0 14px 14px 0 !important; }
+        .vp-sm .vp-sub { padding: 4px 0 10px 14px; }
+        .vp-sm .vp-sub-label { margin: 0 0 6px; font-size: 11.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-secondary); }
+        .vp-sm .vp-sec-title { margin: 24px 12px 8px; padding-top: 16px; border-top: 1px solid var(--border-color, rgba(255, 255, 255, .1)); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; }
+        .vp-sm .vp-sec-title:first-child { margin-top: 4px; padding-top: 0; border-top: 0; }
+        .vp-sm .vp-rcards > .vp-sec-title:first-child { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-color, rgba(255, 255, 255, .1)); }
+        .vp-sm .vp-pick-grid { gap: 8px; }
+        .vp-sm .vp-sub .vp-pick-grid { gap: 8px; }
+        .vp-sm .vp-pick-grid .nick-style-option { border: 1px solid var(--border-color, rgba(255, 255, 255, .12)) !important; border-radius: 12px !important; background: color-mix(in srgb, var(--text-primary, #fff) 4%, transparent); }
+        .vp-sm .vp-pick-grid .nick-style-option.vp-active { border-color: var(--vp-accent, #0080ff) !important; }
         .vp-sm .toggle-switch:not(.active):not(.vp-tri) { background: color-mix(in srgb, var(--text-primary, #fff) 22%, transparent) !important; }
         @keyframes vpSmIn { from { opacity: 0; } }
         @keyframes vpSmBox { from { opacity: 0; transform: translateY(14px) scale(.98); } }
@@ -385,14 +397,16 @@
             misc: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
             icon: '<rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="M9 12.5 11 14.5l4-5"/>'
         };
+        const VP_CHILD_ROWS = ['Мику справа', 'Тето слева', 'Подсветка ника', 'Подсветка аватарок', 'Подсветка постов'];
         function settingItem(label, redraw, after) {
             if (label === 'Заставка при входе' && IS_PHONE) return introModeRow();
             if (label === 'Громкость') return volumeRow();
             if (label === 'Карточки панели') return railCardsBox(redraw);
-            if (label === 'Размер персонажей') { const r = palSizeRow(); if (!palsOn) r.classList.add('vp-dim'); return r; }
+            if (label === 'Размер персонажей') { const r = palSizeRow(); r.classList.add('vp-child'); if (!palsOn) r.classList.add('vp-dim'); return r; }
             const row = settingRow(SETTINGS.find(o => o.label === label), after);
             if (!neonEnabled && label.startsWith('Подсветка ')) row.classList.add('vp-dim');
             if (!palsOn && (label === 'Мику справа' || label === 'Тето слева')) row.classList.add('vp-dim');
+            if (VP_CHILD_ROWS.includes(label)) row.classList.add('vp-child');
             return row;
         }
         let settingsModal = null, settingsModalHist = false;
@@ -465,7 +479,12 @@
                             skins.appendChild(pickRow(icon, name, key === skin, () => { GM_setValue(PALS[pid].skinKey, key); palsReset(pid); palsApply(); }, redraw));
                         });
                         skins.style.gridTemplateRows = 'auto';
-                        body.appendChild(skins);
+                        const sub = document.createElement('div'), cap = document.createElement('div');
+                        sub.className = 'vp-sub';
+                        cap.className = 'vp-sub-label';
+                        cap.textContent = 'Анимация';
+                        sub.append(cap, skins);
+                        body.appendChild(sub);
                     }
                 }
                 if (id === 'pals') {
