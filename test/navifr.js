@@ -77,6 +77,19 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   const far = await navs();
   console.log('over:', JSON.stringify(await p.evaluate(() => [window.__ov.slice(-6), window.__pm])));
   check(far.every(t => !t), 'мышь ушла во вложенное окно — кнопки отпущены: ' + JSON.stringify(far.filter(Boolean)));
+  // кнопка «Ивент»: анимация при наведении
+  const ev = await p.evaluate(() => { const a = document.querySelector('nav a.vp-nav-link:has(> svg.vp-portal)'); if (!a) return null; const r = a.getBoundingClientRect(); return [r.x + 60, r.y + r.height / 2]; });
+  if (ev) {
+    await p.mouse.move(ev[0] + 30, ev[1] - 40); await p.mouse.move(ev[0], ev[1], { steps: 8 }); await p.waitForTimeout(600);
+    const hov = await p.evaluate(() => { const a = document.querySelector('nav a.vp-nav-link:has(> svg.vp-portal)'); const sv = a.querySelector(':scope > svg.vp-portal'); return [a.style.getPropertyValue('--vp-k'), sv.style.transform, a.style.transform]; });
+    check(parseFloat(hov[0]) > 0.5 && /scale/.test(hov[1]) && /translateX/.test(hov[2]), 'кнопка «Ивент» при наведении: подсветка, увеличение, притяжение ' + JSON.stringify(hov));
+    // портал сайта на время не ответил: кнопка теряет href, мод держит её живой
+    await p.mouse.move(900, 400, { steps: 4 });
+    await p.evaluate(() => { const a = document.querySelector('nav a.vp-nav-link:has(> svg.vp-portal)'); a.removeAttribute('href'); a.setAttribute('aria-disabled', 'true'); a.className = 'OfVj'; const i = a.querySelector('img'); i.className = 'R2HN'; i.src = '/assets/portal/portal-inactive.png'; });
+    await p.waitForTimeout(900);
+    const kept = await p.evaluate(() => { const a = document.querySelector('nav a:has(> svg.vp-portal)'); return [a.getAttribute('href'), a.getAttribute('aria-disabled'), a.querySelector(':scope > svg.vp-portal').dataset.state]; });
+    check(kept[0] && kept[1] !== 'true' && kept[2] === 'live', 'кнопка «Ивент» остаётся нажимаемой, когда сайт на время её отключил ' + JSON.stringify(kept));
+  } else check(false, 'на странице нет кнопки «Ивент»');
   console.log(fails.length ? 'Не прошло: ' + fails.length : 'Всё прошло');
   await b.close();
 })();

@@ -111,11 +111,19 @@
             if (plus.style.top !== top) plus.style.top = top;
             if (plus.style.left !== left) plus.style.left = left;
         });
-        let eventMaskN = 0;
+        let eventMaskN = 0, evLiveAt = 0, evHref = '';
         onDom(function eventIcon() {
             document.querySelectorAll('a[href^="/event"] img, img[src*="/assets/portal/"]').forEach(img => {
                 const own = [...img.classList].filter(c => !c.startsWith('vp-'));
-                const state = own.length > 1 || (/portal/.test(img.src) && !/inactive/.test(img.src)) ? 'live' : 'idle';
+                let state = own.length > 1 || (/portal/.test(img.src) && !/inactive/.test(img.src)) ? 'live' : 'idle';
+                const link = img.closest('a');
+                // Сайт на время (до 45 с без ответа портала, возврат на вкладку) сам гасит «ивент идёт» и отключает кнопку: держим её живой ещё 3 минуты
+                if (state === 'live') { evLiveAt = Date.now(); if (link && link.getAttribute('href')) evHref = link.getAttribute('href'); }
+                else if (link && evHref && Date.now() - evLiveAt < 180000) {
+                    state = 'live';
+                    if (!link.getAttribute('href')) link.setAttribute('href', evHref);
+                    if (link.getAttribute('aria-disabled') === 'true') link.setAttribute('aria-disabled', 'false');
+                }
                 if (!img.classList.contains('vp-portal-img')) img.classList.add('vp-portal-img');
                 let svg = img.parentElement.querySelector(':scope > svg.vp-portal');
                 if (!svg) {

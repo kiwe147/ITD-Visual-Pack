@@ -6286,7 +6286,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         };
         const CHANGELOG = [
             ['3.7.8.8', '28 октября 2026', [
-                'Ивент: окно «Сообщений» не растягивается на всю страницу, а встаёт обычной колонкой'
+                'Ивент: окно «Сообщений» не растягивается на всю страницу, а встаёт обычной колонкой',
+                'Кнопка «Ивент»: при наведении увеличивается и светится, как остальные; больше не отключается на секунды, когда сайт временно теряет связь с ивентом'
             ]],
             ['3.7.8.7', '28 октября 2026', [
                 'Кнопка «Ивент»: вместо постоянной рамки, похожей на залипание, вся кнопка теперь в паутине',
@@ -11363,11 +11364,19 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (plus.style.top !== top) plus.style.top = top;
             if (plus.style.left !== left) plus.style.left = left;
         });
-        let eventMaskN = 0;
+        let eventMaskN = 0, evLiveAt = 0, evHref = '';
         onDom(function eventIcon() {
             document.querySelectorAll('a[href^="/event"] img, img[src*="/assets/portal/"]').forEach(img => {
                 const own = [...img.classList].filter(c => !c.startsWith('vp-'));
-                const state = own.length > 1 || (/portal/.test(img.src) && !/inactive/.test(img.src)) ? 'live' : 'idle';
+                let state = own.length > 1 || (/portal/.test(img.src) && !/inactive/.test(img.src)) ? 'live' : 'idle';
+                const link = img.closest('a');
+                // Сайт на время (до 45 с без ответа портала, возврат на вкладку) сам гасит «ивент идёт» и отключает кнопку: держим её живой ещё 3 минуты
+                if (state === 'live') { evLiveAt = Date.now(); if (link && link.getAttribute('href')) evHref = link.getAttribute('href'); }
+                else if (link && evHref && Date.now() - evLiveAt < 180000) {
+                    state = 'live';
+                    if (!link.getAttribute('href')) link.setAttribute('href', evHref);
+                    if (link.getAttribute('aria-disabled') === 'true') link.setAttribute('aria-disabled', 'false');
+                }
                 if (!img.classList.contains('vp-portal-img')) img.classList.add('vp-portal-img');
                 let svg = img.parentElement.querySelector(':scope > svg.vp-portal');
                 if (!svg) {
@@ -12420,7 +12429,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         a[href^="/event"] img[src*="/portal/"], img.vp-portal-img { display: none !important; }
         .vp-nav-link:has(> svg.vp-portal[data-state="live"]) { position: relative; }
         .vp-nav-link:has(> svg.vp-portal[data-state="live"])::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-            background: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 250 56%22 preserveAspectRatio=%22none%22%3E%3Cpath d=%22M0 0L250 1M0 0L246 20M0 0L226 44M0 0L190 56M0 0L140 56M0 0L84 56M0 0L30 56M0 0L1 56M34.0 0.1Q29.2 1.2 33.9 2.8M33.9 2.8Q28.9 4.0 33.4 6.5M33.4 6.5Q28.4 6.9 32.6 9.6M32.6 9.6Q27.6 9.6 31.6 12.6M31.6 12.6Q25.7 13.5 28.3 18.9M28.3 18.9Q19.1 21.0 16.1 30.0M16.1 30.0Q7.2 27.5 0.6 34.0M62.0 0.2Q53.2 2.3 61.8 5.0M61.8 5.0Q52.7 7.3 60.9 11.8M60.9 11.8Q51.7 12.6 59.5 17.5M59.5 17.5Q50.3 17.4 57.6 23.0M57.6 23.0Q46.9 24.7 51.6 34.4M51.6 34.4Q34.8 38.3 29.3 54.7M29.3 54.7Q13.0 47.6 1.0 56.0M98.0 0.4Q84.1 3.6 97.7 7.9M97.7 7.9Q83.4 11.5 96.2 18.7M96.2 18.7Q81.8 20.0 94.0 27.7M94.0 27.7Q79.5 27.6 91.0 36.4M91.0 36.4Q74.2 39.0 81.5 54.4M81.5 54.4Q48.0 47.5 30.0 56.0M140.0 0.6Q120.2 5.1 139.5 11.3M139.5 11.3Q119.1 16.4 137.4 26.8M137.4 26.8Q116.8 28.5 134.3 39.6M134.3 39.6Q113.6 39.4 130.0 52.0M130.0 52.0Q92.0 46.4 84.0 56.0M190.0 0.8Q163.1 6.9 189.4 15.4M189.4 15.4Q161.6 22.2 186.5 36.3M186.5 36.3Q158.6 38.7 182.2 53.7M182.2 53.7Q138.6 47.2 140.0 56.0%22 fill=%22none%22 stroke=%22rgb%28205%2C184%2C255%29%22 stroke-opacity=%22.5%22 stroke-width=%221%22 stroke-linecap=%22round%22 vector-effect=%22non-scaling-stroke%22/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; -webkit-mask-image: linear-gradient(90deg, #000, rgba(0, 0, 0, .35) 55%, rgba(0, 0, 0, .7)); mask-image: linear-gradient(90deg, #000, rgba(0, 0, 0, .35) 55%, rgba(0, 0, 0, .7)); }
+            background: radial-gradient(circle at 28px 50%, rgba(190, 150, 255, calc(.6 * var(--vp-k, 0))) 0, transparent 58px) 0 0 / 100% 100% no-repeat, url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 250 56%22 preserveAspectRatio=%22none%22%3E%3Cpath d=%22M0 0L250 1M0 0L246 20M0 0L226 44M0 0L190 56M0 0L140 56M0 0L84 56M0 0L30 56M0 0L1 56M34.0 0.1Q29.2 1.2 33.9 2.8M33.9 2.8Q28.9 4.0 33.4 6.5M33.4 6.5Q28.4 6.9 32.6 9.6M32.6 9.6Q27.6 9.6 31.6 12.6M31.6 12.6Q25.7 13.5 28.3 18.9M28.3 18.9Q19.1 21.0 16.1 30.0M16.1 30.0Q7.2 27.5 0.6 34.0M62.0 0.2Q53.2 2.3 61.8 5.0M61.8 5.0Q52.7 7.3 60.9 11.8M60.9 11.8Q51.7 12.6 59.5 17.5M59.5 17.5Q50.3 17.4 57.6 23.0M57.6 23.0Q46.9 24.7 51.6 34.4M51.6 34.4Q34.8 38.3 29.3 54.7M29.3 54.7Q13.0 47.6 1.0 56.0M98.0 0.4Q84.1 3.6 97.7 7.9M97.7 7.9Q83.4 11.5 96.2 18.7M96.2 18.7Q81.8 20.0 94.0 27.7M94.0 27.7Q79.5 27.6 91.0 36.4M91.0 36.4Q74.2 39.0 81.5 54.4M81.5 54.4Q48.0 47.5 30.0 56.0M140.0 0.6Q120.2 5.1 139.5 11.3M139.5 11.3Q119.1 16.4 137.4 26.8M137.4 26.8Q116.8 28.5 134.3 39.6M134.3 39.6Q113.6 39.4 130.0 52.0M130.0 52.0Q92.0 46.4 84.0 56.0M190.0 0.8Q163.1 6.9 189.4 15.4M189.4 15.4Q161.6 22.2 186.5 36.3M186.5 36.3Q158.6 38.7 182.2 53.7M182.2 53.7Q138.6 47.2 140.0 56.0%22 fill=%22none%22 stroke=%22rgb%28205%2C184%2C255%29%22 stroke-opacity=%22.5%22 stroke-width=%221%22 stroke-linecap=%22round%22 vector-effect=%22non-scaling-stroke%22/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; -webkit-mask-image: linear-gradient(90deg, #000, rgba(0, 0, 0, .35) 55%, rgba(0, 0, 0, .7)); mask-image: linear-gradient(90deg, #000, rgba(0, 0, 0, .35) 55%, rgba(0, 0, 0, .7)); }
         .vp-nav-link:has(> svg.vp-portal[data-state="live"])::after { content: ""; display: block !important; position: absolute; inset: 0 !important; pointer-events: none;
             background: var(--hw-asset-web-corner-webp, none) 0 0 / 42px 42px no-repeat !important; opacity: .75; }
         .vp-itdx-btn { background: color-mix(in srgb, var(--vp-accent) 16%, var(--block-bg)) !important;
@@ -12835,8 +12844,10 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const x = (k * PROX_MAX).toFixed(2);
                 a.style.transform = k ? `translateX(${x}px)` : '';
                 a.style.opacity = k && !a.classList.contains('vp-active') ? String((0.5 + 0.5 * k).toFixed(3)) : '';
-                const icon = a.querySelector('.' + SELECTORS.navIcon);
+                const portal = a.querySelector(':scope > svg.vp-portal');
+                const icon = a.querySelector('.' + SELECTORS.navIcon) || portal;
                 if (icon) icon.style.transform = k ? `scale(${(1 + 0.12 * k).toFixed(3)})` : '';
+                if (portal) a.style.setProperty('--vp-k', k ? k.toFixed(3) : '0');
                 if (a.classList.contains('vp-active')) activeK = k;
                 rows.push([a.offsetTop + a.offsetHeight / 2, k]);
             });

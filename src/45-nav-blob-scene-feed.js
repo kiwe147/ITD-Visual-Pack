@@ -124,8 +124,10 @@
                 const x = (k * PROX_MAX).toFixed(2);
                 a.style.transform = k ? `translateX(${x}px)` : '';
                 a.style.opacity = k && !a.classList.contains('vp-active') ? String((0.5 + 0.5 * k).toFixed(3)) : '';
-                const icon = a.querySelector('.' + SELECTORS.navIcon);
+                const portal = a.querySelector(':scope > svg.vp-portal');
+                const icon = a.querySelector('.' + SELECTORS.navIcon) || portal;
                 if (icon) icon.style.transform = k ? `scale(${(1 + 0.12 * k).toFixed(3)})` : '';
+                if (portal) a.style.setProperty('--vp-k', k ? k.toFixed(3) : '0');
                 if (a.classList.contains('vp-active')) activeK = k;
                 rows.push([a.offsetTop + a.offsetHeight / 2, k]);
             });
