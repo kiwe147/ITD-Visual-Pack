@@ -69,7 +69,13 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   console.log(JSON.stringify(info));
   const fr = await p.$('iframe'); const box = await fr.boundingBox();
   await p.screenshot({ path: 'test/out/mascot0.png', clip: box });
-  await p.mouse.click(box.x + box.width * 0.88, box.y + box.height * 0.78); await p.waitForTimeout(450);
+  const say = () => p.evaluate(() => document.querySelector('iframe').contentDocument.querySelector('.vp-mas-say').classList.contains('vp-on'));
+  const m0 = await p.evaluate(() => { const r = document.querySelector('iframe').contentDocument.querySelector('.vp-mas-pic').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+  await p.mouse.click(box.x + m0[0] + m0[2] * 0.03, box.y + m0[1] + m0[3] * 0.05); await p.waitForTimeout(400);
+  console.log('клик по пустому углу квадрата -> фраза:', await say());
+  await p.mouse.move(box.x + m0[0] + m0[2] * 0.7, box.y + m0[1] + m0[3] * 0.55); await p.waitForTimeout(100);
+  console.log('курсор над видимым:', await p.evaluate(() => document.querySelector('iframe').contentDocument.documentElement.classList.contains('vp-mas-hover')));
+  await p.mouse.click(box.x + m0[0] + m0[2] * 0.7, box.y + m0[1] + m0[3] * 0.55); await p.waitForTimeout(450);
   console.log('фраза:', await p.evaluate(() => { const s = document.querySelector('iframe').contentDocument.querySelector('.vp-mas-say'); return s.textContent + ' on=' + s.classList.contains('vp-on'); }));
   await p.screenshot({ path: 'test/out/mascot1.png', clip: box });
   await b.close();
