@@ -15279,7 +15279,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         addEventListener('resize', placeRail);
 
         function placeSidebar() {
-            if (galOpen) { document.documentElement.classList.remove('vp-side-moved'); return; }
+            if (galOpen || /^\/event\/[^/]/.test(location.pathname)) { document.documentElement.classList.remove('vp-side-moved'); return; }
             const side = siteEl('sidebar');
             const cb = contentBox() || lastCb;
             if (!side || !cb) return;
