@@ -154,12 +154,12 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(s.length === 1 && s[0].w === 790 && s[0].h === 800, `по умолчанию первая анимация «Прыгает» (${s[0] && s[0].w}×${s[0] && s[0].h})`);
   await pickSkin(p, 'Кивает');
   s = await sizes(p);
-  check(s.length === 1 && s[0].w === 728 && s[0].h === 675 && await skinNow(p) === 'Кивает', `выбрал «Кивает»: Мику сменилась на новую ${s[0] && s[0].w}×${s[0] && s[0].h}, выбор сохранён (${await skinNow(p)})`);
+  check(s.length === 1 && s[0].w === 776 && s[0].h === 723 && await skinNow(p) === 'Кивает', `выбрал «Кивает»: Мику сменилась на новую ${s[0] && s[0].w}×${s[0] && s[0].h}, выбор сохранён (${await skinNow(p)})`);
   await p.screenshot({ path: path.join(__dirname, 'out', 'pals-new.png') });
   await p.close();
   p = await open(); await waitLoaded(p);
   s = await sizes(p);
-  check(s.length === 1 && s[0].w === 728, 'после перезагрузки осталась анимация «Кивает»');
+  check(s.length === 1 && s[0].w === 776, 'после перезагрузки осталась анимация «Кивает»');
   await pickSkin(p, 'Прыгает');
   s = await sizes(p);
   check(s.length === 1 && s[0].w === 790 && await skinNow(p) === 'Прыгает', `вернул «Прыгает»: ${s[0] && s[0].w}×${s[0] && s[0].h}`);
@@ -171,7 +171,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(s.length === 2 && (s.find(x => x.id === 'teto') || {}).w === 734, `Тето включена отдельно: у неё своя анимация, по умолчанию «Прыгает» (${(s.find(x => x.id === 'teto') || {}).w})`);
   await pickSkin(p, 'Кивает', 1); await p.waitForTimeout(700);
   s = await sizes(p);
-  check(s.length === 2 && s.every(x => x.h === 675) && (s.find(x => x.id === 'teto') || {}).w === 565, `обе в новой анимации: ${s.map(x => x.id + ' ' + x.w + '×' + x.h).join(', ')}`);
+  check(s.length === 2 && s.every(x => x.h === 723) && (s.find(x => x.id === 'teto') || {}).w === 613, `обе в новой анимации: ${s.map(x => x.id + ' ' + x.w + '×' + x.h).join(', ')}`);
   await p.keyboard.press('Escape'); await p.mouse.click(700, 80); await p.waitForTimeout(400);
   await p.screenshot({ path: path.join(__dirname, 'out', 'pals-new-both.png') });
   await p.evaluate(() => { document.querySelector('.vp-pals').dataset.look = 'neon'; }); await p.waitForTimeout(400);
