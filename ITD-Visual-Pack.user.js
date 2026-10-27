@@ -6287,7 +6287,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         const CHANGELOG = [
             ['3.7.8.7', '28 октября 2026', [
                 'Кнопка «Ивент»: вместо постоянной рамки, похожей на залипание, теперь фиолетовая надпись с мигающей точкой; паутина сайта у кнопки убрана',
-                'Ивент: при открытых «Сообщениях» или галерее правая панель снова на месте'
+                'Ивент: при открытых «Сообщениях» меню слева встаёт рядом с окном, как на других страницах, а правая панель на месте'
             ]],
             ['3.7.8.6', '28 октября 2026', [
                 'Ивент: меню слева больше не «залипает» тянущимся к мыши, когда курсор уходит на сцену ивента'
@@ -15318,7 +15318,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
 
         function placeSidebar() {
             document.documentElement.classList.toggle('vp-ev-scene', /^\/event\/[^/]/.test(location.pathname));
-            if (galOpen || /^\/event\/[^/]/.test(location.pathname)) { document.documentElement.classList.remove('vp-side-moved'); return; }
+            if (galOpen || (/^\/event\/[^/]/.test(location.pathname) && !msgsOpen)) { document.documentElement.classList.remove('vp-side-moved'); return; }
             const side = siteEl('sidebar');
             const cb = contentBox() || lastCb;
             if (!side || !cb) return;
