@@ -65,7 +65,7 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   await p.waitForTimeout(500);
   await p.evaluate(() => history.replaceState({}, '', '/event/halloween'));
   await p.waitForTimeout(4500);
-  const info = await p.evaluate(() => { const d = document.querySelector('iframe').contentDocument; const m = d.querySelector('.vp-mas'); if (!m) return 'нет маскота'; const r = m.getBoundingClientRect(), s = d.querySelector('.room-stage').getBoundingClientRect(); return { mas: [r.left, r.top, r.width, r.height].map(Math.round), stage: [s.left, s.top, s.width, s.height].map(Math.round), img: m.querySelector('img').naturalWidth }; });
+  const info = await p.evaluate(() => { const d = document.querySelector('iframe').contentDocument; const m = d.querySelector('.vp-mas'); if (!m) return 'нет маскота'; const r = m.getBoundingClientRect(), s = d.querySelector('.room-stage').getBoundingClientRect(); return { mas: [r.left, r.top, r.width, r.height].map(Math.round), stage: [s.left, s.top, s.width, s.height].map(Math.round), pic: getComputedStyle(m.querySelector('.vp-mas-pic')).backgroundImage.slice(0, 20) }; });
   console.log(JSON.stringify(info));
   const fr = await p.$('iframe'); const box = await fr.boundingBox();
   await p.screenshot({ path: 'test/out/mascot0.png', clip: box });

@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.9.3
+// @version      3.7.9.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6285,6 +6285,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.9.4', '28 октября 2026', [
+                'Мяу'
+            ]],
             ['3.7.9.3', '28 октября 2026', [
                 'Миу'
             ]],
@@ -16061,9 +16064,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         const MASCOT = { file: 'mascot.webp', cache: 'mascot@1', ratio: 640 / 585 };
         const MASCOT_SAYS = ['Арра-Ара~', 'Миу', 'Мяу', 'Мь?', 'Мя', 'Мур'];
         const MASCOT_CSS = `
-        .vp-mas { position: absolute; left: 76%; bottom: 7%; width: 18%; aspect-ratio: ${MASCOT.ratio}; z-index: 6; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; animation: vpMasIn .9s cubic-bezier(.2, .9, .3, 1.1) both; }
+        .vp-mas { position: absolute; left: 72%; bottom: 6%; width: 25%; aspect-ratio: ${MASCOT.ratio}; z-index: 6; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; animation: vpMasIn .9s cubic-bezier(.2, .9, .3, 1.1) both; }
         .vp-mas-shadow { position: absolute; left: 4%; right: -4%; bottom: -2%; height: 13%; border-radius: 50%; background: radial-gradient(closest-side, rgba(12, 4, 24, .6), rgba(12, 4, 24, 0)); pointer-events: none; }
-        .vp-mas img { position: relative; display: block; width: 100%; height: 100%; max-width: none; filter: brightness(.84) saturate(.8) contrast(1.05); transform-origin: 55% 100%; }
+        .vp-mas-pic { position: relative; width: 100%; height: 100%; background: var(--vp-mas-img) center / 100% 100% no-repeat; filter: brightness(.84) saturate(.8) contrast(1.05); transform-origin: 55% 100%; }
         .vp-mas-tint { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: soft-light; animation: vpMasFlick 3.4s ease-in-out infinite alternate;
             -webkit-mask: var(--vp-mas-img) center / 100% 100% no-repeat; mask: var(--vp-mas-img) center / 100% 100% no-repeat;
             background: linear-gradient(90deg, rgba(255, 150, 55, .75), rgba(255, 150, 55, 0) 62%), linear-gradient(180deg, rgba(125, 80, 200, .35), rgba(70, 35, 120, .5)); }
@@ -16071,7 +16074,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             box-shadow: 0 .3cqw .8cqw rgba(0, 0, 0, .35); opacity: 0; transform: translateY(30%) scale(.7); transform-origin: 50% 100%; transition: opacity .18s ease, transform .22s cubic-bezier(.3, 1.5, .5, 1); }
         .vp-mas-say::after { content: ""; position: absolute; left: 50%; top: 100%; width: .9cqw; height: .9cqw; translate: -50% -55%; rotate: 45deg; background: #fff1d6; border: max(1.5px, .16cqw) solid #2a170f; border-top: 0; border-left: 0; }
         .vp-mas-say.vp-on { opacity: 1; transform: none; }
-        .vp-mas.vp-hop img { animation: vpMasHop .38s cubic-bezier(.3, 1.4, .5, 1); }
+        .vp-mas.vp-hop .vp-mas-pic { animation: vpMasHop .38s cubic-bezier(.3, 1.4, .5, 1); }
         @keyframes vpMasIn { from { opacity: 0; translate: 0 8%; } }
         @keyframes vpMasHop { 40% { transform: translateY(-4%) scale(1.03, .97); } 70% { transform: scale(.98, 1.02); } }
         @keyframes vpMasFlick { from { opacity: .8; } to { opacity: 1; } }
@@ -16115,8 +16118,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const el = d.createElement('div');
                 el.className = 'vp-mas';
                 el.style.setProperty('--vp-mas-img', `url("${mascotUrl}")`);
-                el.innerHTML = '<div class="vp-mas-shadow"></div><img alt="" draggable="false"><div class="vp-mas-tint"></div><div class="vp-mas-say"></div>';
-                el.querySelector('img').src = mascotUrl;
+                el.innerHTML = '<div class="vp-mas-shadow"></div><div class="vp-mas-pic"></div><div class="vp-mas-tint"></div><div class="vp-mas-say"></div>';
                 el.addEventListener('click', e => { e.stopPropagation(); mascotSay(el); });
                 stage.appendChild(el);
             }
