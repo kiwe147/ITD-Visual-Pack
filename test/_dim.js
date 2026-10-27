@@ -74,17 +74,9 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   await p.evaluate(() => document.addEventListener('click', e => { const a = e.target.closest && e.target.closest('nav a[href^="/"]'); if (!a || e.defaultPrevented) return; e.preventDefault(); history.pushState({}, '', a.getAttribute('href')); dispatchEvent(new PopStateEvent('popstate')); }, false));
   await p.evaluate(() => history.replaceState({}, '', '/event/halloween'));
   await probe('старт');
-  await click('Сообщения'); await p.waitForTimeout(2500);
-  console.log(JSON.stringify(await p.evaluate(() => {
-    const nav = document.querySelector('nav'), out = [];
-    const r0 = nav.getBoundingClientRect();
-    [nav, ...nav.querySelectorAll('*'), nav.parentElement].forEach(e => { const c = getComputedStyle(e), r = e.getBoundingClientRect(); const bg = c.backgroundColor, bi = c.backgroundImage, sh = c.boxShadow, bd = c.borderTopWidth;
-      const vis = (bg !== 'rgba(0, 0, 0, 0)' || bi !== 'none' || sh !== 'none' || (bd !== '0px' && c.borderTopStyle !== 'none')) && r.width > 0;
-      if (vis) out.push([e.tagName, (e.className.baseVal ?? e.className).toString().slice(0, 40), Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height), bg, bi.slice(0, 30), sh.slice(0, 70), c.opacity]); });
-    const sb = document.querySelector('aside'); const sc = sb && getComputedStyle(sb);
-    return { out, aside: sb && [sc.backgroundColor, sc.boxShadow.slice(0, 80), sc.backgroundImage.slice(0, 50)], tag: nav.parentElement.tagName };
-  }), null, 1));
-  const r = await p.evaluate(() => { const b = document.querySelector('aside').getBoundingClientRect(); return { x: b.x - 30, y: b.y, width: b.width + 560, height: Math.min(900, b.height) }; });
-  await p.screenshot({ path: 'test/out/dim_wide.png', clip: r });
+  await p.evaluate(() => document.documentElement.style.setProperty('--vp-accent', '#ff3d8b'));
+  const crop = async n => { const r = await p.evaluate(() => { const b = document.querySelector('aside').getBoundingClientRect(); return { x: Math.max(0, b.x - 10), y: 330, width: 330, height: 330 }; }); await p.screenshot({ path: 'test/out/glow_' + n + '.png', clip: r }); };
+  await click('Сообщения'); await p.waitForTimeout(2000); await crop('msgs');
+  console.log(JSON.stringify(await p.evaluate(() => [...document.querySelectorAll('nav .vp-nav-link')].map(a => { const c = getComputedStyle(a); return [a.textContent.trim().slice(0, 8), a.className.replace(/\S*[A-Z]\S*/g, '').trim(), c.backdropFilter.slice(0, 30), c.backgroundColor, c.boxShadow.slice(0, 30), c.borderTopStyle]; }))));
   await b.close();
 })();

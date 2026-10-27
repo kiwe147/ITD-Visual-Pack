@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.9.0
+// @version      3.7.9.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6285,6 +6285,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.9.1', '28 октября 2026', [
+                'Ивент: под плашкой «Сообщений» больше нет прямоугольной подсветки у кнопки «Ивент»'
+            ]],
             ['3.7.9.0', '28 октября 2026', [
                 'Сообщения: аватарки-картинки снова показываются (сайт сменил адреса старых аватарок), а если картинка не загрузилась, вместо пустого круга видно смайл'
             ]],
@@ -12422,7 +12425,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-nav-has-blob { position: relative; }
         .vp-nav-has-blob .vp-nav-link { position: relative; z-index: 1; transition: background-color .2s ease, opacity .2s ease !important; }
         .vp-nav-has-blob .vp-nav-link .vp-nav-icon { transition: none; }
-        .vp-nav-has-blob .vp-nav-link:not(.vp-active):not(:hover) { background-color: transparent !important; }
+        .vp-nav-has-blob .vp-nav-link:not(.vp-active):not(:hover) { background-color: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
         html.vp-ev-scene .vp-sidebar, html.vp-ev-scene .vp-rail { z-index: 30 !important; }
         .vp-nav-has-blob .vp-nav-link.vp-active { background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
         .vp-nav-has-blob > div:not(.vp-nav-blob):not(:has(a)) { opacity: 0 !important; }
