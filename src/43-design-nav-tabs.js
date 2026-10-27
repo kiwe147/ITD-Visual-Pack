@@ -487,7 +487,9 @@
             backdrop-filter: var(--vp-glass-filter, blur(16px)); -webkit-backdrop-filter: var(--vp-glass-filter, blur(16px)); }
         .vp-bump-bg .vp-bump-fill { fill: var(--glass-bg); }
         a[href^="/event"] img[src*="/portal/"], img.vp-portal-img { display: none !important; }
-        .vp-nav-link:has(> svg.vp-portal[data-state="live"])::after { display: none !important; }
+        .vp-nav-link:has(> svg.vp-portal[data-state="live"]) { position: relative; }
+        .vp-nav-link:has(> svg.vp-portal[data-state="live"])::after { content: ""; display: block !important; position: absolute; inset: 0 !important; pointer-events: none;
+            background: var(--hw-asset-web-corner-webp, none) 0 0 / 42px 42px no-repeat !important; opacity: .75; }
         .vp-nav-link:has(> svg.vp-portal[data-state="live"]) > span { color: color-mix(in srgb, #b58cff 62%, var(--text-primary)); }
         .vp-nav-link:has(> svg.vp-portal[data-state="live"]) > span::after { content: ''; display: inline-block; width: 7px; height: 7px; margin-left: 9px; border-radius: 50%; vertical-align: middle;
             background: #b58cff; box-shadow: 0 0 8px #b58cff; animation: vpLiveDot 2s ease-in-out infinite; }
