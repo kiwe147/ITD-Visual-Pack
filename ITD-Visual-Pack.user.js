@@ -2286,7 +2286,7 @@
         .vp-like-inline { max-height: none !important; }
         .vp-settings-tabs .settings-option.vp-dim { opacity: .4; pointer-events: none; }
         .vp-pals { position: fixed; inset: 0; z-index: 9000; pointer-events: none; overflow: hidden; }
-        .vp-pal { position: absolute; bottom: 0; box-sizing: content-box; padding: 24px; margin: -24px; width: auto; height: min(var(--vp-pal-h, 45vh), calc(48vw * var(--vp-pal-r, 1))); pointer-events: none;
+        .vp-pal { position: absolute; bottom: 0; box-sizing: content-box; padding: 24px; margin: -24px; width: auto; height: calc(min(var(--vp-pal-h, 45vh), calc(48vw * var(--vp-pal-r, 1))) * var(--vp-pal-k, 1)); pointer-events: none;
             user-select: none; -webkit-user-drag: none; animation: vpPalIn .7s cubic-bezier(.2, .9, .3, 1.15) both; }
         .vp-pal-miku { right: 0; transform: translate(var(--vp-pal-dx, 6%), 5%); }
         .vp-pal-teto { left: 0; transform: scaleX(-1) translate(var(--vp-pal-dx, 6%), 5%); }
@@ -4294,12 +4294,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         let palsOn = GM_getValue('palsEnabled', false);
         const PALS = {
-            miku: { key: 'palMiku', skins: { old: { file: 'miku.webp', r: 800 / 790, dx: '6%', cache: 'pal-miku@8' }, new: { file: 'miku2.webp', r: 675 / 728, dx: '6%', cache: 'pal-miku-2@2' } } },
-            teto: { key: 'palTeto', skins: { old: { file: 'teto.webp', r: 776 / 734, dx: '6%', cache: 'pal-teto@8' }, new: { file: 'teto2.webp', r: 675 / 565, dx: '0%', cache: 'pal-teto-2@2' } } }
+            miku: { key: 'palMiku', skinKey: 'palSkinMiku', skins: { old: { file: 'miku.webp', r: 800 / 790, dx: '6%', cache: 'pal-miku@8' }, new: { file: 'miku2.webp', r: 675 / 728, dx: '6%', cache: 'pal-miku-2@2' } } },
+            teto: { key: 'palTeto', skinKey: 'palSkinTeto', skins: { old: { file: 'teto.webp', r: 776 / 734, dx: '6%', cache: 'pal-teto@8' }, new: { file: 'teto2.webp', r: 675 / 565, dx: '0%', k: 1.15, cache: 'pal-teto-2@2' } } }
         };
         const PAL_SKINS = [['old', 'Прыгают'], ['new', 'Кивают']];
-        const palSkin = () => GM_getValue('palSkin', 'old') === 'new' ? 'new' : 'old';
-        const palCfg = id => PALS[id].skins[palSkin()];
+        // у каждого персонажа своя анимация; общая палитра palSkin (прошлая сборка) используется, пока свою не выбрали
+        const palSkin = id => GM_getValue(PALS[id].skinKey, GM_getValue('palSkin', 'old')) === 'new' ? 'new' : 'old';
+        const palCfg = id => PALS[id].skins[palSkin(id)];
         const PAL_LOOKS = [
             ['plain', 'Как есть', '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="12" cy="11" r="3"/><path d="M7 20c.8-2.6 2.8-4 5-4s4.2 1.4 5 4"/>'],
             ['neon', 'Неон', '<circle cx="12" cy="10" r="3.5"/><path d="M5.5 20c1-3.3 3.5-5 6.5-5s5.5 1.7 6.5 5"/><path d="M12 2.5v2M4.6 5.6l1.4 1.4M19.4 5.6 18 7"/>'],
@@ -4330,9 +4331,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             }
             return null;
         }
-        function palsReset() {
+        function palsReset(id) {
             if (!palsBox) return;
-            palsBox.querySelectorAll('.vp-pal').forEach(i => { if (i.src) URL.revokeObjectURL(i.src); i.remove(); });
+            palsBox.querySelectorAll(id ? '.vp-pal-' + id : '.vp-pal').forEach(i => { if (i.src) URL.revokeObjectURL(i.src); i.remove(); });
         }
         function palsApply() {
             if (!palsBox) { palsBox = document.createElement('div'); palsBox.className = 'vp-pals'; }
@@ -4352,6 +4353,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     img.alt = '';
                     img.style.setProperty('--vp-pal-r', palCfg(id).r);
                     img.style.setProperty('--vp-pal-dx', palCfg(id).dx);
+                    img.style.setProperty('--vp-pal-k', palCfg(id).k || 1);
                     palsBox.appendChild(img);
                     fresh = true;
                 }
@@ -4700,20 +4702,23 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const redraw = () => show(id);
                 const tab = SETTINGS_TABS.find(t => t.id === id);
                 if (id === 'icon') body.appendChild(iconPicker());
-                else for (const label of tab.items) body.appendChild(settingItem(label, redraw, id === 'bg' || id === 'nick' || id === 'pals' ? redraw : null));
+                else for (const label of tab.items) {
+                    body.appendChild(settingItem(label, redraw, id === 'bg' || id === 'nick' || id === 'pals' ? redraw : null));
+                    if (id === 'pals' && (label === 'Мику справа' || label === 'Тето слева')) {      // у каждой своя анимация, сразу под её выключателем
+                        const pid = label === 'Мику справа' ? 'miku' : 'teto', skins = document.createElement('div');
+                        skins.className = 'vp-pick-grid' + (palsOn && GM_getValue(PALS[pid].key, true) ? '' : ' vp-dim');
+                        const skin = palSkin(pid);
+                        PAL_SKINS.forEach(([key, name]) => {
+                            const icon = document.createElement('div');
+                            icon.className = 'vp-menu-icon';
+                            icon.innerHTML = svgIcon(PAL_LOOKS[0][2]);
+                            skins.appendChild(pickRow(icon, name, key === skin, () => { GM_setValue(PALS[pid].skinKey, key); palsReset(pid); palsApply(); }, redraw));
+                        });
+                        skins.style.gridTemplateRows = 'auto';
+                        body.appendChild(skins);
+                    }
+                }
                 if (id === 'pals') {
-                    body.appendChild(secTitle('Анимация'));
-                    const skins = document.createElement('div');
-                    skins.className = 'vp-pick-grid' + (palsOn ? '' : ' vp-dim');
-                    const skin = palSkin();
-                    PAL_SKINS.forEach(([key, name]) => {
-                        const icon = document.createElement('div');
-                        icon.className = 'vp-menu-icon';
-                        icon.innerHTML = svgIcon(PAL_LOOKS[0][2]);
-                        skins.appendChild(pickRow(icon, name, key === skin, () => { GM_setValue('palSkin', key); palsReset(); palsApply(); }, redraw));
-                    });
-                    skins.style.gridTemplateRows = `repeat(${Math.ceil(skins.children.length / 2)}, auto)`;
-                    body.appendChild(skins);
                     body.appendChild(secTitle('Вид'));
                     const grid = document.createElement('div');
                     grid.className = 'vp-pick-grid' + (palsOn ? '' : ' vp-dim');

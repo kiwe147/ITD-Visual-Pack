@@ -142,10 +142,10 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(asked.every(u => /\/main\/assets\//.test(u)), 'качается из папки assets репозитория');
   check(!p.errors.length, 'ошибок нет' + (p.errors.length ? ': ' + p.errors.join(' | ') : ''));
   // выбор анимации: «Прежняя» / «Новая, 52 к/с»
-  const pickSkin = async (pg, name) => {
+  const pickSkin = async (pg, name, nth = 0) => {
     for (let i = 0; i < 2 && !(await pg.$('.vp-stab[data-tab="pals"]')); i++) { await pg.click('.vp-itdx-btn'); await pg.waitForTimeout(300); }
     await pg.$eval('.vp-stab[data-tab="pals"]', x => x.click()); await pg.waitForTimeout(200);
-    await pg.$$eval('.vp-tab-body .nick-style-option', (rs, n) => rs.find(r => r.textContent.trim() === n).click(), name);
+    await pg.$$eval('.vp-tab-body .nick-style-option', (rs, [n, k]) => rs.filter(r => r.textContent.trim() === n)[k].click(), [name, nth]);
     await pg.waitForTimeout(300); await waitLoaded(pg); await pg.waitForTimeout(300);
   };
   const sizes = pg => pg.evaluate(() => [...document.querySelectorAll('.vp-pal')].map(i => ({ id: i.className.match(/vp-pal-(\w+)/)[1], w: i.naturalWidth, h: i.naturalHeight })));
@@ -166,7 +166,10 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   check(!p.errors.length, 'выбор анимации: ошибок нет' + (p.errors.length ? ': ' + p.errors.join(' | ') : ''));
   await pickSkin(p, 'Кивают');
   await p.$$eval('.vp-tab-body .settings-option', rs => rs.find(r => /Тето слева/.test(r.textContent)).click());
-  await p.waitForTimeout(400); await waitLoaded(p); await p.waitForTimeout(700);
+  await p.waitForTimeout(400); await waitLoaded(p);
+  s = await sizes(p);
+  check(s.length === 2 && (s.find(x => x.id === 'teto') || {}).w === 734, `Тето включена отдельно: у неё своя анимация, по умолчанию «Прыгают» (${(s.find(x => x.id === 'teto') || {}).w})`);
+  await pickSkin(p, 'Кивают', 1); await p.waitForTimeout(700);
   s = await sizes(p);
   check(s.length === 2 && s.every(x => x.h === 675) && (s.find(x => x.id === 'teto') || {}).w === 565, `обе в новой анимации: ${s.map(x => x.id + ' ' + x.w + '×' + x.h).join(', ')}`);
   await p.keyboard.press('Escape'); await p.mouse.click(700, 80); await p.waitForTimeout(400);
