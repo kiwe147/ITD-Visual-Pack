@@ -21,11 +21,18 @@
             return hcCache.get(key);
         }
         const pick = (...vals) => vals.find(v => v !== undefined && v !== null && v !== '');
+        // как у самого сайта: старые адреса /images/avatars/ он больше не показывает, а берёт baseAvatar или смайл из профиля
+        const siteAva = d => {
+            const a = pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl);
+            if (typeof a !== 'string' || !a.includes('/images/avatars/')) return pick(a, d.emoji, '👤');
+            const nonUrl = v => typeof v === 'string' && v && !/^(?:https?:|\/)/.test(v) ? v : '';
+            return pick(typeof d.baseAvatar === 'string' && d.baseAvatar, nonUrl(d.clanAvatar), d.emoji, '👤');
+        };
         function hcBuild(user, d) {
             const el = document.createElement('div');
             el.className = 'vp-hc';
             const banner = pick(d.banner && (d.banner.url || d.banner), d.bannerUrl, d.banner_url, d.cover && (d.cover.url || d.cover));
-            const ava = avaUrlOf(user) || pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl, d.emoji, '👤');
+            const ava = avaUrlOf(user) || siteAva(d);
             const followers = pick(d.followersCount, d.followers_count, d.stats && d.stats.followers, typeof d.followers === 'number' ? d.followers : undefined);
             const following = pick(d.followingCount, d.following_count, d.stats && d.stats.following, typeof d.following === 'number' ? d.following : undefined);
             const bio = pick(d.bio, d.description, d.about, '');

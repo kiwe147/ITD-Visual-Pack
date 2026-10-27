@@ -23,7 +23,7 @@
                 const d = await hcData(n).catch(() => null), p = msgPeople.get(n);
                 if (!d || !p) return;
                 p.name = pick(d.displayName, d.display_name, n);
-                p.ava = avaUrlOf(n) || pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl, d.emoji, '👤');
+                p.ava = avaUrlOf(n) || siteAva(d);
                 p.online = !!d.online; p.lastSeen = d.lastSeen || null;
             }));
             onUpdate();
@@ -420,6 +420,7 @@
             const avaHtml = a => a === '🛟' ? SUP_AVA : isUrl(a) ? `<img src="${esc(a)}" alt="">` : esc(a);
             const msgAva = d => d.login && d.ava !== '🛟' && !d.support ? clubAvaOf(d.login, d.ava) : d.ava;
             const headAva = () => { const h = current && $('.vp-msgs-chead .vp-msgs-ava'); if (h) h.innerHTML = avaHtml(msgAva(current)); };
+            root.addEventListener('error', e => { const im = e.target; if (im && im.tagName === 'IMG' && im.closest('.vp-msgs-ava')) im.replaceWith(document.createTextNode('👤')); }, true);
 
             let supDir = false;
             function renderList() {

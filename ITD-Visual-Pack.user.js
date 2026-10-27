@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.8.9
+// @version      3.7.9.0
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6285,6 +6285,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.9.0', '28 октября 2026', [
+                'Сообщения: аватарки-картинки снова показываются (сайт сменил адреса старых аватарок), а если картинка не загрузилась, вместо пустого круга видно смайл'
+            ]],
             ['3.7.8.9', '28 октября 2026', [
                 'Кнопка «Ивент» не тускнеет, когда сверху открыты «Сообщения» или галерея',
                 'Мику и Тето возвращаются, когда с ивента переходишь в «Сообщения» или галерею'
@@ -9700,7 +9703,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const d = await hcData(n).catch(() => null), p = msgPeople.get(n);
                 if (!d || !p) return;
                 p.name = pick(d.displayName, d.display_name, n);
-                p.ava = avaUrlOf(n) || pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl, d.emoji, '👤');
+                p.ava = avaUrlOf(n) || siteAva(d);
                 p.online = !!d.online; p.lastSeen = d.lastSeen || null;
             }));
             onUpdate();
@@ -10097,6 +10100,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const avaHtml = a => a === '🛟' ? SUP_AVA : isUrl(a) ? `<img src="${esc(a)}" alt="">` : esc(a);
             const msgAva = d => d.login && d.ava !== '🛟' && !d.support ? clubAvaOf(d.login, d.ava) : d.ava;
             const headAva = () => { const h = current && $('.vp-msgs-chead .vp-msgs-ava'); if (h) h.innerHTML = avaHtml(msgAva(current)); };
+            root.addEventListener('error', e => { const im = e.target; if (im && im.tagName === 'IMG' && im.closest('.vp-msgs-ava')) im.replaceWith(document.createTextNode('👤')); }, true);
 
             let supDir = false;
             function renderList() {
@@ -13213,11 +13217,18 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             return hcCache.get(key);
         }
         const pick = (...vals) => vals.find(v => v !== undefined && v !== null && v !== '');
+        // как у самого сайта: старые адреса /images/avatars/ он больше не показывает, а берёт baseAvatar или смайл из профиля
+        const siteAva = d => {
+            const a = pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl);
+            if (typeof a !== 'string' || !a.includes('/images/avatars/')) return pick(a, d.emoji, '👤');
+            const nonUrl = v => typeof v === 'string' && v && !/^(?:https?:|\/)/.test(v) ? v : '';
+            return pick(typeof d.baseAvatar === 'string' && d.baseAvatar, nonUrl(d.clanAvatar), d.emoji, '👤');
+        };
         function hcBuild(user, d) {
             const el = document.createElement('div');
             el.className = 'vp-hc';
             const banner = pick(d.banner && (d.banner.url || d.banner), d.bannerUrl, d.banner_url, d.cover && (d.cover.url || d.cover));
-            const ava = avaUrlOf(user) || pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl, d.emoji, '👤');
+            const ava = avaUrlOf(user) || siteAva(d);
             const followers = pick(d.followersCount, d.followers_count, d.stats && d.stats.followers, typeof d.followers === 'number' ? d.followers : undefined);
             const following = pick(d.followingCount, d.following_count, d.stats && d.stats.following, typeof d.following === 'number' ? d.following : undefined);
             const bio = pick(d.bio, d.description, d.about, '');
