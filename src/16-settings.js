@@ -47,13 +47,13 @@
             miku: { key: 'palMiku', skinKey: 'palSkinMiku', skins: {
                 old: { file: 'miku.webp', r: 800 / 790, dx: '6%', cache: 'pal-miku@8' },
                 new: { file: 'miku2.webp', r: 675 / 728, dx: '6%', k: 723 / 675, cache: 'pal-miku-2@3' },
-                hall: { file: 'miku-hall.webp', r: 1086 / 1274, dx: '6%', k: 1134 / 1086, cache: 'pal-miku-hall@1' },
-                hall2: { file: 'miku-hall2.webp', r: 1000 / 1336, dx: '0%', k: 1048 / 1000, flip: true, cache: 'pal-miku-hall2@1' }
+                hall: { file: 'miku-hall.webp', r: 1086 / 1274, dx: '6%', k: 1134 / 1086, flip: true, cache: 'pal-miku-hall@1' },
+                hall2: { file: 'miku-hall2.webp', r: 1000 / 1336, dx: '0%', k: 1048 / 1000, cache: 'pal-miku-hall2@1' }
             } },
             teto: { key: 'palTeto', skinKey: 'palSkinTeto', skins: {
                 old: { file: 'teto.webp', r: 776 / 734, dx: '6%', cache: 'pal-teto@8' },
                 new: { file: 'teto2.webp', r: 675 / 565, dx: '0%', k: 723 / 675, cache: 'pal-teto-2@3' },
-                hall: { file: 'teto-hall.webp', r: 1067 / 1144, dx: '0%', k: 1115 / 1067, cache: 'pal-teto-hall@1' },
+                hall: { file: 'teto-hall.webp', r: 1067 / 1144, dx: '0%', k: 1115 / 1067, noflip: true, cache: 'pal-teto-hall@1' },
                 hall2: { file: 'teto-hall2.webp', r: 951 / 1284, dx: '0%', k: 999 / 951, cache: 'pal-teto-hall2@1' }
             } }
         };
@@ -121,6 +121,7 @@
                     img.style.setProperty('--vp-pal-dx', parseFloat(palCfg(id).dx) / 100);
                     img.style.setProperty('--vp-pal-k', palCfg(id).k || 1);
                     img.classList.toggle('vp-pal-flip', !!palCfg(id).flip);
+                    img.classList.toggle('vp-pal-noflip', !!palCfg(id).noflip);
                     palsBox.appendChild(img);
                     fresh = true;
                 }
@@ -363,6 +364,8 @@
         .vp-sm .vp-rcards > .vp-sec-title:first-child { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-color, rgba(255, 255, 255, .1)); }
         .vp-sm .vp-pick-grid { gap: 8px; }
         .vp-sm .vp-sub .vp-pick-grid { gap: 8px; }
+        .vp-sm .vp-pick-grid.vp-pick-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; grid-auto-flow: row !important; }
+        .vp-sm .vp-pick-grid.vp-pick-grid-4 .nick-style-option { padding: 8px 6px !important; gap: 6px !important; justify-content: center; }
         .vp-sm .vp-pick-grid .nick-style-option { border: 1px solid var(--border-color, rgba(255, 255, 255, .12)) !important; border-radius: 12px !important; background: color-mix(in srgb, var(--text-primary, #fff) 4%, transparent); }
         .vp-sm .vp-pick-grid .nick-style-option.vp-active { border-color: var(--vp-accent, #0080ff) !important; }
         .vp-sm .toggle-switch:not(.active):not(.vp-tri) { background: color-mix(in srgb, var(--text-primary, #fff) 22%, transparent) !important; }
@@ -487,7 +490,7 @@
                     body.appendChild(settingItem(label, redraw, id === 'bg' || id === 'nick' || id === 'pals' ? redraw : null));
                     if (id === 'pals' && (label === 'Мику справа' || label === 'Тето слева')) {      // у каждой своя анимация, сразу под её выключателем
                         const pid = label === 'Мику справа' ? 'miku' : 'teto', skins = document.createElement('div');
-                        skins.className = 'vp-pick-grid' + (palsOn && GM_getValue(PALS[pid].key, true) ? '' : ' vp-dim');
+                        skins.className = 'vp-pick-grid vp-pick-grid-4' + (palsOn && GM_getValue(PALS[pid].key, true) ? '' : ' vp-dim');
                         const skin = palSkin(pid);
                         PAL_SKINS.forEach(([key, name]) => {
                             const icon = document.createElement('div');
@@ -496,6 +499,7 @@
                             skins.appendChild(pickRow(icon, name, key === skin, () => { GM_setValue(PALS[pid].skinKey, key); palsReset(pid); palsApply(); }, redraw));
                         });
                         skins.style.gridTemplateRows = 'auto';
+                        skins.style.gridAutoFlow = 'row';
                         const sub = document.createElement('div'), cap = document.createElement('div');
                         sub.className = 'vp-sub';
                         cap.className = 'vp-sub-label';
