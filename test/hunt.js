@@ -89,6 +89,12 @@ const mkPage = (n) => Array.from({ length: 20 }, (_, i) => ({ id: 'p-' + n + '-'
         // ждём, пока поиск найдёт посты
         await p.waitForTimeout(6000);
         const tgts = await fr.evaluate(() => [...document.querySelectorAll('.vp-hunt-tgt')].map(t => ({ kind: t.className.replace(/.*vp-(poss|wolf).*/, '$1'), x: Math.round(t.getBoundingClientRect().x), y: Math.round(t.getBoundingClientRect().y) })));
+        const stats = await fr.evaluate(() => ({
+            scanned: (document.querySelector('.vp-hunt-scanned') || {}).textContent,
+            found: (document.querySelector('.vp-hunt-found') || {}).textContent
+        }));
+        check(+stats.scanned > 0, `счётчик «проанализировано» растёт (${stats.scanned})`);
+        check(+stats.found === tgts.length, `счётчик «найдено» совпадает (${stats.found} / ${tgts.length})`);
         check(tgts.length > 0, `сущности появились (${tgts.length})`);
         check(tgts.some(t => t.kind === 'poss'), 'есть призрак (радужная)');
         check(tgts.some(t => t.kind === 'wolf'), 'есть оборотень (фиолетовая)');

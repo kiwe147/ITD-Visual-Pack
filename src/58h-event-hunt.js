@@ -25,7 +25,11 @@
 .vp-hunt-modes button.vp-on{background:rgba(150,105,255,.28);color:#fff;box-shadow:inset 0 0 0 1px rgba(150,105,255,.55);}
 .vp-hunt-bar{position:absolute;top:58px;left:0;right:0;height:3px;background:rgba(255,255,255,.06);z-index:3;}
 .vp-hunt-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#7cffb0,#5bd6ff,#8a5bff);transition:width .4s ease;box-shadow:0 0 12px rgba(140,150,255,.7);}
-.vp-hunt-stage{position:absolute;inset:60px 0 0;overflow:hidden;}
+.vp-hunt-stats{position:absolute;top:66px;left:16px;right:16px;display:flex;gap:8px;z-index:5;pointer-events:none;}
+.vp-hunt-stat{padding:7px 13px;border-radius:12px;background:rgba(15,9,26,.78);border:1px solid rgba(255,255,255,.09);font-size:12.5px;color:rgba(255,255,255,.6);white-space:nowrap;}
+.vp-hunt-stat b{color:#fff;font-size:14px;margin-left:5px;font-variant-numeric:tabular-nums;}
+.vp-hunt-stat.vp-gold b{color:#ffd46a;}
+.vp-hunt-stage{position:absolute;inset:104px 0 0;overflow:hidden;}
 .vp-hunt-tgt{position:absolute;width:78px;height:78px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:36px;
   background:rgba(20,14,40,.7);backdrop-filter:blur(6px);transition:transform .12s ease,filter .12s;will-change:transform;}
 .vp-hunt-tgt:hover{transform:scale(1.08);filter:brightness(1.2);}
@@ -50,6 +54,35 @@
             const huntTargets = new Map();
             const HUNT_MAX_TARGETS = 4, HUNT_MAX_PAGES = 40, HUNT_GAP = 1200;
 
+            const HUNT_SAVE = 'vpHuntState';
+            function huntStatsUpdate() {
+                if (!huntDoc) return;
+                const s = huntDoc.querySelector('.vp-hunt-scanned'), f = huntDoc.querySelector('.vp-hunt-found');
+                if (s) s.textContent = String(huntScanned);
+                if (f) f.textContent = String(huntFound);
+            }
+            function huntSave() {
+                try {
+                    const targets = [];
+                    huntTargets.forEach((v, id) => { targets.push({ id: id, kind: v.kind, user: v.user, label: v.label, x: v.x, y: v.y }); });
+                    sessionStorage.setItem(HUNT_SAVE, JSON.stringify({
+                        at: Date.now(), found: huntFound, scanned: huntScanned,
+                        cursor: huntCursor, seen: [...huntSeen], targets: targets
+                    }));
+                } catch (e) { }
+            }
+            function huntSaveClear() {
+                try { sessionStorage.removeItem(HUNT_SAVE); } catch (e) { }
+            }
+            function huntLoadSave() {
+                try {
+                    const raw = sessionStorage.getItem(HUNT_SAVE);
+                    if (!raw) return null;
+                    const st = JSON.parse(raw);
+                    if (!st || !st.at || Date.now() - st.at > 30 * 60 * 1000) return null;
+                    return st;
+                } catch (e) { return null; }
+            }
             function huntStatus(text) {
                 const s = huntDoc && huntDoc.querySelector('.vp-hunt-status');
                 if (s && text != null) s.textContent = text;
@@ -58,7 +91,7 @@
                 const b = huntDoc && huntDoc.querySelector('.vp-hunt-bar i');
                 if (b) b.style.width = Math.max(0, Math.min(100, pct)) + '%';
             }
-            function huntSpawn(kind, postId, user, label) {
+            function huntSpawn(kind, postId, user, label, at) {
                 if (!huntDoc || huntTargets.size >= HUNT_MAX_TARGETS) return;
                 if (huntTargets.has(postId)) return;
                 const stage = huntDoc.querySelector('.vp-hunt-stage');
@@ -68,8 +101,8 @@
                 el.className = 'vp-hunt-tgt vp-' + kind;
                 el.textContent = kind === 'wolf' ? '\u{1F43A}' : '\u{1F47B}';
                 el.title = label + ' — нажми, чтобы открыть пост';
-                const x = 40 + Math.random() * Math.max(40, W - 160);
-                const y = 40 + Math.random() * Math.max(40, H - 160);
+                const x = at ? at.x : 40 + Math.random() * Math.max(40, W - 160);
+                const y = at ? at.y : 40 + Math.random() * Math.max(40, H - 160);
                 el.style.left = x + 'px';
                 el.style.top = y + 'px';
                 const phase = Math.random() * Math.PI * 2, sx = 0.9 + Math.random() * 0.8, sy = 0.7 + Math.random() * 0.6;
@@ -87,12 +120,19 @@
                     el.classList.add('vp-caught');
                     cancelAnimationFrame(raf);
                     const id = postId, u = user;
-                    setTimeout(() => { huntBack(); try { parent.postMessage({ vpHunt: 'open', postId: id, user: u }, '*'); } catch (x) { } }, 260);
+                    setTimeout(() => {
+                        huntSave();
+                        try { const st = huntLoadSave() || {}; st.wasOpen = true; st.at = Date.now(); sessionStorage.setItem(HUNT_SAVE, JSON.stringify(st)); } catch (x) { }
+                        huntBack(true);
+                        try { parent.postMessage({ vpHunt: 'open', postId: id, user: u }, '*'); } catch (x) { }
+                    }, 260);
                 }, true);
                 stage.appendChild(el);
-                huntTargets.set(postId, { el, raf, kind });
+                huntTargets.set(postId, { el, raf, kind, user, label, x, y });
                 huntFound++;
-                huntStatus('Найдено: ' + huntFound + ' · просмотрено постов: ' + huntScanned);
+                huntStatsUpdate();
+                huntSave();
+                huntStatus('Найдено: ' + huntFound + ' · проанализировано постов: ' + huntScanned);
             }
             function huntClear() {
                 if (!huntDoc) return;
@@ -136,7 +176,8 @@
                     let posts = d.posts || [], next = (d.pagination && d.pagination.nextCursor) || d.nextCursor || d.cursor || null;
                     huntScanned += posts.length;
                     huntBar(Math.min(100, (huntFound / Math.max(6, HUNT_MAX_TARGETS)) * 100));
-                    huntStatus('Ищем… просмотрено ' + huntScanned + ' постов, найдено ' + huntFound);
+                    huntStatsUpdate();
+                    huntStatus('Ищем… проанализировано ' + huntScanned + ' постов, найдено ' + huntFound);
                     if (posts.length) {
                         const ids = posts.map(p => p.id).filter(Boolean);
                         if (ids.length) {
@@ -162,7 +203,8 @@
                         }
                     }
                     huntCursor = next;
-                    if (!next || huntScanned >= HUNT_MAX_PAGES * lim) { huntDone = true; huntStatus(huntFound ? 'Просмотрено ' + huntScanned + ' постов, найдено ' + huntFound : 'Сейчас никого не нашли — попробуй позже'); }
+                    huntSave();
+                    if (!next || huntScanned >= HUNT_MAX_PAGES * lim) { huntDone = true; huntStatus(huntFound ? 'Проанализировано ' + huntScanned + ' постов, найдено ' + huntFound : 'Сейчас никого не нашли — попробуй позже'); }
                 } catch (e) { logErr('охота', e); huntDone = true; }
                 finally { huntBusy = false; }
             }
@@ -177,6 +219,10 @@
                     + '<div class="vp-hunt-modes">' + MODE_LIST.map(m => '<button type="button" data-m="' + m[0] + '">' + m[1] + '</button>').join('') + '</div>'
                     + '</div>'
                     + '<div class="vp-hunt-bar"><i></i></div>'
+                    + '<div class="vp-hunt-stats">'
+                    + '<div class="vp-hunt-stat">Проанализировано<b class="vp-hunt-scanned">0</b></div>'
+                    + '<div class="vp-hunt-stat vp-gold">Найдено<b class="vp-hunt-found">0</b></div>'
+                    + '</div>'
                     + '<div class="vp-hunt-stage"><div class="vp-hunt-empty">Ищем…</div></div>'
                     + '<div class="vp-hunt-status">Готов</div>';
                 w.querySelector('.vp-hunt-back').addEventListener('click', huntBack, true);
@@ -186,7 +232,8 @@
                         e.preventDefault(); e.stopPropagation();
                         GM_setValue(HUNT_KEY, b.dataset.m);
                         w.querySelectorAll('.vp-hunt-modes button').forEach(x => x.classList.toggle('vp-on', x.dataset.m === b.dataset.m));
-                        huntRestart();
+                        huntSaveClear();
+                        huntRestart(false);
                     }, true);
                 });
                 huntDoc.body.appendChild(w);
@@ -194,30 +241,61 @@
                 return w;
             }
 
-            function huntRestart() {
+            function huntRestart(resume) {
                 huntSeq++;
+                const em0 = huntDoc && huntDoc.querySelector('.vp-hunt-empty');
+                if (resume) {
+                    const st = huntLoadSave();
+                    if (st) {
+                        huntCursor = st.cursor || null;
+                        huntSeen = new Set(st.seen || []);
+                        huntFound = 0; huntScanned = st.scanned || 0;
+                        huntClear();
+                        huntFound = 0;
+                        for (const t of (st.targets || [])) huntSpawn(t.kind, t.id, t.user, t.label, { x: t.x, y: t.y });
+                        if ((st.targets || []).length && em0) em0.style.display = 'none';
+                        huntDone = false; huntBusy = false;
+                        huntBar(Math.min(100, (huntFound / Math.max(6, HUNT_MAX_TARGETS)) * 100));
+                        huntStatsUpdate();
+                        huntStatus('Продолжаем: проанализировано ' + huntScanned + ', найдено ' + huntFound);
+                        setTimeout(huntLoop, 800);
+                        return;
+                    }
+                }
                 huntCursor = null; huntSeen.clear(); huntFound = 0; huntScanned = 0;
                 huntDone = false; huntBusy = false;
                 huntClear();
                 huntBar(0);
+                huntStatsUpdate();
                 huntStatus('Готов');
-                const em = huntDoc && huntDoc.querySelector('.vp-hunt-empty');
-                if (em) em.style.display = '';
+                if (em0) em0.style.display = '';
                 setTimeout(huntLoop, 300);
             }
 
+            let huntAutoChecked = false;
+            function huntAutoOpen() {
+                if (huntAutoChecked || !huntDoc) return;
+                const st = huntLoadSave();
+                if (!st || !st.targets || !st.targets.length) return;
+                if (st.wasOpen === false) return;
+                if (huntDoc.querySelector('.vp-hunt.vp-open')) { huntAutoChecked = true; return; }
+                huntAutoChecked = true;
+                huntOpenWin();
+            }
             function huntOpenWin() {
                 if (!huntDoc) return;
                 huntOpen = true;
+                try { const st = huntLoadSave() || {}; st.wasOpen = true; st.at = Date.now(); sessionStorage.setItem(HUNT_SAVE, JSON.stringify(st)); } catch (e) { }
                 const w = huntWindow();
                 w.classList.add('vp-open');
                 const sc = huntDoc.querySelector('.room-stage');
                 if (sc) sc.style.visibility = 'hidden';
-                huntRestart();
+                huntRestart(true);
             }
 
-            function huntBack() {
+            function huntBack(silent) {
                 huntOpen = false;
+                if (!silent) { try { const st = huntLoadSave() || {}; st.wasOpen = false; st.at = Date.now(); sessionStorage.setItem(HUNT_SAVE, JSON.stringify(st)); } catch (e) { } }
                 if (huntWin) huntWin.classList.remove('vp-open');
                 if (huntDoc) {
                     const sc = huntDoc.querySelector('.room-stage');
@@ -274,6 +352,7 @@
                     if (dv) dv.classList.remove('vp-hunt-loading');
                 }
                 huntFrame = fr; huntDoc = d;
+                setTimeout(huntAutoOpen, 600);
                 if (!d._vpHuntMsg) {
                     d._vpHuntMsg = true;
                     d.defaultView.addEventListener('message', ev => {
