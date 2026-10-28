@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.9.5
+// @version      3.7.9.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2292,6 +2292,7 @@
         .vp-pal { position: absolute; bottom: 0; box-sizing: content-box; padding: 70px; margin: -70px; width: auto; height: calc(min(var(--vp-pal-h, 45vh), calc(48vw * var(--vp-pal-r, 1))) * var(--vp-pal-k, 1)); pointer-events: none;
             user-select: none; -webkit-user-drag: none; animation: vpPalIn .7s cubic-bezier(.2, .9, .3, 1.15) both; }
         .vp-pal-miku { right: 0; transform: translate(calc((100% - 92px) * var(--vp-pal-dx, .06)), calc((100% - 92px) * .05)); }
+        .vp-pal-miku.vp-pal-flip { transform: scaleX(-1) translate(calc((100% - 92px) * var(--vp-pal-dx, .06)), calc((100% - 92px) * .05)); }
         .vp-pal-teto { left: 0; transform: scaleX(-1) translate(calc((100% - 92px) * var(--vp-pal-dx, .06)), calc((100% - 92px) * .05)); }
         .vp-pals[data-look="neon"] .vp-pal-miku { filter: drop-shadow(0 0 1.5px rgba(120, 255, 245, .9)) drop-shadow(0 0 10px rgba(57, 197, 187, .55)); }
         .vp-pals[data-look="neon"] .vp-pal-teto { filter: drop-shadow(0 0 1.5px rgba(255, 150, 170, .9)) drop-shadow(0 0 10px rgba(255, 77, 109, .55)); }
@@ -4297,12 +4298,22 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         let palsOn = GM_getValue('palsEnabled', false);
         const PALS = {
-            miku: { key: 'palMiku', skinKey: 'palSkinMiku', skins: { old: { file: 'miku.webp', r: 800 / 790, dx: '6%', cache: 'pal-miku@8' }, new: { file: 'miku2.webp', r: 675 / 728, dx: '6%', k: 723 / 675, cache: 'pal-miku-2@3' } } },
-            teto: { key: 'palTeto', skinKey: 'palSkinTeto', skins: { old: { file: 'teto.webp', r: 776 / 734, dx: '6%', cache: 'pal-teto@8' }, new: { file: 'teto2.webp', r: 675 / 565, dx: '0%', k: 723 / 675, cache: 'pal-teto-2@3' } } }
+            miku: { key: 'palMiku', skinKey: 'palSkinMiku', skins: {
+                old: { file: 'miku.webp', r: 800 / 790, dx: '6%', cache: 'pal-miku@8' },
+                new: { file: 'miku2.webp', r: 675 / 728, dx: '6%', k: 723 / 675, cache: 'pal-miku-2@3' },
+                hall: { file: 'miku-hall.webp', r: 1086 / 1274, dx: '6%', k: 1134 / 1086, cache: 'pal-miku-hall@1' },
+                hall2: { file: 'miku-hall2.webp', r: 1000 / 1336, dx: '0%', k: 1048 / 1000, flip: true, cache: 'pal-miku-hall2@1' }
+            } },
+            teto: { key: 'palTeto', skinKey: 'palSkinTeto', skins: {
+                old: { file: 'teto.webp', r: 776 / 734, dx: '6%', cache: 'pal-teto@8' },
+                new: { file: 'teto2.webp', r: 675 / 565, dx: '0%', k: 723 / 675, cache: 'pal-teto-2@3' },
+                hall: { file: 'teto-hall.webp', r: 1067 / 1144, dx: '0%', k: 1115 / 1067, cache: 'pal-teto-hall@1' },
+                hall2: { file: 'teto-hall2.webp', r: 951 / 1284, dx: '0%', k: 999 / 951, cache: 'pal-teto-hall2@1' }
+            } }
         };
-        const PAL_SKINS = [['old', 'Прыгает'], ['new', 'Кивает']];
+        const PAL_SKINS = [['old', 'Прыгает'], ['new', 'Кивает'], ['hall', 'Хеллоуин'], ['hall2', 'Хеллоуин v2']];
         // у каждого персонажа своя анимация; общая палитра palSkin (прошлая сборка) используется, пока свою не выбрали
-        const palSkin = id => GM_getValue(PALS[id].skinKey, GM_getValue('palSkin', 'old')) === 'new' ? 'new' : 'old';
+        const palSkin = id => { const v = GM_getValue(PALS[id].skinKey, GM_getValue('palSkin', 'old')); return PALS[id].skins[v] ? v : 'old'; };
         const palCfg = id => PALS[id].skins[palSkin(id)];
         const PAL_LOOKS = [
             ['plain', 'Как есть', '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="12" cy="11" r="3"/><path d="M7 20c.8-2.6 2.8-4 5-4s4.2 1.4 5 4"/>'],
@@ -4363,6 +4374,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     img.style.setProperty('--vp-pal-r', palCfg(id).r);
                     img.style.setProperty('--vp-pal-dx', parseFloat(palCfg(id).dx) / 100);
                     img.style.setProperty('--vp-pal-k', palCfg(id).k || 1);
+                    img.classList.toggle('vp-pal-flip', !!palCfg(id).flip);
                     palsBox.appendChild(img);
                     fresh = true;
                 }
@@ -6285,6 +6297,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.9.6', '28 октября 2026', [
+                'Мику и Тето: новые анимации «Хеллоуин» и «Хеллоуин v2» — в настройках у каждого своя'
+            ]],
             ['3.7.9.5', '28 октября 2026', [
                 'Сообщения: аватарки-картинки снова видны в списке чатов и в шапке открытого чата',
                 'Своя аватарка теперь появляется и на других устройствах, где зашёл в тот же аккаунт'
