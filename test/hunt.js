@@ -79,7 +79,7 @@ const mkPage = (n) => Array.from({ length: 20 }, (_, i) => ({ id: 'p-' + n + '-'
             const st = w.querySelector('.vp-hunt-stage');
             const modes = [...w.querySelectorAll('.vp-hunt-modes button')].map(b => ({ m: b.dataset.m, on: b.classList.contains('vp-on') }));
             const sceneHidden = document.querySelector('.room-stage').style.visibility === 'hidden';
-            return { open: w.classList.contains('vp-open'), modes, sceneHidden, bar: !!w.querySelector('.vp-hunt-bar i'), status: (w.querySelector('.vp-hunt-status') || {}).textContent };
+            return { open: w.classList.contains('vp-open'), modes, sceneHidden, bar: !!w.querySelector('.vp-hunt-bar i, .vp-hunt-rings, .vp-hunt-radar, .vp-hunt-slots'), status: (w.querySelector('.vp-hunt-status') || {}).textContent };
         });
         check(!!win && win.open, 'окно поиска открылось');
         check(!!win && win.sceneHidden, 'сцена ивента спрятана');
