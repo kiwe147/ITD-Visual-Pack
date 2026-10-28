@@ -6285,6 +6285,10 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.9.5', '28 октября 2026', [
+                'Сообщения: аватарки-картинки снова видны в списке чатов и в шапке открытого чата',
+                'Своя аватарка теперь появляется и на других устройствах, где зашёл в тот же аккаунт'
+            ]],
             ['3.7.9.4', '28 октября 2026', [
                 'Мур'
             ]],
