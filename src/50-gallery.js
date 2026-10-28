@@ -60,6 +60,38 @@
         .vp-gal-grid { display: flex; gap: 8px; align-items: flex-start; max-width: 1400px; margin: 0 auto; }
         .vp-gal-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
         .vp-gal-tile { position: relative; border-radius: 16px; overflow: hidden; background: rgba(128,128,128,.15); cursor: pointer; }
+        .vp-gal-ghost { position: absolute; top: 8px; right: 8px; z-index: 4; pointer-events: none; display: inline-flex; align-items: center; gap: 3px; padding: 4px 8px; border-radius: 12px; background: rgba(20,10,40,.72); color: #fff; font-size: 13px; font-weight: 600; line-height: 1; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+        .vp-gal-ghost.ghost-ex { background: rgba(30,30,30,.72); color: #bbb; }
+        .vp-gal-ghost.ghost-taken { background: rgba(120,60,190,.85); }
+        .vp-gal-ghost.ghost-night { background: rgba(40,50,90,.85); }
+        .vp-gal-tile.vp-gal-poss::before { content: ''; position: absolute; inset: 0; border-radius: 16px; padding: 2px;
+            background: linear-gradient(115deg, #ff5b5b, #ffb15b, #f8ff5b, #5bff8a, #5bd6ff, #8a5bff, #ff5bd0, #ff5b5b);
+            background-size: 400% 400%; -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            -webkit-mask-composite: xor; mask-composite: exclude; animation: vpGalRainbow 5s linear infinite; pointer-events: none; z-index: 3; }
+        .vp-gal-tile.vp-gal-poss::after { content: ''; position: absolute; inset: 0; border-radius: 16px;
+            background: linear-gradient(115deg, transparent 38%, rgba(255,255,255,.42) 50%, transparent 62%),
+                        linear-gradient(135deg, rgba(255,255,255,.10), rgba(140,200,255,.08));
+            background-size: 260% 100%, 100% 100%; background-position: 200% 0, 0 0;
+            animation: vpGalSheen 4s ease-in-out infinite; pointer-events: none; z-index: 2; mix-blend-mode: screen; }
+        .vp-gal-tile.vp-gal-poss { backdrop-filter: blur(1px) saturate(1.15); -webkit-backdrop-filter: blur(1px) saturate(1.15); }
+        .vp-gal-textbox { position: absolute; inset: 0; padding: 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px;
+            background: linear-gradient(150deg, rgba(20,15,35,.92), rgba(10,8,22,.95)); overflow: hidden; }
+        .vp-gal-textnick { font-size: 12px; font-weight: 600; color: rgba(255,255,255,.55); text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+        .vp-gal-textbody { flex: 1 1 auto; font-size: 14px; line-height: 1.35; color: #eae6f5; white-space: pre-wrap; overflow: hidden;
+            display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; }
+        .vp-gal-tile.vp-gal-wolf::before { content: ''; position: absolute; inset: 0; border-radius: 16px;
+            border: 2px solid rgba(150,105,255,.60);
+            background: linear-gradient(135deg, rgba(130,85,215,.22), rgba(55,35,110,.12));
+            box-shadow: inset 0 0 26px rgba(150,105,255,.28), 0 0 14px rgba(150,105,255,.22);
+            backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+            pointer-events: none; z-index: 2; }
+        .vp-gal-tile.vp-gal-wolf::after { content: ''; position: absolute; inset: 0; border-radius: 16px;
+            background: linear-gradient(115deg, transparent 38%, rgba(255,255,255,.38) 50%, transparent 62%);
+            background-size: 260% 100%; background-position: 200% 0;
+            animation: vpGalSheen 4s ease-in-out infinite; pointer-events: none; z-index: 3; mix-blend-mode: screen; }
+        @keyframes vpGalRainbow { 0% { background-position: 0% 50%; } 100% { background-position: 400% 50%; } }
+        @keyframes vpGalSheen { 0% { background-position: 200% 0; } 55% { background-position: -100% 0; } 100% { background-position: -100% 0; } }
+        @media (prefers-reduced-motion: reduce) { .vp-gal-tile.vp-gal-poss::before, .vp-gal-tile.vp-gal-wolf::after { animation: none !important; } }
         .vp-gal-strip { display: flex; width: 100%; height: 100%; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory;
             scrollbar-width: none; overscroll-behavior-x: contain; }
         .vp-gal-strip::-webkit-scrollbar { display: none; }
@@ -382,6 +414,111 @@
             }
             return galImgIO;
         }
+        const GAL_GHOST_TTL = 60000, GAL_GHOST_CHUNK = 40;
+        function galGhostMap() {
+            if (!gal.gmap) gal.gmap = new Map();
+            return gal.gmap;
+        }
+        function galGhostParse(v) {
+            if (!v) return null;
+            const p = v.possession, w = v.werewolf;
+            if (p) {
+                if (p.resolved) return { k: 'ex', t: '\u{1F480}', label: 'Призрак изгнан' };
+                if (p.stage === 'taken') return { k: 'taken', t: '\u{1F47B}', label: 'Пост захвачен' };
+                return { k: '', t: '\u{1F47B}', label: 'Призрак' };
+            }
+            if (w && w.night) return { k: 'night', t: '\u{1F43A}', label: 'Оборотень (ночь)' };
+            return null;
+        }
+        let galNetLast = 0;
+        async function galApi(path, opts) {
+            const wait = galNetLast + GAL_GAP - Date.now();
+            if (wait > 0) await new Promise(r => setTimeout(r, wait));
+            galNetLast = Date.now();
+            return api(path, opts);
+        }
+        async function galGhostFetch(ids) {
+            const map = galGhostMap();
+            const now = Date.now();
+            const need = ids.filter(id => { const h = map.get(id); return !h || now - h.at > GAL_GHOST_TTL; });
+            if (!need.length) return map;
+            for (let i = 0; i < need.length; i += GAL_GHOST_CHUNK) {
+                const chunk = need.slice(i, i + GAL_GHOST_CHUNK);
+                const url = '/api/v1/halloween/feed-state?posts=' + chunk.map(encodeURIComponent).join(',');
+                let res = null;
+                try { res = await galApi(url); } catch (e) { break; }
+                if (res && (res.status === 413 || res.status === 414 || res.status === 422) && chunk.length > 20 && GAL_GHOST_CHUNK > 20) {
+                    // сервер не принял длину — режем поровну и пробуем по 20
+                    const half = chunk.slice(0, Math.ceil(chunk.length / 2)), rest = chunk.slice(half.length);
+                    for (const sub of [half, rest]) {
+                        if (!sub.length) continue;
+                        const u2 = '/api/v1/halloween/feed-state?posts=' + sub.map(encodeURIComponent).join(',');
+                        let r2 = null;
+                        try { r2 = await galApi(u2); } catch (e) { break; }
+                        if (!r2 || !r2.ok) continue;
+                        let d2 = null;
+                        try { d2 = await r2.json(); } catch (e) { continue; }
+                        const p2 = (d2 && ((d2.data && d2.data.posts) || d2.posts)) || {};
+                        const at2 = Date.now();
+                        for (const id of sub) map.set(id, { at: at2, tag: galGhostParse(p2[id]) });
+                    }
+                    continue;
+                }
+                if (!res || !res.ok) break;
+                let data = null;
+                try { data = await res.json(); } catch (e) { break; }
+                const posts = (data && ((data.data && data.data.posts) || data.posts)) || {};
+                const seen = Date.now();
+                for (const id of chunk) map.set(id, { at: seen, tag: galGhostParse(posts[id]) });
+                for (const id of chunk) if (!map.has(id)) map.set(id, { at: seen, tag: null });
+            }
+            return map;
+        }
+        async function galGhostAll(list) {
+            const ids = list.map(p => p.id).filter(Boolean);
+            if (!ids.length) return galGhostMap();
+            try { await galGhostFetch(ids); } catch (e) { }
+            return galGhostMap();
+        }
+        function galGhostTag(map, id) {
+            const h = map.get(id);
+            return h ? h.tag : null;
+        }
+        function galGhostBadge(tile, tag) {
+            const el = tile && tile.querySelector('.vp-gal-ghost');
+            if (!el) return;
+            if (!tag) { el.hidden = true; return; }
+            el.hidden = false;
+            el.className = 'vp-gal-ghost' + (tag.k ? ' ghost-' + tag.k : '');
+            el.textContent = tag.t;
+            el.title = tag.label;
+            el.setAttribute('aria-label', tag.label);
+        }
+        function galTextTile(post, text) {
+            const tile = document.createElement('div');
+            tile.className = 'vp-gal-tile vp-gal-text';
+            tile._vpRatio = 1.0;
+            tile._vpN = galN++;
+            tile.style.aspectRatio = '1 / 1';
+            tile.style.setProperty('--vp-r', 1.0);
+            const box = document.createElement('div');
+            box.className = 'vp-gal-textbox';
+            const who = (post.author && (post.author.displayName || post.author.username)) || '';
+            if (who) {
+                const n = document.createElement('div');
+                n.className = 'vp-gal-textnick';
+                n.textContent = '\u0040' + String(who).slice(0, 40);
+                box.appendChild(n);
+            }
+            const p = document.createElement('div');
+            p.className = 'vp-gal-textbody';
+            p.textContent = text;
+            box.appendChild(p);
+            tile.appendChild(box);
+            tile._vpGhost = post.id;
+            tile.addEventListener('click', () => { if (!tile._vpDragged) galOpenPost(post); });
+            return tile;
+        }
         function galTile(post, media) {
             const tile = document.createElement('div');
             tile.className = 'vp-gal-tile';
@@ -492,16 +629,17 @@
             strip.querySelectorAll('img').forEach(i => i.addEventListener('load', barBg));
             if (media.length > 1) strip.addEventListener('scroll', () => requestAnimationFrame(barBg), { passive: true });
             barBg();
+            tile._vpGhost = post.id;
             tile.addEventListener('click', () => { if (!tile._vpDragged) galOpenPost(post); });
             return tile;
         }
-        const GAL_NEED = 3, GAL_AHEAD = 6;
+        const GAL_NEED = 2, GAL_AHEAD = 4;
         function galNear(screens) {
             const b = gal.el && gal.el.querySelector('.vp-gal-body');
             return !!b && b.clientHeight > 0 && b.scrollTop + b.clientHeight > b.scrollHeight - Math.max(screens * 900, b.clientHeight * screens);
         }
         function galNeedMore() { return galNear(GAL_NEED); }
-        const GAL_CHAIN = 2, GAL_CACHE_MS = 10 * 60 * 1000, GAL_GAP = 700;
+        const GAL_CHAIN = 1, GAL_CACHE_MS = 10 * 60 * 1000, GAL_GAP = 1200;
         const galCacheKey = tab => 'vpGalCache:' + tab;
         function galCacheRead(tab) {
             try {
@@ -518,8 +656,9 @@
             if (!post || gal.seen.has(post.id)) return false;
             gal.seen.add(post.id);
             const media = (post.attachments || []).filter(att => att && att.url && (!att.type || /image|video/.test(att.type))).slice(0, 10);
-            if (!media.length) return false;
-            const tile = galTile(post, media);
+            const gtext = gal.tab === 'ghosts' ? String(post.text || post.content || '').trim().slice(0, 260) : '';
+            if (!media.length && !gtext) return false;
+            const tile = media.length ? galTile(post, media) : galTextTile(post, gtext);
             if (gal.fresh && !calm) {
                 tile.classList.add('vp-gal-new');
                 tile.style.setProperty('--vp-d', (galN % 8) * 40 + 'ms');
@@ -529,21 +668,55 @@
             const st = gal.acts.get(post.id);
             gal.cachePosts.push({
                 id: post.id, author: post.author && { username: post.author.username },
+                text: gtext || undefined,
                 attachments: media.map(({ type, url, width, height, duration, thumbnailUrl }) => ({ type, url, width, height, duration, thumbnailUrl })),
                 isLiked: st ? st.like : post.isLiked, isReposted: st ? st.repost : post.isReposted
             });
             return true;
         }
-        async function galFetchPage(cursor, tab) {
-            const url = lim => `/api/posts?limit=${lim}&tab=${tab}` + (cursor ? '&cursor=' + encodeURIComponent(cursor) : '');
-            let res = await api(url(gal.lim || 50));
-            if (res.status === 400 && (gal.lim || 50) !== 20) { gal.lim = 20; res = await api(url(20)); }
+        async function galFetchPage(cursor, tab, hops) {
+            const apiTab = tab === 'ghosts' ? 'popular' : tab;
+            const url = lim => `/api/posts?limit=${lim}&tab=${apiTab}` + (cursor ? '&cursor=' + encodeURIComponent(cursor) : '');
+            const LIM_MIN = 20, LIM_MAX = 200;
+            const galLimGet = () => { const v = +GM_getValue('vp_gal_lim', 100) || 100; return Math.max(LIM_MIN, Math.min(LIM_MAX, v)); };
+            const galLimSet = n => { GM_setValue('vp_gal_lim', Math.max(LIM_MIN, Math.min(LIM_MAX, n))); };
+            const galLimLower = bad => Math.max(LIM_MIN, Math.floor(bad / 2));
+            const galLimProbe = (r, okLim, tryNext) => {
+                if (!r || !r.ok) { if (okLim < galLimGet()) galLimSet(okLim); return; }
+                galLimSet(okLim);
+                if (galLimGet() < LIM_MAX && !gal.limT && (gal.lastLimProbe || 0) < Date.now() - 60000) {
+                    gal.lastLimProbe = Date.now();
+                    clearTimeout(gal.limT);
+                    gal.limT = setTimeout(() => { gal.limT = 0; if (!gal.el || gal.tab !== 'ghosts') galLimProbeRun(tab, okLim); }, 20000);
+                }
+            };
+            const galLimProbeRun = async (tab2, cur) => {
+                const nxt = Math.min(LIM_MAX, Math.floor(cur * 1.5));
+                if (nxt <= cur) return;
+                try {
+                    const r = await galApi(`/api/posts?limit=${nxt}&tab=${tab2 === 'ghosts' ? 'popular' : tab2}`);
+                    if (r && r.ok) galLimSet(nxt);
+                    else galLimSet(cur);
+                } catch (e) { }
+            };
+            const bad = s => s === 400 || s === 422 || s === 413 || s === 414;
+            const want = galLimGet();
+            let res = await galApi(url(want));
+            if (bad(res.status)) {
+                const okLim = galLimLower(want);
+                res = await galApi(url(okLim));
+                galLimProbe(res, okLim, want);
+            } else if (res.ok) {
+                galLimProbe(res, want);
+            }
             if (res.status === 429) { const e = new Error('лента: 429'); e.retry = +res.headers.get('Retry-After') || 0; throw e; }
             if (!res.ok) throw new Error('лента: ' + res.status);
             const j = await res.json(), d = j.data || j;
             keepSitePosts(j);
-            const posts = d.posts || [], next = (d.pagination && d.pagination.nextCursor) || d.nextCursor || d.cursor || null;
-            return { posts, cursor: next, done: !next || !posts.length };
+            let posts = d.posts || [], next = (d.pagination && d.pagination.nextCursor) || d.nextCursor || d.cursor || null;
+            const raw = posts.slice();
+            const done = !next || !raw.length;
+            return { posts, cursor: next, done, raw: raw.length };
         }
         function galApply(page, after) {
             const gen = gal.gen;
@@ -559,10 +732,26 @@
                 gal.fresh = false;
                 gal.cursor = page.cursor;
                 gal.done = page.done;
+                const added = page.posts.length;
                 galCacheSave();
                 gal.el.querySelector('.vp-gal-more').textContent = gal.done ? (gal.seen.size ? 'Это всё' : 'Пусто') : '';
                 gal.loading = false;
+                if (gal.tab === 'ghosts' && !added && !gal.done) {
+                    gal.ghostHop = (gal.ghostHop || 0) + 1;
+                    if (gal.ghostHop <= 2) {
+                        gal.el.querySelector('.vp-gal-more').textContent = 'Ищем призраков…';
+                        clearTimeout(gal.hopT);
+                        const g0 = gal.gen;
+                        gal.hopT = setTimeout(() => { if (gal.el && g0 === gal.gen && gal.tab === 'ghosts') galLoad(); }, 900);
+                        return;
+                    }
+                    gal.el.querySelector('.vp-gal-more').textContent = 'Дальше пусто — нажми, чтобы продолжить';
+                    gal.el.querySelector('.vp-gal-more').onclick = () => { gal.ghostHop = 0; galLoad(); };
+                    return;
+                }
+                gal.ghostHop = 0;
                 after();
+                if (!gal.done && !gal.buf && !gal.pre) galPrefetch(true);
             };
             step();
         }
@@ -575,9 +764,11 @@
             clearTimeout(gal.waitT);
             gal.waitT = setTimeout(() => { gal.waitUntil = 0; if (gal.el && gen === gal.gen) galLoad(); }, wait * 1000);
         }
-        function galPrefetch() {
-            if (!gal.el || gal.loading || gal.done || gal.buf || gal.pre || (gal.waitUntil || 0) > Date.now() || !galNear(GAL_AHEAD)) return;
-            const gen = gal.gen, gap = (gal.lastReq || 0) + GAL_GAP - Date.now();
+        function galPrefetch(force) {
+            if (!gal.el || gal.loading || gal.done || gal.pre || (gal.waitUntil || 0) > Date.now()) return;
+            if (gal.buf) { if (galNear(GAL_AHEAD)) galLoad(true); return; }
+            if (!force && !galNear(GAL_AHEAD)) return;
+            const gen = gal.gen, gap = force ? 0 : (gal.lastReq || 0) + GAL_GAP - Date.now();
             if (gap > 0) { clearTimeout(gal.preT); gal.preT = setTimeout(() => { if (gen === gal.gen) galPrefetch(); }, gap); return; }
             gal.lastReq = Date.now();
             const tab = gal.tab, cursor = gal.cursor;
@@ -630,7 +821,7 @@
             if (ind && i >= 0) ind.style.transform = `translateX(${i * 100}%)`;
         }
         function galSwitch(tab, fresh) {
-            gal.tab = tab; gal.cursor = null; gal.done = false; gal.seen.clear(); gal.acts.clear(); galN = 0;
+            gal.tab = tab; gal.cursor = null; gal.done = false; gal.seen.clear(); gal.acts.clear(); galN = 0; gal.ghostHop = 0; clearTimeout(gal.hopT);
             gal.gen = (gal.gen || 0) + 1; gal.loading = false; gal.chain = 0; gal.cachePosts = []; gal.cacheT = 0;
             gal.buf = null; gal.pre = null; clearTimeout(gal.preT);
             clearTimeout(gal.waitT); gal.waitUntil = 0;
