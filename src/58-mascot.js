@@ -61,7 +61,42 @@
             clearTimeout(say._t);
             say._t = setTimeout(() => say.classList.remove('vp-on'), 2300);
         }
+        function mascotInjectToggle(d) {
+            const dlg = d.querySelector('dialog.dialog');
+            if (!dlg) return;
+            const content = dlg.querySelector('.dialog-content');
+            if (!content || content.querySelector('.vp-mas-toggle')) return;
+            const label = d.createElement('label');
+            label.className = 'toggle-line vp-mas-toggle';
+            const span = d.createElement('span');
+            const strong = d.createElement('strong');
+            strong.textContent = 'Фурри поняшка';
+            const small = d.createElement('small');
+            small.textContent = 'Маскот ИТД X у камина на сцене ивента';
+            span.appendChild(strong); span.appendChild(small);
+            const input = d.createElement('input');
+            input.type = 'checkbox';
+            input.checked = !!GM_getValue('mascotOn', true);
+            input.addEventListener('change', () => {
+                const on = !!input.checked;
+                GM_setValue('mascotOn', on);
+                for (const fr of document.querySelectorAll('iframe')) {
+                    let dd = null;
+                    try { dd = fr.contentDocument; } catch (e) { }
+                    const m = dd && dd.querySelector('.vp-mas');
+                    if (!on && m) m.remove();
+                }
+                if (on) mascotPlace();
+            });
+            label.appendChild(span); label.appendChild(input);
+            content.appendChild(label);
+        }
         function mascotPlace() {
+            for (const fr of document.querySelectorAll('iframe')) {
+                let d = null;
+                try { d = fr.contentDocument; } catch (e) { }
+                if (d) mascotInjectToggle(d);
+            }
             if (!GM_getValue('mascotOn', true) || !/^\/event\/[^/]/.test(location.pathname)) return;
             for (const fr of document.querySelectorAll('iframe')) {
                 let d = null;

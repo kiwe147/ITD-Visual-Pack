@@ -4304,13 +4304,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             miku: { key: 'palMiku', skinKey: 'palSkinMiku', skins: {
                 old: { file: 'miku.webp', r: 800 / 790, dx: '6%', cache: 'pal-miku@8' },
                 new: { file: 'miku2.webp', r: 675 / 728, dx: '6%', k: 723 / 675, cache: 'pal-miku-2@3' },
-                hall: { file: 'miku-hall-b.webp', r: 1086 / 1274, dx: '6%', k: 1214 / 1086, flip: true, tuck: 88, cache: 'pal-miku-hall@8' },
+                hall: { file: 'miku-hall-b.webp', r: 1086 / 1274, dx: '6%', k: 1214 / 1086, flip: true, tuck: 88, cache: 'pal-miku-hall@9' },
                 hall2: { file: 'miku-hall2.webp', r: 1000 / 1336, dx: '0%', k: 1048 / 1000, cache: 'pal-miku-hall2@1' }
             } },
             teto: { key: 'palTeto', skinKey: 'palSkinTeto', skins: {
                 old: { file: 'teto.webp', r: 776 / 734, dx: '6%', cache: 'pal-teto@8' },
                 new: { file: 'teto2.webp', r: 675 / 565, dx: '0%', k: 723 / 675, cache: 'pal-teto-2@3' },
-                hall: { file: 'teto-hall-b.webp', r: 1067 / 1144, dx: '0%', k: 1195 / 1067, noflip: true, tuck: 70, cache: 'pal-teto-hall@8' },
+                hall: { file: 'teto-hall-b.webp', r: 1067 / 1144, dx: '0%', k: 1195 / 1067, noflip: true, tuck: 70, cache: 'pal-teto-hall@9' },
                 hall2: { file: 'teto-hall2.webp', r: 951 / 1284, dx: '0%', k: 999 / 951, cache: 'pal-teto-hall2@1' }
             } }
         };
@@ -16156,7 +16156,42 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             clearTimeout(say._t);
             say._t = setTimeout(() => say.classList.remove('vp-on'), 2300);
         }
+        function mascotInjectToggle(d) {
+            const dlg = d.querySelector('dialog.dialog');
+            if (!dlg) return;
+            const content = dlg.querySelector('.dialog-content');
+            if (!content || content.querySelector('.vp-mas-toggle')) return;
+            const label = d.createElement('label');
+            label.className = 'toggle-line vp-mas-toggle';
+            const span = d.createElement('span');
+            const strong = d.createElement('strong');
+            strong.textContent = 'Фурри поняшка';
+            const small = d.createElement('small');
+            small.textContent = 'Маскот ИТД X у камина на сцене ивента';
+            span.appendChild(strong); span.appendChild(small);
+            const input = d.createElement('input');
+            input.type = 'checkbox';
+            input.checked = !!GM_getValue('mascotOn', true);
+            input.addEventListener('change', () => {
+                const on = !!input.checked;
+                GM_setValue('mascotOn', on);
+                for (const fr of document.querySelectorAll('iframe')) {
+                    let dd = null;
+                    try { dd = fr.contentDocument; } catch (e) { }
+                    const m = dd && dd.querySelector('.vp-mas');
+                    if (!on && m) m.remove();
+                }
+                if (on) mascotPlace();
+            });
+            label.appendChild(span); label.appendChild(input);
+            content.appendChild(label);
+        }
         function mascotPlace() {
+            for (const fr of document.querySelectorAll('iframe')) {
+                let d = null;
+                try { d = fr.contentDocument; } catch (e) { }
+                if (d) mascotInjectToggle(d);
+            }
             if (!GM_getValue('mascotOn', true) || !/^\/event\/[^/]/.test(location.pathname)) return;
             for (const fr of document.querySelectorAll('iframe')) {
                 let d = null;
