@@ -2294,8 +2294,6 @@
         .vp-pal-miku { right: 0; transform: translate(calc((100% - 92px) * var(--vp-pal-dx, .06)), calc((100% - 92px) * .05)); }
         .vp-pal-miku.vp-pal-flip { transform: scaleX(-1) translate(calc((100% - 92px) * var(--vp-pal-dx, .06)), calc((100% - 92px) * .05)); }
         .vp-pal-teto.vp-pal-noflip { transform: translate(calc((100% - 92px) * var(--vp-pal-dx, .06)), calc((100% - 92px) * .05)); }
-        .vp-pal-miku.vp-pal-edge-r { right: -49px; }
-        .vp-pal-teto.vp-pal-edge-l { left: -41px; }
         .vp-pal-teto { left: 0; transform: scaleX(-1) translate(calc((100% - 92px) * var(--vp-pal-dx, .06)), calc((100% - 92px) * .05)); }
         .vp-pals[data-look="neon"] .vp-pal-miku { filter: drop-shadow(0 0 1.5px rgba(120, 255, 245, .9)) drop-shadow(0 0 10px rgba(57, 197, 187, .55)); }
         .vp-pals[data-look="neon"] .vp-pal-teto { filter: drop-shadow(0 0 1.5px rgba(255, 150, 170, .9)) drop-shadow(0 0 10px rgba(255, 77, 109, .55)); }
@@ -4304,13 +4302,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             miku: { key: 'palMiku', skinKey: 'palSkinMiku', skins: {
                 old: { file: 'miku.webp', r: 800 / 790, dx: '6%', cache: 'pal-miku@8' },
                 new: { file: 'miku2.webp', r: 675 / 728, dx: '6%', k: 723 / 675, cache: 'pal-miku-2@3' },
-                hall: { file: 'miku-hall.webp', r: 1086 / 1274, dx: '0%', k: 1134 / 1086, edge: 'r', cache: 'pal-miku-hall@1' },
+                hall: { file: 'miku-hall.webp', r: 1086 / 1274, dx: '6%', k: 1134 / 1086, flip: true, cache: 'pal-miku-hall@1' },
                 hall2: { file: 'miku-hall2.webp', r: 1000 / 1336, dx: '0%', k: 1048 / 1000, cache: 'pal-miku-hall2@1' }
             } },
             teto: { key: 'palTeto', skinKey: 'palSkinTeto', skins: {
                 old: { file: 'teto.webp', r: 776 / 734, dx: '6%', cache: 'pal-teto@8' },
                 new: { file: 'teto2.webp', r: 675 / 565, dx: '0%', k: 723 / 675, cache: 'pal-teto-2@3' },
-                hall: { file: 'teto-hall.webp', r: 1067 / 1144, dx: '0%', k: 1115 / 1067, noflip: true, edge: 'l', cache: 'pal-teto-hall@1' },
+                hall: { file: 'teto-hall.webp', r: 1067 / 1144, dx: '0%', k: 1115 / 1067, noflip: true, cache: 'pal-teto-hall@1' },
                 hall2: { file: 'teto-hall2.webp', r: 951 / 1284, dx: '0%', k: 999 / 951, cache: 'pal-teto-hall2@1' }
             } }
         };
@@ -4379,8 +4377,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     img.style.setProperty('--vp-pal-k', palCfg(id).k || 1);
                     img.classList.toggle('vp-pal-flip', !!palCfg(id).flip);
                     img.classList.toggle('vp-pal-noflip', !!palCfg(id).noflip);
-                    img.classList.toggle('vp-pal-edge-r', palCfg(id).edge === 'r');
-                    img.classList.toggle('vp-pal-edge-l', palCfg(id).edge === 'l');
                     palsBox.appendChild(img);
                     fresh = true;
                 }
