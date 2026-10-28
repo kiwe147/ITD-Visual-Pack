@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.10.4
+// @version      3.7.10.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6306,9 +6306,15 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.10.5', '29 октября 2026', [
+                'Ивент «Хеллоуин»: в охоте на нечисть призраки и оборотни больше не упираются в нижний край — их всегда можно нажать',
+                'Ивент «Хеллоуин»: маскот больше не перехватывает клики по окну охоты'
+            ]],
+            ['3.7.10.4', '29 октября 2026', [
+                'Ивент «Хеллоуин»: в охоте на нечисть оборотень по клику сразу получает лайк (ночная конфета), призрак ведёт на пост'
+            ]],
             ['3.7.10.3', '29 октября 2026', [
                 'Ивент «Хеллоуин»: в комнате появилось устройство «Охота на нечисть» — мини-игра с поиском активных призраков и оборотней',
-                'Ивент «Хеллоуин»: в охоте на нечисть оборотень по клику сразу получает лайк (ночная конфета), призрак ведёт на пост',
                 'Галерея: страницы ленты крупнее — при этом мод сам подбирает безопасный размер, если сайт против',
                 'Галерея: между запросами теперь пауза — сервер не забрасывается'
             ]],
@@ -16451,8 +16457,15 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 stage.appendChild(el);
                 if (!d._vpMas) {
                     d._vpMas = true;
-                    d.addEventListener('click', e => { if (mascotHit(d, e)) { e.stopPropagation(); e.preventDefault(); const m = d.querySelector('.vp-mas'); if (m) mascotSay(m); } }, true);
-                    d.addEventListener('pointermove', e => { const on = mascotHit(d, e); if (on !== d.documentElement.classList.contains('vp-mas-hover')) d.documentElement.classList.toggle('vp-mas-hover', on); }, true);
+                    const masHit = (doc, ev) => {
+                        const m = doc.querySelector('.vp-mas');
+                        if (!m) return null;
+                        const t = ev.target;
+                        if (!(t === m || (t && m.contains(t)))) return null;
+                        return mascotHit(doc, ev) ? m : null;
+                    };
+                    d.addEventListener('click', e => { const m = masHit(d, e); if (m) { e.stopPropagation(); e.preventDefault(); mascotSay(m); } }, true);
+                    d.addEventListener('pointermove', e => { const on = !!masHit(d, e); if (on !== d.documentElement.classList.contains('vp-mas-hover')) d.documentElement.classList.toggle('vp-mas-hover', on); }, true);
                 }
             }
         }
@@ -16631,7 +16644,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
 .vp-hunt-slots i.on{background:var(--vh-gold);box-shadow:0 0 8px var(--vh-gold);}
 
 /* цели: радужное стекло у призрака, фиолетовое у оборотня — как было */
-.vp-hunt-tgt{position:absolute;z-index:2;width:78px;height:78px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:36px;
+.vp-hunt-tgt{position:absolute;z-index:10;width:78px;height:78px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:36px;
   background:rgba(20,14,40,.7);backdrop-filter:blur(6px);transition:transform .12s ease,filter .12s,scale .15s ease;will-change:transform;}
 .vp-hunt-tgt:hover{scale:1.08;filter:brightness(1.2);}
 .vp-hunt-tgt:focus-visible{outline:2px solid #fff;outline-offset:3px;}
@@ -16927,6 +16940,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const stage = huntDoc.querySelector('.vp-hunt-stage');
                 if (!stage) return;
                 const W = stage.clientWidth || 800, H = stage.clientHeight || 600;
+                const SZ = 78, MARG = 8;
                 const el = huntDoc.createElement('div');
                 el.className = 'vp-hunt-tgt vp-' + kind;
                 el.textContent = kind === 'wolf' ? '\u{1F43A}' : '\u{1F47B}';
@@ -16935,8 +16949,10 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 el.tabIndex = 0;
                 el.setAttribute('role', 'button');
                 el.setAttribute('aria-label', label + hint);
-                const x = at ? at.x : 40 + Math.random() * Math.max(40, W - 160);
-                const y = at ? at.y : 40 + Math.random() * Math.max(40, H - 160);
+                const clampX = v => Math.max(MARG, Math.min(W - SZ - MARG, v));
+                const clampY = v => Math.max(MARG, Math.min(H - SZ - MARG, v));
+                const x = at ? clampX(at.x) : MARG + Math.random() * Math.max(20, W - SZ - MARG * 2);
+                const y = at ? clampY(at.y) : MARG + Math.random() * Math.max(20, H - SZ - MARG * 2);
                 el.style.left = x + 'px';
                 el.style.top = y + 'px';
                 // вылет из карточки (или просто «всплытие» на месте, если цель восстановлена из сохранения)
@@ -16949,7 +16965,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const move = now => {
                     if (!el.isConnected) return;
                     const t = (now - t0) / 1000;
-                    const dx = Math.sin(t * sx + phase) * 46, dy = Math.cos(t * sy + phase * 1.3) * 34;
+                    let dx = Math.sin(t * sx + phase) * 46, dy = Math.cos(t * sy + phase * 1.3) * 34;
+                    dx = Math.max(MARG - x, Math.min(W - SZ - MARG - x, dx));
+                    dy = Math.max(MARG - y, Math.min(H - SZ - MARG - y, dy));
                     el.style.transform = 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px)';
                     raf = requestAnimationFrame(move);
                 };
@@ -16980,11 +16998,32 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } });
                 stage.appendChild(el);
                 huntTargets.set(postId, { el, raf, kind, user, label, x, y });
+                setTimeout(huntReflow, 60);
                 huntFound++;
                 huntStatsUpdate();
                 huntSave();
                 huntStatus('Найдено: ' + huntFound + ' · проанализировано постов: ' + huntScanned);
             }
+            // Все цели — внутрь видимой области сцены (после реальной раскладки и при resize).
+            function huntReflow() {
+                const stage = huntDoc && huntDoc.querySelector('.vp-hunt-stage');
+                if (!stage) return;
+                const W = stage.clientWidth, H = stage.clientHeight;
+                if (!W || !H) return;
+                const SZ = 78, MARG = 8;
+                huntTargets.forEach(t => {
+                    const el = t.el;
+                    if (!el || !el.isConnected) return;
+                    const curX = parseFloat(el.style.left) || 0;
+                    const curY = parseFloat(el.style.top) || 0;
+                    const nx = Math.max(MARG, Math.min(W - SZ - MARG, curX));
+                    const ny = Math.max(MARG, Math.min(H - SZ - MARG, curY));
+                    if (nx !== curX) { el.style.left = nx + 'px'; t.x = nx; }
+                    if (ny !== curY) { el.style.top = ny + 'px'; t.y = ny; }
+                });
+            }
+            addEventListener('resize', () => setTimeout(huntReflow, 120));
+
             function huntClear() {
                 if (!huntDoc) return;
                 huntDoc.querySelectorAll('.vp-hunt-tgt').forEach(t => t.remove());
@@ -17183,6 +17222,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const sc = huntDoc.querySelector('.room-stage');
                 if (sc) sc.style.visibility = 'hidden';
                 huntRestart(true);
+                setTimeout(huntReflow, 80);
+                setTimeout(huntReflow, 400);
             }
 
             function huntBack(silent) {
@@ -17274,6 +17315,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 }
             }
             setInterval(huntTick, 1000);
+            setInterval(() => { if (huntOpen) huntReflow(); }, 900);
             onDom(huntTick);
             document.addEventListener('vp-loc', huntTick);
 

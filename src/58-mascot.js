@@ -124,8 +124,15 @@
                 stage.appendChild(el);
                 if (!d._vpMas) {
                     d._vpMas = true;
-                    d.addEventListener('click', e => { if (mascotHit(d, e)) { e.stopPropagation(); e.preventDefault(); const m = d.querySelector('.vp-mas'); if (m) mascotSay(m); } }, true);
-                    d.addEventListener('pointermove', e => { const on = mascotHit(d, e); if (on !== d.documentElement.classList.contains('vp-mas-hover')) d.documentElement.classList.toggle('vp-mas-hover', on); }, true);
+                    const masHit = (doc, ev) => {
+                        const m = doc.querySelector('.vp-mas');
+                        if (!m) return null;
+                        const t = ev.target;
+                        if (!(t === m || (t && m.contains(t)))) return null;
+                        return mascotHit(doc, ev) ? m : null;
+                    };
+                    d.addEventListener('click', e => { const m = masHit(d, e); if (m) { e.stopPropagation(); e.preventDefault(); mascotSay(m); } }, true);
+                    d.addEventListener('pointermove', e => { const on = !!masHit(d, e); if (on !== d.documentElement.classList.contains('vp-mas-hover')) d.documentElement.classList.toggle('vp-mas-hover', on); }, true);
                 }
             }
         }

@@ -172,7 +172,7 @@
 .vp-hunt-slots i.on{background:var(--vh-gold);box-shadow:0 0 8px var(--vh-gold);}
 
 /* цели: радужное стекло у призрака, фиолетовое у оборотня — как было */
-.vp-hunt-tgt{position:absolute;z-index:2;width:78px;height:78px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:36px;
+.vp-hunt-tgt{position:absolute;z-index:10;width:78px;height:78px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:36px;
   background:rgba(20,14,40,.7);backdrop-filter:blur(6px);transition:transform .12s ease,filter .12s,scale .15s ease;will-change:transform;}
 .vp-hunt-tgt:hover{scale:1.08;filter:brightness(1.2);}
 .vp-hunt-tgt:focus-visible{outline:2px solid #fff;outline-offset:3px;}
@@ -468,6 +468,7 @@
                 const stage = huntDoc.querySelector('.vp-hunt-stage');
                 if (!stage) return;
                 const W = stage.clientWidth || 800, H = stage.clientHeight || 600;
+                const SZ = 78, MARG = 8;
                 const el = huntDoc.createElement('div');
                 el.className = 'vp-hunt-tgt vp-' + kind;
                 el.textContent = kind === 'wolf' ? '\u{1F43A}' : '\u{1F47B}';
@@ -476,8 +477,10 @@
                 el.tabIndex = 0;
                 el.setAttribute('role', 'button');
                 el.setAttribute('aria-label', label + hint);
-                const x = at ? at.x : 40 + Math.random() * Math.max(40, W - 160);
-                const y = at ? at.y : 40 + Math.random() * Math.max(40, H - 160);
+                const clampX = v => Math.max(MARG, Math.min(W - SZ - MARG, v));
+                const clampY = v => Math.max(MARG, Math.min(H - SZ - MARG, v));
+                const x = at ? clampX(at.x) : MARG + Math.random() * Math.max(20, W - SZ - MARG * 2);
+                const y = at ? clampY(at.y) : MARG + Math.random() * Math.max(20, H - SZ - MARG * 2);
                 el.style.left = x + 'px';
                 el.style.top = y + 'px';
                 // вылет из карточки (или просто «всплытие» на месте, если цель восстановлена из сохранения)
@@ -490,7 +493,9 @@
                 const move = now => {
                     if (!el.isConnected) return;
                     const t = (now - t0) / 1000;
-                    const dx = Math.sin(t * sx + phase) * 46, dy = Math.cos(t * sy + phase * 1.3) * 34;
+                    let dx = Math.sin(t * sx + phase) * 46, dy = Math.cos(t * sy + phase * 1.3) * 34;
+                    dx = Math.max(MARG - x, Math.min(W - SZ - MARG - x, dx));
+                    dy = Math.max(MARG - y, Math.min(H - SZ - MARG - y, dy));
                     el.style.transform = 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px)';
                     raf = requestAnimationFrame(move);
                 };
@@ -521,11 +526,32 @@
                 el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } });
                 stage.appendChild(el);
                 huntTargets.set(postId, { el, raf, kind, user, label, x, y });
+                setTimeout(huntReflow, 60);
                 huntFound++;
                 huntStatsUpdate();
                 huntSave();
                 huntStatus('Найдено: ' + huntFound + ' · проанализировано постов: ' + huntScanned);
             }
+            // Все цели — внутрь видимой области сцены (после реальной раскладки и при resize).
+            function huntReflow() {
+                const stage = huntDoc && huntDoc.querySelector('.vp-hunt-stage');
+                if (!stage) return;
+                const W = stage.clientWidth, H = stage.clientHeight;
+                if (!W || !H) return;
+                const SZ = 78, MARG = 8;
+                huntTargets.forEach(t => {
+                    const el = t.el;
+                    if (!el || !el.isConnected) return;
+                    const curX = parseFloat(el.style.left) || 0;
+                    const curY = parseFloat(el.style.top) || 0;
+                    const nx = Math.max(MARG, Math.min(W - SZ - MARG, curX));
+                    const ny = Math.max(MARG, Math.min(H - SZ - MARG, curY));
+                    if (nx !== curX) { el.style.left = nx + 'px'; t.x = nx; }
+                    if (ny !== curY) { el.style.top = ny + 'px'; t.y = ny; }
+                });
+            }
+            addEventListener('resize', () => setTimeout(huntReflow, 120));
+
             function huntClear() {
                 if (!huntDoc) return;
                 huntDoc.querySelectorAll('.vp-hunt-tgt').forEach(t => t.remove());
@@ -724,6 +750,8 @@
                 const sc = huntDoc.querySelector('.room-stage');
                 if (sc) sc.style.visibility = 'hidden';
                 huntRestart(true);
+                setTimeout(huntReflow, 80);
+                setTimeout(huntReflow, 400);
             }
 
             function huntBack(silent) {
@@ -815,6 +843,7 @@
                 }
             }
             setInterval(huntTick, 1000);
+            setInterval(() => { if (huntOpen) huntReflow(); }, 900);
             onDom(huntTick);
             document.addEventListener('vp-loc', huntTick);
 
