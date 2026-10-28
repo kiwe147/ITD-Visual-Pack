@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.9.6
+// @version      3.7.10
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4304,13 +4304,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             miku: { key: 'palMiku', skinKey: 'palSkinMiku', skins: {
                 old: { file: 'miku.webp', r: 800 / 790, dx: '6%', cache: 'pal-miku@8' },
                 new: { file: 'miku2.webp', r: 675 / 728, dx: '6%', k: 723 / 675, cache: 'pal-miku-2@3' },
-                hall: { file: 'miku-hall-b.webp', r: 1086 / 1274, dx: '6%', k: 1214 / 1086, flip: true, tuck: 88, cache: 'pal-miku-hall@9' },
+                hall: { file: 'miku-hall-b.webp', r: 1086 / 1274, dx: '6%', k: 1214 / 1086, flip: true, tuck: 88, cache: 'pal-miku-hall@10' },
                 hall2: { file: 'miku-hall2.webp', r: 1000 / 1336, dx: '0%', k: 1048 / 1000, cache: 'pal-miku-hall2@1' }
             } },
             teto: { key: 'palTeto', skinKey: 'palSkinTeto', skins: {
                 old: { file: 'teto.webp', r: 776 / 734, dx: '6%', cache: 'pal-teto@8' },
                 new: { file: 'teto2.webp', r: 675 / 565, dx: '0%', k: 723 / 675, cache: 'pal-teto-2@3' },
-                hall: { file: 'teto-hall-b.webp', r: 1067 / 1144, dx: '0%', k: 1195 / 1067, noflip: true, tuck: 70, cache: 'pal-teto-hall@9' },
+                hall: { file: 'teto-hall-b.webp', r: 1067 / 1144, dx: '0%', k: 1195 / 1067, noflip: true, tuck: 70, cache: 'pal-teto-hall@10' },
                 hall2: { file: 'teto-hall2.webp', r: 951 / 1284, dx: '0%', k: 999 / 951, cache: 'pal-teto-hall2@1' }
             } }
         };
@@ -6306,12 +6306,11 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
-            ['3.7.9.6', '28 октября 2026', [
-                'Мику и Тето: новые анимации «Хеллоуин» и «Хеллоуин v2» — в настройках у каждого своя'
-            ]],
-            ['3.7.9.5', '28 октября 2026', [
+            ['3.7.10', '28 октября 2026', [
+                'Мику и Тето: новые анимации «Хеллоуин» и «Хеллоуин v2» — в настройках у каждого своя',
                 'Сообщения: аватарки-картинки снова видны в списке чатов и в шапке открытого чата',
-                'Своя аватарка теперь появляется и на других устройствах, где зашёл в тот же аккаунт'
+                'Своя аватарка теперь появляется и на других устройствах, где зашёл в тот же аккаунт',
+                'Ивент «Хеллоуин»: в «Звук и эффекты» новая галочка «Фурри поняшка» — маскот у камина включается и выключается'
             ]],
             ['3.7.9.4', '28 октября 2026', [
                 'Мур'
