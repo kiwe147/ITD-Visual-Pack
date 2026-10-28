@@ -16499,7 +16499,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
 @media (prefers-reduced-motion:reduce){.vp-hunt-tgt,.vp-hunt-tgt.vp-caught{animation:none!important;transition:none!important;}}
 `;
 
-            const DEV_FILE = 'hunt-dev.webp', DEV_CACHE = 'hunt-dev@1';
+            const DEV_FILE = 'hunt-dev2.webp', DEV_CACHE = 'hunt-dev2@1';
             let devUrl = '';
 
             let huntFrame = null, huntDoc = null, huntOpen = false, huntWin = null;
