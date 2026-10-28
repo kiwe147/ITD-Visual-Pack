@@ -17263,15 +17263,16 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             });
         })();
         (function hauntMark() {
-            const MARK_SVG = '<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
-                + '<circle cx="38" cy="68" r="22" stroke="currentColor" stroke-width="6"/>'
-                + '<path d="M88 18 L70.7 34.3" stroke="currentColor" stroke-width="7"/>'
-                + '<polygon points="58,47 63.6,27.2 77.8,41.4" fill="currentColor"/>'
+            const MARK_SVG = '<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+                + '<circle cx="50" cy="50" r="38" stroke="currentColor" stroke-width="6"/>'
+                + '<path d="M112 8 L86 34" stroke="currentColor" stroke-width="9" stroke-linecap="butt"/>'
+                + '<polygon points="78,24 96,30 86,42" fill="currentColor"/>'
                 + '</svg>';
 
             addCss(`
-.vp-haunt-mark{position:absolute;width:64px;height:64px;pointer-events:none;z-index:6;color:#ff1f1f;
-  filter:drop-shadow(0 2px 8px rgba(255,31,31,.6));animation:vpHMarkPulse 1.6s ease-in-out infinite;transform-origin:59% 47%;}
+.vp-haunt-mark{position:absolute;width:120px;height:120px;pointer-events:none;z-index:6;color:#ff1f1f;
+  filter:drop-shadow(0 2px 10px rgba(255,31,31,.65));transform-origin:50% 50%;}
+.vp-haunt-mark svg{animation:vpHMarkPulse 1.6s ease-in-out infinite;transform-origin:42% 42%;}
 .vp-haunt-mark svg{width:100%;height:100%;display:block;}
 .vp-haunt-mark.vp-haunt-taken{color:#b25bff;filter:drop-shadow(0 2px 8px rgba(178,91,255,.65));}
 .vp-haunt-mark.vp-haunt-taken svg polygon,.vp-haunt-mark.vp-haunt-taken svg path,.vp-haunt-mark.vp-haunt-taken svg circle{stroke:currentColor;}
@@ -17292,14 +17293,15 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     const taken = host.getAttribute('data-haunt') === 'taken';
                     if (mark) { mark.classList.toggle('vp-haunt-taken', taken); return; }
                     if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
-                    const hr = host.getBoundingClientRect(), br = btn.getBoundingClientRect();
+                    const ghost = btn.querySelector('.hw-ghost, .hw-rig, .hw-body') || btn;
+                    const hr = host.getBoundingClientRect(), br = ghost.getBoundingClientRect();
                     if (!hr.width || !br.width) return;
                     mark = document.createElement('span');
                     mark.className = 'vp-haunt-mark' + (taken ? ' vp-haunt-taken' : '');
                     mark.innerHTML = MARK_SVG;
-                    const W = 64;
-                    const left = (br.left - hr.left) + br.width / 2 - W * 0.58;
-                    const top = (br.top - hr.top) + br.height / 2 - W * 0.47;
+                    const W = 120;
+                    const left = (br.left - hr.left) + br.width / 2 - W * 0.5;
+                    const top = (br.top - hr.top) + br.height / 2 - W * 0.5;
                     mark.style.left = Math.round(left) + 'px';
                     mark.style.top = Math.round(top) + 'px';
                     host.appendChild(mark);
