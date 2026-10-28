@@ -267,6 +267,25 @@
             }
 
             // ───────── состояние поиска: одно место, где решается, что видит пользователь ─────────
+            let huntRetryAt = 0, huntRetryT = 0;
+            function huntRetryClear() {
+                huntRetryAt = 0;
+                if (huntRetryT) { clearInterval(huntRetryT); huntRetryT = 0; }
+            }
+            function huntRetryStart(ms) {
+                huntRetryClear();
+                if (!ms) return;
+                huntRetryAt = Date.now() + ms;
+                huntRetryT = setInterval(() => {
+                    if (!huntOpen) { huntRetryClear(); return; }
+                    const left = Math.ceil((huntRetryAt - Date.now()) / 1000);
+                    huntUi();
+                    if (left <= 0) {
+                        huntRetryClear();
+                        if (huntState() === 'error') { huntErr = false; huntDone = false; huntUi(); huntLoop(); }
+                    }
+                }, 250);
+            }
             function huntState() {
                 if (huntErr) return 'error';
                 if (huntPaused) return 'pause';
@@ -287,11 +306,16 @@
                     empty: ['Сейчас никого нет', 'Нажми, чтобы искать снова'],
                     error: ['Поиск остановлен', 'Ошибка сети — нажми, чтобы повторить']
                 }[st];
+                let head = T[0], sub = T[1];
+                if (st === 'error' && huntRetryAt) {
+                    const left = Math.max(0, Math.ceil((huntRetryAt - Date.now()) / 1000));
+                    sub = 'Продолжу сам через ' + left + ' с — или нажми, чтобы не ждать';
+                }
                 const set = (sel, txt) => { const n = w.querySelector(sel); if (n && n.textContent !== txt) n.textContent = txt; };
-                set('.vp-hunt-state-hx', T[0]);
-                set('.vp-hunt-state-s', T[1]);
+                set('.vp-hunt-state-hx', head);
+                set('.vp-hunt-state-s', sub);
                 const btn = w.querySelector('.vp-hunt-state');
-                if (btn) { btn.disabled = (st === 'full' || st === 'done'); btn.title = T[1]; }
+                if (btn) { btn.disabled = (st === 'full' || st === 'done'); btn.title = sub; }
                 if (st === 'empty') { set('.vp-hunt-empty-h', 'Сейчас никого нет'); set('.vp-hunt-empty-s', 'Проверено постов: ' + huntScanned + '. Загляни позже — нечисть появляется не всегда.'); }
                 if (st === 'error') { set('.vp-hunt-empty-h', 'Поиск остановлен'); set('.vp-hunt-empty-s', 'Не удалось загрузить ленту. Проверь соединение и нажми «повторить».'); }
                 if (st === 'search') huntCardKick();
@@ -305,7 +329,7 @@
                 if (st === 'search') { huntPaused = true; huntUi(); }
                 else if (st === 'pause') { huntPaused = false; huntUi(); huntLoop(); }
                 else if (st === 'empty') { huntSaveClear(); huntRestart(false); }
-                else if (st === 'error') { huntErr = false; huntDone = false; huntUi(); huntLoop(); }
+                else if (st === 'error') { huntRetryClear(); huntErr = false; huntDone = false; huntUi(); huntLoop(); }
             }
             // Дальше поиск сам идёт страница за страницей; паузу между запросами держит huntNet.
             function huntNext(seq) {
@@ -634,7 +658,7 @@
                     let url = '/api/posts?limit=' + lim + '&tab=popular' + (huntCursor ? '&cursor=' + encodeURIComponent(huntCursor) : '');
                     const res = await huntNet(url);
                     if (seq !== huntSeq || huntPaused) return;
-                    if (!res || !res.ok) { huntErr = true; huntDone = true; huntStatus('Поиск остановлен (ошибка сети)'); huntBusy = false; return; }
+                    if (!res || !res.ok) { huntErr = true; huntDone = true; huntRetryStart(15000); huntStatus('Поиск остановлен (ошибка сети)'); huntBusy = false; return; }
                     const j = await res.json(), d = j.data || j;
                     let posts = d.posts || [], next = (d.pagination && d.pagination.nextCursor) || d.nextCursor || d.cursor || null;
                     huntScanned += posts.length;
@@ -669,7 +693,10 @@
                     huntCursor = next;
                     huntSave();
                     if (!next || huntScanned >= HUNT_MAX_PAGES * lim) { huntDone = true; huntStatus(huntFound ? 'Проанализировано ' + huntScanned + ' постов, найдено ' + huntFound : 'Сейчас никого не нашли — попробуй позже'); }
-                } catch (e) { logErr('охота', e); huntDone = true; }
+                } catch (e) {
+                    logErr('охота', e);
+                    if (seq === huntSeq && !huntPaused) { huntErr = true; huntDone = true; huntRetryStart(15000); }
+                }
                 finally { huntBusy = false; huntNext(seq); }
             }
 
@@ -898,7 +925,7 @@
                 }
             }
             setInterval(huntTick, 1000);
-            setInterval(() => { if (huntOpen) { huntGuard(); huntReflow(); } }, 900);
+            setInterval(() => { if (huntOpen) { huntGuard(); huntReflow(); if (huntRetryAt) huntUi(); } }, 900);
             onDom(huntTick);
             document.addEventListener('vp-loc', huntTick);
 
