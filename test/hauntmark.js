@@ -11,27 +11,27 @@ const check = (ok, w) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w); 
 // Пост с призраком: article[data-haunt] + кнопка «Изгнать призрака» (как у сайта)
 const HAUNT_POST = `
 <div class="vp-post-slot" style="position:relative">
-  <article data-haunt="calm" style="position:relative;width:600px;height:420px;background:#222;margin:12px" data-alice-water-anchor-kind="post">
+  <div data-haunt="calm" style="position:relative;width:600px;height:420px;background:#222;margin:12px" data-alice-water-anchor-kind="post">
     <div style="padding:16px;color:#fff;font:14px system-ui">Текст поста с призраком</div>
     <div class="hw-layer" style="position:absolute;right:20px;top:180px;width:120px;height:120px">
       <button type="button" aria-label="Изгнать призрака" style="width:80px;height:80px;background:#444;border-radius:50%;border:0;cursor:pointer"></button>
     </div>
-  </article>
+  </div>
 </div>`;
 const TAKEN_POST = `
 <div class="vp-post-slot" style="position:relative">
-  <article data-haunt="taken" style="position:relative;width:600px;height:420px;background:#222;margin:12px">
+  <div data-haunt="taken" style="position:relative;width:600px;height:420px;background:#222;margin:12px">
     <div style="padding:16px;color:#fff;font:14px system-ui">Захваченный пост</div>
     <div class="hw-layer" style="position:absolute;right:20px;top:180px;width:120px;height:120px">
       <button type="button" aria-label="Изгнать призрака" style="width:80px;height:80px;background:#444;border-radius:50%;border:0;cursor:pointer"></button>
     </div>
-  </article>
+  </div>
 </div>`;
 const NORMAL_POST = `
 <div class="vp-post-slot" style="position:relative">
   <article style="position:relative;width:600px;height:300px;background:#222;margin:12px">
     <div style="padding:16px;color:#fff;font:14px system-ui">Обычный пост</div>
-  </article>
+  </div>
 </div>`;
 
 (async () => {
@@ -74,7 +74,7 @@ const NORMAL_POST = `
     await p.waitForTimeout(1500);
 
     const res = await p.evaluate(() => {
-        const arts = [...document.querySelectorAll('article[data-haunt]')];
+        const arts = [...document.querySelectorAll('[data-haunt]')];
         return arts.map(art => {
             const m = art.querySelector(':scope > .vp-haunt-mark');
             const btn = art.querySelector('button[aria-label*="призрак" i]');
@@ -107,7 +107,7 @@ const NORMAL_POST = `
     check(normal === false, 'на обычном посте маркера нет');
 
     // убираем data-haunt (как «поймали») — маркер должен исчезнуть
-    await p.evaluate(() => { const a = document.querySelector('article[data-haunt="calm"]'); if (a) a.removeAttribute('data-haunt'); });
+    await p.evaluate(() => { const a = document.querySelector('[data-haunt="calm"]'); if (a) a.removeAttribute('data-haunt'); });
     await p.waitForTimeout(1600);
     const gone = await p.evaluate(() => document.querySelectorAll('.vp-haunt-mark').length);
     check(gone === 1, `при снятии data-haunt маркер исчез (осталось ${gone})`);

@@ -17285,28 +17285,28 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             }
 
             function markAll() {
-                document.querySelectorAll('article[data-haunt]').forEach(art => {
-                    const btn = findBtn(art);
-                    let mark = art.querySelector(':scope > .vp-haunt-mark');
+                document.querySelectorAll('[data-haunt]').forEach(host => {
+                    const btn = findBtn(host);
+                    let mark = host.querySelector(':scope > .vp-haunt-mark');
                     if (!btn) { if (mark) mark.remove(); return; }
-                    const taken = art.getAttribute('data-haunt') === 'taken';
+                    const taken = host.getAttribute('data-haunt') === 'taken';
                     if (mark) { mark.classList.toggle('vp-haunt-taken', taken); return; }
-                    if (getComputedStyle(art).position === 'static') art.style.position = 'relative';
-                    const ar = art.getBoundingClientRect(), br = btn.getBoundingClientRect();
-                    if (!ar.width || !br.width) return;
+                    if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+                    const hr = host.getBoundingClientRect(), br = btn.getBoundingClientRect();
+                    if (!hr.width || !br.width) return;
                     mark = document.createElement('span');
                     mark.className = 'vp-haunt-mark' + (taken ? ' vp-haunt-taken' : '');
                     mark.innerHTML = MARK_SVG;
                     const W = 64;
-                    const left = (br.left - ar.left) + br.width / 2 - W * 0.58;
-                    const top = (br.top - ar.top) + br.height / 2 - W * 0.47;
+                    const left = (br.left - hr.left) + br.width / 2 - W * 0.58;
+                    const top = (br.top - hr.top) + br.height / 2 - W * 0.47;
                     mark.style.left = Math.round(left) + 'px';
                     mark.style.top = Math.round(top) + 'px';
-                    art.appendChild(mark);
+                    host.appendChild(mark);
                 });
                 document.querySelectorAll('.vp-haunt-mark').forEach(m => {
-                    const art = m.closest('article[data-haunt]');
-                    if (!art || !findBtn(art)) m.remove();
+                    const host = m.closest('[data-haunt]');
+                    if (!host || !findBtn(host)) m.remove();
                 });
             }
 
