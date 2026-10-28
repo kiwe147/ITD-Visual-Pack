@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.10
+// @version      3.7.10.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6306,6 +6306,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.7.10.1', '28 октября 2026', [
+                'Ивент «Хеллоуин»: галочка «Фурри поняшка» больше не появляется в чужих окнах — только в «Звук и эффекты»'
+            ]],
             ['3.7.10', '28 октября 2026', [
                 'Мику и Тето: новые анимации «Хеллоуин» и «Хеллоуин v2» — в настройках у каждого своя',
                 'Сообщения: аватарки-картинки снова видны в списке чатов и в шапке открытого чата',
@@ -16156,7 +16159,14 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             say._t = setTimeout(() => say.classList.remove('vp-on'), 2300);
         }
         function mascotInjectToggle(d) {
-            const dlg = d.querySelector('dialog.dialog');
+            // Ищем ИМЕННО диалог «Звук и эффекты», не любой dialog.dialog
+            let dlg = null;
+            for (const x of d.querySelectorAll('dialog.dialog')) {
+                const label = (x.getAttribute('aria-label') || '').trim();
+                const h2 = x.querySelector('h2');
+                const title = h2 ? h2.textContent.trim() : '';
+                if (label === 'Звук и эффекты' || title === 'Звук и эффекты') { dlg = x; break; }
+            }
             if (!dlg) return;
             const content = dlg.querySelector('.dialog-content');
             if (!content || content.querySelector('.vp-mas-toggle')) return;

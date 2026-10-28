@@ -62,7 +62,14 @@
             say._t = setTimeout(() => say.classList.remove('vp-on'), 2300);
         }
         function mascotInjectToggle(d) {
-            const dlg = d.querySelector('dialog.dialog');
+            // Ищем ИМЕННО диалог «Звук и эффекты», не любой dialog.dialog
+            let dlg = null;
+            for (const x of d.querySelectorAll('dialog.dialog')) {
+                const label = (x.getAttribute('aria-label') || '').trim();
+                const h2 = x.querySelector('h2');
+                const title = h2 ? h2.textContent.trim() : '';
+                if (label === 'Звук и эффекты' || title === 'Звук и эффекты') { dlg = x; break; }
+            }
             if (!dlg) return;
             const content = dlg.querySelector('.dialog-content');
             if (!content || content.querySelector('.vp-mas-toggle')) return;
