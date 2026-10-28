@@ -236,13 +236,16 @@
                 }
                 avaLookOf = u => {
                     const own = (GM_getValue(acctKey('vp_ava'), null) || {}).ref || '';
-                    if (u === (myUsername || '').toLowerCase()) return own ? lookImgUrl(own) : '';
+                    if (u === (myUsername || '').toLowerCase()) {
+                        const ref = own || (showLooks && lookBy.get(u) && lookBy.get(u).a) || '';
+                        return ref ? lookImgUrl(ref) : '';
+                    }
                     const r = showLooks && lookBy.get(u);
                     return r && r.a ? lookImgUrl(r.a) : '';
                 };
                 function markAvatars(me, pu, others) {
                     const own = GM_getValue(acctKey('vp_ava'), null) || {};
-                    const refOf = u => u === me ? { a: own.ref || '', va: own.vid || '' } : others && lookBy.get(u) || {};
+                    const refOf = u => u === me ? { a: own.ref || (others && lookBy.get(u) && lookBy.get(u).a) || '', va: own.vid || (others && lookBy.get(u) && lookBy.get(u).va) || '' } : others && lookBy.get(u) || {};
                     const put = (av, u) => { const r = refOf(u); avaPut(av, r.a || '', r.va || ''); };
                     document.querySelectorAll(PROFILE_LINK).forEach(link => {
                         const av = link.querySelector('.' + SELECTORS.avatar);
