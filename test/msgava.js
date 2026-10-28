@@ -52,8 +52,12 @@ const check = (ok, what) => { console.log((ok ? 'ок   ' : 'ОШИБКА ') + w
   const headEarly = await p.evaluate(() => { const a = document.querySelector('.vp-msgs-chead .vp-msgs-ava'); return a ? a.textContent.trim() + (a.querySelector('img') ? '[img]' : '') : null; });
   await p.waitForTimeout(2600);
   const late = await p.evaluate(() => null);
-  const head = await p.evaluate(() => { const a = document.querySelector('.vp-msgs-chead .vp-msgs-ava'); return { img: !!(a && a.querySelector('img')), src: ((a && a.querySelector('img')) || {}).src || '', text: a ? a.textContent.trim() : null }; });
+  const head = await p.evaluate(() => { const a = document.querySelector('.vp-msgs-chead .vp-msgs-ava'); if (!a) return null; const img = a.querySelector('img'), pic = a.querySelector('.vp-ava-pic'); const src = img ? img.src : pic ? (getComputedStyle(pic).backgroundImage.match(/url\("?([^")]+)"?\)/) || [])[1] || '' : ''; return { img: !!(img || pic), src, text: a.textContent.trim() }; });
   check(head.img && /ab12cd34/.test(head.src), 'чат открыт до загрузки профиля, потом в шапке картинка, а не тёмный кружок 👤 (сразу было: ' + headEarly + ', стало: ' + JSON.stringify(head) + ')');
+  const headSize = await p.evaluate(() => { const a = document.querySelector('.vp-msgs-chead .vp-msgs-ava'); const pic = a && (a.querySelector('img') || a.querySelector('.vp-ava-pic')); if (!pic) return null; const r = pic.getBoundingClientRect(); return { w: r.width, h: r.height, tag: pic.tagName }; });
+  check(headSize && headSize.w > 0 && headSize.h > 0, 'у картинки в шапке ненулевой размер (w×h): ' + JSON.stringify(headSize));
+  const rowSize = await p.evaluate(() => { const a = document.querySelector('.vp-msgs-row .vp-msgs-ava'); const pic = a && (a.querySelector('img') || a.querySelector('.vp-ava-pic')); if (!pic) return null; const r = pic.getBoundingClientRect(); return { w: r.width, h: r.height, tag: pic.tagName }; });
+  if (rowSize) check(rowSize.w > 0 && rowSize.h > 0, 'у картинки в списке ненулевой размер (w×h): ' + JSON.stringify(rowSize));
   if (process.env.SHOT) await p.screenshot({ path: process.env.SHOT });
   check(errors.length === 0, 'нет ошибок страницы ' + errors.join('|'));
   console.log('—    сразу после открытия: ' + JSON.stringify(early));

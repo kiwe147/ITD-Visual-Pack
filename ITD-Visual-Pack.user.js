@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.9.4
+// @version      3.7.9.5
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -9894,9 +9894,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-msgs-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; overscroll-behavior: contain; }
         .vp-msgs-row { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 18px; cursor: pointer; }
         .vp-msgs-row:hover, .vp-msgs-row:active { background: var(--block-bg); }
-        .vp-msgs-ava { position: relative; width: 50px; height: 50px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+        .vp-msgs-ava { position: relative; flex: 0 0 50px !important; min-width: 50px !important; min-height: 50px !important; max-width: 50px !important; max-height: 50px !important; box-sizing: border-box !important; border-radius: 50%; display: flex; align-items: center; justify-content: center;
             font-size: 26px; background: var(--block-bg); }
-        .vp-msgs-ava.vp-sm { width: 38px; height: 38px; font-size: 20px; }
+        .vp-msgs-ava.vp-sm { flex: 0 0 38px !important; min-width: 38px !important; min-height: 38px !important; max-width: 38px !important; max-height: 38px !important; font-size: 20px; }
         html.vp-glass .vp-msgs-chead .vp-msgs-ava { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
         .vp-msgs-ava.vp-sup { color: #fff; background: linear-gradient(145deg, #ff5a5f, #d0202a); box-shadow: 0 0 0 2px rgba(255, 90, 95, .28), 0 4px 14px rgba(208, 32, 42, .4); }
         .vp-msgs-ava.vp-sup svg { width: 58%; height: 58%; stroke-width: 2.1; }
@@ -10107,9 +10107,15 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             };
             let current = null, botTimer = 0;
             const SUP_AVA = svgIcon('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.6"/><path d="m5.6 5.6 3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>', 28);
-            const avaHtml = a => a === '🛟' ? SUP_AVA : isUrl(a) ? `<img src="${esc(a)}" alt="">` : esc(a);
-            const msgAva = d => d.login && d.ava !== '🛟' && !d.support ? clubAvaOf(d.login, d.ava) : d.ava;
-            const headAva = () => { const h = current && $('.vp-msgs-chead .vp-msgs-ava'); if (h) h.innerHTML = avaHtml(msgAva(current)); };
+            const avaHtml = (a, size) => {
+                const s = size || 50;
+                if (a === '🛟') return SUP_AVA;
+                if (!isUrl(a)) return esc(a);
+                const bg = String(a).replace(/[\\"\'()\r\n]/g, c => encodeURIComponent(c));
+                return '<div class="vp-ava-pic" style="width:' + s + 'px;height:' + s + 'px;min-width:' + s + 'px;min-height:' + s + 'px;max-width:' + s + 'px;max-height:' + s + 'px;flex:0 0 ' + s + 'px;background-image:url(' + bg + ');background-size:cover;background-position:center;background-repeat:no-repeat;border-radius:50%;"></div>';
+            };
+            const msgAva = d => { const a = d.login && d.ava !== '🛟' && !d.support ? clubAvaOf(d.login, d.ava) : d.ava; return a || '👤'; };
+            const headAva = () => { const h = current && $('.vp-msgs-chead .vp-msgs-ava'); if (h) h.innerHTML = avaHtml(msgAva(current), 38); };
             root.addEventListener('error', e => { const im = e.target; if (im && im.tagName === 'IMG' && im.closest('.vp-msgs-ava')) im.replaceWith(document.createTextNode('👤')); }, true);
 
             let supDir = false;
@@ -10244,7 +10250,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 selEnd(); clearReply(); closeFwd(); pinEl.hidden = true; pinIdx = 0;
                 d.unread = 0;
                 msgMarkOpened(d.id);
-                $('.vp-msgs-chead .vp-msgs-ava').innerHTML = avaHtml(msgAva(d));
+                $('.vp-msgs-chead .vp-msgs-ava').innerHTML = avaHtml(msgAva(d), 38);
                 $('.vp-msgs-chead .vp-msgs-ava').classList.toggle('vp-online', !!d.online);
                 $('.vp-msgs-chead .vp-msgs-ava').classList.toggle('vp-sup', d.ava === '🛟');
                 $('.vp-msgs-who b').textContent = d.name;
@@ -10857,7 +10863,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     const row = document.createElement('button');
                     row.type = 'button';
                     row.className = 'vp-msgs-fwd-r';
-                    row.innerHTML = '<span class="vp-msgs-ava vp-sm">' + avaHtml(msgAva(x)) + '</span><span></span>';
+                    row.innerHTML = '<span class="vp-msgs-ava vp-sm">' + avaHtml(msgAva(x), 30) + '</span><span></span>';
                     row.lastChild.textContent = x.name;
                     row.addEventListener('click', () => forwardTo(x, ms));
                     box.appendChild(row);
