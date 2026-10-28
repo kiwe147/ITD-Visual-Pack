@@ -19,14 +19,7 @@
             names.forEach(n => { if (!msgPeople.has(n)) msgPeople.set(n, { id: 'u:' + n, login: n, ava: '👤', name: n, last: 'Тоже с ИТД X · напиши первым', time: '', unread: 0, msgs: [] }); });
             MSG_DIALOGS = [MSG_SUPPORT, ...names.map(n => msgPeople.get(n))];
             onUpdate();
-            await Promise.all(names.map(async n => {
-                const d = await hcData(n).catch(() => null), p = msgPeople.get(n);
-                if (!d || !p) return;
-                p.name = pick(d.displayName, d.display_name, n);
-                p.ava = avaUrlOf(n) || siteAva(d);
-                p.online = !!d.online; p.lastSeen = d.lastSeen || null;
-            }));
-            onUpdate();
+            // hcData догружается лениво через IntersectionObserver в renderList (см. msgLazyObserver)
         }
         const MSG_ICON = {
             back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
@@ -430,6 +423,42 @@
             root.addEventListener('error', e => { const im = e.target; if (im && im.tagName === 'IMG' && im.closest('.vp-msgs-ava')) im.replaceWith(document.createTextNode('👤')); }, true);
 
             let supDir = false;
+            // Ленивая подгрузка профилей из API: только для видимых строк списка
+            const msgLazyTried = new Set();
+            let msgLazyObserver = null;
+            function msgLazyLoad(d, rowEl) {
+                const n = d.login;
+                if (!n || msgLazyTried.has(n)) return;
+                msgLazyTried.add(n);
+                hcData(n).then(dt => {
+                    if (!dt) return;
+                    d.name = pick(dt.displayName, dt.display_name, d.name, n);
+                    d.ava = avaUrlOf(n) || siteAva(dt);
+                    d.online = !!dt.online;
+                    d.lastSeen = dt.lastSeen || null;
+                    if (!rowEl || !rowEl.isConnected) return;
+                    const av = rowEl.querySelector('.vp-msgs-ava');
+                    if (av) { av.innerHTML = avaHtml(msgAva(d)); av.classList.toggle('vp-online', !!d.online); }
+                    const nm = rowEl.querySelector('.vp-msgs-name span');
+                    if (nm) nm.textContent = d.name;
+                }).catch(() => { });
+            }
+            function msgLazyObserve() {
+                if (!msgLazyObserver) {
+                    msgLazyObserver = new IntersectionObserver(entries => {
+                        for (const e of entries) {
+                            if (!e.isIntersecting) continue;
+                            const rowEl = e.target;
+                            const id = rowEl.dataset.id;
+                            if (!id || id.indexOf('u:') !== 0) continue;
+                            const d = msgPeople.get(id.slice(2));
+                            if (d) msgLazyLoad(d, rowEl);
+                        }
+                    }, { root: list, rootMargin: '300px', threshold: 0 });
+                }
+                msgLazyObserver.disconnect();
+                list.querySelectorAll('.vp-msgs-row[data-id^="u:"]').forEach(row => msgLazyObserver.observe(row));
+            }
             function renderList() {
                 const q = search.value.trim().toLowerCase();
                 const pins = msgPins();
@@ -458,6 +487,7 @@
                     <div class="vp-msgs-side"><span>${d.tick ? `<i class="vp-msgs-tick${d.tick === 2 ? ' vp-read' : ''}" title="${d.tick === 2 ? 'Прочитано' : 'Доставлено'}">${d.tick === 2 ? MSG_ICON.tick2 : MSG_ICON.tick1}</i>` : ''}${esc(d.time)}</span>${d.unread ? `<span class="vp-msgs-badge">${d.unread}</span>`
                         : pins.includes(d.id) ? `<span class="vp-msgs-pin" title="Закреплён">${MSG_ICON.pin}</span>` : ''}</div>
                 </div>`).join('') : '<div class="vp-msgs-empty">Ничего не нашлось</div>';
+                msgLazyObserve();
             }
             const now = () => new Date().toTimeString().slice(0, 5);
             function setMeta(i, str) {
