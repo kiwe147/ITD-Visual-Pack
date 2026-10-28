@@ -4304,13 +4304,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             miku: { key: 'palMiku', skinKey: 'palSkinMiku', skins: {
                 old: { file: 'miku.webp', r: 800 / 790, dx: '6%', cache: 'pal-miku@8' },
                 new: { file: 'miku2.webp', r: 675 / 728, dx: '6%', k: 723 / 675, cache: 'pal-miku-2@3' },
-                hall: { file: 'miku-hall-b.webp', r: 1086 / 1274, dx: '6%', k: 1342 / 1086, flip: true, tuck: 88, cache: 'pal-miku-hall@5' },
+                hall: { file: 'miku-hall-b.webp', r: 1086 / 1274, dx: '6%', k: 1214 / 1086, flip: true, tuck: 88, cache: 'pal-miku-hall@6' },
                 hall2: { file: 'miku-hall2.webp', r: 1000 / 1336, dx: '0%', k: 1048 / 1000, cache: 'pal-miku-hall2@1' }
             } },
             teto: { key: 'palTeto', skinKey: 'palSkinTeto', skins: {
                 old: { file: 'teto.webp', r: 776 / 734, dx: '6%', cache: 'pal-teto@8' },
                 new: { file: 'teto2.webp', r: 675 / 565, dx: '0%', k: 723 / 675, cache: 'pal-teto-2@3' },
-                hall: { file: 'teto-hall-b.webp', r: 1067 / 1144, dx: '0%', k: 1323 / 1067, noflip: true, tuck: 70, cache: 'pal-teto-hall@5' },
+                hall: { file: 'teto-hall-b.webp', r: 1067 / 1144, dx: '0%', k: 1195 / 1067, noflip: true, tuck: 70, cache: 'pal-teto-hall@6' },
                 hall2: { file: 'teto-hall2.webp', r: 951 / 1284, dx: '0%', k: 999 / 951, cache: 'pal-teto-hall2@1' }
             } }
         };
