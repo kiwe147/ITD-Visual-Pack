@@ -4255,7 +4255,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             snow: { name: 'Снегопад', icon: svgIcon('<path d="M12 2v20M3.3 7l17.4 10M3.3 17 20.7 7"/><path d="m9 4 3 2 3-2M9 20l3-2 3 2"/>') },
             custom: { name: 'Своя картинка', icon: svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>') }
         };
-        function renderAutoLikeUsers(list, footer, usersData) {
+﻿        function renderAutoLikeUsers(list, footer, usersData) {
             const own = n => (usersData[n] && usersData[n].id) === OWNER_ID;
             const users = Object.keys(usersData).sort((a, b) => own(a) ? -1 : own(b) ? 1 : a.localeCompare(b));
             const count = () => { footer.textContent = `Активно: ${Object.keys(autoLikeUsers).length}`; };
@@ -4304,13 +4304,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             miku: { key: 'palMiku', skinKey: 'palSkinMiku', skins: {
                 old: { file: 'miku.webp', r: 800 / 790, dx: '6%', cache: 'pal-miku@8' },
                 new: { file: 'miku2.webp', r: 675 / 728, dx: '6%', k: 723 / 675, cache: 'pal-miku-2@3' },
-                hall: { file: 'miku-hall.webp', r: 1086 / 1274, dx: '6%', k: 1342 / 1086, flip: true, tuck: 88, cache: 'pal-miku-hall@2' },
+                hall: { file: 'miku-hall.webp', r: 1086 / 1274, dx: '6%', k: 1342 / 1086, flip: true, tuck: 88, cache: 'pal-miku-hall@3' },
                 hall2: { file: 'miku-hall2.webp', r: 1000 / 1336, dx: '0%', k: 1048 / 1000, cache: 'pal-miku-hall2@1' }
             } },
             teto: { key: 'palTeto', skinKey: 'palSkinTeto', skins: {
                 old: { file: 'teto.webp', r: 776 / 734, dx: '6%', cache: 'pal-teto@8' },
                 new: { file: 'teto2.webp', r: 675 / 565, dx: '0%', k: 723 / 675, cache: 'pal-teto-2@3' },
-                hall: { file: 'teto-hall.webp', r: 1067 / 1144, dx: '0%', k: 1323 / 1067, noflip: true, tuck: 70, cache: 'pal-teto-hall@2' },
+                hall: { file: 'teto-hall.webp', r: 1067 / 1144, dx: '0%', k: 1323 / 1067, noflip: true, tuck: 70, cache: 'pal-teto-hall@3' },
                 hall2: { file: 'teto-hall2.webp', r: 951 / 1284, dx: '0%', k: 999 / 951, cache: 'pal-teto-hall2@1' }
             } }
         };
