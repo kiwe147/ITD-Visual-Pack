@@ -6308,6 +6308,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         const CHANGELOG = [
             ['3.7.10.3', '29 октября 2026', [
                 'Ивент «Хеллоуин»: в комнате появилось устройство «Охота на нечисть» — мини-игра с поиском активных призраков и оборотней',
+                'Ивент «Хеллоуин»: в охоте на нечисть оборотень по клику сразу получает лайк (ночная конфета), призрак ведёт на пост',
                 'Галерея: страницы ленты крупнее — при этом мод сам подбирает безопасный размер, если сайт против',
                 'Галерея: между запросами теперь пауза — сервер не забрасывается'
             ]],
@@ -16929,10 +16930,11 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const el = huntDoc.createElement('div');
                 el.className = 'vp-hunt-tgt vp-' + kind;
                 el.textContent = kind === 'wolf' ? '\u{1F43A}' : '\u{1F47B}';
-                el.title = label + ' — нажми, чтобы открыть пост';
+                const hint = kind === 'wolf' ? ' — нажми, чтобы поставить лайк (ночная конфета)' : ' — нажми, чтобы открыть пост';
+                el.title = label + hint;
                 el.tabIndex = 0;
                 el.setAttribute('role', 'button');
-                el.setAttribute('aria-label', label + ' — открыть пост');
+                el.setAttribute('aria-label', label + hint);
                 const x = at ? at.x : 40 + Math.random() * Math.max(40, W - 160);
                 const y = at ? at.y : 40 + Math.random() * Math.max(40, H - 160);
                 el.style.left = x + 'px';
@@ -16956,12 +16958,18 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     e.preventDefault(); e.stopPropagation();
                     el.classList.add('vp-caught');
                     cancelAnimationFrame(raf);
-                    const id = postId, u = user;
-                    // цель считается отработанной: убираем из карты и из DOM сразу
+                    const id = postId, u = user, isWolf = kind === 'wolf';
                     huntTargets.delete(postId);
                     huntFound = Math.max(0, huntFound - 1);
                     huntStatsUpdate();
                     setTimeout(() => { if (el.parentNode) el.remove(); }, 500);
+                    if (isWolf) {
+                        // оборотень: лайк вместо перехода (за ночной лайк дают конфету)
+                        huntLike(id);
+                        huntSave();
+                        huntStatus('Оборотень пойман — лайк поставлен', 'scan');
+                        return;
+                    }
                     setTimeout(() => {
                         huntSave();
                         try { const st = huntLoadSave() || {}; st.wasOpen = true; st.at = Date.now(); sessionStorage.setItem(HUNT_SAVE, JSON.stringify(st)); } catch (x) { }
@@ -16994,6 +17002,23 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 return null;
             }
 
+            const huntLiked = new Set();
+            async function huntLike(postId) {
+                if (!postId || huntLiked.has(postId)) return;
+                huntLiked.add(postId);
+                try {
+                    const r = await api('/api/posts/' + encodeURIComponent(postId) + '/like', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+                    });
+                    if (!r || (r.status !== 200 && r.status !== 201 && r.status !== 204 && r.status !== 409)) {
+                        huntLiked.delete(postId);
+                        huntStatus('Лайк не поставился (' + (r ? r.status : 'сеть') + ')', 'err');
+                    }
+                } catch (e) {
+                    huntLiked.delete(postId);
+                    logErr('охота: лайк', e);
+                }
+            }
             let huntLastNet = 0;
             async function huntNet(url) {
                 const wait = huntLastNet + HUNT_GAP - Date.now();
