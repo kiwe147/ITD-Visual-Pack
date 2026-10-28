@@ -15,12 +15,12 @@
 .vp-hunt-dev:hover .vp-hunt-hint{opacity:1;}
 
 /* ───────── окно: те же токены и скругления, что у галереи и «Сообщений» ───────── */
-.vp-hunt{--vh-bg:var(--bg-primary,#000);--vh-chip:var(--glass-bg,rgba(35,35,35,.5));--vh-chip-h:rgba(255,255,255,.12);
+.vp-hunt{--vh-bg:#14121c;--vh-chip:var(--glass-bg,rgba(35,35,35,.5));--vh-chip-h:rgba(255,255,255,.12);
   --vh-fg:var(--text-primary,#f5f5f5);--vh-fg2:var(--text-secondary,#b5bac1);--vh-bd:var(--border-color,rgba(255,255,255,.15));
   --vh-ac:var(--vp-accent,#9b6bff);--vh-card:rgba(30,28,42,.97);--vh-gold:#ffd46a;--vh-web:rgba(255,255,255,.2);
   position:fixed;inset:0;z-index:99998;display:none;box-sizing:border-box;padding:12px;overflow:hidden;
   background:var(--vh-bg);color:var(--vh-fg);font-family:inherit;font-size:14px;line-height:1.4;}
-.vp-hunt.vp-light{--vh-bg:var(--bg-primary,#fff);--vh-chip:rgba(0,0,0,.06);--vh-chip-h:rgba(0,0,0,.1);
+.vp-hunt.vp-light{--vh-bg:#f6f4fa;--vh-chip:rgba(0,0,0,.06);--vh-chip-h:rgba(0,0,0,.1);
   --vh-fg:var(--text-primary,#141414);--vh-fg2:var(--text-secondary,#5b5f66);--vh-bd:var(--border-color,rgba(0,0,0,.12));
   --vh-card:#fff;--vh-gold:#b7791f;--vh-web:rgba(0,0,0,.16);}
 .vp-hunt.vp-open{display:block;animation:vpHIn .22s cubic-bezier(.2,.8,.2,1);}
@@ -30,9 +30,9 @@
 .vp-hunt button:focus-visible{outline:2px solid var(--vh-ac);outline-offset:2px;}
 
 .vp-hunt-shell{position:relative;height:100%;display:flex;flex-direction:column;overflow:hidden;border-radius:36px;border:1px solid var(--vh-bd);
-  background:radial-gradient(70% 55% at 50% 112%,rgba(155,107,255,.2),transparent 70%),var(--block-bg,rgba(24,22,32,.78));
-  backdrop-filter:var(--vp-glass-filter,none);-webkit-backdrop-filter:var(--vp-glass-filter,none);box-shadow:0 16px 48px rgba(0,0,0,.45);}
-.vp-hunt.vp-light .vp-hunt-shell{box-shadow:0 16px 48px rgba(0,0,0,.12);background:radial-gradient(70% 55% at 50% 112%,rgba(155,107,255,.14),transparent 70%),var(--block-bg,rgba(255,255,255,.85));}
+  background:radial-gradient(70% 55% at 50% 112%,rgba(155,107,255,.2),transparent 70%),var(--vh-card,rgba(30,28,42,.97));
+  box-shadow:0 16px 48px rgba(0,0,0,.45);}
+.vp-hunt.vp-light .vp-hunt-shell{box-shadow:0 16px 48px rgba(0,0,0,.12);background:radial-gradient(70% 55% at 50% 112%,rgba(155,107,255,.14),transparent 70%),var(--vh-card,#fff);}
 .vp-hunt-shell::before{content:'';position:absolute;left:0;top:0;width:190px;height:190px;pointer-events:none;opacity:.7;
   background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200' fill='none' stroke='%23ffffff' stroke-opacity='.2' stroke-linecap='round'%3E%3Cpath d='M0 0H200M0 0L196 52M0 0L173 100M0 0L141 141M0 0L100 173M0 0L52 196M0 0V200'/%3E%3Cpath d='M45 0Q26 26 0 45M85 0Q49 49 0 85M125 0Q72 72 0 125M165 0Q96 96 0 165'/%3E%3C/svg%3E") no-repeat 0 0/100% 100%;}
 .vp-hunt.vp-light .vp-hunt-shell::before{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200' fill='none' stroke='%23000000' stroke-opacity='.16' stroke-linecap='round'%3E%3Cpath d='M0 0H200M0 0L196 52M0 0L173 100M0 0L141 141M0 0L100 173M0 0L52 196M0 0V200'/%3E%3Cpath d='M45 0Q26 26 0 45M85 0Q49 49 0 85M125 0Q72 72 0 125M165 0Q96 96 0 165'/%3E%3C/svg%3E");}
@@ -316,10 +316,35 @@
             }
 
             // ───────── тема: окно живёт в iframe, а переменные и шрифт мода — в родителе ─────────
+            // Непрозрачная база: в iframe ивента мод форсит --bg-primary: transparent,
+            // поэтому фон окна нельзя брать из переменной — иначе видно сцену (блюр-экран).
+            function huntSolidBg(light) {
+                const base = light ? [255, 255, 255] : [20, 18, 28];
+                try {
+                    const cs = getComputedStyle(document.documentElement);
+                    const raw = (cs.getPropertyValue('--block-bg') || '').trim();
+                    const m = raw.match(/rgba?\(([^)]+)\)/);
+                    if (m) {
+                        const p = m[1].split(',').map(s => parseFloat(s));
+                        const r = p[0], g = p[1], b = p[2], a = p.length > 3 ? p[3] : 1;
+                        if (isFinite(r) && isFinite(g) && isFinite(b)) {
+                            if (a >= 0.95) return 'rgb(' + Math.round(r) + ',' + Math.round(g) + ',' + Math.round(b) + ')';
+                            const mix = (c, i) => Math.round(c * a + base[i] * (1 - a));
+                            return 'rgb(' + mix(r, 0) + ',' + mix(g, 1) + ',' + mix(b, 2) + ')';
+                        }
+                    }
+                    if (/^#([0-9a-f]{6})$/i.test(raw)) return raw;
+                } catch (e) { }
+                return light ? '#f6f4fa' : '#14121c';
+            }
             function huntTheme(w) {
                 try {
+                    const light = document.documentElement.classList.contains('vp-light');
+                    const solid = huntSolidBg(light);
+                    w.style.setProperty('--vh-bg', solid);
+                    w.style.setProperty('--vh-card', light ? '#fff' : '#1e1c2a');
                     const cs = [getComputedStyle(document.documentElement), document.body ? getComputedStyle(document.body) : null];
-                    ['--block-bg', '--glass-bg', '--text-primary', '--text-secondary', '--border-color', '--vp-accent', '--vp-glass-filter', '--bg-primary'].forEach(k => {
+                    ['--block-bg', '--glass-bg', '--text-primary', '--text-secondary', '--border-color', '--vp-accent', '--vp-glass-filter'].forEach(k => {
                         for (const c of cs) {
                             if (!c) continue;
                             const v = c.getPropertyValue(k).trim();
@@ -740,18 +765,48 @@
                 huntAutoChecked = true;
                 huntOpenWin();
             }
+            function huntShowScene() {
+                if (!huntDoc) return;
+                const sc = huntDoc.querySelector('.room-stage');
+                if (sc && sc.style.visibility === 'hidden') sc.style.visibility = '';
+            }
             function huntOpenWin() {
                 if (!huntDoc) return;
                 huntOpen = true;
                 try { const st = huntLoadSave() || {}; st.wasOpen = true; st.at = Date.now(); sessionStorage.setItem(HUNT_SAVE, JSON.stringify(st)); } catch (e) { }
-                const w = huntWindow();
-                huntTheme(w);
-                w.classList.add('vp-open');
-                const sc = huntDoc.querySelector('.room-stage');
-                if (sc) sc.style.visibility = 'hidden';
-                huntRestart(true);
+                let w = null;
+                try {
+                    w = huntWindow();
+                    huntTheme(w);
+                    w.classList.add('vp-open');
+                } catch (e) {
+                    logErr('охота: окно', e);
+                }
+                // окно должно реально быть в документе — иначе сцену не прячем (иначе «блюр без окна»)
+                if (!w || !w.isConnected) {
+                    huntOpen = false;
+                    huntWin = null;
+                    huntShowScene();
+                    try { const st = huntLoadSave() || {}; st.wasOpen = false; st.at = Date.now(); sessionStorage.setItem(HUNT_SAVE, JSON.stringify(st)); } catch (e) { }
+                    return;
+                }
+                if (w.querySelector('.vp-hunt-shell')) {
+                    const sc = huntDoc.querySelector('.room-stage');
+                    if (sc) sc.style.visibility = 'hidden';
+                }
+                try { huntRestart(true); } catch (e) { logErr('охота: старт', e); }
                 setTimeout(huntReflow, 80);
                 setTimeout(huntReflow, 400);
+            }
+            // Сторож: если окно «открыто», но его нет в документе — вернуть сцену и сбросить флаг
+            function huntGuard() {
+                if (!huntOpen || !huntDoc) return;
+                const w = huntDoc.querySelector('.vp-hunt');
+                if (w && w.isConnected) return;
+                huntOpen = false;
+                huntWin = null;
+                huntShowScene();
+                try { const st = huntLoadSave() || {}; st.wasOpen = false; st.at = Date.now(); sessionStorage.setItem(HUNT_SAVE, JSON.stringify(st)); } catch (e) { }
             }
 
             function huntBack(silent) {
@@ -843,7 +898,7 @@
                 }
             }
             setInterval(huntTick, 1000);
-            setInterval(() => { if (huntOpen) huntReflow(); }, 900);
+            setInterval(() => { if (huntOpen) { huntGuard(); huntReflow(); } }, 900);
             onDom(huntTick);
             document.addEventListener('vp-loc', huntTick);
 
