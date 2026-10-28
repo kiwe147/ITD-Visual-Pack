@@ -120,6 +120,11 @@
                     el.classList.add('vp-caught');
                     cancelAnimationFrame(raf);
                     const id = postId, u = user;
+                    // цель считается отработанной: убираем из карты и из DOM сразу
+                    huntTargets.delete(postId);
+                    huntFound = Math.max(0, huntFound - 1);
+                    huntStatsUpdate();
+                    setTimeout(() => { if (el.parentNode) el.remove(); }, 500);
                     setTimeout(() => {
                         huntSave();
                         try { const st = huntLoadSave() || {}; st.wasOpen = true; st.at = Date.now(); sessionStorage.setItem(HUNT_SAVE, JSON.stringify(st)); } catch (x) { }
@@ -139,6 +144,8 @@
                 huntDoc.querySelectorAll('.vp-hunt-tgt').forEach(t => t.remove());
                 huntTargets.forEach(v => cancelAnimationFrame(v.raf));
                 huntTargets.clear();
+                huntFound = 0;
+                huntStatsUpdate();
             }
 
             function huntParse(v) {

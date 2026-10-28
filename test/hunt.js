@@ -98,11 +98,11 @@ const mkPage = (n) => Array.from({ length: 20 }, (_, i) => ({ id: 'p-' + n + '-'
         check(tgts.length > 0, `сущности появились (${tgts.length})`);
         check(tgts.some(t => t.kind === 'poss'), 'есть призрак (радужная)');
         check(tgts.some(t => t.kind === 'wolf'), 'есть оборотень (фиолетовая)');
-        await p.screenshot({ path: 'test/out/hunt.png' });
-        // проверим, что изгнанные не появляются
+        // клик по цели: должна исчезнуть и из DOM, и из счётчика, и из сохранения
+        // изгнанных среди целей нет
         const exTargets = tgts.filter(t => EX.includes(t.id));
         check(exTargets.length === 0, 'изгнанных среди целей нет');
-        // back
+        // «Назад» — до клика по цели, иначе iframe уедет на страницу поста
         await fr.click('.vp-hunt-back');
         await p.waitForTimeout(300);
         const closed = await fr.evaluate(() => ({
@@ -111,6 +111,23 @@ const mkPage = (n) => Array.from({ length: 20 }, (_, i) => ({ id: 'p-' + n + '-'
         }));
         check(!closed.open, 'окно закрылось по «Назад»');
         check(closed.scene !== 'hidden', 'сцена ивента вернулась');
+        // снова открываем и кликаем по цели (последнее действие, iframe уедет)
+        await fr.click('.vp-hunt-dev');
+        await p.waitForTimeout(500);
+        const beforeClick = await fr.evaluate(() => document.querySelectorAll('.vp-hunt-tgt:not(.vp-caught)').length);
+        if (beforeClick > 0) {
+            const clickRes = await fr.evaluate(() => {
+                const t = document.querySelector('.vp-hunt-tgt:not(.vp-caught)');
+                if (!t) return { ok: false };
+                t.click();
+                const caught = t.classList.contains('vp-caught');
+                const foundNow = +(document.querySelector('.vp-hunt-found') || {}).textContent;
+                const domNow = document.querySelectorAll('.vp-hunt-tgt:not(.vp-caught)').length;
+                return { ok: true, caught, foundNow, domNow };
+            });
+            check(clickRes.ok && clickRes.caught, 'цель помечена «поймана» сразу при клике');
+            check(clickRes.domNow === beforeClick - 1, `в поле осталось на одну меньше (${beforeClick} -> ${clickRes.domNow})`);
+        }
     }
     if (errs.length) console.log('ERR:', JSON.stringify(errs.slice(0, 3)));
     check(errs.length === 0, 'нет ошибок страницы');
