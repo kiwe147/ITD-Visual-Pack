@@ -69,9 +69,10 @@ const PUMPKIN_HTML = `<!doctype html><html><head><style>body{font:14px system-ui
         const save = [...document.querySelectorAll('button')].find(b => /Сохранить тыкву/.test(b.textContent));
         if (!bl) return { hasBlock: false, hasSave: !!save };
         const prev = bl.previousElementSibling;
+        const saveContainer = save.parentNode;
         return {
             hasBlock: true, hasSave: !!save,
-            afterSave: prev === save,
+            afterSave: prev === saveContainer,
             title: (bl.querySelector('.vp-ps-title') || {}).textContent || '',
             btns: [...bl.querySelectorAll('.vp-ps-btn')].map(b => b.textContent.trim())
         };

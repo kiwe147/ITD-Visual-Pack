@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.8.2.1
+// @version      3.8.2.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6602,8 +6602,12 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.8.2.2', '30 октября 2026', [
+                'Ивент «Хеллоуин»: у окна с тыквой появились кнопки «Поделиться», «Скопировать» и «Закрыть», а ещё строка «Фонарь светит: спасибо от N человек»',
+                'Ивент «Хеллоуин»: блок «Подложка для обводки» на странице тыквы больше не сжимает кнопки сайта и не торчит из-под окна просмотра'
+            ]],
             ['3.8.2.1', '30 октября 2026', [
-                'Ивент «Хеллоуин»: тыква у ника больше не закрывается сама — теперь показывается в удобном окне, закрыть можно крестиком, кликом по фону или Esc'
+                'Ивент «Хеллоуин»: тыква у ника больше не закрывается сама — теперь показывается в удобном окне, закрыть можно крестиком, кликом по фону или Esc (это был баг самого сайта, без мода он тоже повторялся)'
             ]],
             ['3.8.2', '30 октября 2026', [
                 'Ивент «Хеллоуин»: на странице тыквы появилась подложка — можно загрузить картинку и обводить её по контуру, подгоняя положение, размер и прозрачность'
@@ -17848,8 +17852,24 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 return null;
             }
 
+            function modalOpen() {
+                // если поверх открыта любая модалка — не мешаем ей
+                const d = document;
+                const list = d.querySelectorAll('[role="dialog"], [aria-modal="true"]');
+                for (const m of list) {
+                    const cs = getComputedStyle(m);
+                    if (cs.display !== 'none' && cs.visibility !== 'hidden' && parseFloat(cs.opacity || '1') > 0.05) {
+                        const r = m.getBoundingClientRect();
+                        if (r.width > 60 && r.height > 60) return m;
+                    }
+                }
+                return null;
+            }
+
             function install() {
                 if (!/\/event\//.test(location.pathname)) return;
+                if (block && modalOpen()) { block.style.display = 'none'; return; }
+                if (block) block.style.display = '';
                 for (const f of document.querySelectorAll('iframe')) {
                     let d = null;
                     try { d = f.contentDocument; } catch (e) { continue; }
@@ -17865,14 +17885,17 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     }
                     const old = d.querySelector('.vp-ps-block');
                     if (old) {
-                        // уже стоит — обновляем позицию кнопки, если перерисовалось
-                        if (old.previousElementSibling !== save) save.parentNode.insertBefore(old, save.nextSibling);
+                        // уже стоит — обновляем позицию, если перерисовалось
+                        const anchor2 = save.parentNode;
+                        if (old.previousElementSibling !== anchor2) anchor2.parentNode.insertBefore(old, anchor2.nextSibling);
                         return;
                     }
                     cfg.x = +load('x', 100); cfg.y = +load('y', 100);
                     cfg.w = +load('w', 400); cfg.o = +load('o', 50);
                     const bl = buildBlock();
-                    save.parentNode.insertBefore(bl, save.nextSibling);
+                    // вставляем ПОСЛЕ контейнера кнопок, не внутрь — иначе ломаем flex-раскладку сайта
+                    const anchor = save.parentNode;
+                    anchor.parentNode.insertBefore(bl, anchor.nextSibling);
                     return;
                 }
             }
@@ -17892,9 +17915,30 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
 .vp-pv-pic svg{width:100%;height:100%;display:block;overflow:visible;filter:drop-shadow(0 8px 28px rgba(255,140,40,.35));}
 .vp-pv-name{font:600 16px/1.2 inherit;color:var(--text-primary,#fff);text-align:center;max-width:420px;}
 .vp-pv-hint{font:12px/1.3 inherit;color:var(--text-secondary,rgba(255,255,255,.5));text-align:center;}
+.vp-pv-actions{display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;justify-content:center;}
+.vp-pv-btn{border:1px solid var(--border-color,rgba(255,255,255,.15));border-radius:10px;padding:8px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;background:var(--glass-bg,rgba(128,128,128,.2));color:var(--text-primary,#fff);transition:background .15s;}
+.vp-pv-btn:hover{background:rgba(128,128,128,.32);}
+.vp-pv-share{background:var(--vp-accent,#ff7b3a);border-color:transparent;}
+.vp-pv-share:hover{filter:brightness(1.1);}
+.vp-pv-toast{position:fixed;left:50%;bottom:32px;transform:translateX(-50%) translateY(20px);z-index:2147483647;display:flex;flex-direction:column;gap:3px;padding:12px 18px;border-radius:14px;background:var(--block-bg,rgba(20,20,30,.94));border:1px solid var(--border-color,rgba(255,255,255,.14));color:var(--text-primary,#fff);box-shadow:0 8px 28px rgba(0,0,0,.5);font:inherit;opacity:0;transition:opacity .25s ease,transform .25s ease;pointer-events:none;max-width:min(420px,calc(100vw - 40px));}
+.vp-pv-toast.vp-pv-toast-on{opacity:1;transform:translateX(-50%) translateY(0);}
+.vp-pv-toast b{font-size:14px;font-weight:600;}
+.vp-pv-toast span{font-size:12.5px;color:var(--text-secondary,rgba(255,255,255,.55));}
 `;
 
             let overlay = null;
+
+            function showToast(title, sub) {
+                const t = document.createElement('div');
+                t.className = 'vp-pv-toast';
+                t.innerHTML = '<b>' + title + '</b>' + (sub ? '<span>' + sub + '</span>' : '');
+                document.body.appendChild(t);
+                requestAnimationFrame(() => t.classList.add('vp-pv-toast-on'));
+                setTimeout(() => {
+                    t.classList.remove('vp-pv-toast-on');
+                    setTimeout(() => { if (t.parentNode) t.remove(); }, 300);
+                }, 2400);
+            }
 
             function close() {
                 if (!overlay) return;
@@ -17943,9 +17987,84 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     nm.textContent = name;
                     card.appendChild(nm);
                 }
+                const thanks = (svgSrc.querySelector('title') || {}).textContent || '';
+                if (/спасибо от/i.test(thanks)) {
+                    const tn = document.createElement('div');
+                    tn.className = 'vp-pv-hint';
+                    tn.textContent = 'Фонарь светит: ' + thanks.trim();
+                    card.appendChild(tn);
+                }
+                const actions = document.createElement('div');
+                actions.className = 'vp-pv-actions';
+                const share = document.createElement('button');
+                share.type = 'button'; share.className = 'vp-pv-btn vp-pv-share'; share.textContent = 'Поделиться';
+                share.addEventListener('click', async e => {
+                    e.preventDefault(); e.stopPropagation();
+                    const url = location.href;
+                    if (navigator.share) { try { await navigator.share({ title: name || 'Тыква', url: url }); } catch (er) { } }
+                    else { try { await navigator.clipboard.writeText(url); } catch (er) { } }
+                }, true);
+                const copy = document.createElement('button');
+                copy.type = 'button'; copy.className = 'vp-pv-btn'; copy.textContent = 'Скопировать';
+                copy.addEventListener('click', async e => {
+                    e.preventDefault(); e.stopPropagation();
+                    try {
+                        // 1. Открываем нативную модалку сайта (одноразовый «пропуск» для capture-перехватчика)
+                        window.__vpPvPass = true;
+                        const btn = document.querySelector('[data-halloween-pumpkin]');
+                        if (btn) btn.click();
+                        window.__vpPvPass = false;
+
+                        // 2. Ждём, пока нативная модалка появится, ищем «Скопировать»
+                        const findNative = () => {
+                            const dialogs = [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')];
+                            for (const d of dialogs) {
+                                const lab = (d.getAttribute('aria-label') || '');
+                                if (!/^Тыква:/i.test(lab)) continue;
+                                const btns = [...d.querySelectorAll('button')];
+                                const copyB = btns.find(b => /^Скопировать$/i.test((b.textContent || '').trim()));
+                                const closeB = btns.find(b => /^Закрыть$/i.test((b.textContent || '').trim()));
+                                return { d, copyB, closeB };
+                            }
+                            return null;
+                        };
+                        let nat = null;
+                        for (let n = 0; n < 40 && !nat; n++) {
+                            await new Promise(r => setTimeout(r, 50));
+                            nat = findNative();
+                        }
+                        if (!nat || !nat.copyB) {
+                            showToast('Не удалось найти кнопку', 'Попробуй ещё раз');
+                            if (nat && nat.closeB) nat.closeB.click();
+                            return;
+                        }
+
+                        // 3. Жмём нативную «Скопировать» — сайт сам делает композит и пишет в буфер
+                        nat.copyB.click();
+
+                        // 4. Ждём немножко, чтобы сайт успел сделать свою работу
+                        await new Promise(r => setTimeout(r, 400));
+
+                        // 5. Закрываем нативную модалку (не мешая сайту)
+                        if (nat.closeB) nat.closeB.click();
+
+                        // 6. Наш тост
+                        showToast('Картинка скопирована', 'Вставь её в пост или в чат');
+                        copy.textContent = 'Готово';
+                        setTimeout(() => copy.textContent = 'Скопировать', 1200);
+                    } catch (er) {
+                        logErr('охота: копия тыквы', er);
+                        showToast('Ошибка', 'Не удалось скопировать');
+                    }
+                }, true);
+                const cl = document.createElement('button');
+                cl.type = 'button'; cl.className = 'vp-pv-btn'; cl.textContent = 'Закрыть';
+                cl.addEventListener('click', e => { e.preventDefault(); close(); }, true);
+                actions.append(share, copy, cl);
+                card.appendChild(actions);
                 const hint = document.createElement('div');
                 hint.className = 'vp-pv-hint';
-                hint.textContent = 'Нажми в любом месте или Esc, чтобы закрыть';
+                hint.textContent = 'Или нажми в любом месте или Esc, чтобы закрыть';
                 card.appendChild(hint);
 
                 ov.appendChild(card);
@@ -17955,9 +18074,14 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 document.addEventListener('keydown', onKey, true);
             }
 
+            function isSmall(btn) {
+                const r = btn.getBoundingClientRect();
+                return r.width > 0 && r.width < 40;
+            }
             document.addEventListener('click', e => {
                 const btn = e.target && e.target.closest && e.target.closest('[data-halloween-pumpkin]');
-                if (!btn) return;
+                if (!btn || !isSmall(btn)) return;
+                if (window.__vpPvPass) return;
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 open(btn);
@@ -17966,7 +18090,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             document.addEventListener('keydown', e => {
                 if (e.key !== 'Enter' && e.key !== ' ') return;
                 const btn = e.target && e.target.closest && e.target.closest('[data-halloween-pumpkin]');
-                if (!btn) return;
+                if (!btn || !isSmall(btn)) return;
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 open(btn);
