@@ -126,9 +126,12 @@
                     d._vpMas = true;
                     const masHit = (doc, ev) => {
                         const m = doc.querySelector('.vp-mas');
-                        if (!m) return null;
+                        if (!m || !m.isConnected) return null;
+                        // окно охоты лежит поверх — оно не должно страдать от маскота
+                        if (doc.querySelector('.vp-hunt.vp-open')) return null;
                         const t = ev.target;
-                        if (!(t === m || (t && m.contains(t)))) return null;
+                        if (t && t.closest && t.closest('.vp-hunt')) return null;
+                        // сам маскот с pointer-events:none, поэтому проверяем по координатам и альфе
                         return mascotHit(doc, ev) ? m : null;
                     };
                     d.addEventListener('click', e => { const m = masHit(d, e); if (m) { e.stopPropagation(); e.preventDefault(); mascotSay(m); } }, true);

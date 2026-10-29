@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.7.10.8
+// @version      3.8.0
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6306,6 +6306,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.8.0', '29 октября 2026', [
+                'Ивент «Хеллоуин»: маскот снова реагирует на клик, но больше не мешает окну охоты на нечисть'
+            ]],
             ['3.7.10.8', '29 октября 2026', [
                 'Ивент «Хеллоуин»: если охота на нечисть споткнулась об ошибку, она сама продолжает поиск через 15 секунд — с обратным отсчётом на кнопке'
             ]],
@@ -16467,9 +16470,12 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     d._vpMas = true;
                     const masHit = (doc, ev) => {
                         const m = doc.querySelector('.vp-mas');
-                        if (!m) return null;
+                        if (!m || !m.isConnected) return null;
+                        // окно охоты лежит поверх — оно не должно страдать от маскота
+                        if (doc.querySelector('.vp-hunt.vp-open')) return null;
                         const t = ev.target;
-                        if (!(t === m || (t && m.contains(t)))) return null;
+                        if (t && t.closest && t.closest('.vp-hunt')) return null;
+                        // сам маскот с pointer-events:none, поэтому проверяем по координатам и альфе
                         return mascotHit(doc, ev) ? m : null;
                     };
                     d.addEventListener('click', e => { const m = masHit(d, e); if (m) { e.stopPropagation(); e.preventDefault(); mascotSay(m); } }, true);
