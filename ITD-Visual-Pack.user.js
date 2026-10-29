@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.8.2.2
+// @version      3.8.2.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -6602,6 +6602,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.8.2.3', '30 октября 2026', [
+                'Ивент «Хеллоуин»: подложка для обводки тыквы снова на прежнем месте — под кнопкой «Сохранить тыкву»'
+            ]],
             ['3.8.2.2', '30 октября 2026', [
                 'Ивент «Хеллоуин»: у окна с тыквой появились кнопки «Поделиться», «Скопировать» и «Закрыть», а ещё строка «Фонарь светит: спасибо от N человек»',
                 'Ивент «Хеллоуин»: блок «Подложка для обводки» на странице тыквы больше не сжимает кнопки сайта и не торчит из-под окна просмотра'
@@ -17852,24 +17855,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 return null;
             }
 
-            function modalOpen() {
-                // если поверх открыта любая модалка — не мешаем ей
-                const d = document;
-                const list = d.querySelectorAll('[role="dialog"], [aria-modal="true"]');
-                for (const m of list) {
-                    const cs = getComputedStyle(m);
-                    if (cs.display !== 'none' && cs.visibility !== 'hidden' && parseFloat(cs.opacity || '1') > 0.05) {
-                        const r = m.getBoundingClientRect();
-                        if (r.width > 60 && r.height > 60) return m;
-                    }
-                }
-                return null;
-            }
-
             function install() {
                 if (!/\/event\//.test(location.pathname)) return;
-                if (block && modalOpen()) { block.style.display = 'none'; return; }
-                if (block) block.style.display = '';
                 for (const f of document.querySelectorAll('iframe')) {
                     let d = null;
                     try { d = f.contentDocument; } catch (e) { continue; }
@@ -17885,17 +17872,14 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     }
                     const old = d.querySelector('.vp-ps-block');
                     if (old) {
-                        // уже стоит — обновляем позицию, если перерисовалось
-                        const anchor2 = save.parentNode;
-                        if (old.previousElementSibling !== anchor2) anchor2.parentNode.insertBefore(old, anchor2.nextSibling);
+                        // уже стоит — обновляем позицию кнопки, если перерисовалось
+                        if (old.previousElementSibling !== save) save.parentNode.insertBefore(old, save.nextSibling);
                         return;
                     }
                     cfg.x = +load('x', 100); cfg.y = +load('y', 100);
                     cfg.w = +load('w', 400); cfg.o = +load('o', 50);
                     const bl = buildBlock();
-                    // вставляем ПОСЛЕ контейнера кнопок, не внутрь — иначе ломаем flex-раскладку сайта
-                    const anchor = save.parentNode;
-                    anchor.parentNode.insertBefore(bl, anchor.nextSibling);
+                    save.parentNode.insertBefore(bl, save.nextSibling);
                     return;
                 }
             }
