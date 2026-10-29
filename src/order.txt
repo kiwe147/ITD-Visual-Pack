@@ -49,6 +49,7 @@
 58-mascot.js
 58h-event-hunt.js
 58j-pumpkin-stencil.js
+58k-pumpkin-viewer.js
 60-games.js
 61-leaderboard.js
 90-boot-tail.js
