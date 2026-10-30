@@ -136,6 +136,134 @@
             const r = new Range(); r.setStart(node, l.start); r.setEnd(node, l.end);
             return [...r.getClientRects()].some(b => x >= b.left - 2 && x <= b.right + 2 && y >= b.top - 2 && y <= b.bottom + 2) ? l : null;
         }
+        // JOIN: склейка разорванных ссылок вида https://domain/ + @user + /post/uuid
+        // Сайт парсит @user как упоминание и рвёт ссылку. Собираем обратно.
+        const JOIN_HOST_RE = /^https?:\/\/(?:xn--d1ah4a\.com|итд\.com)\/$/i;
+        const JOIN_PATH_RE = /^\s*(\/[a-z]+\/[0-9a-f-]+)/i;
+        function joinProfilePostLinks() {
+            const root = document.getElementById('root');
+            if (!root) return 0;
+            let fixed = 0;
+            root.querySelectorAll('a[href^="/@"]').forEach(a => {
+                if (a.dataset.vpJoined) return;
+                const href = a.getAttribute('href') || '';
+                if (!/^\/@[\w.-]+$/i.test(href)) return;
+                const wrap = a.parentElement;
+                if (!wrap || wrap.closest('a, button, input, textarea')) return;
+                // слева от обёртки: текст «https://домен/»
+                let p = wrap.previousSibling;
+                while (p && p.nodeType === 1 && !(p.textContent || '').trim()) p = p.previousSibling;
+                if (!p) return;
+                const hostText = (p.nodeType === 3 ? p.nodeValue : p.textContent || '').trim();
+                const hm = hostText.match(/(https?:\/\/(?:xn--d1ah4a\.com|итд\.com))\/?\s*$/i);
+                if (!hm) return;
+                const hostURL = hm[1];
+                // справа от обёртки: текст «/post/uuid» (может не быть — тогда профиль)
+                let n = wrap.nextSibling;
+                while (n && n.nodeType === 1 && !(n.textContent || '').trim()) n = n.nextSibling;
+                let postPath = '';
+                if (n) {
+                    const postText = (n.nodeType === 3 ? n.nodeValue : n.textContent || '');
+                    const pm = postText.match(JOIN_PATH_RE);
+                    if (pm) postPath = pm[1];
+                }
+                const full = hostURL + href + postPath;
+                const link = document.createElement('a');
+                link.href = full;
+                link.textContent = full;
+                link.className = 'vp-joined-link';
+                link.dataset.vpJoined = '1';
+                link.target = '_blank';
+                link.rel = 'noopener';
+                // убираем только URL-части, окружающий текст сохраняем
+                const cutNode = (node, pattern, isLeft) => {
+                    if (node.nodeType === 3) {
+                        const t = node.nodeValue || '';
+                        if (isLeft) {
+                            const idx = t.search(pattern);
+                            if (idx >= 0) node.nodeValue = t.slice(0, idx);
+                        } else {
+                            const mm = t.match(pattern);
+                            if (mm) node.nodeValue = t.slice((mm.index || 0) + mm[0].length);
+                        }
+                        return node.nodeValue.trim() ? node : (node.remove(), null);
+                    }
+                    // Element: удаляем только текстовые узлы с URL
+                    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+                    let tn;
+                    while ((tn = walker.nextNode())) {
+                        if (isLeft) {
+                            const idx = tn.nodeValue.search(pattern);
+                            if (idx >= 0) tn.nodeValue = tn.nodeValue.slice(0, idx);
+                        } else {
+                            const mm = tn.nodeValue.match(pattern);
+                            if (mm) tn.nodeValue = tn.nodeValue.slice((mm.index || 0) + mm[0].length);
+                        }
+                    }
+                    if (!node.textContent.trim()) { node.remove(); return null; }
+                    return node;
+                };
+                cutNode(p, /https?:\/\/(?:xn--d1ah4a\.com|итд\.com)\/?\s*$/i, true);
+                if (n) cutNode(n, JOIN_PATH_RE, false);
+                wrap.replaceWith(link);
+                fixed++;
+            });
+            return fixed;
+        }
+        addCss('.vp-joined-link { color: var(--link-color); text-decoration: none; font-weight: 500; word-break: break-all; }');
+        // LINKIFY: цельные URL в тексте (посты, комментарии) -> кликабельные <a>
+        // Работает быстрее ванильного парсера сайта. Не трогает уже разорванные (их склеивает joinProfilePostLinks).
+        const URL_POST_RE = /https?:\/\/(?:xn--d1ah4a\.com|итд\.com)\/@[\w.-]+(?:\/(?:post|comment)\/[0-9a-f-]+)?/gi;
+        function linkifyProfilePosts() {
+            const root = document.getElementById('root');
+            if (!root) return 0;
+            let fixed = 0;
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+            const todo = [];
+            let node;
+            while ((node = walker.nextNode())) {
+                const text = node.nodeValue;
+                if (!text || text.length < 20) continue;
+                if (!/(xn--d1ah4a\.com|итд\.com)\/@/.test(text)) continue;
+                const host = node.parentElement;
+                if (!host) continue;
+                if (host.closest('a, button, input, textarea, .vp-joined-link, script, style')) continue;
+                todo.push(node);
+            }
+            for (const tn of todo) {
+                const text = tn.nodeValue;
+                const frag = document.createDocumentFragment();
+                let last = 0;
+                URL_POST_RE.lastIndex = 0;
+                let m;
+                while ((m = URL_POST_RE.exec(text))) {
+                    if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+                    const a = document.createElement('a');
+                    a.href = m[0];
+                    a.textContent = m[0];
+                    a.className = 'vp-joined-link';
+                    a.dataset.vpJoined = '1';
+                    a.target = '_blank';
+                    a.rel = 'noopener';
+                    frag.appendChild(a);
+                    last = m.index + m[0].length;
+                    fixed++;
+                }
+                if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+                if (fixed > 0) tn.parentNode.replaceChild(frag, tn);
+            }
+            return fixed;
+        }
+        const _origScanLinks = scanLinks;
+        scanLinks = function () {
+            const r = _origScanLinks.apply(this, arguments);
+            joinProfilePostLinks();
+            linkifyProfilePosts();
+            return r;
+        };
+        // периодический вызов — не зависит от мутаций DOM (раскрытие «Читать далее», комментарии)
+        setInterval(() => { try { joinProfilePostLinks(); linkifyProfilePosts(); } catch (e) { } }, 1500);
+
         document.addEventListener('click', e => {
             if (e.button || !linkNodes.size || e.target.closest('a, button, input, textarea')) return;
             const l = linkAt(e.clientX, e.clientY);
