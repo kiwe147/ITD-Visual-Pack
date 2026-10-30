@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.8.2.5
+// @version      3.8.2.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1239,7 +1239,21 @@
                     && $$('img, svg', s).some(x => !x.closest('.' + SELECTORS.badgeVoronoi + ', .' + SELECTORS.badgeVerify)))),
             nickRow: () => F('nickContainer').map(c => (c.closest(PROFILE_LINK) || c).parentElement).filter(Boolean),
             nickLarge: () => F('nickContainer').filter(c => !c.closest('a, article, .' + SELECTORS.post) && atLoginOf(c) && isProfileHeader(c)),
-            banner: () => $$('img[alt="Banner"]').map(i => i.parentElement).filter(Boolean),
+            banner: () => {
+                const byImg = $$('img[alt="Banner"]').map(i => i.parentElement).filter(Boolean);
+                if (byImg.length) return byImg;
+                // фолбэк: баннер без картинки (новый профиль). Ищем шапку профиля + кнопку с 'баннер'
+                const header = document.querySelector('[data-alice-water-anchor-kind="profile_header"]');
+                if (!header) return [];
+                const btn = [...header.querySelectorAll('button')].find(b => /баннер/i.test(b.title || ''));
+                if (!btn) return [];
+                let el = btn.parentElement;
+                for (let i = 0; el && i < 5; i++) {
+                    if (el.querySelector('img[alt="Banner"]') || el.querySelector('button[title*="баннер" i]')) return [el.parentElement || el];
+                    el = el.parentElement;
+                }
+                return [];
+            },
             bannerButtons: () => F('banner').map(b => [...b.children].find(c => c.querySelector('button') && !c.querySelector('section'))).filter(Boolean),
             bannerDelete: () => F('bannerButtons').flatMap(c => $$('button', c))
                 .filter(b => /удал/i.test(b.title || '') || b.innerHTML.includes('points="3 6 5 6 21 6"')),
@@ -6602,6 +6616,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.8.2.6', '30 октября 2026', [
+                'Баннер профиля: кнопки мода снова появляются, если баннер ещё не загружен - мод находит его по кнопке сайта, а не только по картинке'
+            ]],
             ['3.8.2.5', '30 октября 2026', [
                 'Починена ошибка, из-за которой у части людей не применялись стили и пропадали кнопки мода - краш аватарки ронял весь запуск'
             ]],
