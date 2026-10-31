@@ -21,7 +21,6 @@
             return hcCache.get(key);
         }
         const pick = (...vals) => vals.find(v => v !== undefined && v !== null && v !== '');
-        // как у самого сайта: старые адреса /images/avatars/ он больше не показывает, а берёт baseAvatar или смайл из профиля
         const siteAva = d => {
             const a = pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl);
             if (typeof a !== 'string' || !a.includes('/images/avatars/')) return pick(a, d.emoji, '👤');

@@ -132,7 +132,6 @@
                     }
                     const old = d.querySelector('.vp-ps-block');
                     if (old) {
-                        // уже стоит — обновляем позицию кнопки, если перерисовалось
                         if (old.previousElementSibling !== save) save.parentNode.insertBefore(old, save.nextSibling);
                         return;
                     }

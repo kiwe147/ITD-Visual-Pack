@@ -117,7 +117,6 @@
                 const own = [...img.classList].filter(c => !c.startsWith('vp-'));
                 let state = own.length > 1 || (/portal/.test(img.src) && !/inactive/.test(img.src)) ? 'live' : 'idle';
                 const link = img.closest('a');
-                // Сайт на время (до 45 с без ответа портала, возврат на вкладку) сам гасит «ивент идёт» и отключает кнопку: держим её живой ещё 3 минуты
                 if (state === 'live') { evLiveAt = Date.now(); if (link && link.getAttribute('href')) evHref = link.getAttribute('href'); }
                 else if (link && evHref && Date.now() - evLiveAt < 180000) {
                     state = 'live';

@@ -103,7 +103,6 @@
             banner: () => {
                 const byImg = $$('img[alt="Banner"]').map(i => i.parentElement).filter(Boolean);
                 if (byImg.length) return byImg;
-                // фолбэк: баннер без картинки (новый профиль). Ищем шапку профиля + кнопку с 'баннер'
                 const header = document.querySelector('[data-alice-water-anchor-kind="profile_header"]');
                 if (!header) return [];
                 const btn = [...header.querySelectorAll('button')].find(b => /баннер/i.test(b.title || ''));

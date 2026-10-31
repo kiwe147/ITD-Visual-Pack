@@ -221,7 +221,6 @@
                         else { el.removeAttribute('data-vp-ava'); el.style.removeProperty('--vp-ava-url'); }
                     }
                     let v = el.querySelector(':scope > .vp-ava-vid');
-                    // защита: если под этим классом не <video> (React заменил, чужой скрипт, битый клон) - снести и создать заново
                     if (v && (v.tagName !== 'VIDEO' || typeof v.play !== 'function')) { try { v.remove(); } catch (e) { } v = null; }
                     const want = ref && vid && el.getBoundingClientRect().width >= 60 ? vid : '';
                     if (!want) { if (v) { try { v.remove(); } catch (e) { } } return; }
@@ -252,7 +251,7 @@
                 function markAvatars(me, pu, others) {
                     const own = GM_getValue(acctKey('vp_ava'), null) || {};
                     const refOf = u => u === me ? { a: own.ref || (others && lookBy.get(u) && lookBy.get(u).a) || '', va: own.vid || (others && lookBy.get(u) && lookBy.get(u).va) || '' } : others && lookBy.get(u) || {};
-                    const put = (av, u) => { try { const r = refOf(u); avaPut(av, r.a || '', r.va || ''); } catch (e) { /* один битый аватар не должен ронять остальные */ } };
+                    const put = (av, u) => { try { const r = refOf(u); avaPut(av, r.a || '', r.va || ''); } catch (e) {   } };
                     document.querySelectorAll(PROFILE_LINK).forEach(link => {
                         const av = link.querySelector('.' + SELECTORS.avatar);
                         if (av) put(av, userOf(link.getAttribute('href')));

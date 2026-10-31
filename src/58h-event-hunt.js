@@ -226,7 +226,6 @@
             const huntTargets = new Map();
             const HUNT_MAX_TARGETS = 4, HUNT_MAX_PAGES = 40, HUNT_GAP = 1200;
 
-            // — только UI-состояние: пауза пользователем, ошибка сети, находки, что ещё «вылетают» из карточек —
             let huntPaused = false, huntErr = false, huntPending = 0;
             const huntMeta = new Map(), huntCards = new Set();
             let huntCardQ = [], huntCardTimer = 0, huntRevealAt = 0;
@@ -266,7 +265,6 @@
                 } catch (e) { return null; }
             }
 
-            // ───────── состояние поиска: одно место, где решается, что видит пользователь ─────────
             let huntRetryAt = 0, huntRetryT = 0;
             function huntRetryClear() {
                 huntRetryAt = 0;
@@ -320,10 +318,8 @@
                 if (st === 'error') { set('.vp-hunt-empty-h', 'Поиск остановлен'); set('.vp-hunt-empty-s', 'Не удалось загрузить ленту. Проверь соединение и нажми «повторить».'); }
                 if (st === 'search') huntCardKick();
             }
-            // Текст статуса теперь собирается из состояния (huntUi), поэтому аргумент не нужен.
-            // Вызовы в логике оставлены как есть, чтобы её не трогать.
             function huntStatus() { huntUi(); }
-            function huntBar() { /* прогресс-полоски больше нет: заполненность поля показывают точки у «Найдено» (huntStatsUpdate) */ }
+            function huntBar() {   }
             function huntToggle() {
                 const st = huntState();
                 if (st === 'search') { huntPaused = true; huntUi(); }
@@ -331,7 +327,6 @@
                 else if (st === 'empty') { huntSaveClear(); huntRestart(false); }
                 else if (st === 'error') { huntRetryClear(); huntErr = false; huntDone = false; huntUi(); huntLoop(); }
             }
-            // Дальше поиск сам идёт страница за страницей; паузу между запросами держит huntNet.
             function huntNext(seq) {
                 if (seq !== huntSeq) return;
                 huntUi();
@@ -339,9 +334,6 @@
                 setTimeout(huntLoop, 0);
             }
 
-            // ───────── тема: окно живёт в iframe, а переменные и шрифт мода — в родителе ─────────
-            // Непрозрачная база: в iframe ивента мод форсит --bg-primary: transparent,
-            // поэтому фон окна нельзя брать из переменной — иначе видно сцену (блюр-экран).
             function huntSolidBg(light) {
                 const base = light ? [255, 255, 255] : [20, 18, 28];
                 try {
@@ -381,7 +373,6 @@
                 } catch (e) { }
             }
 
-            // ───────── карточки постов: летят, переворачиваются, из нужной вылетает цель ─────────
             function huntPostMeta(p) {
                 let img = '', video = false;
                 const at = Array.isArray(p.attachments) ? p.attachments : [];
@@ -463,7 +454,6 @@
                 if (huntCardTimer || !huntDoc || !huntOpen || !huntCardQ.length) return;
                 huntCardTimer = setInterval(huntCardTick, 260);
             }
-            // каждый загруженный пост — кандидат на карточку; на экран попадает только часть, чтобы не было каши
             function huntCardPush(p) {
                 if (!p || !p.id || !huntDoc) return;
                 const m = huntPostMeta(p);
@@ -480,8 +470,6 @@
                 huntCards.clear();
                 if (huntDoc) huntDoc.querySelectorAll('.vp-hunt-card,.vp-hunt-burst').forEach(n => n.remove());
             }
-            // Находка: карточка этого поста выезжает в центр, дрожит, «бац» — и из неё вылетает цель.
-            // Сама цель создаётся прежним huntSpawn, просто чуть позже и с точкой вылета.
             function huntReveal(m) {
                 if (!huntDoc) return;
                 const seq = huntSeq;
@@ -532,7 +520,6 @@
                 const y = at ? clampY(at.y) : MARG + Math.random() * Math.max(20, H - SZ - MARG * 2);
                 el.style.left = x + 'px';
                 el.style.top = y + 'px';
-                // вылет из карточки (или просто «всплытие» на месте, если цель восстановлена из сохранения)
                 el.style.setProperty('--fx', (from ? from.x - (x + 39) : 0) + 'px');
                 el.style.setProperty('--fy', (from ? from.y - (y + 39) : 0) + 'px');
                 el.classList.add('vp-launch');
@@ -559,7 +546,6 @@
                     huntStatsUpdate();
                     setTimeout(() => { if (el.parentNode) el.remove(); }, 500);
                     if (isWolf) {
-                        // оборотень: лайк вместо перехода (за ночной лайк дают конфету)
                         huntLike(id);
                         huntSave();
                         huntStatus('Оборотень пойман — лайк поставлен', 'scan');
@@ -581,7 +567,6 @@
                 huntSave();
                 huntStatus('Найдено: ' + huntFound + ' · проанализировано постов: ' + huntScanned);
             }
-            // Все цели — внутрь видимой области сцены (после реальной раскладки и при resize).
             function huntReflow() {
                 const stage = huntDoc && huntDoc.querySelector('.vp-hunt-stage');
                 if (!stage) return;
@@ -809,7 +794,6 @@
                 } catch (e) {
                     logErr('охота: окно', e);
                 }
-                // окно должно реально быть в документе — иначе сцену не прячем (иначе «блюр без окна»)
                 if (!w || !w.isConnected) {
                     huntOpen = false;
                     huntWin = null;
@@ -825,7 +809,6 @@
                 setTimeout(huntReflow, 80);
                 setTimeout(huntReflow, 400);
             }
-            // Сторож: если окно «открыто», но его нет в документе — вернуть сцену и сбросить флаг
             function huntGuard() {
                 if (!huntOpen || !huntDoc) return;
                 const w = huntDoc.querySelector('.vp-hunt');

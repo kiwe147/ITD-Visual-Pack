@@ -448,7 +448,6 @@
                 let res = null;
                 try { res = await galApi(url); } catch (e) { break; }
                 if (res && (res.status === 413 || res.status === 414 || res.status === 422) && chunk.length > 20 && GAL_GHOST_CHUNK > 20) {
-                    // сервер не принял длину — режем поровну и пробуем по 20
                     const half = chunk.slice(0, Math.ceil(chunk.length / 2)), rest = chunk.slice(half.length);
                     for (const sub of [half, rest]) {
                         if (!sub.length) continue;

@@ -210,9 +210,6 @@
             });
         }
 
-        // ── Новый путь: рисунок через /api/files/banner-drawing (штрихи, не картинка) ──
-        // Сайт больше не принимает загруженный файл баннером (BANNER_DRAWING_REQUIRED),
-        // поэтому картинку превращаем в ops (кисти-линии) и отправляем как «рисунок».
         function bannerImageData() {
             return new Promise((resolve, reject) => {
                 const img = bannerEdit.img;
@@ -225,7 +222,6 @@
                 const canvas = document.createElement('canvas');
                 canvas.width = W; canvas.height = H;
                 const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                // фон — белый, как у сервера: важно для skipLight-блоков (на сервере они белые)
                 ctx.fillStyle = '#ffffff';
                 ctx.fillRect(0, 0, W, H);
                 const src = new Image();
@@ -241,17 +237,12 @@
             });
         }
 
-        // Квантование цвета (шаг по каждому каналу), чтобы уменьшить число цветовых переходов.
         function bannerQuantStep(colors) {
             const n = Math.max(2, Math.min(16, Math.round(Math.cbrt(colors))));
             return Math.round(255 / (n - 1));
         }
 
         const BANNER_MAX_OPS = 1990, BANNER_MAX_POINTS = 55000;
-        // Блочный конвертер: сетка bw x bh, соседние блоки сливаются, пока близки к среднему.
-        // Блоки с настройками (взято частично из чужого Banner.py):
-        // skipLight — не рисовать блоки, где все каналы > порога (светлый фон экономит ops)
-        // useAnchor — сравнивать с цветом НАЧАЛА линии, а не со средним (даёт длинные линии на градиентах)
         function bannerBlocksToOps(imgData, bw, bh, thr, skipLight, useAnchor) {
             const W = imgData.width, H = imgData.height, d = imgData.data;
             const hex = (r, g, b) => '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
@@ -304,12 +295,11 @@
             return { version: 1, width: W, height: H, ops: ops, _points: ops.length * 2 };
         }
 
-        // RMSE между исходником и рендером ops (для автоподбора лучшего варианта)
         function bannerScore(imgData, body) {
             const W = imgData.width, H = imgData.height;
             const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
             const cx = cv.getContext('2d', { willReadFrequently: true });
-            cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, W, H);   // как сервер
+            cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, W, H);   
             for (const op of body.ops) {
                 cx.strokeStyle = op.color;
                 cx.fillStyle = op.color;
@@ -324,7 +314,7 @@
             const rd = cx.getImageData(0, 0, W, H).data;
             const od = imgData.data;
             let sum = 0, n = 0;
-            for (let i = 0; i < od.length; i += 16) {  // каждый 4-й пиксель, для скорости
+            for (let i = 0; i < od.length; i += 16) {  
                 const dr = od[i] - rd[i], dg = od[i+1] - rd[i+1], db = od[i+2] - rd[i+2];
                 sum += dr*dr + dg*dg + db*db; n += 3;
             }
@@ -354,7 +344,6 @@
                 }
                 ops.push({ tool: 'brush', color: hex(Math.round(sr / cnt), Math.round(sg / cnt), Math.round(sb / cnt)), width: brush, points: [[start, yc], [W - 1, yc]] });
             }
-            // Склеиваем соседние штрихи одного цвета в строке
             const merged = [];
             for (const op of ops) {
                 const last = merged[merged.length - 1];
@@ -409,43 +398,25 @@
             try {
                 const token = await getAccessToken();
                 const imgData = await bannerImageData();
-                // Подбираем самую мелкую кисть, которая влезает в лимиты сайта (штрихи/точки).
-                // Так мы делаем РОВНО ОДИН запрос и получаем максимальное качество.
-                // Автоподбор (сокращённый, чтобы уложиться в ~250 мс):
-                // линии × 12, блоки × 64 (сетки × thr × skip × anchor). Итого 76.
-                const cands = [];
-                for (const brush of [4, 6, 8, 10, 12, 16]) {
-                    for (const thr of [25, 40]) {
-                        cands.push({ kind: 'lines', a: brush, b: thr });
-                    }
+                const onProg = (msg) => {
+                    if (!apply.isConnected) return;
+                    apply.title = msg;
+                };
+                const auto = await __vpBannerAuto.autoBanner(
+                    { width: imgData.width, height: imgData.height, data: imgData.data },
+                    onProg
+                );
+                const body = { version: 1, width: 1100, height: 380, ops: auto.ops };
+                const label = auto.cell + 'px, ' + auto.colors + ' цв., связн. ' + auto.merge + ', пятна ' + auto.minArea + ' px²';
+                console.log('[ITD VP] баннер-рисунок:', label, auto.opsCount, 'штрихов, ΔE', auto.dE.toFixed(2));
+                if (apply.isConnected) apply.title = label + ' · ' + auto.opsCount + ' штрихов · ΔE ' + auto.dE.toFixed(2);
+                if (!auto.fits) {
+                    console.warn('[ITD VP] баннер не влез в лимиты:', auto.opsCount, 'штрихов');
+                    alert('Рисунок получился слишком сложным для сайта (' + auto.opsCount + ' штрихов, можно 2000).\nПопробуй другую картинку или кадрируй её проще.');
+                    if (apply.isConnected) { apply.innerHTML = ICONS.BANNER_APPLY; apply.disabled = false; }
+                    return;
                 }
-                for (const grid of [[4,4],[5,4],[6,4],[6,6],[8,4],[8,6],[8,8],[10,6],[10,8],[12,8],[12,10],[14,10]]) {
-                    for (const thr of [25, 30, 35]) {
-                        for (const skip of [0, 240]) {
-                            cands.push({ kind: 'blocks', a: grid[0], b: grid[1], thr: thr, skip: skip, anchor: true });
-                        }
-                    }
-                }
-                let best = null;
-                for (const c of cands) {
-                    const b = c.kind === 'lines'
-                        ? bannerPixelToOps(imgData, c.a, c.b)
-                        : bannerBlocksToOps(imgData, c.a, c.b, c.thr, c.skip, c.anchor);
-                    if (b.ops.length > BANNER_MAX_OPS || b.ops.length < 1) continue;
-                    const score = bannerScore(imgData, b);
-                    const tags = [];
-                    if (c.skip) tags.push('skip');
-                    if (c.anchor) tags.push('anc');
-                    const label = (c.kind === 'lines' ? (c.a + 'px/' + c.b) : (c.a + 'x' + c.b + '/' + c.thr)) + (tags.length ? '[' + tags.join('+') + ']' : '');
-                    if (!best || score < best.score) best = { score: score, body: b, label: label, kind: c.kind, a: c.a, b: c.b, thr: c.thr };
-                }
-                if (!best) { // fallback: самые грубые блоки
-                    const b = bannerBlocksToOps(imgData, 14, 10, 60);
-                    best = { score: 0, body: b, label: '14x10/60', kind: 'blocks' };
-                }
-                const body = best.body;
-                console.log('[ITD VP] баннер-рисунок:', best.label, body.ops.length, 'штрихов, RMSE', best.score.toFixed(1), '(', best.kind, ')');
-                if (apply.isConnected) apply.title = best.label + ' · ' + body.ops.length + ' штрихов';
+                if (apply.isConnected) apply.title = 'Отправка: ' + auto.opsCount + ' штрихов…';
                 const file = await uploadBannerDrawing(body, token);
                 const res = await fetch('/api/users/me', {
                     method: 'PUT',
@@ -466,18 +437,20 @@
                 const message = error.message || 'Неизвестная ошибка';
                 if (message.includes('запрещённый контент') || message.includes('CONTENT_MODERATION')) {
                     alert('Изображение не прошло модерацию.\nПожалуйста, выберите другое изображение.');
-                } else if (message.includes('сети') || message.includes('network')) {
+                } else if (message.includes('сети') || message.includes('network') || message.includes('Failed to fetch')) {
                     alert('Ошибка сети. Проверьте подключение к интернету.');
+                } else if (error.status === 429 || message.includes('Слишком много') || message.includes('Too many')) {
+                    alert('Сайт просит подождать: слишком частые загрузки баннера.\nПопробуй через минуту.');
+                } else if (error.status === 401 || error.status === 403 || message.includes('401') || message.includes('403')) {
+                    alert('Сессия истекла. Обнови страницу и попробуй снова.');
                 } else {
-                    alert(`Ошибка: ${message}`);
+                    alert(`Не удалось нарисовать баннер: ${message}`);
                 }
                 apply.innerHTML = ICONS.BANNER_APPLY;
                 apply.disabled = false;
             }
         }
 
-        // ── Тест: сколько штрихов принимает сервер ──
-        // Вызов в консоли: __vpBannerProbe(brush, thr)
         (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window).__vpBannerProbe = async function (brush, thr, blockW, blockH) {
             const W = 1100, H = 380;
             const pick = document.createElement('input');
@@ -496,8 +469,7 @@
             const data = ctx.getImageData(0, 0, W, H);
             let body;
             if (blockW && blockH) {
-                if (!thr || thr < 1) thr = 20;   // без порога блоки не сливаются, ops взлетают в 10 раз
-                // блоки
+                if (!thr || thr < 1) thr = 20;   
                 const ops = [];
                 const hex = (r, g, b) => '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
                 const d = data.data;

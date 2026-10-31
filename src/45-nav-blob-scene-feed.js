@@ -163,7 +163,6 @@
                 if (y !== proxY) { proxY = y; proxKick(); }
             }, { passive: true });
             document.addEventListener('pointerleave', () => { proxY = null; proxKick(); });
-            // Вложенное окно (сцена ивента) съедает движения мыши: страница больше не получает pointermove, и кнопки так и остаются «притянутыми».
             document.addEventListener('pointerover', e => { if (e.target && e.target.tagName === 'IFRAME' && proxY !== null) { proxY = null; proxKick(); } }, { passive: true });
             addEventListener('blur', () => { if (proxY !== null) { proxY = null; proxKick(); } });
         }

@@ -58,7 +58,6 @@
             } }
         };
         const PAL_SKINS = [['old', 'Прыгает'], ['new', 'Кивает'], ['hall', 'Хеллоуин'], ['hall2', 'Хеллоуин v2']];
-        // у каждого персонажа своя анимация; общая палитра palSkin (прошлая сборка) используется, пока свою не выбрали
         const palSkin = id => { const v = GM_getValue(PALS[id].skinKey, GM_getValue('palSkin', 'old')); return PALS[id].skins[v] ? v : 'old'; };
         const palCfg = id => PALS[id].skins[palSkin(id)];
         const PAL_LOOKS = [
@@ -95,8 +94,6 @@
             if (!palsBox) return;
             palsBox.querySelectorAll(id ? '.vp-pal-' + id : '.vp-pal').forEach(i => { if (i.src) URL.revokeObjectURL(i.src); i.remove(); });
         }
-        // «Свет вырубило» (ивент): сайт на ~12 с затемняет весь экран фонариком, Мику и Тето на это время прячем.
-        // Признак без хэш-классов сайта: подпись внутри aria-hidden-слоя
         onDom(function palsBlackout() {
             const on = [...document.querySelectorAll('div[aria-hidden="true"] > p')].some(p => /вырубило|свети фонарик/i.test(p.textContent));
             if (on !== document.documentElement.classList.contains('vp-blackout')) document.documentElement.classList.toggle('vp-blackout', on);
@@ -490,7 +487,7 @@
                 if (id === 'icon') body.appendChild(iconPicker());
                 else for (const label of tab.items) {
                     body.appendChild(settingItem(label, redraw, id === 'bg' || id === 'nick' || id === 'pals' ? redraw : null));
-                    if (id === 'pals' && (label === 'Мику справа' || label === 'Тето слева')) {      // у каждой своя анимация, сразу под её выключателем
+                    if (id === 'pals' && (label === 'Мику справа' || label === 'Тето слева')) {      
                         const pid = label === 'Мику справа' ? 'miku' : 'teto', skins = document.createElement('div');
                         skins.className = 'vp-pick-grid vp-pick-grid-4' + (palsOn && GM_getValue(PALS[pid].key, true) ? '' : ' vp-dim');
                         const skin = palSkin(pid);

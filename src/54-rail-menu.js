@@ -191,7 +191,6 @@
             return cbCached;
         }
         function contentBoxNow() {
-            // страница ивента: сцена живёт во вложенном окне, окно сообщений ставим обычной колонкой, а не по размеру сцены
             if (msgsOpen && /^\/event\/[^/]/.test(location.pathname)) return frameColumn();
             const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail';
             let left = Infinity, right = 0;
@@ -381,7 +380,6 @@
             if (on) document.documentElement.style.setProperty('--vp-side-left', want + 'px');
         }
         addEventListener('resize', placeSidebar);
-        // смена адреса без перерисовки страницы (ивент ↔ сообщения): положение меню и панели пересчитываем сами
         document.addEventListener('vp-loc', () => { placeSidebar(); placeRail(); });
         addEventListener('popstate', () => setTimeout(() => { placeSidebar(); placeRail(); }, 0));
         onDom(glidePlace);

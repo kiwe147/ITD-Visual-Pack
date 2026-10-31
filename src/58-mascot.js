@@ -1,5 +1,3 @@
-        // Маскот ИТД X на странице ивента: арт сидит на полу справа от камина, по клику говорит случайную фразу.
-        // Рисуется внутри окна ивента (оно того же сайта), поэтому двигается и масштабируется вместе с комнатой.
         const MASCOT = { file: 'mascot3.webp', cache: 'mascot-3@1', ratio: 800 / 737 };
         const MASCOT_SAYS = ['Арра-Ара~', 'Миу', 'Мяу', 'Мь?', 'Мя', 'Мур'];
         const MASCOT_CSS = `
@@ -21,7 +19,6 @@
         @media (orientation: portrait), (prefers-reduced-motion: reduce) { .vp-mas { animation: none; } .vp-mas-tint { animation: none; } }
         @media (orientation: portrait) { .vp-mas { display: none; } }`;
         let mascotUrl = '', mascotLoading = false, mascotLast = -1, mascotMask = null;
-        // нажимается только видимая часть арта: прозрачность берём из уменьшенной копии картинки
         function mascotMaskBuild(url) {
             const im = new Image();
             im.onload = () => {
@@ -62,7 +59,6 @@
             say._t = setTimeout(() => say.classList.remove('vp-on'), 2300);
         }
         function mascotInjectToggle(d) {
-            // Ищем ИМЕННО диалог «Звук и эффекты», не любой dialog.dialog
             let dlg = null;
             for (const x of d.querySelectorAll('dialog.dialog')) {
                 const label = (x.getAttribute('aria-label') || '').trim();
@@ -127,11 +123,9 @@
                     const masHit = (doc, ev) => {
                         const m = doc.querySelector('.vp-mas');
                         if (!m || !m.isConnected) return null;
-                        // окно охоты лежит поверх — оно не должно страдать от маскота
                         if (doc.querySelector('.vp-hunt.vp-open')) return null;
                         const t = ev.target;
                         if (t && t.closest && t.closest('.vp-hunt')) return null;
-                        // сам маскот с pointer-events:none, поэтому проверяем по координатам и альфе
                         return mascotHit(doc, ev) ? m : null;
                     };
                     d.addEventListener('click', e => { const m = masHit(d, e); if (m) { e.stopPropagation(); e.preventDefault(); mascotSay(m); } }, true);

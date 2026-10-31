@@ -136,8 +136,6 @@
             const r = new Range(); r.setStart(node, l.start); r.setEnd(node, l.end);
             return [...r.getClientRects()].some(b => x >= b.left - 2 && x <= b.right + 2 && y >= b.top - 2 && y <= b.bottom + 2) ? l : null;
         }
-        // JOIN: склейка разорванных ссылок вида https://domain/ + @user + /post/uuid
-        // Сайт парсит @user как упоминание и рвёт ссылку. Собираем обратно.
         const JOIN_HOST_RE = /^https?:\/\/(?:xn--d1ah4a\.com|итд\.com)\/$/i;
         const JOIN_PATH_RE = /^\s*(\/[a-z]+\/[0-9a-f-]+)/i;
         function joinProfilePostLinks() {
@@ -150,7 +148,6 @@
                 if (!/^\/@[\w.-]+$/i.test(href)) return;
                 const wrap = a.parentElement;
                 if (!wrap || wrap.closest('a, button, input, textarea')) return;
-                // слева от обёртки: текст «https://домен/»
                 let p = wrap.previousSibling;
                 while (p && p.nodeType === 1 && !(p.textContent || '').trim()) p = p.previousSibling;
                 if (!p) return;
@@ -158,7 +155,6 @@
                 const hm = hostText.match(/(https?:\/\/(?:xn--d1ah4a\.com|итд\.com))\/?\s*$/i);
                 if (!hm) return;
                 const hostURL = hm[1];
-                // справа от обёртки: текст «/post/uuid» (может не быть — тогда профиль)
                 let n = wrap.nextSibling;
                 while (n && n.nodeType === 1 && !(n.textContent || '').trim()) n = n.nextSibling;
                 let postPath = '';
@@ -175,7 +171,6 @@
                 link.dataset.vpJoined = '1';
                 link.target = '_blank';
                 link.rel = 'noopener';
-                // убираем только URL-части, окружающий текст сохраняем
                 const cutNode = (node, pattern, isLeft) => {
                     if (node.nodeType === 3) {
                         const t = node.nodeValue || '';
@@ -188,7 +183,6 @@
                         }
                         return node.nodeValue.trim() ? node : (node.remove(), null);
                     }
-                    // Element: удаляем только текстовые узлы с URL
                     const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
                     let tn;
                     while ((tn = walker.nextNode())) {
@@ -211,8 +205,6 @@
             return fixed;
         }
         addCss('.vp-joined-link { color: var(--link-color); text-decoration: none; font-weight: 500; word-break: break-all; }');
-        // LINKIFY: цельные URL в тексте (посты, комментарии) -> кликабельные <a>
-        // Работает быстрее ванильного парсера сайта. Не трогает уже разорванные (их склеивает joinProfilePostLinks).
         const URL_POST_RE = /https?:\/\/(?:xn--d1ah4a\.com|итд\.com)\/@[\w.-]+(?:\/(?:post|comment)\/[0-9a-f-]+)?/gi;
         function linkifyProfilePosts() {
             const root = document.getElementById('root');
@@ -261,7 +253,6 @@
             linkifyProfilePosts();
             return r;
         };
-        // периодический вызов — не зависит от мутаций DOM (раскрытие «Читать далее», комментарии)
         setInterval(() => { try { joinProfilePostLinks(); linkifyProfilePosts(); } catch (e) { } }, 1500);
 
         document.addEventListener('click', e => {

@@ -104,13 +104,11 @@
                 copy.addEventListener('click', async e => {
                     e.preventDefault(); e.stopPropagation();
                     try {
-                        // 1. Открываем нативную модалку сайта (одноразовый «пропуск» для capture-перехватчика)
                         window.__vpPvPass = true;
                         const btn = document.querySelector('[data-halloween-pumpkin]');
                         if (btn) btn.click();
                         window.__vpPvPass = false;
 
-                        // 2. Ждём, пока нативная модалка появится, ищем «Скопировать»
                         const findNative = () => {
                             const dialogs = [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')];
                             for (const d of dialogs) {
@@ -134,16 +132,12 @@
                             return;
                         }
 
-                        // 3. Жмём нативную «Скопировать» — сайт сам делает композит и пишет в буфер
                         nat.copyB.click();
 
-                        // 4. Ждём немножко, чтобы сайт успел сделать свою работу
                         await new Promise(r => setTimeout(r, 400));
 
-                        // 5. Закрываем нативную модалку (не мешая сайту)
                         if (nat.closeB) nat.closeB.click();
 
-                        // 6. Наш тост
                         showToast('Картинка скопирована', 'Вставь её в пост или в чат');
                         copy.textContent = 'Готово';
                         setTimeout(() => copy.textContent = 'Скопировать', 1200);

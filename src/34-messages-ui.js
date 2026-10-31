@@ -19,7 +19,6 @@
             names.forEach(n => { if (!msgPeople.has(n)) msgPeople.set(n, { id: 'u:' + n, login: n, ava: '👤', name: n, last: 'Тоже с ИТД X · напиши первым', time: '', unread: 0, msgs: [] }); });
             MSG_DIALOGS = [MSG_SUPPORT, ...names.map(n => msgPeople.get(n))];
             onUpdate();
-            // hcData догружается лениво через IntersectionObserver в renderList (см. msgLazyObserver)
         }
         const MSG_ICON = {
             back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
@@ -423,7 +422,6 @@
             root.addEventListener('error', e => { const im = e.target; if (im && im.tagName === 'IMG' && im.closest('.vp-msgs-ava')) im.replaceWith(document.createTextNode('👤')); }, true);
 
             let supDir = false;
-            // Ленивая подгрузка профилей из API: только для видимых строк списка
             const msgLazyTried = new Set();
             let msgLazyObserver = null;
             function msgLazyLoad(d, rowEl) {
