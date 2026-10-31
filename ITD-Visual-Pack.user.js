@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.8.3
+// @version      3.8.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -8127,6 +8127,9 @@ var __vpBannerAuto = (() => {
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.8.4', '31 октября 2026', [
+                'Галочка: если человек не заходил с модом больше 3 месяцев или галочку сняли вручную, она становится серой — это значит «не подтверждён». Чтобы вернуть, зайди на сайт с модом: галочка снова уйдёт на подтверждение'
+            ]],
             ['3.8.3', '31 октября 2026', [
                 'Баннер профиля: мод сам подбирает рисунок под лимит сайта — картинка получается заметно детальнее',
                 'Баннер профиля: подбор идёт быстро и не подвешивает сайт, а при ошибке показывается понятная причина'
@@ -8788,6 +8791,7 @@ var __vpBannerAuto = (() => {
                 approved: parseOwnerList(comments, 'ITDX-V'),
                 seen: parseOwnerList(comments, 'ITDX-SEEN'),
                 cooldown: parseOwnerList(comments, 'ITDX-C'),
+                revoked: parseOwnerList(comments, 'ITDX-B'),
                 request: parseRequests(comments),
             };
         }
@@ -8874,13 +8878,15 @@ var __vpBannerAuto = (() => {
                     if (!name || verifiedUsers[name] || !isAuthorCode(c.author, parsed)) continue;
                     const a = c.author, ava = a.avatar && (a.avatar.url || a.avatar) || a.avatarUrl || a.emoji;
                     const seen = Math.max(lookAt.get(a.id) || 0, GONE_FROM);
-                    const gone = a.id !== OWNER_ID && a.id !== myId && !(myUsername && name === myUsername) && now - seen > GONE_MS;
+                    const revokedAt = ((lists.revoked && lists.revoked.get(String(a.id).toLowerCase())) || 0) * 1000;
+                    const isRevoked = revokedAt > 0 && seen <= revokedAt;
+                    const gone = !isRevoked && a.id !== OWNER_ID && a.id !== myId && !(myUsername && name === myUsername) && now - seen > GONE_MS;
                     verifiedUsers[name] = {
                         code: parsed.code, commentId: c.id, hasMod: true, flags: parsed.flags,
                         id: a.id || undefined,
                         displayName: a.displayName || a.display_name || undefined,
                         avatar: typeof ava === 'string' ? ava : undefined,
-                        state: a.id === OWNER_ID ? 'approved' : gone ? 'gone' : resolveVerifyState(a.id, lists, now),
+                        state: a.id === OWNER_ID ? 'approved' : isRevoked ? 'revoked' : gone ? 'gone' : resolveVerifyState(a.id, lists, now),
                         look: gone ? undefined : looks.get(a.id) || undefined
                     };
                 }
@@ -8903,7 +8909,13 @@ var __vpBannerAuto = (() => {
             if (!myId || myId === OWNER_ID) return;
             try {
                 const all = await loadVerificationComments();
-                if (!verifyTimeline(myId, parseAllOwnerLists(all), Date.now()).needRequest) return;
+                const lists = parseAllOwnerLists(all);
+                const myLookC = all.find(c => c.author && c.author.id === myId && parseLook(c.content));
+                const myLook = myLookC ? parseLook(myLookC.content) : null;
+                const mySeen = Math.max((myLook && myLook.t ? myLook.t : 0) * 864e5, GONE_FROM);
+                const revokedAt = ((lists.revoked && lists.revoked.get(String(myId).toLowerCase())) || 0) * 1000;
+                if (revokedAt > 0 && mySeen <= revokedAt) return;
+                if (!verifyTimeline(myId, lists, Date.now()).needRequest) return;
                 const content = sealText('ITDX-R ' + Math.floor(Date.now() / 1000));
                 const mine = all.find(c => c.author && c.author.id === myId && /^ITDX-R \d+$/.test(openText(c.content)));
                 const res = mine
@@ -9136,7 +9148,7 @@ var __vpBannerAuto = (() => {
                             if (info.state === 'approved') {
                                 verifiedSet.add(name.toLowerCase());
                                 if (info.id) approvedIds.add(String(info.id).toLowerCase());
-                            } else if (info.state === 'quarantine') verifiedPendingSet.add(name.toLowerCase());
+                            } else if (info.state === 'quarantine' || info.state === 'revoked') verifiedPendingSet.add(name.toLowerCase());
                         }
                     }
                     const allNames = new Set([...verifiedSet, ...verifiedPendingSet]);
