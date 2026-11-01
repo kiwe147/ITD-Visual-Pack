@@ -4994,7 +4994,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         const CALL_CSS = `
         .vp-call { position: fixed; inset: 0; z-index: 2147483600; display: flex; align-items: center; justify-content: center; padding: 16px;
             background: rgba(0, 0, 0, .9); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); animation: vpCallIn .25s ease; font-family: inherit; }
-        .vp-call-card { width: min(300px, 100%); box-sizing: border-box; padding: 34px 22px 24px; border-radius: 22px; background: #2b2d31; color: #f2f3f5; text-align: center;
+        .vp-call-card { width: min(380px, 100%); box-sizing: border-box; padding: 28px 16px 20px; border-radius: 22px; background: #2b2d31; color: #f2f3f5; text-align: center;
             box-shadow: 0 24px 70px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(255, 255, 255, .06); }
         .vp-call-ava { position: relative; width: 132px; height: 132px; margin: 0 auto 22px; border-radius: 50%; background: #fff; display: grid; place-items: center; }
         .vp-call-ava::before, .vp-call-ava::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .5); animation: vpCallRing 1.6s ease-out infinite; }
@@ -5003,12 +5003,17 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-call-ava img { position: relative; z-index: 1; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
         .vp-call-name { font-size: 19px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; line-height: 1.2; }
         .vp-call-sub { margin-top: 6px; font-size: 15px; color: #b5bac1; min-height: 0; font-variant-numeric: tabular-nums; }
-        .vp-call-btns { display: flex; gap: 14px; justify-content: center; margin-top: 26px; }
-        .vp-call-btns button { flex: 1 1 0; max-width: 118px; height: 48px; border: 0; border-radius: 12px; color: #fff; font: 700 15px/1 inherit; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; gap: 7px; transition: filter .15s, transform .15s; }
+        .vp-call-btns { display: flex; gap: 8px; justify-content: center; margin-top: 20px; }
+        .vp-call-btns button { flex: 1 1 0; min-width: 0; height: 44px; padding: 0 8px; border: 0; border-radius: 12px; color: #fff; font: 700 13px/1 inherit; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 5px; transition: filter .15s, transform .15s; }
+        .vp-call-btns button span { overflow: hidden; text-overflow: ellipsis; }
+        @media (max-width: 420px) {
+            .vp-call-btns button { flex: 0 0 44px; border-radius: 50%; padding: 0; }
+            .vp-call-btns button span { display: none; }
+        }
         .vp-call-btns button:hover { filter: brightness(1.12); }
         .vp-call-btns button:active { transform: scale(.96); }
-        .vp-call-btns svg { width: 18px; height: 18px; }
+        .vp-call-btns svg { width: 16px; height: 16px; flex: 0 0 auto; }
         .vp-call-no { background: #248046; }
         .vp-call-yes { background: #248046; }
         .vp-call.vp-out { animation: vpCallOut .3s ease forwards; }
@@ -5026,9 +5031,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-call-end svg { transform: rotate(135deg); }
         .vp-call-mute { background: #4e5058; }
         .vp-call-mute.vp-on { background: #f2f3f5; color: #111; }
-        .vp-call-note { margin-top: 16px; font-size: 11.5px; line-height: 1.35; color: #80848e; }
+        .vp-call-note { margin-top: 10px; font-size: 11px; line-height: 1.35; color: #80848e; }
         .vp-call-audio { display: none; }
-        .vp-call-tag { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 18px; font-size: 12.5px; font-weight: 600; color: #23a55a; }
+        .vp-call-tag { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 14px; font-size: 12px; font-weight: 600; color: #23a55a; }
         .vp-call-mini .vp-call-tag { display: none; }
         .vp-call-lv { display: none; gap: 14px; justify-content: center; margin-top: 12px; font-size: 12px; color: #b5bac1; }
         .vp-call-real.vp-live:not(.vp-call-mini) .vp-call-lv { display: flex; }
@@ -5041,6 +5046,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-call-mini .vp-call-info { display: none; }
         .vp-call-real.vp-live .vp-call-ava::before, .vp-call-real.vp-live .vp-call-ava::after { animation: none; opacity: 0; }
         .vp-call.vp-call-mini { inset: auto 16px 16px auto; padding: 0; background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+        .vp-call-screenwrap.vp-full { bottom: 0 !important; right: 0 !important; }
         .vp-call-mini .vp-call-card { width: auto; max-width: calc(100vw - 32px); padding: 8px 8px 8px 16px; display: flex; align-items: center; gap: 12px; text-align: left; cursor: pointer; }
         .vp-call-mini .vp-call-ava, .vp-call-mini .vp-call-note, .vp-call-mini .vp-call-min { display: none; }
         .vp-call-mini .vp-call-name { font-size: 14px; text-transform: none; letter-spacing: 0; }
@@ -5050,9 +5056,15 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-call-mini .vp-call-btns button span { display: none; }
         .vp-call-stage { display: none; }
         .vp-call-preview { display: none; }
-        .vp-call-screenvid { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: contain; background: #000; z-index: 2147483598; display: none; }
-        .vp-call-screenvid.vp-on { display: block; }
+        .vp-call-screenwrap { position: fixed; right: 16px; bottom: 92px; width: min(38vw, 620px); aspect-ratio: 16/9; z-index: 2147483601; display: none;
+            border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,.18); box-shadow: 0 10px 40px rgba(0,0,0,.7); background: #000; cursor: zoom-in; }
+        .vp-call-screenwrap.vp-on { display: block; }
+        .vp-call-screenwrap.vp-full { left: 0; top: 0; right: auto; bottom: auto; width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0; border: 0; box-shadow: none; cursor: zoom-out; }
+        .vp-call-screenvid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
+        .vp-call-screentag { position: absolute; left: 8px; bottom: 8px; padding: 3px 9px; border-radius: 7px; font-size: 10.5px; font-weight: 600; color: #fff; background: rgba(0,0,0,.62); pointer-events: none; }
         
+        .vp-call-screen { background: #4e5058; }
+        .vp-call-screen.vp-on { background: #248046; }
         .vp-call-who { display: flex; flex-direction: column; align-items: center; }
         .vp-call-txt { display: flex; flex-direction: column; align-items: center; }
         .vp-call.vp-watching { align-items: flex-end; justify-content: center; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 0 0 14px; pointer-events: none; }
@@ -5070,8 +5082,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-call.vp-watching .vp-call-btns { margin: 0 0 0 auto; gap: 8px; flex: 0 0 auto; }
         .vp-call.vp-watching .vp-call-btns button { max-width: none; width: 40px; height: 40px; padding: 0; border-radius: 50%; flex: 0 0 auto; }
         .vp-call.vp-watching .vp-call-btns button span { display: none; }
-        .vp-call.vp-watching .vp-call-stage { display: block; position: fixed; right: 16px; bottom: 92px; width: 220px; aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; box-shadow: 0 6px 22px rgba(0,0,0,.7); z-index: 2147483599; background: #000; border: 1px solid rgba(255,255,255,.14); }
-        .vp-call.vp-watching .vp-call-stage::after { content: 'твой экран'; position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 600; color: #fff; background: rgba(0,0,0,.6); pointer-events: none; }
+        .vp-call.vp-watching.vp-sharing .vp-call-stage { display: block; position: fixed; left: 16px; bottom: 16px; width: 220px; aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; box-shadow: 0 6px 22px rgba(0,0,0,.7); z-index: 2147483601; background: #000; border: 1px solid rgba(255,255,255,.14); }
+        .vp-call.vp-watching.vp-sharing .vp-call-stage::after { content: 'твой экран'; position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 600; color: #fff; background: rgba(0,0,0,.6); pointer-events: none; }
         .vp-call.vp-sharing:not(.vp-watching) .vp-call-stage::after { content: 'твой экран'; position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 600; color: #fff; background: rgba(0,0,0,.6); pointer-events: none; }
         .vp-call-stage { position: relative; }
         .vp-call.vp-watching .vp-call-preview { display: block; width: 100%; height: 100%; object-fit: contain; background: #000; }
@@ -5229,30 +5241,56 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             try { c.ac = new (window.AudioContext || window.webkitAudioContext)(); if (c.ac.state === 'suspended') c.ac.resume().catch(() => { }); } catch (e) { c.ac = null; }
         }
         function callScreenPrep(c) {
+            const w = document.createElement('div');
+            w.className = 'vp-call-screenwrap';
             const v = document.createElement('video');
             v.className = 'vp-call-screenvid';
             v.autoplay = true; v.playsInline = true; v.muted = true;
-            document.body.appendChild(v);
+            w.appendChild(v);
+            const tag = document.createElement('div');
+            tag.className = 'vp-call-screentag';
+            tag.textContent = 'экран собеседника · клик = во весь экран';
+            w.appendChild(tag);
+            w.addEventListener('click', function () { w.classList.toggle('vp-full'); });
+            document.body.appendChild(w);
             c.screenVideo = v;
+            c.screenWrap = w;
+            c.screenTag = tag;
+        }
+        function callScreenAudioPrep(c) {
+            if (c.screenAudio) return;
             const a = document.createElement('audio');
-            a.className = 'vp-call-audio';
+            a.className = 'vp-call-audio vp-call-screen-audio';
             a.autoplay = true; a.setAttribute('playsinline', '');
             document.body.appendChild(a);
             c.screenAudio = a;
         }
+        function callScreenAudioAttach(c, st) {
+            if (!c.screenAudio) callScreenAudioPrep(c);
+            c.screenAudio.srcObject = st;
+            const p = c.screenAudio.play();
+            if (p && p.catch) p.catch(() => {
+                // Браузер не дал autoplay — покажем кнопку «включить звук» (та же, что для звонка).
+                if (!c.blocked) { c.blocked = true; callPaint(c); }
+            });
+        }
         function callScreenDrop(c) {
             c.remoteScreenOn = false;
             c.remoteScreen = null;
-            if (c.screenVideo) { c.screenVideo.srcObject = null; c.screenVideo.remove(); c.screenVideo = null; }
+            c.screenStreamId = null;
+            if (c.screenVideo) { c.screenVideo.srcObject = null; c.screenVideo = null; }
+            if (c.screenTag) { c.screenTag = null; }
+            if (c.screenWrap) { c.screenWrap.remove(); c.screenWrap = null; }
             if (c.screenAudio) { c.screenAudio.srcObject = null; c.screenAudio.remove(); c.screenAudio = null; }
             callSharePaint(c);
             callPaint(c);
         }
         function callPlay(c) {
-            const a = c.audio;
-            if (!a || c.state === 'end') return;
+            if (c.state === 'end') return;
             if (c.ac && c.ac.state === 'suspended') c.ac.resume().catch(() => { });
-            if (!a.srcObject) return;
+            if (c.screenAudio && c.screenAudio.srcObject) { const sp = c.screenAudio.play(); if (sp && sp.catch) sp.catch(() => { }); }
+            const a = c.audio;
+            if (!a || !a.srcObject) return;
             const p = a.play();
             if (p) p.then(() => { if (c.blocked) { c.blocked = false; callPaint(c); } }, e => {
                 if (!e || e.name !== 'NotAllowedError' || c.blocked) return;
@@ -5317,24 +5355,12 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             c.polite = c.dir !== 'out';
             c.makingOffer = false;
             c.ignoreOffer = false;
-            pc.onnegotiationneeded = async () => {
-                // Только ре-негоциация в живом звонке. Первичный offer делает callStart/callAccept.
-                if (c.state !== 'talk' || !c.pc) return;
-                if (pc.signalingState !== 'stable') return;
-                try {
-                    c.makingOffer = true;
-                    await pc.setLocalDescription();
-                    await callGather(pc);
-                    if (c.state === 'end') return;
-                    const sdp = await callPackFit(pc.localDescription.sdp);
-                    await callSig(c.uid, 4, c.id, sdp);
-                    setTimeout(function () { try { msgSync(); } catch (err) { } }, 1500);
-                } catch (e) { logErr('звонок: ре-негоциация', e); }
-                finally { c.makingOffer = false; }
-            };
+            pc.onnegotiationneeded = () => { callNegotiate(c); };
             pc.ontrack = e => {
+                const sid = e.streams[0] ? e.streams[0].id : ('t:' + e.track.id);
                 if (e.track.kind === 'video') {
-                    // Демонстрация экрана собеседника: видео + его звук отдельными элементами.
+                    // Видео = демонстрация экрана (камера в звонке не используется).
+                    c.screenStreamId = sid;
                     if (!c.screenVideo) callScreenPrep(c);
                     const st = e.streams[0] || new MediaStream([e.track]);
                     c.remoteScreen = st;
@@ -5345,11 +5371,24 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                         c.screenVideo.addEventListener('canplay', function () { c.screenVideo && c.screenVideo.play().catch(function () { }); });
                         setTimeout(function () { c.screenVideo && c.screenVideo.play().catch(function () { }); }, 500);
                     }
-                    const at = st.getAudioTracks()[0];
-                    if (at && c.screenAudio) { c.screenAudio.srcObject = new MediaStream([at]); c.screenAudio.play().catch(() => { }); }
+                    // Если аудио экрана пришло раньше видео — теперь знаем его поток, переносим.
+                    if (c.pendingScreenAudio && c.pendingScreenAudioId === sid) {
+                        callScreenAudioAttach(c, c.pendingScreenAudio);
+                        c.pendingScreenAudio = null; c.pendingScreenAudioId = null;
+                    }
                     c.remoteScreenOn = true;
                     callSharePaint(c);
                     callPaint(c);
+                    return;
+                }
+                // Аудио: различаем микрофон и звук экрана по id потока.
+                let isScreenAudio = false;
+                if (c.screenStreamId) isScreenAudio = (sid === c.screenStreamId);
+                else if (c.micStreamId) isScreenAudio = (sid !== c.micStreamId);
+                if (!isScreenAudio && !c.micStreamId) c.micStreamId = sid;
+                if (isScreenAudio) {
+                    if (!c.screenAudio) callScreenAudioPrep(c);
+                    callScreenAudioAttach(c, new MediaStream([e.track]));
                     return;
                 }
                 if (!c.audio) callAudioPrep(c);
@@ -5370,6 +5409,24 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 }
             };
             return pc;
+        }
+        async function callNegotiate(c) {
+            if (!c.pc || c.state !== 'talk') return;
+            const pc = c.pc;
+            if (pc.signalingState !== 'stable' || c.makingOffer) {
+                if (!c.negT) c.negT = setTimeout(function () { c.negT = null; callNegotiate(c); }, 500);
+                return;
+            }
+            try {
+                c.makingOffer = true;
+                await pc.setLocalDescription();
+                await callGather(pc);
+                if (c.state === 'end') return;
+                const sdp = await callPackFit(pc.localDescription.sdp);
+                await callSig(c.uid, 4, c.id, sdp);
+                setTimeout(function () { try { msgSync(); } catch (err) { } }, 1500);
+            } catch (e) { logErr('звонок: ре-негоциация', e); }
+            finally { c.makingOffer = false; }
         }
         function callDc(c, dc) {
             c.dc = dc;
@@ -5598,7 +5655,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (!el) return;
             el.classList.toggle('vp-sharing', !!c.screen);
             el.classList.toggle('vp-watching', !!c.remoteScreenOn);
-            if (c.screenVideo) c.screenVideo.classList.toggle('vp-on', !!c.remoteScreenOn);
+            if (c.screenWrap) c.screenWrap.classList.toggle('vp-on', !!c.remoteScreenOn);
             const pv = el.querySelector('.vp-call-preview');
             if (!pv) return;
             if (c.screen) {
@@ -5607,6 +5664,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             } else {
                 pv.srcObject = null;
             }
+
         }
         async function callRenegotiateIn(c, data) {
             const pc = c.pc;
@@ -5616,6 +5674,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const collision = c.makingOffer || pc.signalingState !== 'stable';
                 c.ignoreOffer = !c.polite && collision;
                 if (c.ignoreOffer) return;
+                if (collision && c.polite && pc.signalingState === 'have-local-offer') {
+                    await pc.setLocalDescription({ type: 'rollback' });
+                }
                 await pc.setRemoteDescription(desc);
                 await pc.setLocalDescription();
                 await callGather(pc);
@@ -5716,14 +5777,18 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     else callEnd(c, r === 1 ? 'Звонок отклонён' : r === 2 ? 'Занято: у собеседника другой звонок' : r === 3 ? 'Не отвечает'
                         : c.state === 'talk' ? 'Собеседник положил трубку' : c.dir === 'out' ? 'Звонок сброшен' : 'Звонок отменён', null);
                 } else if (ans) callAnswered(c, ans.data);
-                const reIn = sigs.find(s => s.dir === 'in' && s.type === 4 && s.uid === c.uid && s.id === c.id);
-                const reOut = sigs.find(s => s.dir === 'in' && s.type === 5 && s.uid === c.uid && s.id === c.id);
-                if (reIn && c.state === 'talk' && reIn.ts > (c.lastReIn || 0)) {
-                    c.lastReIn = reIn.ts;
+                const reIns = sigs.filter(s => s.dir === 'in' && s.type === 4 && s.uid === c.uid && s.id === c.id);
+                const reOuts = sigs.filter(s => s.dir === 'in' && s.type === 5 && s.uid === c.uid && s.id === c.id);
+                const reIn = reIns.length ? reIns[reIns.length - 1] : null;
+                const reOut = reOuts.length ? reOuts[reOuts.length - 1] : null;
+                const reInKey = reIn ? reIn.ts + '|' + reIn.data.length : '';
+                const reOutKey = reOut ? reOut.ts + '|' + reOut.data.length : '';
+                if (reIn && c.state === 'talk' && reInKey !== c.lastReInKey) {
+                    c.lastReInKey = reInKey;
                     callRenegotiateIn(c, reIn.data);
                 }
-                if (reOut && c.state === 'talk' && reOut.ts > (c.lastReOut || 0)) {
-                    c.lastReOut = reOut.ts;
+                if (reOut && c.state === 'talk' && reOutKey !== c.lastReOutKey) {
+                    c.lastReOutKey = reOutKey;
                     callRenegotiateOut(c, reOut.data);
                 }
             }
