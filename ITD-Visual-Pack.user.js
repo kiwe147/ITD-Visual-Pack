@@ -5011,7 +5011,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-call-btns svg { width: 18px; height: 18px; }
         .vp-call-no { background: #248046; }
         .vp-call-yes { background: #248046; }
-        .vp-call.vp-talk .vp-call-btns { visibility: hidden; }
         .vp-call.vp-out { animation: vpCallOut .3s ease forwards; }
         @keyframes vpCallIn { from { opacity: 0; } }
         @keyframes vpCallOut { to { opacity: 0; } }
@@ -5054,13 +5053,31 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-call-screenvid { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: contain; background: #000; z-index: 2147483598; display: none; }
         .vp-call-screenvid.vp-on { display: block; }
         
-        .vp-call.vp-watching .vp-call-card { width: min(360px, 92vw); }
-        .vp-call.vp-watching .vp-call-stage { display: block; position: absolute; right: 10px; bottom: 10px; width: 120px; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.6); }
+        .vp-call-who { display: flex; flex-direction: column; align-items: center; }
+        .vp-call-txt { display: flex; flex-direction: column; align-items: center; }
+        .vp-call.vp-watching { align-items: flex-end; justify-content: center; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 0 0 14px; pointer-events: none; }
+        .vp-call.vp-watching .vp-call-card { width: min(560px, 96vw); padding: 8px 14px; border-radius: 16px; margin: 0 auto; pointer-events: auto;
+            display: flex; flex-direction: row; align-items: center; gap: 12px; text-align: left;
+            background: rgba(20, 21, 23, .96); box-shadow: 0 8px 30px rgba(0,0,0,.55); }
+        .vp-call.vp-watching .vp-call-who { flex-direction: row; gap: 10px; min-width: 0; }
+        .vp-call.vp-watching .vp-call-txt { align-items: flex-start; min-width: 0; }
+        .vp-call.vp-watching .vp-call-ava { width: 38px; height: 38px; margin: 0; flex: 0 0 auto; }
+        .vp-call.vp-watching .vp-call-emoji { font-size: 22px; }
+        .vp-call.vp-watching .vp-call-name { font-size: 14px; font-weight: 700; letter-spacing: 0; text-transform: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+        .vp-call.vp-watching .vp-call-sub { margin: 1px 0 0; font-size: 12px; color: #b5bac1; }
+        .vp-call.vp-watching .vp-call-note, .vp-call.vp-watching .vp-call-tag, .vp-call.vp-watching .vp-call-min, .vp-call.vp-watching .vp-call-info { display: none; }
+        .vp-call.vp-watching .vp-call-lv { display: none !important; }
+        .vp-call.vp-watching .vp-call-btns { margin: 0 0 0 auto; gap: 8px; flex: 0 0 auto; }
+        .vp-call.vp-watching .vp-call-btns button { max-width: none; width: 40px; height: 40px; padding: 0; border-radius: 50%; flex: 0 0 auto; }
+        .vp-call.vp-watching .vp-call-btns button span { display: none; }
+        .vp-call.vp-watching .vp-call-stage { display: block; position: fixed; right: 16px; bottom: 92px; width: 220px; aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; box-shadow: 0 6px 22px rgba(0,0,0,.7); z-index: 2147483599; background: #000; border: 1px solid rgba(255,255,255,.14); }
+        .vp-call.vp-watching .vp-call-stage::after { content: 'твой экран'; position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 600; color: #fff; background: rgba(0,0,0,.6); pointer-events: none; }
+        .vp-call.vp-sharing:not(.vp-watching) .vp-call-stage::after { content: 'твой экран'; position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 600; color: #fff; background: rgba(0,0,0,.6); pointer-events: none; }
+        .vp-call-stage { position: relative; }
         .vp-call.vp-watching .vp-call-preview { display: block; width: 100%; height: 100%; object-fit: contain; background: #000; }
-        .vp-call.vp-sharing .vp-call-stage { display: block; margin: 0 auto 14px; width: 100%; max-width: 260px; aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; background: #000; }
-        .vp-call.vp-sharing .vp-call-preview { display: block; width: 100%; height: 100%; object-fit: contain; }
-        .vp-call.vp-sharing .vp-call-ava { width: 72px; height: 72px; margin-bottom: 12px; }
-        .vp-call.vp-watching .vp-call-ava { width: 72px; height: 72px; margin-bottom: 12px; }
+        .vp-call.vp-sharing:not(.vp-watching) .vp-call-stage { display: block; margin: 0 auto 14px; width: 100%; max-width: 260px; aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; background: #000; }
+        .vp-call.vp-sharing:not(.vp-watching) .vp-call-preview { display: block; width: 100%; height: 100%; object-fit: contain; }
+        .vp-call.vp-sharing:not(.vp-watching) .vp-call-ava { width: 72px; height: 72px; margin-bottom: 12px; }
         .vp-call-screen.vp-on { background: #248046; }`;
         function callTone(kind) {
             let ac, t = 0;
@@ -5118,26 +5135,39 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         function callSig(uid, type, id, data) { return msgSend(uid, '', false, null, cat(new Uint8Array([4, type]), be32(id), data || new Uint8Array(0))); }
         function sdpSlim(sdp, drop) {
             const lines = sdp.split(/\r?\n/).filter(Boolean);
-            const audio = new Set(), video = new Set();
+            const audio = new Set(), video = new Set(), vrank = {};
             let bundle = false;
             for (const l of lines) {
                 if (l.startsWith('a=group:BUNDLE')) bundle = true;
                 const m = l.match(/^a=rtpmap:(\d+) (opus|VP8|VP9|H264)\//i);
-                if (m) (m[2].toLowerCase() === 'opus' ? audio : video).add(m[1]);
+                if (m) {
+                    const name = m[2].toLowerCase();
+                    if (name === 'opus') audio.add(m[1]);
+                    else { video.add(m[1]); vrank[m[1]] = name === 'vp9' ? 3 : name === 'h264' ? 2 : 1; }
+                }
             }
             const out = [];
             let sec = -1, isVideo = false, videoPt = null;
             // Оставляем ОДИН видеокодек — иначе SDP не влезет в лимит сообщения.
             for (const l of lines) {
                 if (/^m=video /.test(l)) {
-                    const pts = l.split(' ').slice(3);
-                    videoPt = pts.find(p => video.has(p)) || pts[0];
+                    const pts = l.split(' ').slice(3).filter(p => video.has(p));
+                    pts.sort((a, b) => (vrank[b] || 0) - (vrank[a] || 0));
+                    videoPt = pts[0] || null;
                     break;
                 }
             }
             for (let l of lines) {
                 if (l.startsWith('m=')) { sec++; isVideo = /^m=video /.test(l); }
-                if ((/^a=extmap:/.test(l) && !/sdes:mid/.test(l)) || /^a=(rtcp-fb|extmap-allow-mixed|simulcast|rid):/.test(l)) continue;
+                if ((/^a=extmap:/.test(l) && !/sdes:mid/.test(l)) || /^a=(extmap-allow-mixed|simulcast|rid):/.test(l)) continue;
+                if (/^a=rtcp-fb:/.test(l)) {
+                    const fp = l.match(/^a=rtcp-fb:(\d+) (.+)$/);
+                    if (!fp) continue;
+                    const isV = !!isVideo;
+                    if (isV && videoPt && fp[1] !== videoPt) continue;
+                    if (!isV && audio.size && !audio.has(fp[1])) continue;
+                    if (!/\b(nack|nack pli|transport-cc|goog-remb|ccm fir)\b/.test(fp[2])) continue;
+                }
                 if (/^a=candidate:/.test(l) && (/^a=candidate:\S+ \d+ tcp /i.test(l) || (bundle && sec > 0) || (drop && drop(l)))) continue;
                 const pt = l.match(/^a=(?:rtpmap|fmtp):(\d+)/);
                 const keep = isVideo ? video : audio;
@@ -5290,6 +5320,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             pc.onnegotiationneeded = async () => {
                 // Только ре-негоциация в живом звонке. Первичный offer делает callStart/callAccept.
                 if (c.state !== 'talk' || !c.pc) return;
+                if (pc.signalingState !== 'stable') return;
                 try {
                     c.makingOffer = true;
                     await pc.setLocalDescription();
@@ -5366,7 +5397,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             el.className = 'vp-call vp-call-real';
             el.innerHTML = `<div class="vp-call-card" role="dialog" aria-label="Звонок"><button type="button" class="vp-call-min" title="Свернуть">${svgIcon('<path d="M6 9l6 6 6-6"/>', 18)}</button>
                 <div class="vp-call-stage"><video class="vp-call-preview" autoplay playsinline muted></video></div>
-                <div class="vp-call-ava"></div><div class="vp-call-name"></div><div class="vp-call-sub"></div>
+                <div class="vp-call-who"><div class="vp-call-ava"></div><div class="vp-call-txt"><div class="vp-call-name"></div><div class="vp-call-sub"></div></div></div>
                 <div class="vp-call-lv"><span data-who="me">ты<b><i></i></b></span><span data-who="them"></span></div><div class="vp-call-btns"></div>
                 <div class="vp-call-tag">${svgIcon('<path d="M4 20v-3M9 20v-7M14 20v-11M19 20V4"/>', 14)}Ловит даже на парковке</div>
                 <div class="vp-call-note">Звук идёт напрямую между вами, мимо серверов ИТД. Собеседнику виден твой IP-адрес</div>
@@ -5510,7 +5541,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 callNet.lastSync = 0;
             } catch (e) { logErr('звонок', e); callEnd(c, e.message || 'Не вышло позвонить', c.offered ? 0 : null); }
         }
-        const CALL_SCREEN = { w: 2560, h: 1440, fps: 30, bitrate: 12000000 };
+        const CALL_SCREEN = { w: 2560, h: 1440, fps: 60, bitrate: 40000000 };
         function callShareSupported() {
             return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) && !matchMedia('(pointer: coarse)').matches;
         }
@@ -5530,11 +5561,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (c.screen) { callUnshare(c); return; }
             try {
                 const stream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { width: { max: CALL_SCREEN.w }, height: { max: CALL_SCREEN.h }, frameRate: { max: CALL_SCREEN.fps } },
+                    video: { width: { ideal: CALL_SCREEN.w }, height: { ideal: CALL_SCREEN.h }, frameRate: { ideal: CALL_SCREEN.fps, max: CALL_SCREEN.fps } },
                     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
                 });
                 if (c.state !== 'talk') { stream.getTracks().forEach(t => t.stop()); return; }
                 const vt = stream.getVideoTracks()[0], at = stream.getAudioTracks()[0] || null;
+                try { vt.contentHint = 'detail'; } catch (e) { }
+                if (at) { try { at.contentHint = 'music'; } catch (e) { } }
                 const vs = c.pc.addTrack(vt, stream);
                 await callShareTune(vs);
                 if (at) c.pc.addTrack(at, stream);
