@@ -5216,6 +5216,39 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); ok(); } });
             });
         }
+        async function callNoiseClean(c, stream) {
+            if (!CFG.noise || !c.ac) return stream;
+            try {
+                const src = c.ac.createMediaStreamSource(stream);
+                const hp = c.ac.createBiquadFilter();
+                hp.type = 'highpass'; hp.frequency.value = CFG.noiseHighpass; hp.Q.value = 0.7;
+                const lp = c.ac.createBiquadFilter();
+                lp.type = 'lowpass'; lp.frequency.value = CFG.noiseLowpass; lp.Q.value = 0.7;
+                const comp = c.ac.createDynamicsCompressor();
+                comp.threshold.value = -28; comp.knee.value = 12; comp.ratio.value = 3;
+                comp.attack.value = 0.005; comp.release.value = 0.18;
+                const gate = c.ac.createGain();
+                gate.gain.value = 1;
+                const analyser = c.ac.createAnalyser();
+                analyser.fftSize = 512;
+                const dest = c.ac.createMediaStreamDestination();
+                src.connect(hp).connect(lp).connect(comp).connect(gate).connect(dest);
+                gate.connect(analyser);
+                const buf = new Uint8Array(analyser.fftSize);
+                let open = true;
+                const gateT = setInterval(function () {
+                    if (c.state === 'end') { clearInterval(gateT); return; }
+                    analyser.getByteTimeDomainData(buf);
+                    let sum = 0;
+                    for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+                    const rms = Math.sqrt(sum / buf.length);
+                    const want = rms > CFG.noiseGate ? 1 : 0.25;
+                    if (want !== open) { open = want; gate.gain.setTargetAtTime(want, c.ac.currentTime, 0.06); }
+                }, 60);
+                c.noiseT = gateT;
+                return dest.stream;
+            } catch (e) { logErr('звонок: шумоподавление', e); return stream; }
+        }
         async function callMedia(c) {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('Браузер не даёт микрофон');
             const hint = setTimeout(() => c.state !== 'end' && callSub(c, 'Разреши микрофон — значок в адресной строке'), 6000);
@@ -5228,6 +5261,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             }
             clearTimeout(hint);
             if (c.state === 'end') { c.stream.getTracks().forEach(t => t.stop()); return false; }
+            c.rawStream = c.stream;
+            c.stream = await callNoiseClean(c, c.stream);
             callMeter(c, 'me', c.stream);
             return true;
         }
@@ -5555,6 +5590,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             c.stops.splice(0).forEach(f => f());
             c.timers.forEach(clearTimeout);
             clearInterval(c.tick); clearInterval(c.lvT); clearInterval(c.syncT); clearTimeout(c.lostT); clearTimeout(c.connT);
+            if (c.noiseT) { clearInterval(c.noiseT); c.noiseT = null; }
+            if (c.rawStream) { c.rawStream.getTracks().forEach(t => t.stop()); c.rawStream = null; }
             if (c.wake) { c.wake.release().catch(() => { }); c.wake = null; }
             if (c.pc) try { c.pc.close(); } catch (e) { }
             if (c.screen) { try { c.screen.stream.getTracks().forEach(t => t.stop()); } catch (e) { } c.screen = null; }
@@ -5599,6 +5636,12 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             } catch (e) { logErr('звонок', e); callEnd(c, e.message || 'Не вышло позвонить', c.offered ? 0 : null); }
         }
         const CALL_SCREEN = { w: 2560, h: 1440, fps: 60, bitrate: 40000000 };
+        const CFG = {
+            noise: true,          // своё шумоподавление поверх браузерного
+            noiseHighpass: 90,    // режем гул/ветер/рокот ниже Гц
+            noiseLowpass: 11000,  // режем шипение/цифровой шум выше Гц
+            noiseGate: 0.012      // порог RMS: тише — гасим до 25%, не в ноль
+        };
         function callShareSupported() {
             return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) && !matchMedia('(pointer: coarse)').matches;
         }
