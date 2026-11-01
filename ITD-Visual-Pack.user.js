@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.8.5
+// @version      3.8.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1754,6 +1754,14 @@
             for (let i = 0; i < 40 && isVerifying; i++) await new Promise(r => setTimeout(r, 250));
             if (!localStorage.getItem(VERIFICATION_STORAGE_KEY)) await checkAllComments();
             loadApprovedIds();
+        }
+
+        function myVerifyState() {
+            if (!myUsername) return 'loading';
+            if (!(+GM_getValue('vp_ver_at', 0) || 0)) return 'loading';
+            const info = verifiedInfo(myUsername);
+            if (info && info.state === 'approved') return 'approved';
+            return 'unverified';
         }
 
         let globalHue = 0;
@@ -4993,136 +5001,110 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         const callCss = () => { if (!document.getElementById('vp-call-css')) addCss(CALL_CSS).id = 'vp-call-css'; };
         const CALL_CSS = `
         .vp-call { position: fixed; inset: 0; z-index: 2147483600; display: flex; align-items: center; justify-content: center; padding: 16px;
-            background: rgba(0, 0, 0, .9); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); animation: vpCallIn .25s ease; font-family: inherit; }
-        .vp-call-card { width: min(380px, 100%); box-sizing: border-box; padding: 28px 16px 20px; border-radius: 22px; background: #2b2d31; color: #f2f3f5; text-align: center;
-            box-shadow: 0 24px 70px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(255, 255, 255, .06); }
-        .vp-call-ava { position: relative; width: 132px; height: 132px; margin: 0 auto 22px; border-radius: 50%; background: #fff; display: grid; place-items: center; }
-        .vp-call-ava::before, .vp-call-ava::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .5); animation: vpCallRing 1.6s ease-out infinite; }
+            background: rgba(0,0,0,.9); color: #f2f3f5; font-family: inherit; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+        .vp-call-dock { position: relative; display: flex; width: 100%; align-items: flex-end; justify-content: center; pointer-events: none; }
+        .vp-call-stack { position: relative; display: flex; width: min(430px, 100%); flex: 0 1 auto; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; will-change: width; transition: width .46s cubic-bezier(.22,.8,.24,1); }
+        .vp-call-stack > *:not(.vp-call-fold) { width: 100%; pointer-events: auto; }
+        .vp-call-card-wrap { position: relative; z-index: 10; width: 100%; flex: 0 0 auto; }
+        .vp-call-card { position: relative; display: flex; width: 100%; min-width: 0; align-items: center; gap: 12px; overflow: hidden; padding: 12px 14px; border-radius: 16px; background: #2b2d31; color: #f2f3f5; text-align: left; box-shadow: 0 24px 70px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.06); transition: padding .42s cubic-bezier(.22,.8,.24,1), border-radius .32s ease; }
+        .vp-call-who { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: row; align-items: center; gap: 12px; transition: gap .42s cubic-bezier(.22,.8,.24,1); }
+        .vp-call-txt { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; opacity: 1; visibility: visible; transition: opacity .16s ease, visibility 0s; }
+        .vp-call-ava { position: relative; display: grid; width: 46px; height: 46px; flex: 0 0 46px; margin: 0; place-items: center; border-radius: 50%; background: #fff; }
+        .vp-call-ava::before, .vp-call-ava::after { position: absolute; inset: -6px; border: 3px solid rgba(255,255,255,.5); border-radius: 50%; content: ''; animation: vpCallRing 1.6s ease-out infinite; }
         .vp-call-ava::after { animation-delay: .8s; }
-        .vp-call.vp-talk .vp-call-ava::before, .vp-call.vp-talk .vp-call-ava::after { animation: none; opacity: 0; }
-        .vp-call-ava img { position: relative; z-index: 1; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
-        .vp-call-name { font-size: 19px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; line-height: 1.2; }
-        .vp-call-sub { margin-top: 6px; font-size: 15px; color: #b5bac1; min-height: 0; font-variant-numeric: tabular-nums; }
-        .vp-call-btns { display: flex; gap: 8px; justify-content: center; margin-top: 20px; }
-        .vp-call-btns button { flex: 1 1 0; min-width: 0; height: 44px; padding: 0 8px; border: 0; border-radius: 12px; color: #fff; font: 700 13px/1 inherit; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; gap: 5px; transition: filter .15s, transform .15s; }
-        .vp-call-btns button span { overflow: hidden; text-overflow: ellipsis; }
-        @media (max-width: 420px) {
-            .vp-call-btns button { flex: 0 0 44px; border-radius: 50%; padding: 0; }
-            .vp-call-btns button span { display: none; }
-        }
+        .vp-call-emoji { position: relative; z-index: 1; font-size: 26px; line-height: 1; }
+        .vp-call-ava img { position: relative; z-index: 1; display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+        .vp-call-name { overflow: hidden; max-width: 180px; color: #f2f3f5; font-size: 15px; font-weight: 700; letter-spacing: 0; line-height: 1.2; text-overflow: ellipsis; text-transform: none; white-space: nowrap; }
+        .vp-call-sub { min-height: 0; margin: 1px 0 0; color: #b5bac1; font-size: 12px; font-variant-numeric: tabular-nums; }
+        .vp-call-btns { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 8px; margin: 0 0 0 auto; opacity: 1; visibility: visible; transition: opacity .16s ease, visibility 0s; }
+        .vp-call-btns button { display: flex; width: 46px; height: 46px; flex: 0 0 46px; align-items: center; justify-content: center; gap: 5px; padding: 0 8px; border: 0; border-radius: 50%; color: #fff; font: 700 13px/1 inherit; cursor: pointer; transition: filter .15s ease, transform .15s ease; }
+        .vp-call-btns button span { display: none; overflow: hidden; text-overflow: ellipsis; }
         .vp-call-btns button:hover { filter: brightness(1.12); }
         .vp-call-btns button:active { transform: scale(.96); }
-        .vp-call-btns svg { width: 16px; height: 16px; flex: 0 0 auto; }
-        .vp-call.vp-incoming { align-items: flex-end; justify-content: center; padding: 0 16px 28px; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; pointer-events: none; }
-        .vp-call.vp-incoming .vp-call-card { width: min(430px, 100%); padding: 12px 14px; border-radius: 16px; pointer-events: auto; text-align: left;
-            display: flex; align-items: center; gap: 12px; animation: vpCallRise .34s cubic-bezier(.2,.8,.3,1); }
-        .vp-call.vp-incoming .vp-call-who { flex-direction: row; align-items: center; gap: 12px; min-width: 0; }
-        .vp-call.vp-incoming .vp-call-txt { align-items: flex-start; min-width: 0; }
-        .vp-call.vp-incoming .vp-call-ava { width: 46px; height: 46px; margin: 0; flex: 0 0 auto; }
-        .vp-call.vp-incoming .vp-call-emoji { font-size: 26px; }
-        .vp-call.vp-incoming .vp-call-name { font-size: 15px; font-weight: 700; letter-spacing: 0; text-transform: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
-        .vp-call.vp-incoming .vp-call-sub { margin: 1px 0 0; font-size: 12px; color: #b5bac1; }
-        .vp-call.vp-incoming .vp-call-lv, .vp-call.vp-incoming .vp-call-tag, .vp-call.vp-incoming .vp-call-note,
-        .vp-call.vp-incoming .vp-call-info, .vp-call.vp-incoming .vp-call-stage, .vp-call.vp-incoming .vp-call-min { display: none !important; }
-        .vp-call.vp-incoming .vp-call-btns { margin: 0 0 0 auto; gap: 8px; flex: 0 0 auto; }
-        .vp-call.vp-incoming .vp-call-btns button { width: 46px; height: 46px; padding: 0; border-radius: 50%; max-width: none; flex: 0 0 auto; }
-        .vp-call.vp-incoming .vp-call-btns button span { display: none; }
-        @keyframes vpCallRise { from { transform: translateY(120%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .vp-call.vp-breaking { pointer-events: none; }
-        .vp-call.vp-breaking .vp-call-card { animation: vpRedWave .4s ease-out forwards; }
-        @keyframes vpRedWave {
-            0% { box-shadow: inset 0 0 0 0 rgba(218,55,60,0), 0 24px 70px rgba(0,0,0,.6); }
-            100% { box-shadow: inset 0 0 0 400px rgba(218,55,60,.55), 0 24px 70px rgba(0,0,0,.6); }
-        }
-        .vp-break-half { position: fixed !important; pointer-events: none; z-index: 2147483699; transition: none; }
-        .vp-break-top { animation: vpBreakTop .7s cubic-bezier(.3,.1,.6,1) forwards; }
-        .vp-break-bot { animation: vpBreakBot .7s cubic-bezier(.3,.1,.6,1) forwards; }
-        @keyframes vpBreakTop {
-            0% { transform: translate(0,0) rotate(0); opacity: 1; }
-            100% { transform: translate(-45px, 260px) rotate(-22deg); opacity: 0; }
-        }
-        @keyframes vpBreakBot {
-            0% { transform: translate(0,0) rotate(0); opacity: 1; }
-            100% { transform: translate(45px, 260px) rotate(22deg); opacity: 0; }
-        }
-        .vp-call-no { background: #248046; }
-        .vp-call-yes { background: #248046; }
-        .vp-call.vp-out { animation: vpCallOut .3s ease forwards; }
-        @keyframes vpCallIn { from { opacity: 0; } }
-        @keyframes vpCallOut { to { opacity: 0; } }
-        @keyframes vpCallRing { from { transform: scale(1); opacity: .8; } to { transform: scale(1.35); opacity: 0; } }
-        @media (prefers-reduced-motion: reduce) { .vp-call-ava::before, .vp-call-ava::after { animation: none; opacity: .4; } }
-        .vp-call-real .vp-call-card { position: relative; }
-        .vp-call-min { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .08);
-            color: #b5bac1; cursor: pointer; display: grid; place-items: center; }
-        .vp-call-min:hover { background: rgba(255, 255, 255, .16); color: #fff; }
-        .vp-call-emoji { position: relative; z-index: 1; font-size: 64px; line-height: 1; }
-        .vp-call-real .vp-call-btns button span { white-space: nowrap; }
+        .vp-call-btns svg { width: 18px; height: 18px; flex: 0 0 auto; }
+        .vp-call-no, .vp-call-yes { background: #248046; }
         .vp-call-end { background: #da373c; }
         .vp-call-end svg { transform: rotate(135deg); }
         .vp-call-mute { background: #4e5058; }
         .vp-call-mute.vp-on { background: #f2f3f5; color: #111; }
-        .vp-call-note { margin-top: 10px; font-size: 11px; line-height: 1.35; color: #80848e; }
-        .vp-call-audio { display: none; }
-        .vp-call-tag { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 14px; font-size: 12px; font-weight: 600; color: #23a55a; }
-        .vp-call-mini .vp-call-tag { display: none; }
-        .vp-call-lv { display: none; gap: 14px; justify-content: center; margin-top: 12px; font-size: 12px; color: #b5bac1; }
-        .vp-call-real.vp-live:not(.vp-call-mini) .vp-call-lv { display: flex; }
-        .vp-call-lv span { display: flex; align-items: center; gap: 6px; min-width: 0; }
-        .vp-call-lv em { font-style: normal; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .vp-call-lv b { display: block; width: 44px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; }
-        .vp-call-lv i { display: block; height: 100%; background: #23a55a; transform-origin: 0 50%; transform: scaleX(.04); transition: transform .1s linear; }
-        .vp-call-info { margin-top: 8px; padding: 4px 8px; border: 0; background: none; color: #80848e; font: inherit; font-size: 11.5px; text-decoration: underline; cursor: pointer; }
-        .vp-call-info:hover { color: #b5bac1; }
-        .vp-call-mini .vp-call-info { display: none; }
-        .vp-call-real.vp-live .vp-call-ava::before, .vp-call-real.vp-live .vp-call-ava::after { animation: none; opacity: 0; }
-        .vp-call.vp-call-mini { inset: auto 16px 16px auto; padding: 0; background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
-        .vp-call-screenwrap.vp-full { bottom: 0 !important; right: 0 !important; }
-        .vp-call-mini .vp-call-card { width: auto; max-width: calc(100vw - 32px); padding: 8px 8px 8px 16px; display: flex; align-items: center; gap: 12px; text-align: left; cursor: pointer; }
-        .vp-call-mini .vp-call-ava, .vp-call-mini .vp-call-note, .vp-call-mini .vp-call-min { display: none; }
-        .vp-call-mini .vp-call-name { font-size: 14px; text-transform: none; letter-spacing: 0; }
-        .vp-call-mini .vp-call-sub { margin: 0; font-size: 13px; }
-        .vp-call-mini .vp-call-btns { margin: 0; gap: 6px; }
-        .vp-call-mini .vp-call-btns button { width: 40px; height: 40px; flex: 0 0 auto; padding: 0; border-radius: 50%; }
-        .vp-call-mini .vp-call-btns button span { display: none; }
-        .vp-call-stage { display: none; }
-        .vp-call-preview { display: none; }
-        .vp-call-screenwrap { position: fixed; right: 16px; bottom: 92px; width: min(38vw, 620px); aspect-ratio: 16/9; z-index: 2147483601; display: none;
-            border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,.18); box-shadow: 0 10px 40px rgba(0,0,0,.7); background: #000; cursor: zoom-in; }
-        .vp-call-screenwrap.vp-on { display: block; }
-        .vp-call-screenwrap.vp-full { left: 0; top: 0; right: auto; bottom: auto; width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0; border: 0; box-shadow: none; cursor: zoom-out; }
-        .vp-call-screenvid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
-        .vp-call-screentag { position: absolute; left: 8px; bottom: 8px; padding: 3px 9px; border-radius: 7px; font-size: 10.5px; font-weight: 600; color: #fff; background: rgba(0,0,0,.62); pointer-events: none; }
-        
         .vp-call-screen { background: #4e5058; }
-        .vp-call-screen.vp-on { background: #248046; }
-        .vp-call-who { display: flex; flex-direction: column; align-items: center; }
-        .vp-call-txt { display: flex; flex-direction: column; align-items: center; }
-        .vp-call.vp-watching { align-items: flex-end; justify-content: center; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 0 0 14px; pointer-events: none; }
-        .vp-call.vp-watching .vp-call-card { width: min(560px, 96vw); padding: 8px 14px; border-radius: 16px; margin: 0 auto; pointer-events: auto;
-            display: flex; flex-direction: row; align-items: center; gap: 12px; text-align: left;
-            background: rgba(20, 21, 23, .96); box-shadow: 0 8px 30px rgba(0,0,0,.55); }
-        .vp-call.vp-watching .vp-call-who { flex-direction: row; gap: 10px; min-width: 0; }
-        .vp-call.vp-watching .vp-call-txt { align-items: flex-start; min-width: 0; }
-        .vp-call.vp-watching .vp-call-ava { width: 38px; height: 38px; margin: 0; flex: 0 0 auto; }
-        .vp-call.vp-watching .vp-call-emoji { font-size: 22px; }
-        .vp-call.vp-watching .vp-call-name { font-size: 14px; font-weight: 700; letter-spacing: 0; text-transform: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
-        .vp-call.vp-watching .vp-call-sub { margin: 1px 0 0; font-size: 12px; color: #b5bac1; }
-        .vp-call.vp-watching .vp-call-note, .vp-call.vp-watching .vp-call-tag, .vp-call.vp-watching .vp-call-min, .vp-call.vp-watching .vp-call-info { display: none; }
-        .vp-call.vp-watching .vp-call-lv { display: none !important; }
-        .vp-call.vp-watching .vp-call-btns { margin: 0 0 0 auto; gap: 8px; flex: 0 0 auto; }
-        .vp-call.vp-watching .vp-call-btns button { max-width: none; width: 40px; height: 40px; padding: 0; border-radius: 50%; flex: 0 0 auto; }
-        .vp-call.vp-watching .vp-call-btns button span { display: none; }
-        .vp-call.vp-watching.vp-sharing .vp-call-stage { display: block; position: fixed; left: 16px; bottom: 16px; width: 220px; aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; box-shadow: 0 6px 22px rgba(0,0,0,.7); z-index: 2147483601; background: #000; border: 1px solid rgba(255,255,255,.14); }
-        .vp-call.vp-watching.vp-sharing .vp-call-stage::after { content: 'твой экран'; position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 600; color: #fff; background: rgba(0,0,0,.6); pointer-events: none; }
-        .vp-call.vp-sharing:not(.vp-watching) .vp-call-stage::after { content: 'твой экран'; position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 600; color: #fff; background: rgba(0,0,0,.6); pointer-events: none; }
-        .vp-call-stage { position: relative; }
-        .vp-call.vp-watching .vp-call-preview { display: block; width: 100%; height: 100%; object-fit: contain; background: #000; }
-        .vp-call.vp-sharing:not(.vp-watching) .vp-call-stage { display: block; margin: 0 auto 14px; width: 100%; max-width: 260px; aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; background: #000; }
-        .vp-call.vp-sharing:not(.vp-watching) .vp-call-preview { display: block; width: 100%; height: 100%; object-fit: contain; }
-        .vp-call.vp-sharing:not(.vp-watching) .vp-call-ava { width: 72px; height: 72px; margin-bottom: 12px; }
-        .vp-call-screen.vp-on { background: #248046; }`;
+        .vp-call-screen.vp-on { background: #248046; }        .vp-call.vp-incoming, .vp-call.vp-outgoing { align-items: flex-end; justify-content: center; padding: 0 16px 28px; background: transparent; pointer-events: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+        .vp-call.vp-incoming .vp-call-card, .vp-call.vp-outgoing .vp-call-card { width: 100%; }
+        .vp-call.vp-incoming .vp-call-ava, .vp-call.vp-outgoing .vp-call-ava { width: 46px; height: 46px; margin: 0; }
+        .vp-call.vp-incoming .vp-call-ava::before, .vp-call.vp-incoming .vp-call-ava::after, .vp-call.vp-outgoing .vp-call-ava::before, .vp-call.vp-outgoing .vp-call-ava::after { animation: none; opacity: 0; }
+        .vp-call.vp-incoming .vp-call-btns, .vp-call.vp-outgoing .vp-call-btns { margin-left: auto; }
+        .vp-call.vp-incoming .vp-call-dock { pointer-events: none; }
+        .vp-call.vp-call-docked .vp-call-dock { justify-content: flex-end; }
+        .vp-call.vp-call-docked .vp-call-ava::before, .vp-call.vp-call-docked .vp-call-ava::after { animation: none; opacity: 0; }
+        .vp-call-fold { position: absolute; z-index: 3; top: 50%; right: calc(100% + 8px); display: flex; width: 34px; height: 34px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 50%; background: rgba(255,255,255,.12); color: #fff; opacity: 0; pointer-events: none; transform: translate(100%, -50%); transition: transform .32s cubic-bezier(.2,.8,.3,1), opacity .18s ease; cursor: pointer; }
+        .vp-call-fold svg { width: 18px; height: 18px; }
+        .vp-call-fold:hover { background: rgba(255,255,255,.2); }
+        .vp-call.vp-call-docked:not(.vp-folded) .vp-call-fold { opacity: 1; pointer-events: auto; transform: translate(0, -50%); transition-delay: .28s; }
+        .vp-call.vp-folded .vp-call-fold { opacity: 0; pointer-events: none; transform: translate(100%, -50%); transition-delay: 0s; }
+        .vp-call-preview-float { position: relative; display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; max-height: 0; flex: 0 0 auto; margin-top: -8px; overflow: visible; border-radius: 14px; background: transparent; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(24px) scale(.97); perspective: 1200px; transition: max-height .30s cubic-bezier(.22,.8,.24,1), margin-top .30s cubic-bezier(.22,.8,.24,1), opacity .20s ease, transform .30s cubic-bezier(.22,.8,.24,1), visibility 0s .30s; }
+        .vp-call.vp-has-preview:not(.vp-folded):not(.vp-folding) .vp-call-preview-float { max-height: 260px; margin-top: 0; opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0) scale(1); transition: max-height .34s cubic-bezier(.22,.8,.24,1), margin-top .34s cubic-bezier(.22,.8,.24,1), opacity .22s .04s ease, transform .34s .02s cubic-bezier(.22,.8,.24,1), visibility 0s; }
+        .vp-screen-flipper { position: absolute; inset: 0; box-sizing: border-box; overflow: visible; border: 1px solid rgba(255,255,255,.14); border-radius: 14px; background: #0d0e10; box-shadow: 0 24px 70px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.06); transform-style: preserve-3d; transform: rotateY(0deg); transition: transform .72s cubic-bezier(.2,.72,.2,1); will-change: transform; }
+        .vp-call.vp-show-remote .vp-screen-flipper { transform: rotateY(180deg); }
+        .vp-screen-face { position: absolute; inset: 0; overflow: hidden; border-radius: 13px; backface-visibility: hidden; -webkit-backface-visibility: hidden; background: #000; }
+        .vp-screen-face--self { pointer-events: auto; }
+        .vp-screen-face--remote { transform: rotateY(180deg); pointer-events: none; }
+        .vp-call:not(.vp-show-remote) .vp-screen-face--remote, .vp-call:not(.vp-show-remote) .vp-screen-face--remote *, .vp-call.vp-show-remote .vp-screen-face--self, .vp-call.vp-show-remote .vp-screen-face--self * { pointer-events: none !important; }
+        .vp-screen-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
+        .vp-screen-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #80848e; font-size: 13px; background: #0d0e10; }        .vp-screen-controls { position: absolute; z-index: 5; top: 9px; right: 9px; display: flex; align-items: center; gap: 8px; pointer-events: none; }
+        .vp-screen-label { color: #fff; font-size: 10px; font-weight: 600; line-height: 30px; text-shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 8px rgba(0,0,0,.65); white-space: nowrap; }
+        .vp-screen-flip { display: none; width: 30px; height: 30px; flex: 0 0 30px; align-items: center; justify-content: center; padding: 0; border: 1px solid rgba(255,255,255,.36); border-radius: 50%; background: rgba(24,26,28,.76); color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.22); cursor: pointer; pointer-events: auto; transition: background .18s ease, transform .18s ease; }
+        .vp-call.vp-remote-available .vp-screen-flip { display: flex; }
+        .vp-screen-flip[hidden] { display: none !important; }
+        .vp-screen-flip:hover { background: rgba(24,26,28,.94); transform: scale(1.06); }
+        .vp-screen-flip:active { transform: scale(.94); }
+        .vp-screen-flip svg { width: 16px; height: 16px; }
+        .vp-screen-fullscreen-control { position: absolute; z-index: 7; top: 9px; left: 9px; display: flex; align-items: center; pointer-events: none; }
+        .vp-screen-fullscreen { display: flex; width: 30px; height: 30px; flex: 0 0 30px; align-items: center; justify-content: center; padding: 0; border: 1px solid rgba(255,255,255,.36); border-radius: 50%; background: rgba(24,26,28,.76); color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.22); cursor: pointer; pointer-events: auto; transition: background .18s ease, transform .18s ease; }
+        .vp-screen-fullscreen[hidden] { display: none !important; }
+        .vp-screen-fullscreen:hover { background: rgba(24,26,28,.94); transform: scale(1.06); }
+        .vp-screen-fullscreen:active { transform: scale(.94); }
+        .vp-screen-fullscreen svg { width: 16px; height: 16px; }
+        .vp-call-preview-float.vp-preview-fullscreen { position: fixed !important; z-index: 1 !important; max-height: none !important; aspect-ratio: auto !important; margin: 0 !important; opacity: 1 !important; visibility: visible !important; pointer-events: auto !important; transform: none !important; }
+        .vp-self-pip { position: fixed; z-index: 2; right: 16px; bottom: 112px; display: none; width: min(430px, calc(100vw - 32px)); aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid rgba(255,255,255,.18); border-radius: 14px; background: #000; box-shadow: 0 18px 48px rgba(0,0,0,.42), 0 0 0 1px rgba(255,255,255,.06); pointer-events: none; }
+        .vp-self-pip.is-visible { display: block; }
+        .vp-self-pip-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
+        .vp-self-pip-label { position: absolute; z-index: 2; top: 9px; right: 10px; color: #fff; font-size: 10px; font-weight: 600; line-height: 20px; text-shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 8px rgba(0,0,0,.65); white-space: nowrap; }
+        .vp-call.vp-remote-fullscreen .vp-call-fold { display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
+        .vp-call.vp-remote-fullscreen .vp-screen-flip { display: none !important; }
+        @media (max-width: 520px) {
+            .vp-self-pip { right: 12px; bottom: 106px; width: min( min(430px, calc(100vw - 24px)), 56vw ); }
+        }
+        .vp-call.vp-folding .vp-call-preview-float, .vp-call.vp-folded .vp-call-preview-float { max-height: 0; margin-top: -8px; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(28px) scale(.96); transition: max-height .30s cubic-bezier(.22,.8,.24,1), margin-top .30s cubic-bezier(.22,.8,.24,1), opacity .16s ease, transform .30s cubic-bezier(.22,.8,.24,1), visibility 0s .30s; }
+        .vp-call.vp-folding .vp-call-fold { opacity: 0; pointer-events: none; transform: translate(100%, -50%); transition-delay: 0s; }
+        .vp-call.vp-folding .vp-call-txt, .vp-call.vp-folding .vp-call-btns { opacity: 0; pointer-events: none; transform: translateX(-7px); transition: opacity .18s ease, transform .22s cubic-bezier(.22,.8,.24,1), visibility 0s .20s; }
+        .vp-call.vp-folded .vp-call-stack { width: 74px; }
+        .vp-call.vp-folded .vp-call-card { width: 100%; padding: 12px 14px; cursor: pointer; }
+        .vp-call.vp-folded .vp-call-who { width: 100%; flex: 1 1 auto; justify-content: center; gap: 0; }
+        .vp-call.vp-folded .vp-call-ava { width: 46px; height: 46px; flex-basis: 46px; margin: 0; }
+        .vp-call.vp-folded .vp-call-txt, .vp-call.vp-folded .vp-call-btns { position: absolute; width: 0; height: 0; overflow: hidden; opacity: 0; visibility: hidden; pointer-events: none; transform: translateX(-7px); transition: opacity .14s ease, transform .18s ease, visibility 0s .18s; }
+        .vp-call.vp-folded .vp-call-fold { transition-delay: 0s; }
+        .vp-call.vp-unfolding .vp-call-txt, .vp-call.vp-unfolding .vp-call-btns { transition: opacity .18s .10s ease, transform .22s .10s cubic-bezier(.22,.8,.24,1), visibility 0s .10s; }
+        .vp-call.vp-unfolding.vp-has-preview:not(.vp-folding) .vp-call-preview-float { transition-delay: .30s, .30s, .30s, .30s, .30s; }        @keyframes vpCallEnterBottom { from { transform: translate3d(0, 112%, 0); opacity: 0; } to { transform: translate3d(0, 0, 0); opacity: 1; } }
+        @keyframes vpCallLeaveAnim { from { transform: translate3d(0, 0, 0); opacity: 1; } to { transform: translate3d(0, 112%, 0); opacity: 0; } }
+        .vp-call.vp-call-enter .vp-call-dock { animation: vpCallEnterBottom .52s cubic-bezier(.22,.82,.24,1) both; }
+        .vp-call.vp-call-leave .vp-call-dock { animation: vpCallLeaveAnim .30s cubic-bezier(.4,.1,.7,.6) both; }
+        .vp-call.vp-breaking { pointer-events: none; }
+        .vp-call.vp-breaking .vp-call-card { animation: vpRedWave .42s ease-out forwards; }
+        @keyframes vpRedWave { from { box-shadow: inset 0 0 0 0 rgba(218,55,60,0), 0 24px 70px rgba(0,0,0,.6); } to { box-shadow: inset 0 0 0 400px rgba(218,55,60,.55), 0 24px 70px rgba(0,0,0,.6); } }
+        .vp-fragment { position: fixed !important; z-index: 2147483699 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: visible; pointer-events: none !important; backface-visibility: hidden; transform-style: preserve-3d; will-change: transform, opacity, filter; }
+        .vp-fragment .vp-call-stack { position: absolute !important; display: flex !important; margin: 0 !important; pointer-events: none !important; transition: none !important; }
+        .vp-fragment .vp-call-card { width: 100% !important; height: auto !important; min-width: 0 !important; margin: 0 !important; box-sizing: border-box !important; visibility: visible !important; pointer-events: none !important; animation: none !important; transition: none !important; }
+        .vp-fragment * { animation: none !important; transition: none !important; }
+        @keyframes vpCallRing { from { transform: scale(1); opacity: .8; } to { transform: scale(1.35); opacity: 0; } }
+        @media (max-width: 420px) {
+            .vp-call.vp-incoming .vp-call-btns, .vp-call.vp-outgoing .vp-call-btns { gap: 6px; }
+            .vp-call.vp-incoming .vp-call-btns button, .vp-call.vp-outgoing .vp-call-btns button { width: 42px; height: 42px; flex-basis: 42px; }
+            .vp-call.vp-incoming .vp-call-name, .vp-call.vp-outgoing .vp-call-name { max-width: 145px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .vp-call *, .vp-call *::before, .vp-call *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+        }
+        `;
         function callTone(kind) {
             let ac, t = 0;
             try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return () => { }; }
@@ -5187,7 +5169,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (m) {
                     const name = m[2].toLowerCase();
                     if (name === 'opus') audio.add(m[1]);
-                    else { video.add(m[1]); vrank[m[1]] = name === 'vp9' ? 3 : name === 'h264' ? 2 : 1; }
+                    else { video.add(m[1]); vrank[m[1]] = name === 'h264' ? 3 : name === 'vp9' ? 2 : 1; }
                 }
             }
             const out = [];
@@ -5308,21 +5290,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             try { c.ac = new (window.AudioContext || window.webkitAudioContext)(); if (c.ac.state === 'suspended') c.ac.resume().catch(() => { }); } catch (e) { c.ac = null; }
         }
         function callScreenPrep(c) {
-            const w = document.createElement('div');
-            w.className = 'vp-call-screenwrap';
-            const v = document.createElement('video');
-            v.className = 'vp-call-screenvid';
-            v.autoplay = true; v.playsInline = true; v.muted = true;
-            w.appendChild(v);
-            const tag = document.createElement('div');
-            tag.className = 'vp-call-screentag';
-            tag.textContent = 'экран собеседника · клик = во весь экран';
-            w.appendChild(tag);
-            w.addEventListener('click', function () { w.classList.toggle('vp-full'); });
-            document.body.appendChild(w);
-            c.screenVideo = v;
-            c.screenWrap = w;
-            c.screenTag = tag;
+            // Новая структура: <video data-side="remote"> уже есть в callUi.
         }
         function callScreenAudioPrep(c) {
             if (c.screenAudio) return;
@@ -5345,9 +5313,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             c.remoteScreenOn = false;
             c.remoteScreen = null;
             c.screenStreamId = null;
-            if (c.screenVideo) { c.screenVideo.srcObject = null; c.screenVideo = null; }
-            if (c.screenTag) { c.screenTag = null; }
-            if (c.screenWrap) { c.screenWrap.remove(); c.screenWrap = null; }
             if (c.screenAudio) { c.screenAudio.srcObject = null; c.screenAudio.remove(); c.screenAudio = null; }
             callSharePaint(c);
             callPaint(c);
@@ -5428,16 +5393,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (e.track.kind === 'video') {
                     // Видео = демонстрация экрана (камера в звонке не используется).
                     c.screenStreamId = sid;
-                    if (!c.screenVideo) callScreenPrep(c);
                     const st = e.streams[0] || new MediaStream([e.track]);
                     c.remoteScreen = st;
-                    if (c.screenVideo.srcObject !== st) c.screenVideo.srcObject = st;
-                    c.screenVideo.play().catch(() => { });
-                    if (!c.screenVideo._vpPlay) {
-                        c.screenVideo._vpPlay = true;
-                        c.screenVideo.addEventListener('canplay', function () { c.screenVideo && c.screenVideo.play().catch(function () { }); });
-                        setTimeout(function () { c.screenVideo && c.screenVideo.play().catch(function () { }); }, 500);
-                    }
                     // Если аудио экрана пришло раньше видео — теперь знаем его поток, переносим.
                     if (c.pendingScreenAudio && c.pendingScreenAudioId === sid) {
                         callScreenAudioAttach(c, c.pendingScreenAudio);
@@ -5481,7 +5438,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (!c.pc || c.state !== 'talk') return;
             const pc = c.pc;
             if (pc.signalingState !== 'stable' || c.makingOffer) {
-                if (!c.negT) c.negT = setTimeout(function () { c.negT = null; callNegotiate(c); }, 500);
+                if (!c.negT) c.negT = setTimeout(function () { c.negT = null; callNegotiate(c); }, 400);
                 return;
             }
             try {
@@ -5491,7 +5448,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (c.state === 'end') return;
                 const sdp = await callPackFit(pc.localDescription.sdp);
                 await callSig(c.uid, 4, c.id, sdp);
-                setTimeout(function () { try { msgSync(); } catch (err) { } }, 1500);
+                setTimeout(function () { try { msgSync(); } catch (err) { } }, 300);
             } catch (e) { logErr('звонок: ре-негоциация', e); }
             finally { c.makingOffer = false; }
         }
@@ -5515,30 +5472,46 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             else if (callNet.title !== null) { document.title = callNet.title; callNet.title = null; }
         }
         const callBtn = (cls, label, glyph) => `<button type="button" class="${cls}">${svgIcon(glyph, 18)}<span>${label}</span></button>`;
+        const CALL_EXPAND_ICON = '<path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3"/>';
+        const CALL_RESTORE_ICON = '<path d="M8 3v5H3M16 3v5h5M21 16h-5v5M3 16h5v5"/>';
         function callUi(c) {
             callCss();
             const el = document.createElement('div');
             el.className = 'vp-call vp-call-real';
-            el.innerHTML = `<div class="vp-call-card" role="dialog" aria-label="Звонок"><button type="button" class="vp-call-min" title="Свернуть">${svgIcon('<path d="M6 9l6 6 6-6"/>', 18)}</button>
-                <div class="vp-call-stage"><video class="vp-call-preview" autoplay playsinline muted></video></div>
-                <div class="vp-call-who"><div class="vp-call-ava"></div><div class="vp-call-txt"><div class="vp-call-name"></div><div class="vp-call-sub"></div></div></div>
-                <div class="vp-call-lv"><span data-who="me">ты<b><i></i></b></span><span data-who="them"></span></div><div class="vp-call-btns"></div>
-                <div class="vp-call-tag">${svgIcon('<path d="M4 20v-3M9 20v-7M14 20v-11M19 20V4"/>', 14)}Ловит даже на парковке</div>
-                <div class="vp-call-note">Звук идёт напрямую между вами, мимо серверов ИТД. Собеседнику виден твой IP-адрес</div>
-                <button type="button" class="vp-call-info">Скопировать сведения о звонке</button></div>`;
-            el.querySelector('[data-who="them"]').innerHTML = '<em></em><b><i></i></b>';
-            el.querySelector('[data-who="them"] em').textContent = c.name;
-            el.querySelector('.vp-call-info').onclick = async e => {
-                const b = e.currentTarget;
-                try { await navigator.clipboard.writeText(await callInfo(c)); b.textContent = 'Скопировано — отправь разработчику'; }
-                catch (er) { b.textContent = 'Не скопировалось'; }
-            };
+            el.innerHTML = `<div class="vp-call-dock"><div class="vp-call-stack">
+                <div class="vp-call-preview-float" aria-label="Демонстрация экрана">
+                    <div class="vp-screen-flipper">
+                        <div class="vp-screen-face vp-screen-face--self">
+                            <video class="vp-screen-video" data-side="self" autoplay playsinline muted></video>
+                            <div class="vp-screen-empty" data-empty="self">Твой экран не расшарен</div>
+                            <div class="vp-screen-controls"><span class="vp-screen-label" data-screen-side="self">Мой экран</span><button type="button" class="vp-screen-flip" aria-label="Показать экран собеседника" title="Показать экран собеседника" hidden>${svgIcon('<path d="M8 3 4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4"/>', 16)}</button></div>
+                        </div>
+                        <div class="vp-screen-face vp-screen-face--remote">
+                            <video class="vp-screen-video" data-side="remote" autoplay playsinline muted></video>
+                            <div class="vp-screen-empty" data-empty="remote">Собеседник не расшарил экран</div>
+                            <div class="vp-screen-fullscreen-control"><button type="button" class="vp-screen-fullscreen" aria-label="Развернуть экран собеседника на весь экран" title="На весь экран" hidden></button></div>
+                            <div class="vp-screen-controls"><span class="vp-screen-label" data-screen-side="remote"></span><button type="button" class="vp-screen-flip" aria-label="Показать мой экран" title="Показать мой экран" hidden>${svgIcon('<path d="M8 3 4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4"/>', 16)}</button></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="vp-call-card-wrap">
+                    <button type="button" class="vp-call-fold" title="Свернуть">${svgIcon('<path d="M9 6l6 6-6 6"/>', 18)}</button>
+                    <div class="vp-call-card" role="dialog" aria-label="Звонок">
+                        <div class="vp-call-who"><div class="vp-call-ava"></div><div class="vp-call-txt"><div class="vp-call-name"></div><div class="vp-call-sub"></div></div></div>
+                        <div class="vp-call-btns"></div>
+                    </div>
+                </div>
+            </div></div>
+            <div class="vp-self-pip" aria-label="Мой экран"><video class="vp-self-pip-video" autoplay playsinline muted></video><span class="vp-self-pip-label">Мой экран</span></div>`;
             const ava = el.querySelector('.vp-call-ava');
             if (isUrl(c.ava)) { const im = document.createElement('img'); im.src = c.ava; im.alt = ''; ava.appendChild(im); }
             else { const sp = document.createElement('span'); sp.className = 'vp-call-emoji'; sp.textContent = c.ava; ava.appendChild(sp); }
             el.querySelector('.vp-call-name').textContent = c.name;
-            el.querySelector('.vp-call-min').onclick = e => { e.stopPropagation(); el.classList.add('vp-call-mini'); };
-            el.querySelector('.vp-call-card').addEventListener('click', e => { if (el.classList.contains('vp-call-mini') && !e.target.closest('button')) el.classList.remove('vp-call-mini'); });
+            el.querySelector('[data-screen-side="remote"]').textContent = 'Экран ' + c.name;
+            el.querySelector('.vp-call-fold').onclick = e => { e.stopPropagation(); callFold(c); };
+            el.querySelector('.vp-call-card').addEventListener('click', e => { if (el.classList.contains('vp-folded') && !e.target.closest('button')) callUnfold(c); });
+            el.querySelectorAll('.vp-screen-flip').forEach(btn => btn.onclick = e => { e.stopPropagation(); callFlip(c); });
+            el.querySelector('.vp-screen-fullscreen').onclick = e => { e.stopPropagation(); callRemoteFullscreenToggle(c); };
             document.body.appendChild(el);
             c.el = el;
             callPaint(c);
@@ -5546,14 +5519,18 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         function callPaint(c) {
             const el = c.el;
             if (!el) return;
-            const ring = c.dir === 'in' && c.state === 'ringing', key = c.state + (c.muted ? 1 : 0) + (c.missed ? 1 : 0) + (c.blocked ? 1 : 0) + (c.screen ? 'S' : '') + (c.remoteScreenOn ? 'R' : '');
+            const ring = c.dir === 'in' && c.state === 'ringing', calling = c.dir === 'out' && c.state === 'calling', docked = c.state === 'talk';
+            const key = c.state + (c.muted ? 1 : 0) + (c.missed ? 1 : 0) + (c.blocked ? 1 : 0) + (c.screen ? 'S' : '') + (c.remoteScreenOn ? 'R' : '');
             el.classList.toggle('vp-live', c.state === 'talk' || c.state === 'end');
-            el.classList.toggle('vp-incoming', ring);
+            el.classList.toggle('vp-incoming', ring || (docked && c.dir === 'in'));
+            el.classList.toggle('vp-outgoing', calling || (docked && c.dir === 'out'));
+            el.classList.toggle('vp-call-docked', docked);
             if (el.dataset.k !== key) {
                 el.dataset.k = key;
                 const btns = el.querySelector('.vp-call-btns');
                 btns.innerHTML = c.state === 'end' ? (c.missed ? callBtn('vp-call-mute vp-call-close', 'Закрыть', GLYPH.close) + callBtn('vp-call-yes vp-call-again', 'Перезвонить', GLYPH.phone) : callBtn('vp-call-mute vp-call-close', 'Закрыть', GLYPH.close))
                     : ring ? callBtn('vp-call-end', 'Отклонить', GLYPH.phone) + callBtn('vp-call-yes', 'Принять', GLYPH.phone)
+                        : calling ? callBtn('vp-call-end', 'Отмена', GLYPH.phone)
                         : callBtn('vp-call-mute' + (c.muted ? ' vp-on' : ''), c.muted ? 'Включить' : 'Микрофон', CALL_MIC + (c.muted ? '<path d="M4 4l16 16"/>' : ''))
                         + (callShareSupported() ? callBtn('vp-call-screen' + (c.screen ? ' vp-on' : ''), c.screen ? 'Стоп' : 'Экран', '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>') : '')
                         + callBtn('vp-call-end', 'Завершить', GLYPH.phone)
@@ -5571,6 +5548,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 }
             }
             callSub(c);
+            callSharePaint(c);
         }
         function callSub(c, text) {
             if (text !== undefined) c.subText = text;
@@ -5592,7 +5570,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             try { if (navigator.wakeLock) navigator.wakeLock.request('screen').then(w => { if (c.state === 'end') w.release().catch(() => { }); else c.wake = w; }, () => { }); } catch (e) { }
             callSub(c, '00:00');
             c.tick = setInterval(() => callSub(c, callMmss(Math.floor((Date.now() - t0) / 1000))), 1000);
-            c.lvT = setInterval(() => callLevels(c), 120);
             c.syncT = setInterval(function () { try { msgSync(); } catch (err) { } }, 3000);
             callPlay(c);
             c.timers.push(setTimeout(async () => {
@@ -5622,7 +5599,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (reason !== null) callSig(c.uid, 3, c.id, dur ? cat(new Uint8Array([reason]), be32(dur)) : new Uint8Array([reason])).catch(e => logErr('звонок: отбой', e));
             c.stops.splice(0).forEach(f => f());
             c.timers.forEach(clearTimeout);
-            clearInterval(c.tick); clearInterval(c.lvT); clearInterval(c.syncT); clearTimeout(c.lostT); clearTimeout(c.connT);
+            clearInterval(c.tick); clearInterval(c.syncT); clearTimeout(c.lostT); clearTimeout(c.connT);
             if (c.noiseT) { clearInterval(c.noiseT); c.noiseT = null; }
             if (c.rawStream) { c.rawStream.getTracks().forEach(t => t.stop()); c.rawStream = null; }
             if (c.wake) { c.wake.release().catch(() => { }); c.wake = null; }
@@ -5643,7 +5620,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             }
             callSub(c, text);
             callPaint(c);
-            if (c.el) c.el.classList.remove('vp-call-mini');
             if (c.missed) { if (c.el) c.el.addEventListener('click', () => callTitle(null), { once: true }); return; }
             callBreak(c);
         }
@@ -5651,72 +5627,120 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const el = c.el;
             if (!el || el.dataset.closing) return;
             el.dataset.closing = '1';
-            el.classList.add('vp-breaking');
+            const stack = el.querySelector('.vp-call-stack');
             const card = el.querySelector('.vp-call-card');
-            if (!card) { callClose(c, 900); return; }
-            const r = card.getBoundingClientRect();
-            const midY = r.top + r.height / 2;
-            const zig = 10;
-            const clipTop = 'polygon(0 0,100% 0,100% calc(50% - ' + zig + 'px),85% calc(50% + ' + zig + 'px),70% calc(50% - ' + zig + 'px),55% calc(50% + ' + zig + 'px),40% calc(50% - ' + zig + 'px),25% calc(50% + ' + zig + 'px),10% calc(50% - ' + zig + 'px),0 calc(50% + ' + zig + 'px))';
-            const clipBot = 'polygon(0 calc(50% + ' + zig + 'px),10% calc(50% - ' + zig + 'px),25% calc(50% + ' + zig + 'px),40% calc(50% - ' + zig + 'px),55% calc(50% + ' + zig + 'px),70% calc(50% - ' + zig + 'px),85% calc(50% + ' + zig + 'px),100% calc(50% - ' + zig + 'px),100% 100%,0 100%)';
-            const wrapClasses = el.className.replace(/\bvp-call\b/g, '').replace(/\bvp-breaking\b/g, '').replace(/\s+/g, ' ').trim();
-            const mk = function () {
-                const w = document.createElement('div');
-                w.className = 'vp-call vp-call-real ' + wrapClasses + ' vp-break-half';
-                w.style.position = 'fixed';
-                w.style.inset = 'auto';
-                w.style.left = r.left + 'px';
-                w.style.top = r.top + 'px';
-                w.style.width = r.width + 'px';
-                w.style.height = r.height + 'px';
-                w.style.padding = '0';
-                w.style.margin = '0';
-                w.style.background = 'transparent';
-                w.style.backdropFilter = 'none';
-                w.style.webkitBackdropFilter = 'none';
-                w.style.display = 'block';
-                w.style.zIndex = '2147483699';
-                const c2 = card.cloneNode(true);
-                c2.style.width = '100%';
-                c2.style.height = '100%';
-                c2.style.boxSizing = 'border-box';
-                w.appendChild(c2);
-                document.body.appendChild(w);
-                return w;
-            };
-            const cloneTop = mk();
-            const cloneBot = mk();
-            cloneTop.style.clipPath = clipTop;
-            cloneBot.style.clipPath = clipBot;
-            const wave = document.createElement('div');
-            wave.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483698;border-radius:50%;background:radial-gradient(circle, rgba(218,55,60,.85) 0%, rgba(218,55,60,.5) 40%, rgba(218,55,60,0) 72%);';
-            const endBtn = el.querySelector('.vp-call-end');
-            const eb = endBtn ? endBtn.getBoundingClientRect() : { left: r.left + r.width / 2, top: r.top + r.height / 2, width: 0, height: 0 };
-            const cx = eb.left + eb.width / 2, cy = eb.top + eb.height / 2;
-            const size = Math.max(window.innerWidth, window.innerHeight) * 2.2;
-            wave.style.left = (cx - size / 2) + 'px';
-            wave.style.top = (cy - size / 2) + 'px';
-            wave.style.width = size + 'px';
-            wave.style.height = size + 'px';
-            wave.style.transform = 'scale(0)'; wave.style.opacity = '0.9';
-            document.body.appendChild(wave);
-            requestAnimationFrame(function () {
-                wave.style.transition = 'transform .38s ease-out, opacity .5s ease-out';
-                wave.style.transform = 'scale(1)';
-                wave.style.opacity = '0';
-            });
-            card.style.visibility = 'hidden';
-            setTimeout(function () {
-                cloneTop.classList.add('vp-break-top');
-                cloneBot.classList.add('vp-break-bot');
-            }, 360);
-            setTimeout(function () {
-                wave.remove(); cloneTop.remove(); cloneBot.remove();
+            if (!stack || !card) {
                 el.classList.add('vp-out'); setTimeout(function () { el.remove(); }, 320);
-            }, 1150);
+                if (callNet.cur === c) callNet.cur = null;
+                return;
+            }
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                el.classList.add('vp-out'); setTimeout(function () { el.remove(); }, 320);
+                if (callNet.cur === c) callNet.cur = null;
+                return;
+            }
+            el.classList.add('vp-breaking');
+            card.style.transition = 'none';
+            card.style.backgroundColor = '#da373c';
+            const stackRect = stack.getBoundingClientRect();
+            const fold = stack.querySelector('.vp-call-fold');
+            const bounds = { left: stackRect.left, top: stackRect.top, right: stackRect.right, bottom: stackRect.bottom };
+            if (fold && getComputedStyle(fold).display !== 'none' && getComputedStyle(fold).opacity !== '0') {
+                const foldRect = fold.getBoundingClientRect();
+                bounds.left = Math.min(bounds.left, foldRect.left);
+                bounds.top = Math.min(bounds.top, foldRect.top);
+                bounds.right = Math.max(bounds.right, foldRect.right);
+                bounds.bottom = Math.max(bounds.bottom, foldRect.bottom);
+            }
+            const r = { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom, width: bounds.right - bounds.left, height: bounds.bottom - bounds.top };
+            const mid = stackRect.left + stackRect.width / 2 - r.left;
+            const amp = Math.min(7, Math.max(3, r.width * 0.015));
+            const cracks = [
+                { x: mid - amp * 0.5, y: 13 },
+                { x: mid + amp,       y: 32 },
+                { x: mid - amp,       y: 51 },
+                { x: mid + amp * 0.7, y: 72 },
+                { x: mid - amp * 0.5, y: 89 }
+            ];
+            let leftPath = 'polygon(0 0, ' + mid + 'px 0';
+            for (let q = 0; q < cracks.length; q++) leftPath += ', ' + cracks[q].x + 'px ' + cracks[q].y + '%';
+            leftPath += ', ' + mid + 'px 100%, 0 100%)';
+            let rightPath = 'polygon(' + mid + 'px 0, 100% 0, 100% 100%, ' + mid + 'px 100%';
+            for (let j = cracks.length - 1; j >= 0; j--) rightPath += ', ' + cracks[j].x + 'px ' + cracks[j].y + '%';
+            rightPath += ')';
+            const wrapClasses = el.className.split(/\s+/).filter(function (cn) { return cn && cn !== 'vp-call' && cn !== 'vp-breaking'; }).join(' ');
+            const mk = function (path, side) {
+                const frag = document.createElement('div');
+                frag.className = 'vp-call vp-fragment ' + wrapClasses;
+                frag.style.setProperty('position', 'fixed', 'important');
+                frag.style.setProperty('inset', 'auto', 'important');
+                frag.style.setProperty('left', r.left + 'px', 'important');
+                frag.style.setProperty('top', r.top + 'px', 'important');
+                frag.style.setProperty('right', 'auto', 'important');
+                frag.style.setProperty('bottom', 'auto', 'important');
+                frag.style.setProperty('width', r.width + 'px', 'important');
+                frag.style.setProperty('height', r.height + 'px', 'important');
+                frag.style.setProperty('padding', '0', 'important');
+                frag.style.setProperty('margin', '0', 'important');
+                frag.style.background = 'transparent';
+                frag.style.backdropFilter = 'none';
+                frag.style.webkitBackdropFilter = 'none';
+                frag.style.display = 'block';
+                frag.style.transformOrigin = side < 0 ? '100% 50%' : '0% 50%';
+                frag.style.clipPath = path;
+                frag.style.webkitClipPath = path;
+                const clone = stack.cloneNode(true);
+                clone.style.position = 'absolute';
+                clone.style.left = (stackRect.left - r.left) + 'px';
+                clone.style.top = (stackRect.top - r.top) + 'px';
+                clone.style.width = stackRect.width + 'px';
+                clone.style.height = stackRect.height + 'px';
+                clone.style.margin = '0';
+                clone.style.transform = 'none';
+                clone.style.transition = 'none';
+                clone.style.pointerEvents = 'none';
+                frag.appendChild(clone);
+                document.body.appendChild(frag);
+                return frag;
+            };
+            setTimeout(function () {
+                if (!el.isConnected) return;
+                const left = mk(leftPath, -1);
+                const right = mk(rightPath, 1);
+                stack.style.setProperty('display', 'none', 'important');
+                const fragments = [
+                    { el: left, side: -1, vx: -34, vy: -8, gravity: 360, av: -0.045, aa: -0.018 },
+                    { el: right, side: 1, vx: 34, vy: -6, gravity: 360, av: 0.045, aa: 0.018 }
+                ];
+                const duration = 1850;
+                let startTime = null;
+                function frame(now) {
+                    if (startTime === null) startTime = now;
+                    const elapsed = Math.min((now - startTime) / 1000, duration / 1000);
+                    const progress = elapsed / (duration / 1000);
+                    for (let fi = 0; fi < fragments.length; fi++) {
+                        const f = fragments[fi];
+                        const x = f.vx * elapsed + 0.5 * f.side * 20 * elapsed * elapsed;
+                        const y = f.vy * elapsed + 0.5 * f.gravity * elapsed * elapsed;
+                        const angle = f.av * elapsed + 0.5 * f.aa * elapsed * elapsed;
+                        const tilt = f.side * (4 * progress);
+                        const opacity = progress < 0.82 ? 1 : Math.max(0, 1 - (progress - 0.82) / 0.18);
+                        const blur = progress * 1.0;
+                        f.el.style.transform = 'perspective(900px) translate3d(' + x + 'px,' + y + 'px,0) rotateZ(' + angle + 'rad) rotateY(' + tilt + 'deg)';
+                        f.el.style.opacity = opacity;
+                        f.el.style.filter = 'blur(' + blur + 'px)';
+                    }
+                    if (now - startTime < duration) requestAnimationFrame(frame);
+                    else {
+                        left.remove(); right.remove(); el.remove();
+                        if (callNet.cur === c) callNet.cur = null;
+                    }
+                }
+                requestAnimationFrame(frame);
+            }, 120);
         }
         async function callStart(uid, name, ava) {
-            if (callNet.cur) { if (callNet.cur.el) callNet.cur.el.classList.remove('vp-call-mini'); return; }
+            if (callNet.cur) { if (callNet.cur.el && callNet.cur.el.classList.contains('vp-folded')) callUnfold(callNet.cur); return; }
             const c = { uid, dir: 'out', id: crypto.getRandomValues(new Uint32Array(1))[0], name, ava, state: 'calling', stops: [], timers: [] };
             callNet.cur = c;
             callAudioPrep(c);
@@ -5741,7 +5765,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 callNet.lastSync = 0;
             } catch (e) { logErr('звонок', e); callEnd(c, e.message || 'Не вышло позвонить', c.offered ? 0 : null); }
         }
-        const CALL_SCREEN = { w: 2560, h: 1440, fps: 60, bitrate: 40000000 };
+        const CALL_SCREEN = { w: 2560, h: 1440, fps: 60, bitrate: 20000000 };
         const CFG = {
             noise: true,          // своё шумоподавление поверх браузерного
             noiseHighpass: 90,    // режем гул/ветер/рокот ниже Гц
@@ -5753,14 +5777,17 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         async function callShareTune(sender) {
             if (!sender || !sender.getParameters) return;
-            try {
+            const apply = async (withPriority) => {
                 const p = sender.getParameters();
                 if (!p.encodings || !p.encodings.length) p.encodings = [{}];
                 p.encodings[0].maxBitrate = CALL_SCREEN.bitrate;
                 p.encodings[0].maxFramerate = CALL_SCREEN.fps;
+                if (withPriority) { p.encodings[0].priority = 'high'; p.encodings[0].networkPriority = 'high'; }
                 p.degradationPreference = 'maintain-resolution';
                 await sender.setParameters(p);
-            } catch (e) { logErr('звонок: настройки экрана', e); }
+            };
+            try { await apply(true); return; } catch (e) { }
+            try { await apply(false); } catch (e) { logErr('звонок: настройки экрана', e); }
         }
         async function callShare(c) {
             if (!c.pc || c.state !== 'talk') return;
@@ -5802,19 +5829,196 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         function callSharePaint(c) {
             const el = c.el;
             if (!el) return;
-            el.classList.toggle('vp-sharing', !!c.screen);
-            el.classList.toggle('vp-watching', !!c.remoteScreenOn);
-            if (c.screenWrap) c.screenWrap.classList.toggle('vp-on', !!c.remoteScreenOn);
-            const pv = el.querySelector('.vp-call-preview');
-            if (!pv) return;
-            if (c.screen) {
-                if (pv.srcObject !== c.screen.stream) pv.srcObject = c.screen.stream;
-                pv.play().catch(() => { });
-            } else {
-                pv.srcObject = null;
+            if (c.state === 'end') {
+                if (c.remoteFullscreen || c.remoteFullscreenClosing) callRemoteFullscreenExit(c, true);
+                el.classList.remove('vp-has-preview', 'vp-show-remote', 'vp-remote-available', 'vp-remote-fullscreen');
+                return;
             }
-
+            const hasPreview = c.state === 'talk' && (!!c.screen || !!c.remoteScreenOn);
+            el.classList.toggle('vp-has-preview', hasPreview);
+            if (!hasPreview) {
+                if (c.remoteFullscreen || c.remoteFullscreenClosing) callRemoteFullscreenExit(c, true);
+                el.classList.remove('vp-show-remote', 'vp-remote-available', 'vp-remote-fullscreen');
+                c.showingRemote = false;
+                callUpdateSelfPip(c);
+                return;
+            }
+            const selfVideo = el.querySelector('.vp-screen-video[data-side="self"]');
+            const remoteVideo = el.querySelector('.vp-screen-video[data-side="remote"]');
+            const selfEmpty = el.querySelector('[data-empty="self"]');
+            const remoteEmpty = el.querySelector('[data-empty="remote"]');
+            if (selfVideo) {
+                const st = c.screen ? c.screen.stream : null;
+                if (selfVideo.srcObject !== st) selfVideo.srcObject = st;
+                if (st) { const p = selfVideo.play(); if (p && p.catch) p.catch(() => { }); }
+            }
+            if (remoteVideo) {
+                const st = c.remoteScreen || null;
+                if (remoteVideo.srcObject !== st) remoteVideo.srcObject = st;
+                if (st) { const p = remoteVideo.play(); if (p && p.catch) p.catch(() => { }); }
+            }
+            if (selfEmpty) selfEmpty.style.display = c.screen ? 'none' : 'flex';
+            if (remoteEmpty) remoteEmpty.style.display = c.remoteScreenOn ? 'none' : 'flex';
+            const canFlip = !!c.screen && !!c.remoteScreenOn;
+            el.classList.toggle('vp-remote-available', canFlip);
+            if (c.remoteFullscreen || c.remoteFullscreenClosing) c.showingRemote = true;
+            else if (!c.screen && c.remoteScreenOn) c.showingRemote = true;
+            if (!c.remoteScreenOn) c.showingRemote = false;
+            el.classList.toggle('vp-show-remote', !!c.remoteScreenOn && !!c.showingRemote);
+            el.querySelectorAll('.vp-screen-flip').forEach(flip => {
+                flip.hidden = !canFlip || c.remoteFullscreen || c.remoteFullscreenClosing;
+            });
+            callUpdateFullscreenButton(c);
+            callUpdateSelfPip(c);
         }
+        function callFold(c) {
+            const el = c.el;
+            if (!el || el.classList.contains('vp-folded') || el.classList.contains('vp-folding')) return;
+            el.classList.add('vp-folding');
+            const hasPreview = el.classList.contains('vp-has-preview');
+            const foldDelay = hasPreview ? 310 : 205;
+            const activeEl = el;
+            c.foldT = setTimeout(() => {
+                c.foldT = null;
+                if (!activeEl.isConnected || !activeEl.classList.contains('vp-folding')) return;
+                activeEl.classList.remove('vp-folding');
+                activeEl.classList.add('vp-folded');
+            }, foldDelay);
+        }
+        function callUnfold(c) {
+            const el = c.el;
+            if (!el || !el.classList.contains('vp-folded')) return;
+            clearTimeout(c.foldT); c.foldT = null;
+            el.classList.remove('vp-folded');
+            el.classList.add('vp-unfolding');
+            setTimeout(() => { if (el.isConnected) el.classList.remove('vp-unfolding'); }, 720);
+        }
+        function callFlip(c) {
+            if (!c.screen || !c.remoteScreenOn) return;
+            if (c.remoteFullscreen) callRemoteFullscreenExit(c, true);
+            c.showingRemote = !c.showingRemote;
+            callSharePaint(c);
+        }
+        function callRemoteFullscreenToggle(c) {
+            if (!c.remoteScreenOn || c.remoteFullscreenClosing) return;
+            if (c.remoteFullscreen) callRemoteFullscreenExit(c, false);
+            else callRemoteFullscreenEnter(c);
+        }
+        function callRemoteFullscreenEnter(c) {
+            const el = c.el;
+            if (!el || !c.remoteScreenOn || c.remoteFullscreen || c.remoteFullscreenClosing) return;
+            const preview = el.querySelector('.vp-call-preview-float');
+            if (!preview) return;
+            const rect = preview.getBoundingClientRect();
+            if (!rect.width || !rect.height) return;
+            c.remoteFullscreenRect = { left: rect.left, top: rect.top, width: rect.width, height: rect.height, borderRadius: getComputedStyle(preview).borderRadius };
+            c.remoteFullscreen = true;
+            c.remoteFullscreenClosing = false;
+            clearTimeout(c.remoteFullscreenT);
+            preview.classList.add('vp-preview-fullscreen');
+            preview.style.transition = 'none';
+            preview.style.position = 'fixed';
+            preview.style.left = rect.left + 'px';
+            preview.style.top = rect.top + 'px';
+            preview.style.right = 'auto';
+            preview.style.bottom = 'auto';
+            preview.style.width = rect.width + 'px';
+            preview.style.height = rect.height + 'px';
+            preview.style.maxHeight = 'none';
+            preview.style.aspectRatio = 'auto';
+            preview.style.margin = '0';
+            preview.style.zIndex = '1';
+            preview.style.borderRadius = c.remoteFullscreenRect.borderRadius;
+            preview.style.opacity = '1';
+            preview.style.visibility = 'visible';
+            preview.style.pointerEvents = 'auto';
+            preview.style.transform = 'none';
+            void preview.offsetWidth;
+            requestAnimationFrame(() => {
+                if (!c.remoteFullscreen || !preview.isConnected) return;
+                preview.style.transition = 'left .44s cubic-bezier(.2,.8,.2,1), top .44s cubic-bezier(.2,.8,.2,1), width .44s cubic-bezier(.2,.8,.2,1), height .44s cubic-bezier(.2,.8,.2,1), border-radius .38s ease';
+                preview.style.left = '0px';
+                preview.style.top = '0px';
+                preview.style.width = window.innerWidth + 'px';
+                preview.style.height = window.innerHeight + 'px';
+                preview.style.borderRadius = '0px';
+            });
+            callSharePaint(c);
+        }
+        function callRemoteFullscreenExit(c, immediate) {
+            const el = c.el;
+            if (!el) return;
+            if (!c.remoteFullscreen && !c.remoteFullscreenRect && !c.remoteFullscreenClosing) return;
+            const preview = el.querySelector('.vp-call-preview-float');
+            const rect = c.remoteFullscreenRect;
+            c.remoteFullscreen = false;
+            clearTimeout(c.remoteFullscreenT);
+            const clearStyles = () => {
+                if (!preview) return;
+                preview.classList.remove('vp-preview-fullscreen');
+                ['position','left','top','right','bottom','width','height','max-height','aspect-ratio','margin','z-index','border-radius','opacity','visibility','pointer-events','transform','transition'].forEach(p => preview.style.removeProperty(p));
+            };
+            if (!preview || !rect || immediate) {
+                clearStyles();
+                c.remoteFullscreenClosing = false;
+                c.remoteFullscreenRect = null;
+                callSharePaint(c);
+                return;
+            }
+            c.remoteFullscreenClosing = true;
+            preview.style.transition = 'left .40s cubic-bezier(.2,.8,.2,1), top .40s cubic-bezier(.2,.8,.2,1), width .40s cubic-bezier(.2,.8,.2,1), height .40s cubic-bezier(.2,.8,.2,1), border-radius .34s ease';
+            preview.style.left = rect.left + 'px';
+            preview.style.top = rect.top + 'px';
+            preview.style.width = rect.width + 'px';
+            preview.style.height = rect.height + 'px';
+            preview.style.borderRadius = rect.borderRadius;
+            callSharePaint(c);
+            c.remoteFullscreenT = setTimeout(() => {
+                if (preview.isConnected) clearStyles();
+                c.remoteFullscreenClosing = false;
+                c.remoteFullscreenRect = null;
+                c.remoteFullscreenT = null;
+                callSharePaint(c);
+            }, 430);
+        }
+        function callUpdateFullscreenButton(c) {
+            const el = c.el;
+            if (!el) return;
+            el.classList.toggle('vp-remote-fullscreen', !!(c.remoteFullscreen || c.remoteFullscreenClosing));
+            const btn = el.querySelector('.vp-screen-fullscreen');
+            if (!btn) return;
+            btn.hidden = !c.remoteScreenOn;
+            btn.disabled = !!c.remoteFullscreenClosing;
+            const label = c.remoteFullscreen ? 'Свернуть демонстрацию' : 'Развернуть экран собеседника на весь экран';
+            btn.setAttribute('aria-label', label);
+            btn.title = c.remoteFullscreen ? 'Вернуть прежний размер' : 'На весь экран';
+            btn.innerHTML = svgIcon(c.remoteFullscreen ? CALL_RESTORE_ICON : CALL_EXPAND_ICON, 16);
+        }
+        function callUpdateSelfPip(c) {
+            const el = c.el;
+            if (!el) return;
+            const pip = el.querySelector('.vp-self-pip');
+            if (!pip) return;
+            const show = !!(c.remoteFullscreen || c.remoteFullscreenClosing) && !!c.remoteScreenOn && !!c.screen && c.state === 'talk';
+            pip.classList.toggle('is-visible', show);
+            const v = pip.querySelector('.vp-self-pip-video');
+            if (!v) return;
+            if (!show) { if (v.srcObject) v.srcObject = null; return; }
+            const st = c.screen ? c.screen.stream : null;
+            if (v.srcObject !== st) v.srcObject = st;
+            if (st) { const p = v.play(); if (p && p.catch) p.catch(() => { }); }
+        }
+        window.addEventListener('keydown', e => {
+            if (e.key !== 'Escape') return;
+            const cur = callNet.cur;
+            if (cur && cur.remoteFullscreen) { e.preventDefault(); callRemoteFullscreenExit(cur, false); }
+        });
+        window.addEventListener('resize', () => {
+            const cur = callNet.cur;
+            if (!cur || !cur.remoteFullscreen || !cur.el) return;
+            const preview = cur.el.querySelector('.vp-call-preview-float');
+            if (preview) { preview.style.width = window.innerWidth + 'px'; preview.style.height = window.innerHeight + 'px'; }
+        });
         async function callRenegotiateIn(c, data) {
             const pc = c.pc;
             if (!pc || c.state === 'end') return;
@@ -5823,7 +6027,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const collision = c.makingOffer || pc.signalingState !== 'stable';
                 c.ignoreOffer = !c.polite && collision;
                 if (c.ignoreOffer) return;
-                if (collision && c.polite && pc.signalingState === 'have-local-offer') {
+                const rolledBack = collision && c.polite && pc.signalingState === 'have-local-offer';
+                if (rolledBack) {
                     await pc.setLocalDescription({ type: 'rollback' });
                 }
                 await pc.setRemoteDescription(desc);
@@ -5831,7 +6036,11 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 await callGather(pc);
                 if (c.state === 'end') return;
                 await callSig(c.uid, 5, c.id, await callPackFit(pc.localDescription.sdp));
-                setTimeout(function () { try { msgSync(); } catch (err) { } }, 1500);
+                setTimeout(function () { try { msgSync(); } catch (err) { } }, 300);
+                // Мы откатили свой offer (были polite в коллизии) — наш трек не попал
+                // в согласованный SDP. Без повторной ре-негоциации он не полетит
+                // собеседнику. Именно это давало «работает через раз».
+                if (rolledBack) callNegotiate(c);
             } catch (e) {
                 logErr('звонок: входящая ре-негоциация', e);
             }
@@ -7595,6 +7804,7 @@ var __vpBannerAuto = (() => {
             B.row = row;
             B.draw = row.querySelector('button:not(.' + SELECTORS.bannerDelete + ')');
             B.del = row.querySelector('.' + SELECTORS.bannerDelete);
+            if (myVerifyState() !== 'approved') return;
             B.image = bannerButton('custom-image-btn', 'Добавить картинку', ICONS.BANNER_IMAGE);
             B.change = bannerButton('custom-change-btn', 'Сменить картинку', ICONS.BANNER_CHANGE);
             B.cancel = bannerButton('custom-cancel-btn', 'Отмена', ICONS.BANNER_CANCEL);
@@ -7607,6 +7817,10 @@ var __vpBannerAuto = (() => {
         }
 
         function pickBannerFile() {
+            if (myVerifyState() !== 'approved') {
+                console.warn('[ITD VP] смена баннера доступна после верификации');
+                return;
+            }
             const input = document.createElement('input');
             input.type = 'file';
             input.accept = 'image/jpeg,image/png,image/webp,image/gif';
@@ -8574,6 +8788,11 @@ var __vpBannerAuto = (() => {
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.8.6', '2 ноября 2026', [
+                'Звонки: новый дизайн — компактная карточка снизу экрана, плавно сворачивается в аватарку и так же разворачивается',
+                'Звонки: демонстрация экрана в новом виде — переворот между своим и чужим экраном, кнопка «на весь экран», в полноэкранном режиме свой экран показывается отдельным окошком справа снизу',
+                'Без подтверждённой галочки нельзя менять баннер профиля и видеть клуб — вместо клуба будет надпись «Не верифицирован»'
+            ]],
             ['3.8.5', '1 ноября 2026', [
                 'Звонки: добавлена демонстрация экрана (WIP)'
             ]],
@@ -18267,6 +18486,18 @@ var __vpBannerAuto = (() => {
             });
         }
         async function renderClub() {
+            const vs = myVerifyState();
+            const cntEl = rail.querySelector('.vp-club-count');
+            if (vs === 'loading') {
+                if (clubShown !== '__loading') { clubShown = '__loading'; railClub.innerHTML = '<div class="vp-menu-note">Загрузка…</div>'; }
+                if (cntEl) cntEl.textContent = '…';
+                return;
+            }
+            if (vs === 'unverified') {
+                if (clubShown !== '__unverified') { clubShown = '__unverified'; railClub.innerHTML = '<div class="vp-menu-note">Не верифицирован</div>'; }
+                if (cntEl) cntEl.textContent = '—';
+                return;
+            }
             const names = verifiedNames();
             if (myUsername && !names.some(n => n.toLowerCase() === myUsername.toLowerCase())) names.push(myUsername);
             const key = names.sort().join();
@@ -18346,6 +18577,7 @@ var __vpBannerAuto = (() => {
             if (d && typeof d === 'object') clubOnline.set(n, { on: !!d.online, seen: d.lastSeen || null, at: Date.now() });
         }
         async function clubPollOnline() {
+            if (myVerifyState() !== 'approved') return;
             if (clubPolling || document.hidden || apiPaused() || !railClub.isConnected || !railClub.getClientRects().length) return;
             clubOnlineLoad();
             const box = railClub.getBoundingClientRect(), now = Date.now();
