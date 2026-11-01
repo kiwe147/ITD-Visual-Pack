@@ -5036,9 +5036,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-call.vp-incoming .vp-call-dock { pointer-events: none; }
         .vp-call.vp-call-docked .vp-call-dock { justify-content: flex-end; }
         .vp-call.vp-call-docked .vp-call-ava::before, .vp-call.vp-call-docked .vp-call-ava::after { animation: none; opacity: 0; }
-        .vp-call-fold { position: absolute; z-index: 3; top: 50%; right: calc(100% + 8px); display: flex; width: 34px; height: 34px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 50%; background: rgba(255,255,255,.12); color: #fff; opacity: 0; pointer-events: none; transform: translate(100%, -50%); transition: transform .32s cubic-bezier(.2,.8,.3,1), opacity .18s ease; cursor: pointer; }
+        .vp-call-fold { position: absolute; z-index: 3; top: 50%; right: calc(100% + 8px); display: flex; width: 34px; height: 34px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 50%; background: #2b2d31; color: #f2f3f5; opacity: 0; pointer-events: none; transform: translate(100%, -50%); box-shadow: 0 8px 24px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.06); transition: transform .32s cubic-bezier(.2,.8,.3,1), opacity .18s ease, background .15s ease; cursor: pointer; }
         .vp-call-fold svg { width: 18px; height: 18px; }
-        .vp-call-fold:hover { background: rgba(255,255,255,.2); }
+        .vp-call-fold:hover { background: #36393f; }
         .vp-call.vp-call-docked:not(.vp-folded) .vp-call-fold { opacity: 1; pointer-events: auto; transform: translate(0, -50%); transition-delay: .28s; }
         .vp-call.vp-folded .vp-call-fold { opacity: 0; pointer-events: none; transform: translate(100%, -50%); transition-delay: 0s; }
         .vp-call-preview-float { position: relative; display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; max-height: 0; flex: 0 0 auto; margin-top: -8px; overflow: visible; border-radius: 14px; background: transparent; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(24px) scale(.97); perspective: 1200px; transition: max-height .30s cubic-bezier(.22,.8,.24,1), margin-top .30s cubic-bezier(.22,.8,.24,1), opacity .20s ease, transform .30s cubic-bezier(.22,.8,.24,1), visibility 0s .30s; }
@@ -5519,12 +5519,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         function callPaint(c) {
             const el = c.el;
             if (!el) return;
-            const ring = c.dir === 'in' && c.state === 'ringing', calling = c.dir === 'out' && c.state === 'calling', docked = c.state === 'talk';
+            const ring = c.dir === 'in' && c.state === 'ringing', calling = c.dir === 'out' && c.state === 'calling', docked = c.state === 'talk', connecting = c.state === 'connecting', ending = c.state === 'end';
             const key = c.state + (c.muted ? 1 : 0) + (c.missed ? 1 : 0) + (c.blocked ? 1 : 0) + (c.screen ? 'S' : '') + (c.remoteScreenOn ? 'R' : '');
             el.classList.toggle('vp-live', c.state === 'talk' || c.state === 'end');
-            el.classList.toggle('vp-incoming', ring || (docked && c.dir === 'in'));
-            el.classList.toggle('vp-outgoing', calling || (docked && c.dir === 'out'));
-            el.classList.toggle('vp-call-docked', docked);
+            const bottom = docked || connecting || ending;
+            el.classList.toggle('vp-incoming', ring || (bottom && c.dir === 'in'));
+            el.classList.toggle('vp-outgoing', calling || (bottom && c.dir === 'out'));
+            el.classList.toggle('vp-call-docked', docked || (ending && c.dir === 'out'));
             if (el.dataset.k !== key) {
                 el.dataset.k = key;
                 const btns = el.querySelector('.vp-call-btns');
