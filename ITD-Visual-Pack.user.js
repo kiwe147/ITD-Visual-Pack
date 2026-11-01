@@ -5051,7 +5051,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-call-mini .vp-call-btns button span { display: none; }
         .vp-call-stage { display: none; }
         .vp-call-preview { display: none; }
-        .vp-call-screen { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: contain; background: #000; z-index: 2147483598; display: none; }
+        .vp-call-screenvid { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: contain; background: #000; z-index: 2147483598; display: none; }
+        .vp-call-screenvid.vp-on { display: block; }
         
         .vp-call.vp-watching .vp-call-card { width: min(360px, 92vw); }
         .vp-call.vp-watching .vp-call-stage { display: block; position: absolute; right: 10px; bottom: 10px; width: 120px; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.6); }
@@ -5199,7 +5200,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         function callScreenPrep(c) {
             const v = document.createElement('video');
-            v.className = 'vp-call-screen';
+            v.className = 'vp-call-screenvid';
             v.autoplay = true; v.playsInline = true; v.muted = true;
             document.body.appendChild(v);
             c.screenVideo = v;
