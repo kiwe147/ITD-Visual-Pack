@@ -5014,6 +5014,38 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-call-btns button:hover { filter: brightness(1.12); }
         .vp-call-btns button:active { transform: scale(.96); }
         .vp-call-btns svg { width: 16px; height: 16px; flex: 0 0 auto; }
+        .vp-call.vp-incoming { align-items: flex-end; justify-content: center; padding: 0 16px 28px; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; pointer-events: none; }
+        .vp-call.vp-incoming .vp-call-card { width: min(430px, 100%); padding: 12px 14px; border-radius: 16px; pointer-events: auto; text-align: left;
+            display: flex; align-items: center; gap: 12px; animation: vpCallRise .34s cubic-bezier(.2,.8,.3,1); }
+        .vp-call.vp-incoming .vp-call-who { flex-direction: row; align-items: center; gap: 12px; min-width: 0; }
+        .vp-call.vp-incoming .vp-call-txt { align-items: flex-start; min-width: 0; }
+        .vp-call.vp-incoming .vp-call-ava { width: 46px; height: 46px; margin: 0; flex: 0 0 auto; }
+        .vp-call.vp-incoming .vp-call-emoji { font-size: 26px; }
+        .vp-call.vp-incoming .vp-call-name { font-size: 15px; font-weight: 700; letter-spacing: 0; text-transform: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+        .vp-call.vp-incoming .vp-call-sub { margin: 1px 0 0; font-size: 12px; color: #b5bac1; }
+        .vp-call.vp-incoming .vp-call-lv, .vp-call.vp-incoming .vp-call-tag, .vp-call.vp-incoming .vp-call-note,
+        .vp-call.vp-incoming .vp-call-info, .vp-call.vp-incoming .vp-call-stage, .vp-call.vp-incoming .vp-call-min { display: none !important; }
+        .vp-call.vp-incoming .vp-call-btns { margin: 0 0 0 auto; gap: 8px; flex: 0 0 auto; }
+        .vp-call.vp-incoming .vp-call-btns button { width: 46px; height: 46px; padding: 0; border-radius: 50%; max-width: none; flex: 0 0 auto; }
+        .vp-call.vp-incoming .vp-call-btns button span { display: none; }
+        @keyframes vpCallRise { from { transform: translateY(120%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .vp-call.vp-breaking { pointer-events: none; }
+        .vp-call.vp-breaking .vp-call-card { animation: vpRedWave .4s ease-out forwards; }
+        @keyframes vpRedWave {
+            0% { box-shadow: inset 0 0 0 0 rgba(218,55,60,0), 0 24px 70px rgba(0,0,0,.6); }
+            100% { box-shadow: inset 0 0 0 400px rgba(218,55,60,.55), 0 24px 70px rgba(0,0,0,.6); }
+        }
+        .vp-break-half { position: fixed !important; pointer-events: none; z-index: 2147483699; transition: none; }
+        .vp-break-top { animation: vpBreakTop .7s cubic-bezier(.3,.1,.6,1) forwards; }
+        .vp-break-bot { animation: vpBreakBot .7s cubic-bezier(.3,.1,.6,1) forwards; }
+        @keyframes vpBreakTop {
+            0% { transform: translate(0,0) rotate(0); opacity: 1; }
+            100% { transform: translate(-45px, 260px) rotate(-22deg); opacity: 0; }
+        }
+        @keyframes vpBreakBot {
+            0% { transform: translate(0,0) rotate(0); opacity: 1; }
+            100% { transform: translate(45px, 260px) rotate(22deg); opacity: 0; }
+        }
         .vp-call-no { background: #248046; }
         .vp-call-yes { background: #248046; }
         .vp-call.vp-out { animation: vpCallOut .3s ease forwards; }
@@ -5516,10 +5548,11 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (!el) return;
             const ring = c.dir === 'in' && c.state === 'ringing', key = c.state + (c.muted ? 1 : 0) + (c.missed ? 1 : 0) + (c.blocked ? 1 : 0) + (c.screen ? 'S' : '') + (c.remoteScreenOn ? 'R' : '');
             el.classList.toggle('vp-live', c.state === 'talk' || c.state === 'end');
+            el.classList.toggle('vp-incoming', ring);
             if (el.dataset.k !== key) {
                 el.dataset.k = key;
                 const btns = el.querySelector('.vp-call-btns');
-                btns.innerHTML = c.state === 'end' ? (c.missed ? callBtn('vp-call-mute vp-call-close', 'Закрыть', GLYPH.close) + callBtn('vp-call-yes vp-call-again', 'Перезвонить', GLYPH.phone) : '')
+                btns.innerHTML = c.state === 'end' ? (c.missed ? callBtn('vp-call-mute vp-call-close', 'Закрыть', GLYPH.close) + callBtn('vp-call-yes vp-call-again', 'Перезвонить', GLYPH.phone) : callBtn('vp-call-mute vp-call-close', 'Закрыть', GLYPH.close))
                     : ring ? callBtn('vp-call-end', 'Отклонить', GLYPH.phone) + callBtn('vp-call-yes', 'Принять', GLYPH.phone)
                         : callBtn('vp-call-mute' + (c.muted ? ' vp-on' : ''), c.muted ? 'Включить' : 'Микрофон', CALL_MIC + (c.muted ? '<path d="M4 4l16 16"/>' : ''))
                         + (callShareSupported() ? callBtn('vp-call-screen' + (c.screen ? ' vp-on' : ''), c.screen ? 'Стоп' : 'Экран', '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>') : '')
@@ -5603,11 +5636,84 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (callNet.cur === c) callNet.cur = null;
             if (!(c.dir === 'in' && was === 'ringing')) callTone('hang');
             if (c.missed) callTitle('📞 Пропущенный звонок'); else callTitle(null);
+            if (was === 'ringing' && c.el) {
+                callSub(c, text);
+                callBreak(c);
+                return;
+            }
             callSub(c, text);
             callPaint(c);
             if (c.el) c.el.classList.remove('vp-call-mini');
-            if (!c.missed) callClose(c, 1800);
-            else if (c.el) c.el.addEventListener('click', () => callTitle(null), { once: true });
+            if (c.missed) { if (c.el) c.el.addEventListener('click', () => callTitle(null), { once: true }); return; }
+            callBreak(c);
+        }
+        function callBreak(c) {
+            const el = c.el;
+            if (!el || el.dataset.closing) return;
+            el.dataset.closing = '1';
+            el.classList.add('vp-breaking');
+            const card = el.querySelector('.vp-call-card');
+            if (!card) { callClose(c, 900); return; }
+            const r = card.getBoundingClientRect();
+            const midY = r.top + r.height / 2;
+            const zig = 10;
+            const clipTop = 'polygon(0 0,100% 0,100% calc(50% - ' + zig + 'px),85% calc(50% + ' + zig + 'px),70% calc(50% - ' + zig + 'px),55% calc(50% + ' + zig + 'px),40% calc(50% - ' + zig + 'px),25% calc(50% + ' + zig + 'px),10% calc(50% - ' + zig + 'px),0 calc(50% + ' + zig + 'px))';
+            const clipBot = 'polygon(0 calc(50% + ' + zig + 'px),10% calc(50% - ' + zig + 'px),25% calc(50% + ' + zig + 'px),40% calc(50% - ' + zig + 'px),55% calc(50% + ' + zig + 'px),70% calc(50% - ' + zig + 'px),85% calc(50% + ' + zig + 'px),100% calc(50% - ' + zig + 'px),100% 100%,0 100%)';
+            const wrapClasses = el.className.replace(/\bvp-call\b/g, '').replace(/\bvp-breaking\b/g, '').replace(/\s+/g, ' ').trim();
+            const mk = function () {
+                const w = document.createElement('div');
+                w.className = 'vp-call vp-call-real ' + wrapClasses + ' vp-break-half';
+                w.style.position = 'fixed';
+                w.style.inset = 'auto';
+                w.style.left = r.left + 'px';
+                w.style.top = r.top + 'px';
+                w.style.width = r.width + 'px';
+                w.style.height = r.height + 'px';
+                w.style.padding = '0';
+                w.style.margin = '0';
+                w.style.background = 'transparent';
+                w.style.backdropFilter = 'none';
+                w.style.webkitBackdropFilter = 'none';
+                w.style.display = 'block';
+                w.style.zIndex = '2147483699';
+                const c2 = card.cloneNode(true);
+                c2.style.width = '100%';
+                c2.style.height = '100%';
+                c2.style.boxSizing = 'border-box';
+                w.appendChild(c2);
+                document.body.appendChild(w);
+                return w;
+            };
+            const cloneTop = mk();
+            const cloneBot = mk();
+            cloneTop.style.clipPath = clipTop;
+            cloneBot.style.clipPath = clipBot;
+            const wave = document.createElement('div');
+            wave.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483698;border-radius:50%;background:radial-gradient(circle, rgba(218,55,60,.85) 0%, rgba(218,55,60,.5) 40%, rgba(218,55,60,0) 72%);';
+            const endBtn = el.querySelector('.vp-call-end');
+            const eb = endBtn ? endBtn.getBoundingClientRect() : { left: r.left + r.width / 2, top: r.top + r.height / 2, width: 0, height: 0 };
+            const cx = eb.left + eb.width / 2, cy = eb.top + eb.height / 2;
+            const size = Math.max(window.innerWidth, window.innerHeight) * 2.2;
+            wave.style.left = (cx - size / 2) + 'px';
+            wave.style.top = (cy - size / 2) + 'px';
+            wave.style.width = size + 'px';
+            wave.style.height = size + 'px';
+            wave.style.transform = 'scale(0)'; wave.style.opacity = '0.9';
+            document.body.appendChild(wave);
+            requestAnimationFrame(function () {
+                wave.style.transition = 'transform .38s ease-out, opacity .5s ease-out';
+                wave.style.transform = 'scale(1)';
+                wave.style.opacity = '0';
+            });
+            card.style.visibility = 'hidden';
+            setTimeout(function () {
+                cloneTop.classList.add('vp-break-top');
+                cloneBot.classList.add('vp-break-bot');
+            }, 360);
+            setTimeout(function () {
+                wave.remove(); cloneTop.remove(); cloneBot.remove();
+                el.classList.add('vp-out'); setTimeout(function () { el.remove(); }, 320);
+            }, 1150);
         }
         async function callStart(uid, name, ava) {
             if (callNet.cur) { if (callNet.cur.el) callNet.cur.el.classList.remove('vp-call-mini'); return; }
@@ -8469,7 +8575,7 @@ var __vpBannerAuto = (() => {
         };
         const CHANGELOG = [
             ['3.8.5', '1 ноября 2026', [
-                'Звонки: демонстрация экрана — видео до 2К и звук экрана отдельно от микрофона, оба участника могут показывать одновременно'
+                'Звонки: добавлена демонстрация экрана (WIP)'
             ]],
             ['3.8.4', '31 октября 2026', [
                 'Галочка: если человек не заходил с модом больше 3 месяцев или галочку сняли вручную, она становится серой — это значит «не подтверждён». Чтобы вернуть, зайди на сайт с модом: галочка снова уйдёт на подтверждение'
@@ -15750,10 +15856,6 @@ var __vpBannerAuto = (() => {
         .vp-gal-grid { display: flex; gap: 8px; align-items: flex-start; max-width: 1400px; margin: 0 auto; }
         .vp-gal-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
         .vp-gal-tile { position: relative; border-radius: 16px; overflow: hidden; background: rgba(128,128,128,.15); cursor: pointer; }
-        .vp-gal-ghost { position: absolute; top: 8px; right: 8px; z-index: 4; pointer-events: none; display: inline-flex; align-items: center; gap: 3px; padding: 4px 8px; border-radius: 12px; background: rgba(20,10,40,.72); color: #fff; font-size: 13px; font-weight: 600; line-height: 1; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); box-shadow: 0 2px 8px rgba(0,0,0,.4); }
-        .vp-gal-ghost.ghost-ex { background: rgba(30,30,30,.72); color: #bbb; }
-        .vp-gal-ghost.ghost-taken { background: rgba(120,60,190,.85); }
-        .vp-gal-ghost.ghost-night { background: rgba(40,50,90,.85); }
         .vp-gal-tile.vp-gal-poss::before { content: ''; position: absolute; inset: 0; border-radius: 16px; padding: 2px;
             background: linear-gradient(115deg, #ff5b5b, #ffb15b, #f8ff5b, #5bff8a, #5bd6ff, #8a5bff, #ff5bd0, #ff5b5b);
             background-size: 400% 400%; -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -15764,11 +15866,6 @@ var __vpBannerAuto = (() => {
             background-size: 260% 100%, 100% 100%; background-position: 200% 0, 0 0;
             animation: vpGalSheen 4s ease-in-out infinite; pointer-events: none; z-index: 2; mix-blend-mode: screen; }
         .vp-gal-tile.vp-gal-poss { backdrop-filter: blur(1px) saturate(1.15); -webkit-backdrop-filter: blur(1px) saturate(1.15); }
-        .vp-gal-textbox { position: absolute; inset: 0; padding: 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px;
-            background: linear-gradient(150deg, rgba(20,15,35,.92), rgba(10,8,22,.95)); overflow: hidden; }
-        .vp-gal-textnick { font-size: 12px; font-weight: 600; color: rgba(255,255,255,.55); text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
-        .vp-gal-textbody { flex: 1 1 auto; font-size: 14px; line-height: 1.35; color: #eae6f5; white-space: pre-wrap; overflow: hidden;
-            display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; }
         .vp-gal-tile.vp-gal-wolf::before { content: ''; position: absolute; inset: 0; border-radius: 16px;
             border: 2px solid rgba(150,105,255,.60);
             background: linear-gradient(135deg, rgba(130,85,215,.22), rgba(55,35,110,.12));
@@ -16104,109 +16201,12 @@ var __vpBannerAuto = (() => {
             }
             return galImgIO;
         }
-        const GAL_GHOST_TTL = 60000, GAL_GHOST_CHUNK = 40;
-        function galGhostMap() {
-            if (!gal.gmap) gal.gmap = new Map();
-            return gal.gmap;
-        }
-        function galGhostParse(v) {
-            if (!v) return null;
-            const p = v.possession, w = v.werewolf;
-            if (p) {
-                if (p.resolved) return { k: 'ex', t: '\u{1F480}', label: 'Призрак изгнан' };
-                if (p.stage === 'taken') return { k: 'taken', t: '\u{1F47B}', label: 'Пост захвачен' };
-                return { k: '', t: '\u{1F47B}', label: 'Призрак' };
-            }
-            if (w && w.night) return { k: 'night', t: '\u{1F43A}', label: 'Оборотень (ночь)' };
-            return null;
-        }
         let galNetLast = 0;
         async function galApi(path, opts) {
             const wait = galNetLast + GAL_GAP - Date.now();
             if (wait > 0) await new Promise(r => setTimeout(r, wait));
             galNetLast = Date.now();
             return api(path, opts);
-        }
-        async function galGhostFetch(ids) {
-            const map = galGhostMap();
-            const now = Date.now();
-            const need = ids.filter(id => { const h = map.get(id); return !h || now - h.at > GAL_GHOST_TTL; });
-            if (!need.length) return map;
-            for (let i = 0; i < need.length; i += GAL_GHOST_CHUNK) {
-                const chunk = need.slice(i, i + GAL_GHOST_CHUNK);
-                const url = '/api/v1/halloween/feed-state?posts=' + chunk.map(encodeURIComponent).join(',');
-                let res = null;
-                try { res = await galApi(url); } catch (e) { break; }
-                if (res && (res.status === 413 || res.status === 414 || res.status === 422) && chunk.length > 20 && GAL_GHOST_CHUNK > 20) {
-                    const half = chunk.slice(0, Math.ceil(chunk.length / 2)), rest = chunk.slice(half.length);
-                    for (const sub of [half, rest]) {
-                        if (!sub.length) continue;
-                        const u2 = '/api/v1/halloween/feed-state?posts=' + sub.map(encodeURIComponent).join(',');
-                        let r2 = null;
-                        try { r2 = await galApi(u2); } catch (e) { break; }
-                        if (!r2 || !r2.ok) continue;
-                        let d2 = null;
-                        try { d2 = await r2.json(); } catch (e) { continue; }
-                        const p2 = (d2 && ((d2.data && d2.data.posts) || d2.posts)) || {};
-                        const at2 = Date.now();
-                        for (const id of sub) map.set(id, { at: at2, tag: galGhostParse(p2[id]) });
-                    }
-                    continue;
-                }
-                if (!res || !res.ok) break;
-                let data = null;
-                try { data = await res.json(); } catch (e) { break; }
-                const posts = (data && ((data.data && data.data.posts) || data.posts)) || {};
-                const seen = Date.now();
-                for (const id of chunk) map.set(id, { at: seen, tag: galGhostParse(posts[id]) });
-                for (const id of chunk) if (!map.has(id)) map.set(id, { at: seen, tag: null });
-            }
-            return map;
-        }
-        async function galGhostAll(list) {
-            const ids = list.map(p => p.id).filter(Boolean);
-            if (!ids.length) return galGhostMap();
-            try { await galGhostFetch(ids); } catch (e) { }
-            return galGhostMap();
-        }
-        function galGhostTag(map, id) {
-            const h = map.get(id);
-            return h ? h.tag : null;
-        }
-        function galGhostBadge(tile, tag) {
-            const el = tile && tile.querySelector('.vp-gal-ghost');
-            if (!el) return;
-            if (!tag) { el.hidden = true; return; }
-            el.hidden = false;
-            el.className = 'vp-gal-ghost' + (tag.k ? ' ghost-' + tag.k : '');
-            el.textContent = tag.t;
-            el.title = tag.label;
-            el.setAttribute('aria-label', tag.label);
-        }
-        function galTextTile(post, text) {
-            const tile = document.createElement('div');
-            tile.className = 'vp-gal-tile vp-gal-text';
-            tile._vpRatio = 1.0;
-            tile._vpN = galN++;
-            tile.style.aspectRatio = '1 / 1';
-            tile.style.setProperty('--vp-r', 1.0);
-            const box = document.createElement('div');
-            box.className = 'vp-gal-textbox';
-            const who = (post.author && (post.author.displayName || post.author.username)) || '';
-            if (who) {
-                const n = document.createElement('div');
-                n.className = 'vp-gal-textnick';
-                n.textContent = '\u0040' + String(who).slice(0, 40);
-                box.appendChild(n);
-            }
-            const p = document.createElement('div');
-            p.className = 'vp-gal-textbody';
-            p.textContent = text;
-            box.appendChild(p);
-            tile.appendChild(box);
-            tile._vpGhost = post.id;
-            tile.addEventListener('click', () => { if (!tile._vpDragged) galOpenPost(post); });
-            return tile;
         }
         function galTile(post, media) {
             const tile = document.createElement('div');
@@ -16318,7 +16318,6 @@ var __vpBannerAuto = (() => {
             strip.querySelectorAll('img').forEach(i => i.addEventListener('load', barBg));
             if (media.length > 1) strip.addEventListener('scroll', () => requestAnimationFrame(barBg), { passive: true });
             barBg();
-            tile._vpGhost = post.id;
             tile.addEventListener('click', () => { if (!tile._vpDragged) galOpenPost(post); });
             return tile;
         }
@@ -16345,9 +16344,8 @@ var __vpBannerAuto = (() => {
             if (!post || gal.seen.has(post.id)) return false;
             gal.seen.add(post.id);
             const media = (post.attachments || []).filter(att => att && att.url && (!att.type || /image|video/.test(att.type))).slice(0, 10);
-            const gtext = gal.tab === 'ghosts' ? String(post.text || post.content || '').trim().slice(0, 260) : '';
-            if (!media.length && !gtext) return false;
-            const tile = media.length ? galTile(post, media) : galTextTile(post, gtext);
+            if (!media.length) return false;
+            const tile = galTile(post, media);
             if (gal.fresh && !calm) {
                 tile.classList.add('vp-gal-new');
                 tile.style.setProperty('--vp-d', (galN % 8) * 40 + 'ms');
@@ -16357,14 +16355,13 @@ var __vpBannerAuto = (() => {
             const st = gal.acts.get(post.id);
             gal.cachePosts.push({
                 id: post.id, author: post.author && { username: post.author.username },
-                text: gtext || undefined,
                 attachments: media.map(({ type, url, width, height, duration, thumbnailUrl }) => ({ type, url, width, height, duration, thumbnailUrl })),
                 isLiked: st ? st.like : post.isLiked, isReposted: st ? st.repost : post.isReposted
             });
             return true;
         }
         async function galFetchPage(cursor, tab, hops) {
-            const apiTab = tab === 'ghosts' ? 'popular' : tab;
+            const apiTab = tab;
             const url = lim => `/api/posts?limit=${lim}&tab=${apiTab}` + (cursor ? '&cursor=' + encodeURIComponent(cursor) : '');
             const LIM_MIN = 20, LIM_MAX = 200;
             const galLimGet = () => { const v = +GM_getValue('vp_gal_lim', 100) || 100; return Math.max(LIM_MIN, Math.min(LIM_MAX, v)); };
@@ -16376,14 +16373,14 @@ var __vpBannerAuto = (() => {
                 if (galLimGet() < LIM_MAX && !gal.limT && (gal.lastLimProbe || 0) < Date.now() - 60000) {
                     gal.lastLimProbe = Date.now();
                     clearTimeout(gal.limT);
-                    gal.limT = setTimeout(() => { gal.limT = 0; if (!gal.el || gal.tab !== 'ghosts') galLimProbeRun(tab, okLim); }, 20000);
+                    gal.limT = setTimeout(() => { gal.limT = 0; if (!gal.el) galLimProbeRun(tab, okLim); }, 20000);
                 }
             };
             const galLimProbeRun = async (tab2, cur) => {
                 const nxt = Math.min(LIM_MAX, Math.floor(cur * 1.5));
                 if (nxt <= cur) return;
                 try {
-                    const r = await galApi(`/api/posts?limit=${nxt}&tab=${tab2 === 'ghosts' ? 'popular' : tab2}`);
+                    const r = await galApi(`/api/posts?limit=${nxt}&tab=${tab2}`);
                     if (r && r.ok) galLimSet(nxt);
                     else galLimSet(cur);
                 } catch (e) { }
@@ -16425,20 +16422,6 @@ var __vpBannerAuto = (() => {
                 galCacheSave();
                 gal.el.querySelector('.vp-gal-more').textContent = gal.done ? (gal.seen.size ? 'Это всё' : 'Пусто') : '';
                 gal.loading = false;
-                if (gal.tab === 'ghosts' && !added && !gal.done) {
-                    gal.ghostHop = (gal.ghostHop || 0) + 1;
-                    if (gal.ghostHop <= 2) {
-                        gal.el.querySelector('.vp-gal-more').textContent = 'Ищем призраков…';
-                        clearTimeout(gal.hopT);
-                        const g0 = gal.gen;
-                        gal.hopT = setTimeout(() => { if (gal.el && g0 === gal.gen && gal.tab === 'ghosts') galLoad(); }, 900);
-                        return;
-                    }
-                    gal.el.querySelector('.vp-gal-more').textContent = 'Дальше пусто — нажми, чтобы продолжить';
-                    gal.el.querySelector('.vp-gal-more').onclick = () => { gal.ghostHop = 0; galLoad(); };
-                    return;
-                }
-                gal.ghostHop = 0;
                 after();
                 if (!gal.done && !gal.buf && !gal.pre) galPrefetch(true);
             };
@@ -16510,7 +16493,7 @@ var __vpBannerAuto = (() => {
             if (ind && i >= 0) ind.style.transform = `translateX(${i * 100}%)`;
         }
         function galSwitch(tab, fresh) {
-            gal.tab = tab; gal.cursor = null; gal.done = false; gal.seen.clear(); gal.acts.clear(); galN = 0; gal.ghostHop = 0; clearTimeout(gal.hopT);
+            gal.tab = tab; gal.cursor = null; gal.done = false; gal.seen.clear(); gal.acts.clear(); galN = 0;
             gal.gen = (gal.gen || 0) + 1; gal.loading = false; gal.chain = 0; gal.cachePosts = []; gal.cacheT = 0;
             gal.buf = null; gal.pre = null; clearTimeout(gal.preT);
             clearTimeout(gal.waitT); gal.waitUntil = 0;
