@@ -5320,16 +5320,19 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         function callPlay(c) {
             if (c.state === 'end') return;
             if (c.ac && c.ac.state === 'suspended') c.ac.resume().catch(() => { });
-            if (c.screenAudio && c.screenAudio.srcObject) { const sp = c.screenAudio.play(); if (sp && sp.catch) sp.catch(() => { }); }
+            const markBlocked = (e, tag) => {
+                if (!e || e.name !== 'NotAllowedError') return;
+                logErr('звонок: браузер не дал включить ' + tag, e);
+                if (!c.blocked) { c.blocked = true; callPaint(c); }
+            };
+            if (c.screenAudio && c.screenAudio.srcObject) {
+                const sp = c.screenAudio.play();
+                if (sp && sp.catch) sp.catch(e => markBlocked(e, 'звук экрана'));
+            }
             const a = c.audio;
             if (!a || !a.srcObject) return;
             const p = a.play();
-            if (p) p.then(() => { if (c.blocked) { c.blocked = false; callPaint(c); } }, e => {
-                if (!e || e.name !== 'NotAllowedError' || c.blocked) return;
-                c.blocked = true;
-                logErr('звонок: браузер не дал включить звук', e);
-                callPaint(c);
-            });
+            if (p) p.then(() => { if (c.blocked) { c.blocked = false; callPaint(c); } }, e => markBlocked(e, 'звук звонка'));
         }
         function callMeter(c, who, stream) {
             if (!c.ac || (c.meters && c.meters[who])) return;
@@ -5509,7 +5512,10 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             el.querySelector('.vp-call-name').textContent = c.name;
             el.querySelector('[data-screen-side="remote"]').textContent = 'Экран ' + c.name;
             el.querySelector('.vp-call-fold').onclick = e => { e.stopPropagation(); callFold(c); };
-            el.querySelector('.vp-call-card').addEventListener('click', e => { if (el.classList.contains('vp-folded') && !e.target.closest('button')) callUnfold(c); });
+            el.querySelector('.vp-call-card').addEventListener('click', e => {
+                if (el.classList.contains('vp-folded') && !e.target.closest('button')) callUnfold(c);
+                if (c.blocked) callPlay(c);
+            });
             el.querySelectorAll('.vp-screen-flip').forEach(btn => btn.onclick = e => { e.stopPropagation(); callFlip(c); });
             el.querySelector('.vp-screen-fullscreen').onclick = e => { e.stopPropagation(); callRemoteFullscreenToggle(c); };
             document.body.appendChild(el);
@@ -5577,7 +5583,11 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (c.state !== 'talk' || !c.pc) return;
                 let got = 0;
                 try { (await c.pc.getStats()).forEach(r => { if (r.type === 'inbound-rtp' && r.kind === 'audio') got += r.bytesReceived || 0; }); } catch (e) { }
-                if (got) return;
+                if (got > 0) {
+                    // Звук доходит, но элемент на паузе — autoplay block.
+                    if (c.audio && c.audio.paused && !c.blocked) { c.blocked = true; callPaint(c); }
+                    return;
+                }
                 c.warn = 'звук от собеседника не приходит';
                 callSub(c);
                 callInfo(c).then(t => logErr('звонок: звук не приходит', new Error(t.split('\n').slice(2, 5).join('; '))));
@@ -5794,10 +5804,20 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (!c.pc || c.state !== 'talk') return;
             if (c.screen) { callUnshare(c); return; }
             try {
-                const stream = await navigator.mediaDevices.getDisplayMedia({
+                const gmReq = {
                     video: { width: { ideal: CALL_SCREEN.w }, height: { ideal: CALL_SCREEN.h }, frameRate: { ideal: CALL_SCREEN.fps, max: CALL_SCREEN.fps } },
                     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-                });
+                    // Chrome без этого играет захваченный звук ЛОКАЛЬНО (loopback).
+                    // Мы слышим свою же демонстрацию. Флаг гасит это в источнике.
+                    suppressLocalAudioPlayback: true
+                };
+                let stream;
+                try { stream = await navigator.mediaDevices.getDisplayMedia(gmReq); }
+                catch (e) {
+                    // Некоторые браузеры не понимают флаг — повторяем без него.
+                    if (e && e.name === 'TypeError') { delete gmReq.suppressLocalAudioPlayback; stream = await navigator.mediaDevices.getDisplayMedia(gmReq); }
+                    else throw e;
+                }
                 if (c.state !== 'talk') { stream.getTracks().forEach(t => t.stop()); return; }
                 const vt = stream.getVideoTracks()[0], at = stream.getAudioTracks()[0] || null;
                 try { vt.contentHint = 'detail'; } catch (e) { }
@@ -5849,7 +5869,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const selfEmpty = el.querySelector('[data-empty="self"]');
             const remoteEmpty = el.querySelector('[data-empty="remote"]');
             if (selfVideo) {
-                const st = c.screen ? c.screen.stream : null;
+                const st = c.screen && c.screen.vt ? new MediaStream([c.screen.vt]) : null;
                 if (selfVideo.srcObject !== st) selfVideo.srcObject = st;
                 if (st) { const p = selfVideo.play(); if (p && p.catch) p.catch(() => { }); }
             }
@@ -6005,7 +6025,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const v = pip.querySelector('.vp-self-pip-video');
             if (!v) return;
             if (!show) { if (v.srcObject) v.srcObject = null; return; }
-            const st = c.screen ? c.screen.stream : null;
+            const st = c.screen && c.screen.vt ? new MediaStream([c.screen.vt]) : null;
             if (v.srcObject !== st) v.srcObject = st;
             if (st) { const p = v.play(); if (p && p.catch) p.catch(() => { }); }
         }
@@ -17246,43 +17266,6 @@ var __vpBannerAuto = (() => {
                 if (emoji) { newest.setAttribute('data-colored', emoji); tintCard(newest, emoji); } else newest.removeAttribute('data-colored');
             }
         });
-
-        if (matchMedia('(hover: hover) and (pointer: fine)').matches) {
-            let hoverVid = null;
-            const videoAt = t => {
-                if (!t || !t.closest) return null;
-                const tile = t.closest('.vp-gal-tile');
-                if (tile) {
-                    const strip = tile.querySelector('.vp-gal-strip'), slide = strip && strip.children[strip._vpI || 0];
-                    return slide ? slide.querySelector('video') : null;
-                }
-                if (t.tagName === 'VIDEO') return t;
-                const box = t.closest('.' + SELECTORS.postMedia);
-                return box ? [...box.querySelectorAll('video')].find(v => v.getBoundingClientRect().width > 0) || null : null;
-            };
-            const unmute = v => {
-                if (!v || !v.muted) return;
-                if (v.closest('.vp-gal')) { const g = galVol(); if (!g) return; v.volume = g; }
-                const wasPlaying = !v.paused;
-                v._vpHoverSound = true;
-                v.muted = false;
-                setTimeout(() => { if (wasPlaying && v.paused && !v.muted) { v.muted = true; v._vpHoverSound = false; v.play().catch(() => { }); } }, 0);
-            };
-            const mute = v => { if (v && v._vpHoverSound) { v.muted = true; v._vpHoverSound = false; } };
-            document.addEventListener('pointerover', e => {
-                if (e.pointerType !== 'mouse') return;
-                const v = videoAt(e.target);
-                if (v === hoverVid) return;
-                mute(hoverVid);
-                hoverVid = v;
-                unmute(v);
-            }, true);
-            document.addEventListener('pointerleave', () => { mute(hoverVid); hoverVid = null; });
-            document.addEventListener('scroll', e => {
-                if (!hoverVid || !e.target.classList || !e.target.classList.contains('vp-gal-strip')) return;
-                requestAnimationFrame(() => { const el = document.querySelectorAll(':hover'), t = el[el.length - 1], v = videoAt(t); if (v !== hoverVid) { mute(hoverVid); hoverVid = v; unmute(v); } });
-            }, true);
-        }
 
         const LINK_RE = /(?:https?:\/\/|www\.)[^\s<>"'«»]+|(?<![\w@.\/-])(?:[a-z0-9-]+\.)+(?:com|ru|me|org|net|io|gg|tv|app|dev|xyz|su|ly|co|be|link|site|store|online|info|pro|рф)(?:\/[^\s<>"'«»]*)?(?![\w-])|(?<![\w@.\/-])[а-яё0-9-]+\.(?:com|рф|ru)(?![\w-])/giu;
         const linkNodes = new Map();
