@@ -5490,7 +5490,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             return callOps(c, async () => {
                 const pc = c.pc;
                 if (!pc || c.state !== 'talk') return;
-                if (pc.signalingState !== 'stable' || c.makingOffer) return;
+                if (pc.signalingState !== 'stable' || c.makingOffer) {
+                    // Не молчим: если в этот момент идёт другая негоциация,
+                    // offer потеряется. Повторяем через 400 мс (один таймер).
+                    clearTimeout(c.negRetryT);
+                    c.negRetryT = setTimeout(() => { if (c.state === 'talk') callNegotiate(c); }, 400);
+                    return;
+                }
                 try {
                     c.makingOffer = true;
                     await pc.setLocalDescription();
@@ -5905,6 +5911,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (c.dc && c.dc.readyState === 'open') try { c.dc.send('screen:1'); } catch (e) { }
                 callSharePaint(c);
                 callPaint(c);
+                callNegotiate(c);
             } catch (e) {
                 if (e && e.name === 'NotAllowedError') return;   // отменил выбор — не ошибка
                 logErr('звонок: экран', e);
@@ -5920,6 +5927,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (c.dc && c.dc.readyState === 'open') try { c.dc.send('screen:0'); } catch (e) { }
             callSharePaint(c);
             callPaint(c);
+            callNegotiate(c);
         }
         function callSharePaint(c) {
             const el = c.el;
