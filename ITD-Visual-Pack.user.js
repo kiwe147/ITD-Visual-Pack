@@ -5387,7 +5387,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const pc = new RTCPeerConnection({ iceServers: CALL_ICE });
             // Perfect negotiation (MDN): оба могут начать ре-негоциацию одновременно.
             // Вызывающий — impolite (его offer побеждает), принимающий — polite (откатывает свой).
-            c.polite = c.dir !== 'out';
+            // Perfect negotiation: роли должны быть детерминированы с двух сторон.
+            // Привязка к dir ломается в glare (оба звонят одновременно или оба
+            // жмут «Экран»): оба impolite -> оба игнорируют чужой offer.
+            // Сравнение ID даёт непротиворечивое разделение.
+            const myCallId = String((typeof msgMyId === 'function' && msgMyId()) || (msgNet && msgNet.me && msgNet.me.id) || '');
+            const peerCallId = String(c.uid || '');
+            c.polite = !!(myCallId && peerCallId && myCallId > peerCallId);
             c.makingOffer = false;
             c.ignoreOffer = false;
             pc.onnegotiationneeded = () => { callNegotiate(c); };
@@ -5427,38 +5433,71 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             pc.onconnectionstatechange = () => {
                 const st = pc.connectionState;
                 if (c.state === 'end') return;
-                if (st === 'connected') { clearTimeout(c.lostT); callLive(c); }
-                else if (st === 'failed') { callInfo(c).then(t => logErr('звонок: не соединились', new Error(t.split('\n').slice(2, 4).join('; ')))); callEnd(c, 'Не удалось соединиться напрямую — обычно мешает мобильный интернет. Попробуйте, чтобы хотя бы у одного был Wi-Fi', 0); }
-                else if (st === 'disconnected' && c.state === 'talk') {
+                if (st === 'connected') {
+                    clearTimeout(c.lostT); clearTimeout(c.iceGraceT);
+                    c.iceRestartTries = 0;
+                    callLive(c);
+                } else if (st === 'failed') {
+                    clearTimeout(c.lostT); clearTimeout(c.iceGraceT);
+                    if (c.state === 'talk') callIceRestart(c, 'failed');
+                    else callEnd(c, 'Не удалось соединиться напрямую — обычно мешает мобильный интернет. Попробуйте, чтобы хотя бы у одного был Wi-Fi', 0, 'connect-failed');
+                } else if (st === 'disconnected' && c.state === 'talk') {
                     callSub(c, 'Связь прерывается…');
-                    clearTimeout(c.lostT);
-                    c.lostT = setTimeout(() => pc.connectionState !== 'connected' && callEnd(c, 'Связь потеряна', 0), 10000);
+                    clearTimeout(c.lostT); clearTimeout(c.iceGraceT);
+                    c.iceGraceT = setTimeout(() => {
+                        if (pc.connectionState === 'connected' || c.state === 'end') return;
+                        callIceRestart(c, 'disconnected');
+                    }, 4500);
                 }
             };
             return pc;
         }
+        // FIFO-очередь операций на соединение: никаких параллельных SLD/SRD.
+        function callOps(c, fn) {
+            const run = async () => { try { await fn(); } catch (e) { logErr('звонок: операция', e); } };
+            c.opChain = (c.opChain || Promise.resolve()).then(run, run);
+            return c.opChain;
+        }
+        function callIceRestart(c, reason) {
+            if (!c.pc || c.state === 'end' || c.iceRestarting) return;
+            c.iceRestartTries = (c.iceRestartTries || 0) + 1;
+            if (c.iceRestartTries > 3) return callEnd(c, 'Связь потеряна', 0, 'ice-restart-max');
+            c.iceRestarting = true;
+            callSub(c, 'Восстанавливаю связь…');
+            callOps(c, async () => {
+                try {
+                    const pc = c.pc;
+                    if (!pc || c.state === 'end') return;
+                    await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
+                    await callGather(pc);
+                    if (c.state === 'end') return;
+                    await callSig(c.uid, 4, c.id, await callPackFit(pc.localDescription.sdp));
+                    setTimeout(function () { try { msgSync(); } catch (e) { } }, 300);
+                } catch (e) { logErr('звонок: ICE restart не удался', e); }
+                finally { c.iceRestarting = false; }
+            });
+        }
         async function callNegotiate(c) {
             if (!c.pc || c.state !== 'talk') return;
-            const pc = c.pc;
-            if (pc.signalingState !== 'stable' || c.makingOffer) {
-                if (!c.negT) c.negT = setTimeout(function () { c.negT = null; callNegotiate(c); }, 400);
-                return;
-            }
-            try {
-                c.makingOffer = true;
-                await pc.setLocalDescription();
-                await callGather(pc);
-                if (c.state === 'end') return;
-                const sdp = await callPackFit(pc.localDescription.sdp);
-                await callSig(c.uid, 4, c.id, sdp);
-                setTimeout(function () { try { msgSync(); } catch (err) { } }, 300);
-            } catch (e) { logErr('звонок: ре-негоциация', e); }
-            finally { c.makingOffer = false; }
+            return callOps(c, async () => {
+                const pc = c.pc;
+                if (!pc || c.state !== 'talk') return;
+                if (pc.signalingState !== 'stable' || c.makingOffer) return;
+                try {
+                    c.makingOffer = true;
+                    await pc.setLocalDescription();
+                    await callGather(pc);
+                    if (c.state === 'end') return;
+                    await callSig(c.uid, 4, c.id, await callPackFit(pc.localDescription.sdp));
+                    setTimeout(function () { try { msgSync(); } catch (err) { } }, 300);
+                } catch (e) { logErr('звонок: ре-негоциация', e); }
+                finally { c.makingOffer = false; }
+            });
         }
         function callDc(c, dc) {
             c.dc = dc;
             dc.onmessage = e => {
-                if (e.data === 'bye') callEnd(c, 'Собеседник положил трубку', null);
+                if (e.data === 'bye') callEnd(c, 'Собеседник положил трубку', null, 'peer-bye');
                 else if (/^mute:[01]$/.test(e.data)) { c.peerMuted = e.data === 'mute:1'; callSub(c); }
                 else if (e.data === 'screen:0') { callScreenDrop(c); try { msgSync(); } catch (err) { } }
                 else if (e.data === 'screen:1') { c.remoteScreenOn = true; callSharePaint(c); try { msgSync(); } catch (err) { } }
@@ -5570,6 +5609,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         function callLive(c) {
             if (c.state === 'talk' || c.state === 'end') return;
+            // FLIP: запоминаем где карточка была, чтобы плавно переехать.
+            const cardEl = c.el && c.el.querySelector('.vp-call-card');
+            const oldRect = cardEl ? cardEl.getBoundingClientRect() : null;
             c.state = 'talk';
             c.stops.splice(0).forEach(f => f());
             clearTimeout(c.connT);
@@ -5593,6 +5635,26 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 callInfo(c).then(t => logErr('звонок: звук не приходит', new Error(t.split('\n').slice(2, 5).join('; '))));
             }, 6000));
             callPaint(c);
+            // FLIP: если карточка сместилась (connecting по центру -> talk справа),
+            // анимируем переезд.
+            if (cardEl && oldRect && cardEl.isConnected) {
+                const newRect = cardEl.getBoundingClientRect();
+                const dx = oldRect.left - newRect.left;
+                const dy = oldRect.top - newRect.top;
+                if (dx || dy) {
+                    cardEl.style.transition = 'none';
+                    cardEl.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+                    void cardEl.offsetWidth;
+                    requestAnimationFrame(function () {
+                        if (!cardEl.isConnected) return;
+                        cardEl.style.transition = 'transform .42s cubic-bezier(.22,.8,.24,1)';
+                        cardEl.style.transform = '';
+                        setTimeout(function () {
+                            if (cardEl.isConnected) { cardEl.style.transition = ''; cardEl.style.transform = ''; }
+                        }, 460);
+                    });
+                }
+            }
         }
         function callMute(c) {
             c.muted = !c.muted;
@@ -5600,8 +5662,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (c.dc && c.dc.readyState === 'open') try { c.dc.send(c.muted ? 'mute:1' : 'mute:0'); } catch (e) { }
             callPaint(c);
         }
-        function callEnd(c, text, reason) {
+        function callEnd(c, text, reason, why) {
             if (c.state === 'end') return;
+            if (why) logErr('звонок: конец · ' + why + ' · ' + text, new Error(why));
             const was = c.state;
             c.state = 'end';
             c.missed = c.dir === 'in' && was === 'ringing' && reason === null;
@@ -5772,7 +5835,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (c.state === 'end') return;
                 callSub(c, 'Вызываю…');
                 c.stops.push(callTone('back'));
-                c.timers.push(setTimeout(() => callEnd(c, 'Не отвечает', 3), (CALL_RING_S + 15) * 1000));
+                c.timers.push(setTimeout(() => callEnd(c, 'Не отвечает', 3, 'ring-timeout'), (CALL_RING_S + 15) * 1000));
                 callNet.lastSync = 0;
             } catch (e) { logErr('звонок', e); callEnd(c, e.message || 'Не вышло позвонить', c.offered ? 0 : null); }
         }
@@ -6043,40 +6106,45 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         async function callRenegotiateIn(c, data) {
             const pc = c.pc;
             if (!pc || c.state === 'end') return;
-            const desc = { type: 'offer', sdp: await callUnpack(data) };
-            try {
-                const collision = c.makingOffer || pc.signalingState !== 'stable';
-                c.ignoreOffer = !c.polite && collision;
-                if (c.ignoreOffer) return;
-                const rolledBack = collision && c.polite && pc.signalingState === 'have-local-offer';
-                if (rolledBack) {
-                    await pc.setLocalDescription({ type: 'rollback' });
+            const offer = await callUnpack(data);
+            return callOps(c, async () => {
+                const pc2 = c.pc;
+                if (!pc2 || c.state === 'end') return;
+                const desc = { type: 'offer', sdp: offer };
+                try {
+                    const collision = c.makingOffer || pc2.signalingState !== 'stable';
+                    c.ignoreOffer = !c.polite && collision;
+                    if (c.ignoreOffer) return;
+                    const rolledBack = collision && c.polite && pc2.signalingState === 'have-local-offer';
+                    if (rolledBack) {
+                        await pc2.setLocalDescription({ type: 'rollback' });
+                    }
+                    await pc2.setRemoteDescription(desc);
+                    await pc2.setLocalDescription();
+                    await callGather(pc2);
+                    if (c.state === 'end') return;
+                    await callSig(c.uid, 5, c.id, await callPackFit(pc2.localDescription.sdp));
+                    setTimeout(function () { try { msgSync(); } catch (err) { } }, 300);
+                    if (rolledBack) callNegotiate(c);
+                } catch (e) {
+                    logErr('звонок: входящая ре-негоциация', e);
                 }
-                await pc.setRemoteDescription(desc);
-                await pc.setLocalDescription();
-                await callGather(pc);
-                if (c.state === 'end') return;
-                await callSig(c.uid, 5, c.id, await callPackFit(pc.localDescription.sdp));
-                setTimeout(function () { try { msgSync(); } catch (err) { } }, 300);
-                // Мы откатили свой offer (были polite в коллизии) — наш трек не попал
-                // в согласованный SDP. Без повторной ре-негоциации он не полетит
-                // собеседнику. Именно это давало «работает через раз».
-                if (rolledBack) callNegotiate(c);
-            } catch (e) {
-                logErr('звонок: входящая ре-негоциация', e);
-            }
+            });
         }
         async function callRenegotiateOut(c, data) {
             const pc = c.pc;
             if (!pc || c.state === 'end') return;
-            // Пришёл ответ на НАШ offer — просто применяем. Никакого rollback:
-            // после отката состояние 'stable', и answer уже не принять.
-            if (pc.signalingState !== 'have-local-offer') return;
-            try {
-                await pc.setRemoteDescription({ type: 'answer', sdp: await callUnpack(data) });
-            } catch (e) {
-                logErr('звонок: ответ ре-негоциации', e);
-            }
+            const answer = await callUnpack(data);
+            return callOps(c, async () => {
+                const pc2 = c.pc;
+                if (!pc2 || c.state === 'end') return;
+                if (pc2.signalingState !== 'have-local-offer') return;
+                try {
+                    await pc2.setRemoteDescription({ type: 'answer', sdp: answer });
+                } catch (e) {
+                    logErr('звонок: ответ ре-негоциации', e);
+                }
+            });
         }
         async function callAnswered(c, data) {
             if (c.answering) return;
@@ -6088,7 +6156,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             callSub(c, 'Соединяю…');
             try { await c.pc.setRemoteDescription({ type: 'answer', sdp: await callUnpack(data) }); }
             catch (e) { logErr('звонок: ответ', e); return callEnd(c, 'Не удалось соединиться', 0); }
-            c.connT = setTimeout(() => c.state !== 'talk' && callEnd(c, 'Не удалось соединиться: мешает сеть', 0), 25000);
+            c.connT = setTimeout(() => c.state !== 'talk' && callEnd(c, 'Не удалось соединиться: мешает сеть', 0, 'conn-timeout'), 25000);
         }
         function callIncoming(s) {
             const w = callWho(s.uid);
@@ -6098,7 +6166,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             callSub(c, 'Звонит тебе…');
             callTitle('📞 ' + c.name + ' звонит');
             const left = Math.max(5, CALL_RING_S + 15 - (srvNow() / 1000 - s.ts));
-            c.timers.push(setTimeout(() => callEnd(c, 'Пропущенный звонок', null), left * 1000));
+            c.timers.push(setTimeout(() => callEnd(c, 'Пропущенный звонок', null, 'missed'), left * 1000));
         }
         async function callAccept(c) {
             if (c.state !== 'ringing') return;
@@ -6120,7 +6188,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 await callGather(c.pc);
                 if (c.state === 'end') return;
                 await callSig(c.uid, 2, c.id, await callPackFit(c.pc.localDescription.sdp));
-                if (c.state !== 'talk') c.connT = setTimeout(() => c.state !== 'talk' && callEnd(c, 'Не удалось соединиться: мешает сеть', 0), 30000);
+                if (c.state !== 'talk') c.connT = setTimeout(() => c.state !== 'talk' && callEnd(c, 'Не удалось соединиться: мешает сеть', 0, 'conn-timeout'), 30000);
             } catch (e) { logErr('звонок: принять', e); callEnd(c, e.message || 'Не вышло ответить', 0); }
         }
         const callMmss = sec => String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
@@ -6152,7 +6220,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const endIn = sigs.find(s => s.dir === 'in' && s.type === 3 && s.uid === c.uid && s.id === c.id);
                 if (endIn) {
                     const r = ended.get(key);
-                    if (c.dir === 'in' && c.state === 'ringing') callEnd(c, 'Пропущенный звонок', null);
+                    if (c.dir === 'in' && c.state === 'ringing') callEnd(c, 'Пропущенный звонок', null, 'missed');
                     else callEnd(c, r === 1 ? 'Звонок отклонён' : r === 2 ? 'Занято: у собеседника другой звонок' : r === 3 ? 'Не отвечает'
                         : c.state === 'talk' ? 'Собеседник положил трубку' : c.dir === 'out' ? 'Звонок сброшен' : 'Звонок отменён', null);
                 } else if (ans) callAnswered(c, ans.data);
