@@ -5174,7 +5174,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             }
             const out = [];
             let sec = -1, isVideo = false, videoPt = null;
-            // Оставляем ОДИН видеокодек — иначе SDP не влезет в лимит сообщения.
             for (const l of lines) {
                 if (/^m=video /.test(l)) {
                     const pts = l.split(' ').slice(3).filter(p => video.has(p));
@@ -5247,7 +5246,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 analyser.fftSize = 512;
                 const dest = c.ac.createMediaStreamDestination();
                 src.connect(hp).connect(lp).connect(comp).connect(gate).connect(dest);
-                gate.connect(analyser);
+                comp.connect(analyser);
                 const buf = new Uint8Array(analyser.fftSize);
                 let open = true;
                 const gateT = setInterval(function () {
@@ -5263,6 +5262,22 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 return dest.stream;
             } catch (e) { logErr('звонок: шумоподавление', e); return stream; }
         }
+        async function callMicCheck(c) {
+            if (c.state !== 'talk' || !c.pc || !c.rawStream || c.stream === c.rawStream) return;
+            let sent = 0;
+            try { (await c.pc.getStats()).forEach(r => { if (r.type === 'outbound-rtp' && r.kind === 'audio') sent += r.bytesSent || 0; }); } catch (e) { return; }
+            if (sent > 0) return;
+            const cur = c.stream.getAudioTracks()[0], raw = c.rawStream.getAudioTracks()[0];
+            const snd = c.pc.getSenders().find(x => x.track === cur);
+            if (!snd || !raw) return;
+            try {
+                await snd.replaceTrack(raw);
+                raw.enabled = !c.muted;
+                clearInterval(c.noiseT); c.noiseT = null;
+                c.stream = c.rawStream;
+                logErr('звонок: шумоподавление не отдало звук, взят обычный микрофон', new Error('noise-fallback'));
+            } catch (e) { logErr('звонок: возврат микрофона', e); }
+        }
         async function callMedia(c) {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('Браузер не даёт микрофон');
             const hint = setTimeout(() => c.state !== 'end' && callSub(c, 'Разреши микрофон — значок в адресной строке'), 6000);
@@ -5277,7 +5292,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (c.state === 'end') { c.stream.getTracks().forEach(t => t.stop()); return false; }
             c.rawStream = c.stream;
             c.stream = await callNoiseClean(c, c.stream);
-            callMeter(c, 'me', c.stream);
             return true;
         }
         function callAudioPrep(c) {
@@ -5288,9 +5302,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             document.body.appendChild(a);
             c.audio = a;
             try { c.ac = new (window.AudioContext || window.webkitAudioContext)(); if (c.ac.state === 'suspended') c.ac.resume().catch(() => { }); } catch (e) { c.ac = null; }
-        }
-        function callScreenPrep(c) {
-            // Новая структура: <video data-side="remote"> уже есть в callUi.
         }
         function callScreenAudioPrep(c) {
             if (c.screenAudio) return;
@@ -5305,7 +5316,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             c.screenAudio.srcObject = st;
             const p = c.screenAudio.play();
             if (p && p.catch) p.catch(() => {
-                // Браузер не дал autoplay — покажем кнопку «включить звук» (та же, что для звонка).
                 if (!c.blocked) { c.blocked = true; callPaint(c); }
             });
         }
@@ -5313,6 +5323,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             c.remoteScreenOn = false;
             c.remoteScreen = null;
             c.screenStreamId = null;
+            c.remoteScreenTrack = null;
             if (c.screenAudio) { c.screenAudio.srcObject = null; c.screenAudio.remove(); c.screenAudio = null; }
             callSharePaint(c);
             callPaint(c);
@@ -5333,30 +5344,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (!a || !a.srcObject) return;
             const p = a.play();
             if (p) p.then(() => { if (c.blocked) { c.blocked = false; callPaint(c); } }, e => markBlocked(e, 'звук звонка'));
-        }
-        function callMeter(c, who, stream) {
-            if (!c.ac || (c.meters && c.meters[who])) return;
-            try {
-                const an = c.ac.createAnalyser();
-                an.fftSize = 256;
-                c.ac.createMediaStreamSource(stream).connect(an);
-                (c.meters || (c.meters = {}))[who] = an;
-            } catch (e) { logErr('звонок: индикатор', e); }
-        }
-        function callLevels(c) {
-            const lv = c.el && c.el.querySelector('.vp-call-lv');
-            if (!lv || !c.meters) return;
-            const buf = new Uint8Array(128);
-            for (const who of ['me', 'them']) {
-                const an = c.meters[who], bar = lv.querySelector(`[data-who="${who}"] i`);
-                if (!an || !bar) continue;
-                an.getByteTimeDomainData(buf);
-                let sum = 0;
-                for (const v of buf) sum += (v - 128) * (v - 128);
-                const lvl = Math.min(1, Math.sqrt(sum / buf.length) / 40);
-                bar.style.transform = `scaleX(${Math.max(.04, lvl).toFixed(2)})`;
-                if (lvl > .06) c.heard = Object.assign(c.heard || {}, { [who]: true });
-            }
         }
         async function callInfo(c) {
             const out = [`ИТД X ${GM_info.script.version} · ${navigator.userAgent}`, `звонок: ${c.dir === 'out' ? 'исходящий' : 'входящий'}, ${c.state}`];
@@ -5385,12 +5372,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         function callPeer(c) {
             const pc = new RTCPeerConnection({ iceServers: CALL_ICE });
-            // Perfect negotiation (MDN): оба могут начать ре-негоциацию одновременно.
-            // Вызывающий — impolite (его offer побеждает), принимающий — polite (откатывает свой).
-            // Perfect negotiation: роли должны быть детерминированы с двух сторон.
-            // Привязка к dir ломается в glare (оба звонят одновременно или оба
-            // жмут «Экран»): оба impolite -> оба игнорируют чужой offer.
-            // Сравнение ID даёт непротиворечивое разделение.
             const myCallId = String((typeof msgMyId === 'function' && msgMyId()) || (msgNet && msgNet.me && msgNet.me.id) || '');
             const peerCallId = String(c.uid || '');
             c.polite = !!(myCallId && peerCallId && myCallId > peerCallId);
@@ -5400,21 +5381,16 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             pc.ontrack = e => {
                 const sid = e.streams[0] ? e.streams[0].id : ('t:' + e.track.id);
                 if (e.track.kind === 'video') {
-                    // Видео = демонстрация экрана (камера в звонке не используется).
+                    const vtrack = e.track;
                     c.screenStreamId = sid;
-                    const st = e.streams[0] || new MediaStream([e.track]);
-                    c.remoteScreen = st;
-                    // Если аудио экрана пришло раньше видео — теперь знаем его поток, переносим.
-                    if (c.pendingScreenAudio && c.pendingScreenAudioId === sid) {
-                        callScreenAudioAttach(c, c.pendingScreenAudio);
-                        c.pendingScreenAudio = null; c.pendingScreenAudioId = null;
-                    }
+                    c.remoteScreen = e.streams[0] || new MediaStream([vtrack]);
+                    c.remoteScreenTrack = vtrack;
+                    vtrack.addEventListener('ended', () => { if (c.remoteScreenTrack === vtrack && c.state !== 'end') callScreenDrop(c); });
                     c.remoteScreenOn = true;
                     callSharePaint(c);
                     callPaint(c);
                     return;
                 }
-                // Аудио: различаем микрофон и звук экрана по id потока.
                 let isScreenAudio = false;
                 if (c.screenStreamId) isScreenAudio = (sid === c.screenStreamId);
                 else if (c.micStreamId) isScreenAudio = (sid !== c.micStreamId);
@@ -5428,22 +5404,23 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 c.remote = e.streams[0] || new MediaStream([e.track]);
                 if (c.audio.srcObject !== c.remote) c.audio.srcObject = c.remote;
                 callPlay(c);
-                callMeter(c, 'them', c.remote);
             };
             pc.onconnectionstatechange = () => {
                 const st = pc.connectionState;
                 if (c.state === 'end') return;
                 if (st === 'connected') {
                     clearTimeout(c.lostT); clearTimeout(c.iceGraceT); clearTimeout(c.iceRetryT);
+                    c.lostSince = 0;
                     c.iceRestartTries = 0;
                     callLive(c);
                 } else if (st === 'failed') {
-                    clearTimeout(c.lostT); clearTimeout(c.iceGraceT);
-                    if (c.state === 'talk') callIceRestart(c, 'failed');
+                    clearTimeout(c.iceGraceT);
+                    if (c.state === 'talk') { callLostWatch(c); callIceRestart(c, 'failed'); }
                     else callEnd(c, 'Не удалось соединиться напрямую — обычно мешает мобильный интернет. Попробуйте, чтобы хотя бы у одного был Wi-Fi', 0, 'connect-failed');
                 } else if (st === 'disconnected' && c.state === 'talk') {
                     callSub(c, 'Связь прерывается…');
-                    clearTimeout(c.lostT); clearTimeout(c.iceGraceT);
+                    callLostWatch(c);
+                    clearTimeout(c.iceGraceT);
                     c.iceGraceT = setTimeout(() => {
                         if (pc.connectionState === 'connected' || c.state === 'end') return;
                         callIceRestart(c, 'disconnected');
@@ -5452,7 +5429,19 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             };
             return pc;
         }
-        // FIFO-очередь операций на соединение: никаких параллельных SLD/SRD.
+        function callLostWatch(c) {
+            if (c.lostSince) return;
+            c.lostSince = Date.now();
+            clearTimeout(c.lostT);
+            c.lostT = setTimeout(() => { if (c.state === 'talk' && c.pc && c.pc.connectionState !== 'connected') callEnd(c, 'Связь потеряна', 0, 'ice-gone'); }, 25000);
+        }
+        async function callUnstick(c) {
+            const pc = c.pc;
+            if (!pc || pc.signalingState !== 'have-local-offer' || !c.offerAt || Date.now() - c.offerAt < 8000) return false;
+            try { await pc.setLocalDescription({ type: 'rollback' }); } catch (e) { return false; }
+            c.offerAt = 0;
+            return true;
+        }
         function callOps(c, fn) {
             const run = async () => { try { await fn(); } catch (e) { logErr('звонок: операция', e); } };
             c.opChain = (c.opChain || Promise.resolve()).then(run, run);
@@ -5466,20 +5455,20 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 try {
                     const pc = c.pc;
                     if (!pc || c.state === 'end') return;
-                    // Если идёт другая ре-негоциация (have-local-offer / have-remote-offer),
-                    // setLocalDescription(offer) бросит InvalidStateError и рестарт молча
-                    // провалится, съев попытку. Ждём завершения и пробуем снова.
+                    if (pc.signalingState === 'have-local-offer') await callUnstick(c);
                     if (pc.signalingState !== 'stable') {
                         clearTimeout(c.iceRetryT);
-                        c.iceRetryT = setTimeout(() => { if (c.state === 'talk') callIceRestart(c, reason + '-retry'); }, 1200);
+                        c.iceRetryT = setTimeout(() => { if (c.state === 'talk') callIceRestart(c, reason); }, 1200);
                         return;
                     }
                     c.iceRestartTries = (c.iceRestartTries || 0) + 1;
                     if (c.iceRestartTries > 3) return callEnd(c, 'Связь потеряна', 0, 'ice-restart-max');
                     await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
+                    c.offerAt = Date.now();
                     await callGather(pc);
                     if (c.state === 'end') return;
                     await callSig(c.uid, 4, c.id, await callPackFit(pc.localDescription.sdp));
+                    callPoke(c);
                     setTimeout(function () { try { msgSync(); } catch (e) { } }, 300);
                 } catch (e) { logErr('звонок: ICE restart не удался', e); }
                 finally { c.iceRestarting = false; }
@@ -5490,9 +5479,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             return callOps(c, async () => {
                 const pc = c.pc;
                 if (!pc || c.state !== 'talk') return;
+                if (pc.signalingState === 'have-local-offer' && !c.makingOffer) await callUnstick(c);
                 if (pc.signalingState !== 'stable' || c.makingOffer) {
-                    // Не молчим: если в этот момент идёт другая негоциация,
-                    // offer потеряется. Повторяем через 400 мс (один таймер).
                     clearTimeout(c.negRetryT);
                     c.negRetryT = setTimeout(() => { if (c.state === 'talk') callNegotiate(c); }, 400);
                     return;
@@ -5500,19 +5488,31 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 try {
                     c.makingOffer = true;
                     await pc.setLocalDescription();
+                    c.offerAt = Date.now();
                     await callGather(pc);
                     if (c.state === 'end') return;
                     await callSig(c.uid, 4, c.id, await callPackFit(pc.localDescription.sdp));
+                    callPoke(c);
                     setTimeout(function () { try { msgSync(); } catch (err) { } }, 300);
                 } catch (e) { logErr('звонок: ре-негоциация', e); }
                 finally { c.makingOffer = false; }
             });
+        }
+        function callScreenCheck(c, pc) {
+            const rt = c.remoteScreenTrack;
+            if (!rt || !c.remoteScreenOn) return;
+            const tx = pc.getTransceivers().find(t => t.receiver.track === rt);
+            if (!tx || tx.currentDirection === 'stopped' || (tx.currentDirection && !/recv/.test(tx.currentDirection))) callScreenDrop(c);
+        }
+        function callPoke(c) {
+            if (c.dc && c.dc.readyState === 'open') try { c.dc.send('poke'); } catch (e) { }
         }
         function callDc(c, dc) {
             c.dc = dc;
             dc.onmessage = e => {
                 if (e.data === 'bye') callEnd(c, 'Собеседник положил трубку', null, 'peer-bye');
                 else if (/^mute:[01]$/.test(e.data)) { c.peerMuted = e.data === 'mute:1'; callSub(c); }
+                else if (e.data === 'poke') { try { msgSync(); } catch (err) { } }
                 else if (e.data === 'screen:0') { callScreenDrop(c); try { msgSync(); } catch (err) { } }
                 else if (e.data === 'screen:1') { c.remoteScreenOn = true; callSharePaint(c); try { msgSync(); } catch (err) { } }
             };
@@ -5592,7 +5592,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     : ring ? callBtn('vp-call-end', 'Отклонить', GLYPH.phone) + callBtn('vp-call-yes', 'Принять', GLYPH.phone)
                         : calling ? callBtn('vp-call-end', 'Отмена', GLYPH.phone)
                         : callBtn('vp-call-mute' + (c.muted ? ' vp-on' : ''), c.muted ? 'Включить' : 'Микрофон', CALL_MIC + (c.muted ? '<path d="M4 4l16 16"/>' : ''))
-                        + (callShareSupported() ? callBtn('vp-call-screen' + (c.screen ? ' vp-on' : ''), c.screen ? 'Стоп' : 'Экран', '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>') : '')
+                        + (callShareSupported() && c.state === 'talk' ? callBtn('vp-call-screen' + (c.screen ? ' vp-on' : ''), c.screen ? 'Стоп' : 'Экран', '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>') : '')
                         + callBtn('vp-call-end', 'Завершить', GLYPH.phone)
                         + (c.blocked ? callBtn('vp-call-yes vp-call-sound', 'Включить звук', '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6"/>') : '');
                 const b = cls => btns.querySelector('.' + cls);
@@ -5623,7 +5623,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         function callLive(c) {
             if (c.state === 'talk' || c.state === 'end') return;
-            // FLIP: запоминаем где карточка была, чтобы плавно переехать.
             const cardEl = c.el && c.el.querySelector('.vp-call-card');
             const oldRect = cardEl ? cardEl.getBoundingClientRect() : null;
             c.state = 'talk';
@@ -5635,12 +5634,12 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             c.tick = setInterval(() => callSub(c, callMmss(Math.floor((Date.now() - t0) / 1000))), 1000);
             c.syncT = setInterval(function () { try { msgSync(); } catch (err) { } }, 3000);
             callPlay(c);
+            c.timers.push(setTimeout(() => callMicCheck(c), 1000));
             c.timers.push(setTimeout(async () => {
                 if (c.state !== 'talk' || !c.pc) return;
                 let got = 0;
                 try { (await c.pc.getStats()).forEach(r => { if (r.type === 'inbound-rtp' && r.kind === 'audio') got += r.bytesReceived || 0; }); } catch (e) { }
                 if (got > 0) {
-                    // Звук доходит, но элемент на паузе — autoplay block.
                     if (c.audio && c.audio.paused && !c.blocked) { c.blocked = true; callPaint(c); }
                     return;
                 }
@@ -5649,8 +5648,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 callInfo(c).then(t => logErr('звонок: звук не приходит', new Error(t.split('\n').slice(2, 5).join('; '))));
             }, 6000));
             callPaint(c);
-            // FLIP: если карточка сместилась (connecting по центру -> talk справа),
-            // анимируем переезд.
             if (cardEl && oldRect && cardEl.isConnected) {
                 const newRect = cardEl.getBoundingClientRect();
                 const dx = oldRect.left - newRect.left;
@@ -5678,7 +5675,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         function callEnd(c, text, reason, why) {
             if (c.state === 'end') return;
-            if (why) logErr('звонок: конец · ' + why + ' · ' + text, new Error(why));
+            if (why && why !== 'peer-bye' && why !== 'missed' && why !== 'ring-timeout') logErr('звонок: конец · ' + why + ' · ' + text, new Error(why));
             const was = c.state;
             c.state = 'end';
             c.missed = c.dir === 'in' && was === 'ringing' && reason === null;
@@ -5701,9 +5698,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (callNet.cur === c) callNet.cur = null;
             if (!(c.dir === 'in' && was === 'ringing')) callTone('hang');
             if (c.missed) callTitle('📞 Пропущенный звонок'); else callTitle(null);
-            // Пропущенный (missed) не ломаем: карточка должна остаться с «Закрыть | Перезвонить».
-            // Иначе срабатывала эта ветка (was === 'ringing') и callBreak() удалял её из DOM,
-            // а код для missed ниже (callPaint + return) был недостижим.
             if (was === 'ringing' && c.el && !c.missed) {
                 callSub(c, text);
                 callBreak(c);
@@ -5858,10 +5852,10 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         const CALL_SCREEN = { w: 2560, h: 1440, fps: 60, bitrate: 20000000 };
         const CFG = {
-            noise: true,          // своё шумоподавление поверх браузерного
-            noiseHighpass: 90,    // режем гул/ветер/рокот ниже Гц
-            noiseLowpass: 11000,  // режем шипение/цифровой шум выше Гц
-            noiseGate: 0.012      // порог RMS: тише — гасим до 25%, не в ноль
+            noise: true,
+            noiseHighpass: 90,
+            noiseLowpass: 11000,
+            noiseGate: 0.012
         };
         function callShareSupported() {
             return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) && !matchMedia('(pointer: coarse)').matches;
@@ -5886,34 +5880,24 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             try {
                 const gmReq = {
                     video: { width: { ideal: CALL_SCREEN.w }, height: { ideal: CALL_SCREEN.h }, frameRate: { ideal: CALL_SCREEN.fps, max: CALL_SCREEN.fps } },
-                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-                    // Chrome без этого играет захваченный звук ЛОКАЛЬНО (loopback).
-                    // Мы слышим свою же демонстрацию. Флаг гасит это в источнике.
-                    suppressLocalAudioPlayback: true
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: true }
                 };
-                let stream;
-                try { stream = await navigator.mediaDevices.getDisplayMedia(gmReq); }
-                catch (e) {
-                    // Некоторые браузеры не понимают флаг — повторяем без него.
-                    if (e && e.name === 'TypeError') { delete gmReq.suppressLocalAudioPlayback; stream = await navigator.mediaDevices.getDisplayMedia(gmReq); }
-                    else throw e;
-                }
+                const stream = await navigator.mediaDevices.getDisplayMedia(gmReq);
                 if (c.state !== 'talk') { stream.getTracks().forEach(t => t.stop()); return; }
                 const vt = stream.getVideoTracks()[0], at = stream.getAudioTracks()[0] || null;
                 try { vt.contentHint = 'detail'; } catch (e) { }
                 if (at) { try { at.contentHint = 'music'; } catch (e) { } }
                 const vs = c.pc.addTrack(vt, stream);
                 await callShareTune(vs);
-                if (at) c.pc.addTrack(at, stream);
-                c.screen = { stream, vt, at, vs };
-                // Кнопка «Показать экран» у браузера — остановка шаринга
+                const as = at ? c.pc.addTrack(at, stream) : null;
+                c.screen = { stream, vt, at, vs, as };
                 vt.addEventListener('ended', () => { if (c.screen) callUnshare(c); });
                 if (c.dc && c.dc.readyState === 'open') try { c.dc.send('screen:1'); } catch (e) { }
                 callSharePaint(c);
                 callPaint(c);
                 callNegotiate(c);
             } catch (e) {
-                if (e && e.name === 'NotAllowedError') return;   // отменил выбор — не ошибка
+                if (e && e.name === 'NotAllowedError') return;
                 logErr('звонок: экран', e);
                 callSub(c, 'Не удалось показать экран');
             }
@@ -5922,8 +5906,11 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const s = c.screen;
             if (!s) return;
             c.screen = null;
+            const txs = c.pc ? c.pc.getTransceivers().filter(t => t.sender === s.vs || (s.as && t.sender === s.as)) : [];
             try { if (s.vs) c.pc.removeTrack(s.vs); } catch (e) { }
+            try { if (s.as) c.pc.removeTrack(s.as); } catch (e) { }
             try { s.stream.getTracks().forEach(t => t.stop()); } catch (e) { }
+            txs.forEach(t => { try { t.stop(); } catch (e) { } });
             if (c.dc && c.dc.readyState === 'open') try { c.dc.send('screen:0'); } catch (e) { }
             callSharePaint(c);
             callPaint(c);
@@ -6111,6 +6098,10 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (v.srcObject !== st) v.srcObject = st;
             if (st) { const p = v.play(); if (p && p.catch) p.catch(() => { }); }
         }
+        window.addEventListener('pagehide', () => {
+            const c = callNet.cur;
+            if (c && c.state === 'talk' && c.dc && c.dc.readyState === 'open') try { c.dc.send('bye'); } catch (e) { }
+        });
         window.addEventListener('keydown', e => {
             if (e.key !== 'Escape') return;
             const cur = callNet.cur;
@@ -6140,9 +6131,11 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     }
                     await pc2.setRemoteDescription(desc);
                     await pc2.setLocalDescription();
+                    callScreenCheck(c, pc2);
                     await callGather(pc2);
                     if (c.state === 'end') return;
                     await callSig(c.uid, 5, c.id, await callPackFit(pc2.localDescription.sdp));
+                    callPoke(c);
                     setTimeout(function () { try { msgSync(); } catch (err) { } }, 300);
                     if (rolledBack) callNegotiate(c);
                 } catch (e) {
@@ -6230,6 +6223,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (!out) return r === 1 ? { text: 'Входящий звонок · отклонён', miss: false } : { text: 'Пропущенный звонок' + (r === 2 ? ' · было занято' : ''), miss: true };
             return { text: 'Исходящий звонок · ' + (r === 1 ? 'отклонён' : r === 2 ? 'занято' : r === 0 ? 'отменён' : 'не ответил'), miss: false };
         }
+        const callSigKey = s => { let h = 2166136261; for (const b of s.data) h = Math.imul(h ^ b, 16777619) >>> 0; return s.ts + '|' + s.data.length + '|' + h; };
         function callCheck() {
             const sigs = msgNet.sigs || [], now = srvNow() / 1000, c = callNet.cur;
             const ended = new Map(sigs.filter(s => s.type === 3).map(s => [s.uid + '|' + s.id, s.data[0] || 0]));
@@ -6247,8 +6241,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const reOuts = sigs.filter(s => s.dir === 'in' && s.type === 5 && s.uid === c.uid && s.id === c.id);
                 const reIn = reIns.length ? reIns[reIns.length - 1] : null;
                 const reOut = reOuts.length ? reOuts[reOuts.length - 1] : null;
-                const reInKey = reIn ? reIn.ts + '|' + reIn.data.length : '';
-                const reOutKey = reOut ? reOut.ts + '|' + reOut.data.length : '';
+                const reInKey = reIn ? callSigKey(reIn) : '';
+                const reOutKey = reOut ? callSigKey(reOut) : '';
                 if (reIn && c.state === 'talk' && reInKey !== c.lastReInKey) {
                     c.lastReInKey = reInKey;
                     callRenegotiateIn(c, reIn.data);
@@ -8899,7 +8893,10 @@ var __vpBannerAuto = (() => {
             ['3.8.6', '2 ноября 2026', [
                 'Звонки: новый дизайн — компактная карточка снизу экрана, плавно сворачивается в аватарку и так же разворачивается',
                 'Звонки: демонстрация экрана в новом виде — переворот между своим и чужим экраном, кнопка «на весь экран», в полноэкранном режиме свой экран показывается отдельным окошком справа снизу',
-                'Без подтверждённой галочки нельзя менять баннер профиля и видеть клуб — вместо клуба будет надпись «Не верифицирован»'
+                'Без подтверждённой галочки нельзя менять баннер профиля и видеть клуб — вместо клуба будет надпись «Не верифицирован»',
+                'Звонки: если собеседник пропал или закрыл вкладку, звонок сам завершается, а не висит на «Восстанавливаю связь»',
+                'Звонки: показ экрана включается быстрее и стабильнее, в том числе при повторном показе; если не слышно голоса, мод сам переключается на обычный микрофон',
+                'Серая галочка теперь видна у всех, кто ещё не подтверждён, а не только у части аккаунтов'
             ]],
             ['3.8.5', '1 ноября 2026', [
                 'Звонки: добавлена демонстрация экрана (WIP)'
@@ -9629,7 +9626,14 @@ var __vpBannerAuto = (() => {
             return verifyLoad;
         }
         function verifiedInfo(name) {
-            try { return readVerified()[name] || null; } catch (e) { return null; }
+            try {
+                const all = readVerified();
+                if (all[name]) return all[name];
+                const k = String(name || '').toLowerCase();
+                if (!k) return null;
+                for (const n in all) if (n.toLowerCase() === k) return all[n];
+                return null;
+            } catch (e) { return null; }
         }
 
         async function checkAllComments(fresh) {
@@ -9925,7 +9929,7 @@ var __vpBannerAuto = (() => {
                             if (info.state === 'approved') {
                                 verifiedSet.add(name.toLowerCase());
                                 if (info.id) approvedIds.add(String(info.id).toLowerCase());
-                            } else if (info.state === 'quarantine' || info.state === 'revoked') verifiedPendingSet.add(name.toLowerCase());
+                            } else verifiedPendingSet.add(name.toLowerCase());
                         }
                     }
                     const allNames = new Set([...verifiedSet, ...verifiedPendingSet]);
@@ -17353,6 +17357,43 @@ var __vpBannerAuto = (() => {
                 if (emoji) { newest.setAttribute('data-colored', emoji); tintCard(newest, emoji); } else newest.removeAttribute('data-colored');
             }
         });
+
+        if (matchMedia('(hover: hover) and (pointer: fine)').matches) {
+            let hoverVid = null;
+            const videoAt = t => {
+                if (!t || !t.closest || t.closest('.vp-call')) return null;
+                const tile = t.closest('.vp-gal-tile');
+                if (tile) {
+                    const strip = tile.querySelector('.vp-gal-strip'), slide = strip && strip.children[strip._vpI || 0];
+                    return slide ? slide.querySelector('video') : null;
+                }
+                if (t.tagName === 'VIDEO') return t;
+                const box = t.closest('.' + SELECTORS.postMedia);
+                return box ? [...box.querySelectorAll('video')].find(v => v.getBoundingClientRect().width > 0) || null : null;
+            };
+            const unmute = v => {
+                if (!v || !v.muted) return;
+                if (v.closest('.vp-gal')) { const g = galVol(); if (!g) return; v.volume = g; }
+                const wasPlaying = !v.paused;
+                v._vpHoverSound = true;
+                v.muted = false;
+                setTimeout(() => { if (wasPlaying && v.paused && !v.muted) { v.muted = true; v._vpHoverSound = false; v.play().catch(() => { }); } }, 0);
+            };
+            const mute = v => { if (v && v._vpHoverSound) { v.muted = true; v._vpHoverSound = false; } };
+            document.addEventListener('pointerover', e => {
+                if (e.pointerType !== 'mouse') return;
+                const v = videoAt(e.target);
+                if (v === hoverVid) return;
+                mute(hoverVid);
+                hoverVid = v;
+                unmute(v);
+            }, true);
+            document.addEventListener('pointerleave', () => { mute(hoverVid); hoverVid = null; });
+            document.addEventListener('scroll', e => {
+                if (!hoverVid || !e.target.classList || !e.target.classList.contains('vp-gal-strip')) return;
+                requestAnimationFrame(() => { const el = document.querySelectorAll(':hover'), t = el[el.length - 1], v = videoAt(t); if (v !== hoverVid) { mute(hoverVid); hoverVid = v; unmute(v); } });
+            }, true);
+        }
 
         const LINK_RE = /(?:https?:\/\/|www\.)[^\s<>"'«»]+|(?<![\w@.\/-])(?:[a-z0-9-]+\.)+(?:com|ru|me|org|net|io|gg|tv|app|dev|xyz|su|ly|co|be|link|site|store|online|info|pro|рф)(?:\/[^\s<>"'«»]*)?(?![\w-])|(?<![\w@.\/-])[а-яё0-9-]+\.(?:com|рф|ru)(?![\w-])/giu;
         const linkNodes = new Map();
