@@ -18737,7 +18737,8 @@ var __vpBannerAuto = (() => {
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #4aa3ff) 55%, transparent); }
         .vp-psort.vp-busy { opacity: .6; pointer-events: none; }
         `);
-        let psortPrev = null, psortFrom = null;
+        let psortPrev = null, psortFrom = null, profOldWhy = '';
+        const PROF_OLD_PAGES = 200;
         function psortLeave(old) {
             const i = old.querySelector('.vp-psort-ind');
             if (i && i.dataset.x !== undefined) psortPrev = { login: old.dataset.login, x: i.dataset.x, w: i.dataset.w, at: Date.now() };
@@ -18841,6 +18842,7 @@ var __vpBannerAuto = (() => {
             });
         }
         async function profOldLoad(login, btn, force) {
+            profOldWhy = '';
             const same = x => x && x.u && x.u.toLowerCase() === login.toLowerCase();
             const hide = login.toLowerCase() === 'neurosfw', label = btn.textContent;
             let base = force ? null : same(profOldPosts) ? profOldPosts : null;
@@ -18850,9 +18852,9 @@ var __vpBannerAuto = (() => {
             const baseIds = new Set(incr ? base.posts.map(p => p.id) : []), byId = new Map(incr ? base.posts.map(p => [p.id, p]) : []);
             let cursor = null, finished = false;
             try {
-                for (let n = 0; n < (incr ? 10 : 60) && !finished; n++) {
+                for (let n = 0; n < (incr ? 10 : PROF_OLD_PAGES) && !finished; n++) {
                     const r = await api(`/api/posts/user/${encodeURIComponent(login)}?limit=50&sort=new` + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
-                    if (!r.ok) return null;
+                    if (!r.ok) { profOldWhy = r.status === 429 ? 'Сайт просит подождать: слишком много запросов. Попробуйте через минуту' : 'Сайт не ответил, попробуйте позже'; return null; }
                     const j = await r.json(), d = j.data || j, list = (d.posts || []).filter(p => p && p.id && !(hide && SERVICE_POSTS.includes(p.id)));
                     let hit = false;
                     list.forEach(p => { if (baseIds.has(p.id)) hit = true; byId.set(p.id, p); });
@@ -18861,12 +18863,12 @@ var __vpBannerAuto = (() => {
                     else {
                         btn.textContent = label + ' ' + byId.size;
                         await new Promise(res => setTimeout(res, 350));
-                        if (apiPaused()) return null;
+                        if (apiPaused()) { profOldWhy = 'Сайт просит подождать: слишком много запросов. Попробуйте через минуту'; return null; }
                     }
                 }
             } finally { btn.textContent = label; }
             if (!finished && incr) return profOldLoad(login, btn, true);
-            if (!finished) { vpNote('Слишком много постов для такой сортировки'); return null; }
+            if (!finished) { profOldWhy = 'Слишком много постов для такой сортировки'; return null; }
             profOldPosts = { u: login, at: Date.now(), full: incr ? base.full : Date.now(), posts: [...byId.values()].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)) };
             try { GM_setValue('vp_old_cache', profOldPosts); } catch (e) { }
             return 'client';
@@ -18955,7 +18957,7 @@ var __vpBannerAuto = (() => {
                                 v = await profSortProbe(login, s);
                                 if (!v && s === 'old') v = await profOldLoad(login, b);
                             } finally { profSortPause = false; }
-                            if (!v) return back('Сайт не отдаёт такую сортировку');
+                            if (!v) return back(s === 'old' && profOldWhy ? profOldWhy : 'Сайт не отдаёт такую сортировку');
                             sessionStorage.setItem(PROF_SORT_KEY, JSON.stringify({ u: login, s, v }));
                         }
                         profUnpinSoon();
