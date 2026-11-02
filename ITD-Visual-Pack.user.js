@@ -1259,7 +1259,7 @@
             bannerDraw: () => F('bannerButtons').map(c => $$('button', c)
                 .find(b => !/custom-/.test(b.className) && !/удал/i.test(b.title || '') && !b.innerHTML.includes('points="3 6 5 6 21 6"'))).filter(Boolean),
             nav: () => $$('nav').filter(n => n.querySelector('a[href="/"], a[href="/notifications"]')),
-            navLink: () => F('nav').flatMap(n => $$('a[href]', n).filter(a => a.parentElement === n || a.parentElement.parentElement === n)),
+            navLink: () => F('nav').flatMap(n => $$('a[href], a[title="Ивент"]', n).filter(a => a.parentElement === n || a.parentElement.parentElement === n)),
             navIcon: () => F('navLink').map(a => a.firstElementChild).filter(s => s && s.tagName === 'SPAN' && s.querySelector('svg')),
             sidebar: () => $$('aside').filter(a => a.querySelector('nav')),
             sidebarRight: () => $$('aside').filter(a => !a.querySelector('nav')),
@@ -5006,7 +5006,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-call-stack { position: relative; display: flex; width: min(430px, 100%); flex: 0 1 auto; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; will-change: width; transition: width .46s cubic-bezier(.22,.8,.24,1); }
         .vp-call-stack > *:not(.vp-call-fold) { width: 100%; pointer-events: auto; }
         .vp-call-card-wrap { position: relative; z-index: 10; width: 100%; flex: 0 0 auto; }
-        .vp-call-card { position: relative; display: flex; width: 100%; min-width: 0; align-items: center; gap: 12px; overflow: hidden; padding: 12px 14px; border-radius: 16px; background: #2b2d31; color: #f2f3f5; text-align: left; box-shadow: 0 24px 70px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.06); transition: padding .42s cubic-bezier(.22,.8,.24,1), border-radius .32s ease; }
+        .vp-call-card { position: relative; display: flex; width: 100%; min-width: 0; align-items: center; gap: 12px; overflow: hidden; padding: 12px 14px; border-radius: 16px; background: #2b2d31; color: #f2f3f5; text-align: left; box-shadow: 0 24px 70px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.06); transition: padding .42s cubic-bezier(.22,.8,.24,1), border-radius .32s ease, box-shadow .16s ease; }
+        .vp-call.vp-voice .vp-call-card { box-shadow: 0 0 0 2px rgba(67,214,120,.85), 0 0 16px 2px rgba(67,214,120,.4), 0 24px 70px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.06); }
         .vp-call-who { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: row; align-items: center; gap: 12px; transition: gap .42s cubic-bezier(.22,.8,.24,1); }
         .vp-call-txt { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; opacity: 1; visibility: visible; transition: opacity .16s ease, visibility 0s; }
         .vp-call-ava { position: relative; display: grid; width: 46px; height: 46px; flex: 0 0 46px; margin: 0; place-items: center; border-radius: 50%; background: #fff; }
@@ -5261,6 +5262,31 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 c.noiseT = gateT;
                 return dest.stream;
             } catch (e) { logErr('звонок: шумоподавление', e); return stream; }
+        }
+        function callVoiceWatch(c) {
+            if (!c.ac || c.voiceT) return;
+            const mk = stream => {
+                try {
+                    const an = c.ac.createAnalyser();
+                    an.fftSize = 512;
+                    c.ac.createMediaStreamSource(stream).connect(an);
+                    return { an, stream, buf: new Uint8Array(an.fftSize) };
+                } catch (e) { return null; }
+            };
+            const level = h => {
+                h.an.getByteTimeDomainData(h.buf);
+                let sum = 0;
+                for (let i = 0; i < h.buf.length; i++) { const v = (h.buf[i] - 128) / 128; sum += v * v; }
+                return Math.sqrt(sum / h.buf.length);
+            };
+            const me = c.rawStream ? mk(c.rawStream) : null;
+            let last = 0;
+            c.voiceT = setInterval(() => {
+                if (c.state !== 'talk' || !c.el) { clearInterval(c.voiceT); if (c.el) c.el.classList.remove('vp-voice'); return; }
+                const now = Date.now();
+                if (me && level(me) > 0.025) last = now;
+                c.el.classList.toggle('vp-voice', now - last < 400);
+            }, 80);
         }
         async function callMicCheck(c) {
             if (c.state !== 'talk' || !c.pc || !c.rawStream || c.stream === c.rawStream) return;
@@ -5584,7 +5610,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const bottom = docked || connecting || ending;
             el.classList.toggle('vp-incoming', ring || (bottom && c.dir === 'in'));
             el.classList.toggle('vp-outgoing', calling || (bottom && c.dir === 'out'));
-            el.classList.toggle('vp-call-docked', docked || (ending && c.dir === 'out'));
+            el.classList.toggle('vp-call-docked', docked || (ending && (c.dir === 'out' || el.classList.contains('vp-call-docked'))));
             if (el.dataset.k !== key) {
                 el.dataset.k = key;
                 const btns = el.querySelector('.vp-call-btns');
@@ -5631,10 +5657,11 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const t0 = c.t0 = Date.now();
             try { if (navigator.wakeLock) navigator.wakeLock.request('screen').then(w => { if (c.state === 'end') w.release().catch(() => { }); else c.wake = w; }, () => { }); } catch (e) { }
             callSub(c, '00:00');
-            c.tick = setInterval(() => callSub(c, callMmss(Math.floor((Date.now() - t0) / 1000))), 1000);
+            c.tick = setInterval(() => { callSub(c, callMmss(Math.floor((Date.now() - t0) / 1000))); callVideoAlive(c); }, 1000);
             c.syncT = setInterval(function () { try { msgSync(); } catch (err) { } }, 3000);
             callPlay(c);
             c.timers.push(setTimeout(() => callMicCheck(c), 1000));
+            callVoiceWatch(c);
             c.timers.push(setTimeout(async () => {
                 if (c.state !== 'talk' || !c.pc) return;
                 let got = 0;
@@ -5684,7 +5711,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (reason !== null) callSig(c.uid, 3, c.id, dur ? cat(new Uint8Array([reason]), be32(dur)) : new Uint8Array([reason])).catch(e => logErr('звонок: отбой', e));
             c.stops.splice(0).forEach(f => f());
             c.timers.forEach(clearTimeout);
-            clearInterval(c.tick); clearInterval(c.syncT); clearTimeout(c.lostT); clearTimeout(c.connT);
+            clearInterval(c.tick); clearInterval(c.syncT); clearInterval(c.voiceT); clearTimeout(c.lostT); clearTimeout(c.connT);
+            if (c.el) c.el.classList.remove('vp-voice');
             if (c.noiseT) { clearInterval(c.noiseT); c.noiseT = null; }
             if (c.rawStream) { c.rawStream.getTracks().forEach(t => t.stop()); c.rawStream = null; }
             if (c.wake) { c.wake.release().catch(() => { }); c.wake = null; }
@@ -5880,7 +5908,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             try {
                 const gmReq = {
                     video: { width: { ideal: CALL_SCREEN.w }, height: { ideal: CALL_SCREEN.h }, frameRate: { ideal: CALL_SCREEN.fps, max: CALL_SCREEN.fps } },
-                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: true }
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
                 };
                 const stream = await navigator.mediaDevices.getDisplayMedia(gmReq);
                 if (c.state !== 'talk') { stream.getTracks().forEach(t => t.stop()); return; }
@@ -5910,11 +5938,18 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             try { if (s.vs) c.pc.removeTrack(s.vs); } catch (e) { }
             try { if (s.as) c.pc.removeTrack(s.as); } catch (e) { }
             try { s.stream.getTracks().forEach(t => t.stop()); } catch (e) { }
-            txs.forEach(t => { try { t.stop(); } catch (e) { } });
+            const live = new Set([c.remoteScreenTrack, c.screenAudio && c.screenAudio.srcObject && c.screenAudio.srcObject.getAudioTracks()[0]].filter(Boolean));
+            txs.forEach(t => { if (live.has(t.receiver.track)) return; try { t.stop(); } catch (e) { } });
             if (c.dc && c.dc.readyState === 'open') try { c.dc.send('screen:0'); } catch (e) { }
             callSharePaint(c);
             callPaint(c);
             callNegotiate(c);
+        }
+        function callVideoAlive(c) {
+            if (!c.el) return;
+            c.el.querySelectorAll('video').forEach(v => {
+                if (v.srcObject && v.paused && v.offsetWidth) { const p = v.play(); if (p && p.catch) p.catch(() => { }); }
+            });
         }
         function callSharePaint(c) {
             const el = c.el;
@@ -5925,6 +5960,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 return;
             }
             const hasPreview = c.state === 'talk' && (!!c.screen || !!c.remoteScreenOn);
+            if (!c.remoteScreenOn && (c.remoteFullscreen || c.remoteFullscreenClosing)) { callRemoteFullscreenExit(c, true); return; }
             el.classList.toggle('vp-has-preview', hasPreview);
             if (!hasPreview) {
                 if (c.remoteFullscreen || c.remoteFullscreenClosing) callRemoteFullscreenExit(c, true);
@@ -5938,7 +5974,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const selfEmpty = el.querySelector('[data-empty="self"]');
             const remoteEmpty = el.querySelector('[data-empty="remote"]');
             if (selfVideo) {
-                const st = c.screen && c.screen.vt ? new MediaStream([c.screen.vt]) : null;
+                const st = c.screen && c.screen.vt ? (c.screen.pv || (c.screen.pv = new MediaStream([c.screen.vt]))) : null;
                 if (selfVideo.srcObject !== st) selfVideo.srcObject = st;
                 if (st) { const p = selfVideo.play(); if (p && p.catch) p.catch(() => { }); }
             }
@@ -6094,7 +6130,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const v = pip.querySelector('.vp-self-pip-video');
             if (!v) return;
             if (!show) { if (v.srcObject) v.srcObject = null; return; }
-            const st = c.screen && c.screen.vt ? new MediaStream([c.screen.vt]) : null;
+            const st = c.screen && c.screen.vt ? (c.screen.pv || (c.screen.pv = new MediaStream([c.screen.vt]))) : null;
             if (v.srcObject !== st) v.srcObject = st;
             if (st) { const p = v.play(); if (p && p.catch) p.catch(() => { }); }
         }
@@ -8896,7 +8932,14 @@ var __vpBannerAuto = (() => {
                 'Без подтверждённой галочки нельзя менять баннер профиля и видеть клуб — вместо клуба будет надпись «Не верифицирован»',
                 'Звонки: если собеседник пропал или закрыл вкладку, звонок сам завершается, а не висит на «Восстанавливаю связь»',
                 'Звонки: показ экрана включается быстрее и стабильнее, в том числе при повторном показе; если не слышно голоса, мод сам переключается на обычный микрофон',
-                'Серая галочка теперь видна у всех, кто ещё не подтверждён, а не только у части аккаунтов'
+                'Серая галочка теперь видна у всех, кто ещё не подтверждён, а не только у части аккаунтов',
+                'Звонки: карточка мягко подсвечивается зелёным, когда говоришь ты (и в свёрнутом виде тоже)',
+                'Звонки: при сбросе карточка больше не прыгает в центр, а закрывается на своём месте; после выхода собеседника из показа экрана твоя демка не растягивается на весь экран; при показе экрана больше не пропадает звук собеседника',
+                'Звонки и сообщения: сайт больше не засыпается запросами (от них были ошибки 429 и обрывы), скрипт читает только новые комментарии',
+                'Звонки: демка экрана больше не бывает чёрной или замершей, когда открыты сообщения или галерея; если один перестаёт показывать экран, у другого не пропадает чужой экран',
+                'Меню: кнопка «Ивент» реагирует на курсор, даже когда сайт её выключил',
+                'Сообщения: чат больше не прокручивается сам вверх, пока читаешь старые сообщения',
+                'Профиль: сортировка «Старые» при ошибке пишет настоящую причину, тянет до 10000 постов и после паузы продолжает с того же места'
             ]],
             ['3.8.5', '1 ноября 2026', [
                 'Звонки: добавлена демонстрация экрана (WIP)'
@@ -9492,6 +9535,7 @@ var __vpBannerAuto = (() => {
             let res = await call(await getAccessToken());
             if (res.status === 401) res = await call(await getAccessToken(true));
             apiPause(res);
+            if (opts.method && opts.method !== 'GET' && opts.method !== 'POST' && /\/comments/.test(path)) try { if (msgNet.cache) msgNet.cache.dirty = true; } catch (e) { }
             return res;
         }
 
@@ -9603,16 +9647,17 @@ var __vpBannerAuto = (() => {
 
 
         let verifyLoad = null, verifyLoadAt = 0;
-        async function allComments(postId, maxPages = 30) {
+        async function allComments(postId, maxPages = 30, opts = {}) {
             const all = [];
             let cursor = null;
             for (let page = 0; page < maxPages; page++) {
-                const res = await api(`/api/posts/${postId}/comments?limit=100` + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
+                const res = await api(`/api/posts/${postId}/comments?limit=${opts.limit || 100}` + (opts.sort ? '&sort=' + opts.sort : '') + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
                 if (!res.ok) throw new Error('комментарии: ' + res.status);
                 const j = await res.json(), d = j.data || j;
                 const list = d.comments || [];
                 if (page && list.length && all.some(c => c.id === list[0].id)) break;
                 all.push(...list);
+                if (opts.stop && opts.stop(list)) break;
                 cursor = d.nextCursor || null;
                 if (!cursor || !d.hasMore && d.hasMore !== undefined || !list.length) break;
             }
@@ -11558,6 +11603,38 @@ var __vpBannerAuto = (() => {
                 return out;
             } catch (e) { return null; }
         }
+        async function msgComments() {
+            const ca = msgNet.cache || (msgNet.cache = { byId: new Map(), full: 0, dirty: false, light: true });
+            const full = async () => {
+                const list = await allComments(MSG_POST_ID, 30);
+                ca.byId = new Map(list.map(c => [c.id, c]));
+                ca.full = Date.now();
+                ca.dirty = false;
+                return list;
+            };
+            if (!ca.full || ca.dirty || !ca.light || Date.now() - ca.full > 60000) return full();
+            let newest = 0, first = true, bad = false;
+            ca.byId.forEach(c => { const t = Date.parse(c.createdAt || ''); if (t > newest) newest = t; });
+            await allComments(MSG_POST_ID, 6, {
+                limit: 20, sort: 'newest',
+                stop: page => {
+                    if (first) {
+                        first = false;
+                        const t = Date.parse(page[0] && page[0].createdAt || '');
+                        if (page.length && (!t || t < newest)) { bad = true; return true; }
+                    }
+                    let seen = false;
+                    for (const c of page) {
+                        const o = ca.byId.get(c.id);
+                        if (o) seen = true;
+                        if (!o || o.content !== c.content) ca.byId.set(c.id, c);
+                    }
+                    return seen;
+                }
+            });
+            if (bad) { ca.light = false; return full(); }
+            return [...ca.byId.values()];
+        }
         function msgSync() {
             if (msgNet.syncing) return msgNet.again || (msgNet.again = msgNet.syncing.catch(() => { }).then(() => { msgNet.again = null; return msgSync(); }));
             msgNet.syncing = (async () => {
@@ -11565,7 +11642,7 @@ var __vpBannerAuto = (() => {
                 let callNote = null;
                 await ensureApproved();
                 const meId = msgMyId(), iAmOwner = meId === OWNER_ID;
-                for (const c of await allComments(MSG_POST_ID, 30)) {
+                for (const c of await msgComments()) {
                     const a = c.author, t = String(c.content || '');
                     if (!a || !a.id) continue;
                     if (a.id !== meId && !iAmOwner && !isApprovedAuthor(a)) continue;
@@ -12746,7 +12823,7 @@ var __vpBannerAuto = (() => {
         @keyframes vpMsgsPop { from { opacity: 0; transform: translateY(6px) scale(.98); } }
         @keyframes vpMsgsDot { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
         @media (prefers-reduced-motion: reduce) { .vp-msgs, .vp-msgs * { animation: none !important; } }
-        html.vp-msgs-open video { visibility: hidden !important; }`);
+        html.vp-msgs-open video:not(.vp-screen-video):not(.vp-self-pip-video) { visibility: hidden !important; }`);
 
             const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
             const root = document.createElement('div');
@@ -13070,6 +13147,18 @@ var __vpBannerAuto = (() => {
             const scheduleDays = () => { if (!daysRaf) daysRaf = requestAnimationFrame(() => { daysRaf = 0; paintDays(); }); };
             const msgClock = ts => new Date(ts * 1000).toTimeString().slice(0, 5);
             const msgMetaText = (t, m) => msgClock(m.at || m.ts) + (m.dir === 'out' ? (readUpTo(t.uid, t.sup, 'them') >= m.ts ? ' ✓✓' : ' ✓') : '');
+            function viewMark() {
+                const top = feed.getBoundingClientRect().top;
+                for (const b of feed.querySelectorAll(':scope > .vp-msgs-b')) {
+                    const r = b.getBoundingClientRect();
+                    if (r.bottom > top + 1) return () => {
+                        if (!b.isConnected) return;
+                        const dy = b.getBoundingClientRect().top - feed.getBoundingClientRect().top - (r.top - top);
+                        if (Math.abs(dy) > 0.5) feed.scrollTop += dy;
+                    };
+                }
+                return () => { };
+            }
             function msgRefreshChat(d) {
                 const t = msgTarget(d);
                 if (input.dataset.vpBlocked && t.uid) blockUi(d, t);
@@ -13078,7 +13167,7 @@ var __vpBannerAuto = (() => {
                 if (input.disabled) return;
                 const list = msgThread(t), have = new Map();
                 feed.querySelectorAll(':scope > .vp-msgs-b[data-ts]').forEach(b => { const k = b.dataset.dir + '|' + b.dataset.ts; if (!have.has(k)) have.set(k, []); have.get(k).push(b); });
-                const nearEnd = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80, keep = feed.scrollTop;
+                const nearEnd = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80, restore = nearEnd ? null : viewMark();
                 feed.querySelectorAll(':scope > .vp-msgs-day').forEach(e => e.remove());
                 let prev = null, added = 0;
                 for (const m of list) {
@@ -13097,13 +13186,12 @@ var __vpBannerAuto = (() => {
                 }
                 have.forEach(arr => arr.forEach(x => x.remove()));
                 if (added) feed.querySelectorAll(':scope > .vp-msgs-note.vp-msgs-first').forEach(n => n.remove());
-                feed.scrollTop = nearEnd ? feed.scrollHeight : keep;
                 if (added && !nearEnd && d.shown) downNew += list.slice(-added).filter(m => m.dir === 'in').length;
                 downSync();
                 paintCalls(t);
                 paintPin(t);
                 paintDays(true);
-                feed.scrollTop = nearEnd ? feed.scrollHeight : keep;
+                if (nearEnd) feed.scrollTop = feed.scrollHeight; else restore();
                 d.shown = list.length; d.sig = chatSig(t.uid);
                 msgReadNow(d, t, list);
             }
@@ -13172,9 +13260,10 @@ var __vpBannerAuto = (() => {
                 blockUi(current, t);
                 if (input.disabled) return;
                 const near = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
-                const n = feed.querySelectorAll(':scope > .vp-msgs-callrow').length;
+                const n = feed.querySelectorAll(':scope > .vp-msgs-callrow').length, restore = near ? null : viewMark();
                 paintCalls(t);
                 if (near && feed.querySelectorAll(':scope > .vp-msgs-callrow').length !== n) feed.scrollTop = feed.scrollHeight;
+                else if (restore) restore();
             };
             root.openDialog = (id, fromHistory) => {
                 msgFillDialogs();
@@ -16874,7 +16963,7 @@ var __vpBannerAuto = (() => {
             }
             gal.el.classList.toggle('vp-card', !row);
         }
-        const OWN_MEDIA = '.vp-gal, .vp-msgs, .vp-bg-media, .vpi-overlay, .vp-call-audio';
+        const OWN_MEDIA = '.vp-gal, .vp-msgs, .vp-bg-media, .vpi-overlay, .vp-call, .vp-call-audio';
         function pauseSiteMedia() {
             document.querySelectorAll('video, audio').forEach(m => { if (!m.paused && !m.closest(OWN_MEDIA)) m.pause(); });
         }
