@@ -5434,7 +5434,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const st = pc.connectionState;
                 if (c.state === 'end') return;
                 if (st === 'connected') {
-                    clearTimeout(c.lostT); clearTimeout(c.iceGraceT);
+                    clearTimeout(c.lostT); clearTimeout(c.iceGraceT); clearTimeout(c.iceRetryT);
                     c.iceRestartTries = 0;
                     callLive(c);
                 } else if (st === 'failed') {
@@ -5460,14 +5460,22 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         function callIceRestart(c, reason) {
             if (!c.pc || c.state === 'end' || c.iceRestarting) return;
-            c.iceRestartTries = (c.iceRestartTries || 0) + 1;
-            if (c.iceRestartTries > 3) return callEnd(c, 'Связь потеряна', 0, 'ice-restart-max');
             c.iceRestarting = true;
             callSub(c, 'Восстанавливаю связь…');
             callOps(c, async () => {
                 try {
                     const pc = c.pc;
                     if (!pc || c.state === 'end') return;
+                    // Если идёт другая ре-негоциация (have-local-offer / have-remote-offer),
+                    // setLocalDescription(offer) бросит InvalidStateError и рестарт молча
+                    // провалится, съев попытку. Ждём завершения и пробуем снова.
+                    if (pc.signalingState !== 'stable') {
+                        clearTimeout(c.iceRetryT);
+                        c.iceRetryT = setTimeout(() => { if (c.state === 'talk') callIceRestart(c, reason + '-retry'); }, 1200);
+                        return;
+                    }
+                    c.iceRestartTries = (c.iceRestartTries || 0) + 1;
+                    if (c.iceRestartTries > 3) return callEnd(c, 'Связь потеряна', 0, 'ice-restart-max');
                     await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
                     await callGather(pc);
                     if (c.state === 'end') return;
