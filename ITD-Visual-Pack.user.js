@@ -35,7 +35,7 @@
     const TG_CHAT_URL = 'https://t.me/+P7NeR_AEc35lYjEy';
     const AUTO_LIKE_KEY = 'itd_auto_like_ids';
     const isUrl = a => /^https?:|^\//.test(a);
-    const ACCT_DEVICE = new Set(['vp_ver_at', 'vp_upd_ask', 'vp_latest', 'vp_vx', 'vp_learned', 'vp_old_cache', 'vp_posts_list', 'vp_posts_lock', 'vp_api_pause',
+    const ACCT_DEVICE = new Set(['vp_ver_at', 'vp_upd_ask', 'vp_latest', 'vp_vx', 'vp_learned', 'vp_old_cache', 'vp_old_part', 'vp_posts_list', 'vp_posts_lock', 'vp_api_pause',
         'vp_club_online', 'vp_club_ava', 'vp_club_next', 'changelogSeen', 'bgGlForce', 'tabletDesktop', 'junkOk', 'adminFabPos', 'fabFace']);
     const ACCT = { id: String(GM_get0('vp_last_acct', '') || '') };
     ACCT.boot = ACCT.id;
@@ -18850,11 +18850,18 @@ var __vpBannerAuto = (() => {
             const incr = !!base && Date.now() - base.full < 12 * 3600e3;
             if (incr && Date.now() - base.at < 120e3) { profOldPosts = base; return 'client'; }
             const baseIds = new Set(incr ? base.posts.map(p => p.id) : []), byId = new Map(incr ? base.posts.map(p => [p.id, p]) : []);
-            let cursor = null, finished = false;
+            const PART = 'vp_old_part', part = incr ? null : GM_getValue(PART, null);
+            let cursor = null, finished = false, pages = 0;
+            if (same(part) && Array.isArray(part.posts) && part.cursor && Date.now() - part.at < 30 * 60e3) { cursor = part.cursor; part.posts.forEach(p => byId.set(p.id, p)); }
+            const keep = () => {
+                if (incr || !cursor || !byId.size) return false;
+                try { GM_setValue(PART, { u: login, at: Date.now(), cursor, posts: [...byId.values()] }); return true; } catch (e) { return false; }
+            };
             try {
                 for (let n = 0; n < (incr ? 10 : PROF_OLD_PAGES) && !finished; n++) {
+                    pages++;
                     const r = await api(`/api/posts/user/${encodeURIComponent(login)}?limit=50&sort=new` + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
-                    if (!r.ok) { profOldWhy = r.status === 429 ? 'Сайт просит подождать: слишком много запросов. Попробуйте через минуту' : 'Сайт не ответил, попробуйте позже'; return null; }
+                    if (!r.ok) { profOldWhy = r.status === 429 ? 'Сайт просит подождать: слишком много запросов. Через минуту нажми снова' : 'Сайт не ответил, попробуй позже'; return null; }
                     const j = await r.json(), d = j.data || j, list = (d.posts || []).filter(p => p && p.id && !(hide && SERVICE_POSTS.includes(p.id)));
                     let hit = false;
                     list.forEach(p => { if (baseIds.has(p.id)) hit = true; byId.set(p.id, p); });
@@ -18863,14 +18870,17 @@ var __vpBannerAuto = (() => {
                     else {
                         btn.textContent = label + ' ' + byId.size;
                         await new Promise(res => setTimeout(res, 350));
-                        if (apiPaused()) { profOldWhy = 'Сайт просит подождать: слишком много запросов. Попробуйте через минуту'; return null; }
+                        if (apiPaused()) { profOldWhy = 'Сайт просит подождать: слишком много запросов. Через минуту нажми снова'; return null; }
                     }
                 }
-            } finally { btn.textContent = label; }
+            } finally {
+                btn.textContent = label;
+                if (!finished && pages < PROF_OLD_PAGES && keep() && profOldWhy) profOldWhy += ', загрузка продолжится с того же места';
+            }
             if (!finished && incr) return profOldLoad(login, btn, true);
             if (!finished) { profOldWhy = 'Слишком много постов для такой сортировки'; return null; }
             profOldPosts = { u: login, at: Date.now(), full: incr ? base.full : Date.now(), posts: [...byId.values()].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)) };
-            try { GM_setValue('vp_old_cache', profOldPosts); } catch (e) { }
+            try { GM_setValue('vp_old_cache', profOldPosts); GM_setValue(PART, null); } catch (e) { }
             return 'client';
         }
         const PSORT_TRY = { old: ['old', 'oldest', 'asc'], popular: ['popular'] };
