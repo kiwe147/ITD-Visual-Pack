@@ -5695,7 +5695,10 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (callNet.cur === c) callNet.cur = null;
             if (!(c.dir === 'in' && was === 'ringing')) callTone('hang');
             if (c.missed) callTitle('📞 Пропущенный звонок'); else callTitle(null);
-            if (was === 'ringing' && c.el) {
+            // Пропущенный (missed) не ломаем: карточка должна остаться с «Закрыть | Перезвонить».
+            // Иначе срабатывала эта ветка (was === 'ringing') и callBreak() удалял её из DOM,
+            // а код для missed ниже (callPaint + return) был недостижим.
+            if (was === 'ringing' && c.el && !c.missed) {
                 callSub(c, text);
                 callBreak(c);
                 return;
