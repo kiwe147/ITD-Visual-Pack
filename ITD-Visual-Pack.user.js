@@ -4066,6 +4066,11 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (!myId || lookBusy || Date.now() < lookRetryAt) return;
             lookBusy = true;
             try {
+                try {
+                    const all0 = await loadVerificationComments();
+                    const m0 = all0.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
+                    if (m0) avaReconcile(parseLook(m0.content));
+                } catch (e) { logErr('аватарка: сверка с сервером', e); }
                 const b = backgroundEnabled ? backgroundStyle : '-';
                 const today = Math.floor(srvNow() / 864e5), was = GM_getValue(acctKey('vp_look_day'), 0), day = today - was < 7 && today >= was ? was : today;
                 const own = GM_getValue(acctKey('vp_ava'), null) || {}, ownAva = own.ref || '', ownVid = ownAva && own.vid || '';
@@ -4076,12 +4081,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (text === lookSent) return;
                 const all = await loadVerificationComments();
                 const mine = all.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
-                if (mine && openText(mine.content) === text && String(mine.content).startsWith('ITDXE ')) { lookSent = text; GM_setValue(acctKey('vp_look_day'), day); return; }
+                const markSeen = () => GM_setValue(acctKey('vp_ava_seen'), { a: (text.match(/ a=([0-4][0-9a-f]{32})/) || [])[1] || '', v: (text.match(/ va=(\S+)/) || [])[1] || '' });
+                if (mine && openText(mine.content) === text && String(mine.content).startsWith('ITDXE ')) { lookSent = text; markSeen(); GM_setValue(acctKey('vp_look_day'), day); return; }
                 const content = sealText(text);
                 const res = mine
                     ? await editComment(mine.id, content)
                     : await sendComment(VERIFICATION_POST_ID, content);
-                if (res.ok) { lookSent = text; lookFails = 0; GM_setValue(acctKey('vp_look_day'), day); if (day !== was) checkAllComments(true); }
+                if (res.ok) { lookSent = text; markSeen(); lookFails = 0; GM_setValue(acctKey('vp_look_day'), day); if (day !== was) checkAllComments(true); }
                 else lookLater();
             } catch (e) { lookLater(); logErr('стиль', e); } finally { lookBusy = false; }
         }
@@ -8429,6 +8435,22 @@ var __vpBannerAuto = (() => {
         @media (prefers-reduced-motion: reduce) { .vp-ave { animation: none; } }
     `);
 
+        // Своя аватарка между устройствами: сервер (стиль look.a/va) главный, локальная копия vp_ava следует за ним.
+        // vp_ava_seen помнит, что было на сервере при последней сверке: если локально с тех пор ничего не меняли, а на сервере стало другое
+        // (сменили или убрали на другом устройстве), берём серверное. Если локально поменяли — оно уходит на сервер.
+        function avaReconcile(look) {
+            const sa = look && look.a || '', sv = sa ? look.va || '' : '';
+            const own = GM_getValue(acctKey('vp_ava'), null) || {}, la = own.ref || '', lv = la ? own.vid || '' : '';
+            const seen = GM_getValue(acctKey('vp_ava_seen'), null);
+            const mark = () => GM_setValue(acctKey('vp_ava_seen'), { a: sa, v: sv });
+            if (la === sa && lv === sv) { if (!seen || seen.a !== sa || seen.v !== sv) mark(); return false; }
+            const untouched = seen && typeof seen.a === 'string' ? seen.a === la && (seen.v || '') === lv : !!sa;
+            if (!untouched) return false;
+            GM_setValue(acctKey('vp_ava'), sa ? (sv ? { ref: sa, vid: sv, at: Date.now() } : { ref: sa, at: Date.now() }) : null);
+            mark();
+            avatarRefresh();
+            return true;
+        }
         const aveOwnRef = () => { const o = GM_getValue(acctKey('vp_ava'), null); return o && o.ref || ''; };
         const aveOwnPage = () => {
             const m = location.pathname.match(/^\/@([^/]+)\/?$/);
@@ -8927,8 +8949,9 @@ var __vpBannerAuto = (() => {
         };
         const CHANGELOG = [
             ['3.9.0', '3 ноября 2026', [
-                'Мини-игры: новая «Песочница» — рисуй песком, водой, камнем, маслом, огнём, растениями, лавой и кислотой, смотри как всё падает, течёт и горит (без счёта и без таблицы лидеров)',
+                'Мини-игры: новая «Песочница» — рисуй песком, водой, камнем, маслом, огнём, растениями, лавой, кислотой, ядом, пропаном, динамитом с фитилём, металлом, стеклом, атомной бомбой и чёрной дырой, смотри как всё падает, течёт, горит, плавится и взрывается (без счёта и без таблицы лидеров)',
                 'Настройки: можно выключить вкладку «Магазин» — её не будет в меню ни на компьютере, ни на телефоне (Настройки → Вид)',
+                'Аватарка мода синхронизируется между устройствами одного аккаунта: сменил или убрал на одном — на другом подтянется само',
                 'Сообщения: ссылки в тексте теперь синие, их видно сразу',
                 'Посты: убрана кнопка «Скопировать картинку» — она брала только первую картинку альбома, а копировать можно правой кнопкой; «Обновить» и «Скопировать ссылку» остались',
                 'Посты с картинкой: у размытого фона больше нет двойной кромки в углу, скругление фона совпадает со скруглением карточки',
@@ -10069,6 +10092,7 @@ var __vpBannerAuto = (() => {
                         try { parsed = JSON.parse(raw) || {}; } catch (e) { }
                         for (const [name, info] of Object.entries(parsed)) if (info && info.look) lookBy.set(name.toLowerCase(), info.look);
                     }
+                    if (me && lookBy.has(me)) { try { avaReconcile(lookBy.get(me)); } catch (e) { logErr('аватарка: сверка', e); } }
                     avaReady = true;
                     document.dispatchEvent(new Event('vp-looks-ready'));
                     const cover = document.documentElement.classList.contains('vp-gal-open') || document.documentElement.classList.contains('vp-msgs-open');
@@ -19307,11 +19331,16 @@ var __vpBannerAuto = (() => {
         .vp-games-win { display: flex; flex-direction: column; gap: 12px; width: min(760px, 100%); height: min(900px, 100%); max-height: 100%; padding: 16px; border-radius: 32px; box-sizing: border-box;
             background: var(--block-bg); color: var(--text-primary, #fff); border: 1px solid var(--border-color, rgba(255, 255, 255, .12));
             box-shadow: 0 24px 64px rgba(0, 0, 0, .5); overflow: auto; }
-        .vp-games-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .vp-games-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 10px; }
+        .vp-games-head .vp-games-tabs { grid-area: 1 / 1; justify-self: start; max-width: 100%; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+        .vp-games-head .vp-games-tabs::-webkit-scrollbar { display: none; }
+        .vp-games-head .vp-games-x { grid-area: 1 / 2; }
+        .vp-games-head .vp-games-score { grid-area: 2 / 1 / 3 / 3; margin: 0; text-align: center; }
+        .vp-games-head .vp-games-score:empty { display: none; }
         @media (max-width: 520px) { .vp-games-win { padding: 12px; border-radius: 26px; } .vp-games-tab { padding: 7px 10px; }
-            .vp-games-score { order: 3; flex: 1 0 100%; margin: 0; text-align: center; } .vp-g-side { min-width: 70px; font-size: 13px; } }
-        .vp-games-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 9999px; background: var(--glass-bg, rgba(35, 35, 35, .6)); }
-        .vp-games-tab { border: 0; border-radius: 9999px; padding: 7px 14px; cursor: pointer; background: none; font: inherit; font-size: 14px; font-weight: 500;
+            .vp-g-side { min-width: 70px; font-size: 13px; } }
+        .vp-games-tabs { display: flex; flex: 0 0 auto; gap: 4px; padding: 4px; border-radius: 9999px; background: var(--glass-bg, rgba(35, 35, 35, .6)); }
+        .vp-games-tab { flex: 0 0 auto; white-space: nowrap; border: 0; border-radius: 9999px; padding: 7px 14px; cursor: pointer; background: none; font: inherit; font-size: 14px; font-weight: 500;
             color: var(--text-secondary); }
         .vp-games-tab.vp-on { color: var(--text-primary, #fff); background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 1px var(--vp-accent); }
         .vp-games-score { margin-left: auto; font-size: 14px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
@@ -19774,7 +19803,7 @@ var __vpBannerAuto = (() => {
             return { el, key, pause, resize, repTo, repRes: () => ({ score, done: over }), destroy() { on = false; cancelAnimationFrame(raf); } };
         }
 
-        const SAND_W = 240, SAND_H = 180;
+        const SAND_W = 240, SAND_H = 180, SAND_PW = 180, SAND_PH = 240, SAND_CS = 12;
         const SAND_MATS = [
             { id: 1, name: 'Песок', rgb: [226, 190, 96], hot: '1' },
             { id: 2, name: 'Вода', rgb: [48, 112, 232], hot: '2' },
@@ -19784,119 +19813,217 @@ var __vpBannerAuto = (() => {
             { id: 6, name: 'Растение', rgb: [52, 172, 72], hot: '6' },
             { id: 7, name: 'Лава', rgb: [242, 72, 20], hot: '7' },
             { id: 8, name: 'Кислота', rgb: [150, 240, 62], hot: '8' },
+            { id: 16, name: 'Яд', rgb: [160, 70, 210], hot: '9' },
+            { id: 15, name: 'Пропан', rgb: [110, 190, 175], hot: '' },
+            { id: 17, name: 'Динамит', rgb: [196, 44, 44], hot: '' },
+            { id: 18, name: 'Фитиль', rgb: [168, 138, 92], hot: '' },
+            { id: 11, name: 'Металл', rgb: [150, 162, 178], hot: '' },
+            { id: 19, name: 'Стекло', rgb: [150, 215, 238], hot: '' },
+            { id: 21, name: 'Атом-бомба', rgb: [150, 162, 44], hot: '' },
+            { id: 22, name: 'Чёрн. дыра', rgb: [38, 18, 78], hot: '' },
             { id: 0, name: 'Ластик', rgb: [30, 30, 36], hot: '0' }
         ];
-        const SAND_STEAM = 9, SAND_SMOKE = 10;
-        const SAND_RGB = { 9: [196, 208, 226], 10: [88, 88, 96] };
+        // 9 пар, 10 дым, 12 горящий фитиль, 13 жидкий металл, 14 жидкое стекло — их нельзя нарисовать, они получаются сами
+        const SAND_STEAM = 9, SAND_SMOKE = 10, SAND_FUSE_LIT = 12, SAND_MELT_METAL = 13, SAND_MELT_GLASS = 14, SAND_PROPANE = 15, SAND_POISON = 16, SAND_DYNAMITE = 17, SAND_FUSE = 18, SAND_METAL = 11, SAND_GLASS = 19, SAND_SICK = 20, SAND_NUKE = 21, SAND_HOLE = 22;
+        const SAND_RGB = { 9: [196, 208, 226], 10: [88, 88, 96], 12: [255, 200, 90], 13: [255, 175, 80], 14: [255, 205, 130] };
         SAND_MATS.forEach(m => { SAND_RGB[m.id] = m.rgb; });
-        const SAND_DENS = { 1: 5, 2: 3, 4: 2, 7: 4, 8: 3 };
-        const SAND_SPREAD = { 2: 4, 4: 3, 7: 1, 8: 3 };
-        let sandCssDone = false;
+        SAND_RGB[15] = [84, 150, 138];
+SAND_RGB[20] = [60, 170, 70];
+        const SAND_DENS = { 1: 5, 2: 3, 4: 2, 7: 4, 8: 3, 13: 6, 14: 5, 16: 3 };
+        const SAND_SPREAD = { 2: 4, 4: 3, 7: 1, 8: 3, 13: 1, 14: 1, 16: 3 };
+        const SAND_IGN = { 4: .5, 6: .12, 15: 1, 17: .35, 18: .4, 20: .12, 21: .35 };
+        const SAND_SOLID = [3, 6, 11, 17, 18, 19, 21];
+const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
+        const SAND_TONES = 32;
+        let sandCols = null, sandCssDone = false;
+        function sandColors() {
+            if (sandCols) return sandCols;
+            const pack = (r, g, b) => ((255 << 24) | (Math.min(255, b) << 16) | (Math.min(255, g) << 8) | Math.min(255, r)) >>> 0;
+            sandCols = [];
+            for (let k = 0; k <= 22; k++) {
+                const c = SAND_RGB[k] || [0, 0, 0], a = new Uint32Array(SAND_TONES);
+                for (let q = 0; q < SAND_TONES; q++) {
+                    const f = 0.82 + q / SAND_TONES * 0.36;
+                    a[q] = k === 7 ? pack(c[0] * (0.9 + q / 300), c[1] * f + 20, c[2] * f) : pack(c[0] * f, c[1] * f, c[2] * f);
+                }
+                sandCols.push(a);
+            }
+            sandCols.pack = pack;
+            return sandCols;
+        }
         function sandGame(setScore) {
             if (!sandCssDone) {
                 sandCssDone = true;
                 addCss(`
-                .vp-sand { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; min-width: 0; }
-                .vp-sand-cv { display: block; border-radius: 20px; background: #05060a; touch-action: none; outline: none; cursor: crosshair; image-rendering: pixelated; }
-                .vp-sand-bar { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
-                .vp-sand-mat, .vp-sand-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border: 0; border-radius: 9999px; cursor: pointer; font: inherit; font-size: 13px;
-                    font-weight: 600; color: var(--text-primary, #fff); background: var(--bg-hover, rgba(255, 255, 255, .08)); }
-                .vp-sand-mat.vp-on { box-shadow: inset 0 0 0 1.5px var(--vp-accent); background: rgba(255, 255, 255, .12); }
-                .vp-sand-mat i { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; }
-                .vp-sand-size { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
-                .vp-sand-size input { width: 110px; accent-color: var(--vp-accent); }
-                @media (max-width: 520px) { .vp-sand-mat, .vp-sand-btn { padding: 6px 9px; font-size: 12px; } }
+                .vp-sand { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; min-width: 0; }
+                .vp-sand-cv { display: block; border-radius: 22px; background: #05060a; touch-action: none; outline: none; cursor: crosshair; image-rendering: pixelated;
+                    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06), 0 8px 26px rgba(0, 0, 0, .35); }
+                .vp-sand-pal { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 6px; width: 100%; max-width: 720px; }
+                .vp-sand-mat { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 10px 3px 8px; border: 0; border-radius: 16px; cursor: pointer;
+                    font: inherit; font-size: 12px; font-weight: 600; color: var(--text-primary, #fff); background: var(--bg-hover, rgba(255, 255, 255, .07));
+                    transition: background-color .15s, transform .12s, box-shadow .15s; -webkit-tap-highlight-color: transparent; }
+                .vp-sand-mat:hover { background: rgba(255, 255, 255, .12); }
+                .vp-sand-mat:active { transform: scale(.95); }
+                .vp-sand-mat.vp-on { background: rgba(255, 255, 255, .14); box-shadow: inset 0 0 0 2px var(--vp-accent); }
+                .vp-sand-mat i { display: block; width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto;
+                    box-shadow: inset 0 -4px 6px rgba(0, 0, 0, .35), inset 0 2px 3px rgba(255, 255, 255, .4), 0 2px 6px rgba(0, 0, 0, .3); }
+                .vp-sand-mat span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .vp-sand-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; max-width: 720px; }
+                .vp-sand-size { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+                .vp-sand-size input { flex: 1 1 auto; min-width: 70px; height: 30px; margin: 0; accent-color: var(--vp-accent); cursor: pointer; }
+                .vp-sand-pre { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; flex: 0 0 auto; }
+                .vp-sand-pre b { display: block; border-radius: 50%; background: var(--text-primary, #fff); opacity: .85; }
+                .vp-sand-acts { display: flex; gap: 8px; flex: 0 0 auto; }
+                .vp-sand-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 42px; padding: 0 18px; border: 0; border-radius: 9999px; cursor: pointer;
+                    font: inherit; font-size: 14px; font-weight: 600; color: var(--text-primary, #fff); background: var(--bg-hover, rgba(255, 255, 255, .08));
+                    transition: background-color .15s, transform .12s; -webkit-tap-highlight-color: transparent; }
+                .vp-sand-btn:hover { background: rgba(255, 255, 255, .14); }
+                .vp-sand-btn:active { transform: scale(.96); }
+                @media (max-width: 700px) {
+                    .vp-sand { gap: 10px; }
+                    .vp-sand-pal { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+                    .vp-sand-mat { padding: 9px 2px 7px; font-size: 11.5px; }
+                    .vp-sand-row { flex-wrap: wrap; }
+                    .vp-sand-size { flex: 1 0 100%; }
+                    .vp-sand-acts { flex: 1 0 100%; }
+                    .vp-sand-btn { flex: 1 1 0; height: 46px; }
+                }
                 `);
             }
-            const W = SAND_W, H = SAND_H, N = W * H;
+            const portrait = innerWidth < 700 || innerHeight > innerWidth * 1.15;
+            const W = portrait ? SAND_PW : SAND_W, H = portrait ? SAND_PH : SAND_H, N = W * H;
+            const CS = SAND_CS, CW = W / CS, CH = H / CS;
             const t = new Uint8Array(N), tn = new Uint8Array(N), life = new Uint8Array(N), stamp = new Uint8Array(N);
+            let act = new Uint8Array(CW * CH).fill(1), nxt = new Uint8Array(CW * CH);
             const el = document.createElement('div');
             el.className = 'vp-sand';
             const cv = document.createElement('canvas');
             cv.className = 'vp-sand-cv'; cv.width = W; cv.height = H; cv.tabIndex = 0;
-            const bar = document.createElement('div');
-            bar.className = 'vp-sand-bar';
+            const pal = document.createElement('div');
+            pal.className = 'vp-sand-pal';
             let mat = +GM_getValue('vp_sand_mat', 1), radius = Math.max(1, Math.min(10, +GM_getValue('vp_sand_r', 3) || 3)), paused = false;
             if (!SAND_MATS.some(m => m.id === mat)) mat = 1;
             const matBtns = SAND_MATS.map(m => {
                 const b = document.createElement('button');
                 b.type = 'button'; b.className = 'vp-sand-mat'; b.dataset.m = m.id;
                 const dot = document.createElement('i');
-                dot.style.background = `rgb(${m.rgb.join(',')})`;
-                b.append(dot, m.name);
+                dot.style.background = `radial-gradient(circle at 35% 30%, rgb(${m.rgb.map(c => Math.min(255, c + 45)).join(',')}), rgb(${m.rgb.join(',')}))`;
+                const nm = document.createElement('span');
+                nm.textContent = m.name;
+                b.append(dot, nm);
                 b.addEventListener('click', () => pick(m.id));
-                bar.appendChild(b);
+                pal.appendChild(b);
                 return b;
             });
+            const row = document.createElement('div');
+            row.className = 'vp-sand-row';
             const size = document.createElement('label');
             size.className = 'vp-sand-size';
             const range = document.createElement('input');
             range.type = 'range'; range.min = 1; range.max = 10; range.value = radius;
-            range.addEventListener('input', () => { radius = +range.value; GM_setValue('vp_sand_r', radius); });
-            size.append('Кисть', range);
+            const pre = document.createElement('span');
+            pre.className = 'vp-sand-pre';
+            pre.innerHTML = '<b></b>';
+            const paintPre = () => { const d = 4 + radius * 2.6 + 'px'; pre.firstChild.style.width = d; pre.firstChild.style.height = d; };
+            paintPre();
+            range.addEventListener('input', () => { radius = +range.value; GM_setValue('vp_sand_r', radius); paintPre(); });
+            size.append('Кисть', range, pre);
+            const acts = document.createElement('div');
+            acts.className = 'vp-sand-acts';
             const pauseBtn = document.createElement('button');
-            pauseBtn.type = 'button'; pauseBtn.className = 'vp-sand-btn'; pauseBtn.textContent = 'Пауза';
+            pauseBtn.type = 'button'; pauseBtn.className = 'vp-sand-btn';
             pauseBtn.addEventListener('click', () => setPause(!paused));
             const clearBtn = document.createElement('button');
-            clearBtn.type = 'button'; clearBtn.className = 'vp-sand-btn'; clearBtn.textContent = 'Очистить';
+            clearBtn.type = 'button'; clearBtn.className = 'vp-sand-btn';
+            clearBtn.innerHTML = svgIcon('<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/>', 18) + '<span>Очистить</span>';
             clearBtn.addEventListener('click', clear);
-            bar.append(size, pauseBtn, clearBtn);
+            acts.append(pauseBtn, clearBtn);
+            row.append(size, acts);
             const hint = document.createElement('div');
             hint.className = 'vp-games-hint';
-            hint.textContent = IS_PHONE ? 'Рисуй пальцем · материал выбирай внизу' : 'Рисуй мышкой · цифры 1–8 — материал · пробел — пауза · C — очистить';
-            el.append(cv, bar, hint);
+            hint.textContent = portrait ? 'Рисуй пальцем · выбери материал выше' : 'Рисуй мышкой · цифры — материал · пробел — пауза · C — очистить';
+            el.append(cv, pal, row, hint);
             function pick(id) {
                 mat = id; GM_setValue('vp_sand_mat', id);
                 matBtns.forEach(b => b.classList.toggle('vp-on', +b.dataset.m === id));
             }
             pick(mat);
-            function setPause(v) { paused = v; pauseBtn.textContent = v ? 'Дальше' : 'Пауза'; }
-            function clear() { t.fill(0); life.fill(0); draw(); }
+            function setPause(v) {
+                paused = v;
+                pauseBtn.innerHTML = svgIcon(v ? '<path d="m8 5 11 7-11 7z"/>' : '<path d="M8 5v14M16 5v14"/>', 18) + '<span>' + (v ? 'Дальше' : 'Пауза') + '</span>';
+            }
+            setPause(false);
+            let dirty = true;
+            function clear() { t.fill(0); life.fill(0); act.fill(1); holes.length = 0; blasts.length = 0; flash = 0; cv.style.transform = ''; dirty = true; }
 
             const g = cv.getContext('2d');
             const img = g.createImageData(W, H);
             const px = new Uint32Array(img.data.buffer);
-            const pack = (r, gr, b) => (255 << 24) | (Math.min(255, b) << 16) | (Math.min(255, gr) << 8) | Math.min(255, r);
+            const COL = sandColors(), pack = COL.pack;
             const BG = pack(5, 6, 10);
             function draw() {
                 for (let i = 0; i < N; i++) {
                     const k = t[i];
-                    if (!k) { px[i] = BG; continue; }
-                    const c = SAND_RGB[k], f = 0.82 + tn[i] / 255 * 0.36;
-                    if (k === 5) { const l = life[i] / 40; px[i] = pack(255, 70 + 150 * l | 0, 10 + 40 * l | 0); }
-                    else if (k === 7) px[i] = pack(c[0] * (0.9 + tn[i] / 900), c[1] * f + 20, c[2] * f);
-                    else px[i] = pack(c[0] * f, c[1] * f, c[2] * f);
+                    if (!k) px[i] = BG;
+                    else if (k === 5) { const l = life[i] / 40; px[i] = pack(255, 70 + 150 * l, 10 + 40 * l); }
+                    else if (k === SAND_SICK) { const l = Math.min(1, life[i] / 100); px[i] = pack(150 - 90 * l, 110 + 60 * l, 40 + 30 * l); }
+                    else if (k === SAND_FUSE_LIT) { const l = life[i] / 24; px[i] = pack(255, 120 + 120 * l, 40 + 60 * l); }
+                    else if (k === SAND_METAL || k === SAND_GLASS) {
+                        const c = SAND_RGB[k], f = 0.82 + (tn[i] >> 3) / 32 * 0.36, h = life[i] * (k === SAND_METAL ? .45 : .9);
+                        px[i] = pack(c[0] * f + h, c[1] * f - h * .45, c[2] * f - h * .75);
+                    }
+                    else px[i] = COL[k][tn[i] >> 3];
                 }
                 g.putImageData(img, 0, 0);
+                for (const h of holes) {
+                    const cr = holeR(h);
+                    g.lineWidth = 1.4;
+                    g.strokeStyle = 'rgba(255, 190, 90, .95)';
+                    g.beginPath(); g.arc(h.x + .5, h.y + .5, cr + 1.6, 0, 6.2832); g.stroke();
+                    g.lineWidth = 1;
+                    g.strokeStyle = 'rgba(170, 110, 255, .45)';
+                    g.beginPath(); g.arc(h.x + .5, h.y + .5, cr + 3.4, 0, 6.2832); g.stroke();
+                }
+                if (flash > 0) { g.fillStyle = 'rgba(255, 255, 240, ' + Math.min(1, flash * .9) + ')'; g.fillRect(0, 0, W, H); }
             }
 
+            // Куски поля 12x12: тот, где ничего не двигалось, спит. Спящий кусок не считается, поэтому полное поле застывшего песка почти ничего не стоит.
             let fr = 1;
             const rnd = Math.random;
+            const chunkOf = new Uint16Array(N);
+            for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) chunkOf[y * W + x] = ((y / CS) | 0) * CW + ((x / CS) | 0);
+            const wake = i => {
+                const c = chunkOf[i], cx = c % CW, cy = (c / CW) | 0;
+                for (let dy = cy > 0 ? -1 : 0; dy <= (cy < CH - 1 ? 1 : 0); dy++) for (let dx = cx > 0 ? -1 : 0; dx <= (cx < CW - 1 ? 1 : 0); dx++) nxt[c + dy * CW + dx] = 1;
+            };
             const sw = (i, j) => {
                 const a = t[i], b = tn[i], c = life[i];
                 t[i] = t[j]; tn[i] = tn[j]; life[i] = life[j];
                 t[j] = a; tn[j] = b; life[j] = c;
                 stamp[i] = fr; stamp[j] = fr;
+                wake(i); wake(j);
             };
-            const put = (i, k, l) => { t[i] = k; tn[i] = rnd() * 255 | 0; life[i] = l || 0; stamp[i] = fr; };
+            const put = (i, k, l) => { t[i] = k; tn[i] = rnd() * 255 | 0; life[i] = l || 0; stamp[i] = fr; wake(i); };
+            const gone = i => { t[i] = 0; life[i] = 0; wake(i); };
             const kind = (x, y) => x < 0 || y < 0 || x >= W || y >= H ? -1 : t[y * W + x];
-            const lighter = (k, me) => k >= 0 && (k === 0 || k === SAND_STEAM || k === SAND_SMOKE || (SAND_DENS[k] && SAND_DENS[k] < SAND_DENS[me]));
+            const lighter = (k, me) => k === 0 || k === SAND_STEAM || k === SAND_SMOKE || k === SAND_PROPANE || (SAND_DENS[k] !== undefined && SAND_DENS[k] < SAND_DENS[me]);
             const NB = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
             function fall(i, x, y, me) {
-                const below = (y + 1) * W + x;
-                if (y + 1 < H && lighter(t[below], me)) { sw(i, below); return true; }
+                if (y + 1 >= H) return false;
+                const below = i + W;
+                if (lighter(t[below], me)) { sw(i, below); return true; }
                 const d = rnd() < .5 ? -1 : 1;
-                for (const s of [d, -d]) {
-                    const nx = x + s;
-                    if (nx < 0 || nx >= W || y + 1 >= H) continue;
-                    const j = (y + 1) * W + nx;
-                    if (lighter(t[j], me) && lighter(t[y * W + nx], me)) { sw(i, j); return true; }
+                for (let q = 0; q < 2; q++) {
+                    const nx = x + (q ? -d : d);
+                    if (nx < 0 || nx >= W) continue;
+                    const s = nx - x;
+                    if (lighter(t[below + s], me) && lighter(t[i + s], me)) { sw(i, below + s); return true; }
                 }
                 return false;
             }
-            function spread(i, x, y, me) {
-                const d = rnd() < .5 ? -1 : 1, n = SAND_SPREAD[me] || 1;
+            function slide(i, x, y, me, d) {
+                const n = SAND_SPREAD[me] || 1;
                 let cx = x, ci = i;
                 for (let s = 0; s < n; s++) {
                     const nx = cx + d;
@@ -19907,85 +20034,280 @@ var __vpBannerAuto = (() => {
                 }
                 return cx !== x;
             }
-            function ignite(x, y, chance) {
-                const k = kind(x, y);
-                if (k > 0 && (k === 4 || k === 6) && rnd() < chance) put(y * W + x, 5, 25 + rnd() * 20 | 0);
+            function spread(i, x, y, me) {
+                const d = rnd() < .5 ? -1 : 1;
+                return slide(i, x, y, me, d) || slide(i, x, y, me, -d);
             }
-            function step() {
-                fr = fr >= 250 ? (stamp.fill(0), 1) : fr + 1;
-                for (let y = H - 1; y >= 0; y--) {
-                    const rev = ((y + fr) & 1) === 1;
-                    for (let q = 0; q < W; q++) {
-                        const x = rev ? W - 1 - q : q, i = y * W + x, k = t[i];
-                        if (!k || stamp[i] === fr) continue;
-                        if (k === 1) { fall(i, x, y, 1); }
-                        else if (k === 2) {
-                            for (const [dx, dy] of NB) { const nk = kind(x + dx, y + dy); if (nk === 5) { put(i, SAND_STEAM, 60 + rnd() * 60 | 0); break; } }
-                            if (t[i] === 2 && !fall(i, x, y, 2)) spread(i, x, y, 2);
+            const FIRE_L = () => 25 + rnd() * 20 | 0;
+            // огонь/лава/расплав поджигают соседа: масло, растение, пропан, фитиль, динамит
+            function lightUp(x, y, mult) {
+                const k = kind(x, y), c = SAND_IGN[k];
+                if (!c || rnd() >= c * (mult || 1)) return;
+                const j = y * W + x;
+                if (k === SAND_FUSE) put(j, SAND_FUSE_LIT, 24);
+                else if (k === SAND_DYNAMITE) explode(x, y, 7);
+                else if (k === SAND_NUKE) nuke(x, y);
+                else if (k === SAND_PROPANE) put(j, 5, 8 + rnd() * 10 | 0);
+                else put(j, 5, FIRE_L());
+            }
+            // взрыв: камень, металл и стекло держатся дальше от центра, горючее загорается, остальное сметает
+            function explode(x, y, r) {
+                put(y * W + x, 5, 40);
+                for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+                    const d2 = dx * dx + dy * dy;
+                    if (d2 > r * r || (dx === 0 && dy === 0)) continue;
+                    const nx = x + dx, ny = y + dy;
+                    if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+                    const j = ny * W + nx, kk = t[j], d = Math.sqrt(d2) / r;
+                    if (kk === 3 || kk === SAND_METAL || kk === SAND_GLASS) { if (d > .5 || rnd() < .5) continue; }
+                    if (kk === 0) { if (rnd() < .45 * (1 - d * .5)) put(j, 5, 8 + rnd() * 18 | 0); }
+                    else if (kk === SAND_DYNAMITE || kk === SAND_NUKE || kk === 4 || kk === 6 || kk === SAND_SICK || kk === SAND_PROPANE || kk === SAND_FUSE || kk === SAND_FUSE_LIT) put(j, 5, 10 + rnd() * 20 | 0);
+                    else if (rnd() < .75) { put(j, rnd() < .5 ? 0 : SAND_SMOKE, 20 + rnd() * 30 | 0); if (t[j] === 0) life[j] = 0; }
+                }
+            }
+            // атомный взрыв: ударная волна расходится кольцом и сметает всё, даже камень и металл; вспышка и тряска
+            const blasts = [], holes = [];
+            let flash = 0;
+            function nuke(x, y) {
+                put(y * W + x, 5, 40);
+                blasts.push({ x, y, r: 0, max: Math.min(38, Math.floor(Math.min(W, H) * .22)) });
+                flash = 1;
+            }
+            function blastStep() {
+                for (let b = blasts.length - 1; b >= 0; b--) {
+                    const bl = blasts[b];
+                    bl.r += 2.2;
+                    const lo = Math.max(0, bl.r - 3.4), hi = bl.r, r2l = lo * lo, r2h = hi * hi;
+                    const x0 = Math.max(0, Math.floor(bl.x - hi)), x1 = Math.min(W - 1, Math.ceil(bl.x + hi)), y0 = Math.max(0, Math.floor(bl.y - hi)), y1 = Math.min(H - 1, Math.ceil(bl.y + hi));
+                    for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) {
+                        const d2 = (xx - bl.x) * (xx - bl.x) + (yy - bl.y) * (yy - bl.y);
+                        if (d2 > r2h || d2 < r2l) continue;
+                        const j = yy * W + xx, q = rnd();
+                        if (q < .62) put(j, 5, 12 + rnd() * 22 | 0);
+                        else if (q < .8) put(j, SAND_SMOKE, 30 + rnd() * 40 | 0);
+                        else if (t[j]) gone(j);
+                    }
+                    if (bl.r >= bl.max) blasts.splice(b, 1);
+                }
+            }
+            const holeR = h => Math.min(10, 3 + Math.floor(h.mass / 120));
+            function addHole(x, y) {
+                if (holes.length >= 4 || x < 0 || y < 0 || x >= W || y >= H) return;
+                holes.push({ x, y, mass: 0 });
+                put(y * W + x, SAND_HOLE, 0);
+                dirty = true;
+            }
+            // дыра втягивает всё подвижное в радиусе и съедает то, что дошло до её края; растёт от съеденного
+            function holesStep() {
+                for (let h = holes.length - 1; h >= 0; h--) {
+                    const ho = holes[h];
+                    if (t[ho.y * W + ho.x] !== SAND_HOLE) { holes.splice(h, 1); continue; }
+                    const cr = holeR(ho), R = 30 + cr * 2;
+                    wake(ho.y * W + ho.x);
+                    const x0 = Math.max(0, ho.x - R), x1 = Math.min(W - 1, ho.x + R), y0 = Math.max(0, ho.y - R), y1 = Math.min(H - 1, ho.y + R);
+                    for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) {
+                        const dx = ho.x - xx, dy = ho.y - yy, d2 = dx * dx + dy * dy;
+                        if (d2 > R * R) continue;
+                        const j = yy * W + xx, k = t[j];
+                        if (!k || k === SAND_HOLE) {
+                            if (d2 <= cr * cr && k !== SAND_HOLE) put(j, SAND_HOLE, 0);
+                            continue;
                         }
-                        else if (k === 4) {
-                            if (!fall(i, x, y, 4)) spread(i, x, y, 4);
-                        }
-                        else if (k === 5) {
-                            if (life[i] <= 1) { if (rnd() < .5) put(i, SAND_SMOKE, 30 + rnd() * 40 | 0); else { t[i] = 0; life[i] = 0; } continue; }
-                            life[i]--;
-                            for (const [dx, dy] of NB) {
-                                const nk = kind(x + dx, y + dy);
-                                if (nk === 4) ignite(x + dx, y + dy, .5);
-                                else if (nk === 6) ignite(x + dx, y + dy, .12);
-                                else if (nk === 2) { put(i, SAND_STEAM, 60 + rnd() * 60 | 0); put((y + dy) * W + x + dx, SAND_STEAM, 60 + rnd() * 60 | 0); break; }
-                            }
-                            if (t[i] === 5 && y > 0 && rnd() < .35) {
-                                const j = (y - 1) * W + x + (rnd() * 3 | 0) - 1;
-                                if (x > 0 && x < W - 1 && t[j] === 0) sw(i, j);
-                            }
-                        }
-                        else if (k === 6) {
-                            if (rnd() < .03) {
-                                const [dx, dy] = NB[rnd() * 4 | 0];
-                                if (kind(x + dx, y + dy) === 2) put((y + dy) * W + x + dx, 6);
-                            }
-                        }
-                        else if (k === 7) {
-                            for (const [dx, dy] of NB) {
-                                const nk = kind(x + dx, y + dy), j = (y + dy) * W + x + dx;
-                                if (nk === 2) { put(j, SAND_STEAM, 60 + rnd() * 60 | 0); put(i, 3); break; }
-                                if (nk === 4 || nk === 6) { put(j, 5, 25 + rnd() * 20 | 0); }
-                            }
-                            if (t[i] === 7 && rnd() < .5 && !fall(i, x, y, 7)) spread(i, x, y, 7);
-                        }
-                        else if (k === 8) {
-                            for (const [dx, dy] of NB) {
-                                const nk = kind(x + dx, y + dy);
-                                if ((nk === 1 || nk === 3 || nk === 6) && rnd() < .08) { t[(y + dy) * W + x + dx] = 0; if (rnd() < .5) { t[i] = 0; break; } }
-                            }
-                            if (t[i] === 8 && !fall(i, x, y, 8)) spread(i, x, y, 8);
-                        }
-                        else if (k === SAND_STEAM || k === SAND_SMOKE) {
-                            if (life[i] <= 1) { if (k === SAND_STEAM && rnd() < .3) put(i, 2); else t[i] = 0; continue; }
-                            life[i]--;
-                            const dx = (rnd() * 3 | 0) - 1;
-                            if (y > 0 && x + dx >= 0 && x + dx < W && t[(y - 1) * W + x + dx] === 0) sw(i, (y - 1) * W + x + dx);
-                            else if (x + dx >= 0 && x + dx < W && t[y * W + x + dx] === 0) sw(i, y * W + x + dx);
+                        const d = Math.sqrt(d2);
+                        if (d <= cr + .5) { gone(j); put(j, SAND_HOLE, 0); ho.mass++; continue; }
+                        if (d <= cr + 1.8 && rnd() < .3) { gone(j); ho.mass++; continue; }
+                        if (!SAND_PULL.includes(k) || stamp[j] === fr || rnd() > 1.15 - d / R) continue;
+                        const sx = Math.sign(dx), sy = Math.sign(dy);
+                        for (const [mx, my] of [[sx, sy], [sx, 0], [0, sy]]) {
+                            if (!mx && !my) continue;
+                            const nj = (yy + my) * W + xx + mx;
+                            if (t[nj] === 0 || t[nj] === SAND_STEAM || t[nj] === SAND_SMOKE) { sw(j, nj); break; }
                         }
                     }
                 }
+            }
+            const HOT_SRC = nk => nk === 7 || nk === SAND_MELT_METAL || nk === SAND_MELT_GLASS;
+            function cell(i, x, y, k) {
+                if (k === 1) { fall(i, x, y, 1); }
+                else if (k === 2) {
+                    for (const [dx, dy] of NB) { if (kind(x + dx, y + dy) === 5) { put(i, SAND_STEAM, 60 + rnd() * 60 | 0); break; } }
+                    if (t[i] === 2 && !fall(i, x, y, 2)) spread(i, x, y, 2);
+                }
+                else if (k === 4) {
+                    if (!fall(i, x, y, 4)) spread(i, x, y, 4);
+                }
+                else if (k === 5) {
+                    wake(i);
+                    if (life[i] <= 1) { if (rnd() < .5) put(i, SAND_SMOKE, 30 + rnd() * 40 | 0); else gone(i); return; }
+                    life[i]--;
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy);
+                        if (nk === 2) { put(i, SAND_STEAM, 60 + rnd() * 60 | 0); put((y + dy) * W + x + dx, SAND_STEAM, 60 + rnd() * 60 | 0); break; }
+                        if (SAND_IGN[nk]) lightUp(x + dx, y + dy, 1);
+                    }
+                    if (t[i] === 5 && y > 0 && rnd() < .35) {
+                        const j = (y - 1) * W + x + (rnd() * 3 | 0) - 1;
+                        if (x > 0 && x < W - 1 && t[j] === 0) sw(i, j);
+                    }
+                }
+                else if (k === 6) {
+                    wake(i);
+                    if (rnd() < .03) {
+                        const [dx, dy] = NB[rnd() * 4 | 0];
+                        if (kind(x + dx, y + dy) === 2) put((y + dy) * W + x + dx, 6);
+                    }
+                }
+                else if (k === 7) {
+                    wake(i);
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy), j = (y + dy) * W + x + dx;
+                        if (nk === 2) { put(j, SAND_STEAM, 60 + rnd() * 60 | 0); put(i, 3); break; }
+                        if (nk === 1 && rnd() < .05) put(j, SAND_MELT_GLASS, 180);
+                        else if (SAND_IGN[nk]) lightUp(x + dx, y + dy, 1.6);
+                    }
+                    if (t[i] === 7 && rnd() < .5 && !fall(i, x, y, 7)) spread(i, x, y, 7);
+                }
+                else if (k === 8) {
+                    wake(i);
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy);
+                        const p = nk === 1 || nk === 3 || nk === 6 ? .08 : nk === SAND_METAL ? .02 : 0;
+                        if (p && rnd() < p) { gone((y + dy) * W + x + dx); if (rnd() < .5) { gone(i); break; } }
+                    }
+                    if (t[i] === 8 && !fall(i, x, y, 8)) spread(i, x, y, 8);
+                }
+                else if (k === SAND_POISON) {
+                    wake(i);
+                    for (const [dx, dy] of NB) {
+                        if (kind(x + dx, y + dy) === 6 && rnd() < .5) { put((y + dy) * W + x + dx, SAND_SICK, 50 + rnd() * 50 | 0); if (rnd() < .3) { gone(i); break; } }
+                    }
+                    if (t[i] === SAND_POISON && !fall(i, x, y, SAND_POISON)) spread(i, x, y, SAND_POISON);
+                }
+                else if (k === SAND_SICK) {
+                    // больное растение заражает соседние живые клетки и умирает само
+                    wake(i);
+                    if (life[i] <= 1) { if (rnd() < .3) put(i, SAND_SMOKE, 15 + rnd() * 20 | 0); else gone(i); return; }
+                    life[i]--;
+                    for (const [dx, dy] of NB) {
+                        if (kind(x + dx, y + dy) === 6 && rnd() < .15) put((y + dy) * W + x + dx, SAND_SICK, 50 + rnd() * 50 | 0);
+                    }
+                }
+                else if (k === SAND_NUKE) {
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy);
+                        if ((nk === 5 || nk === 7 || nk === SAND_FUSE_LIT || nk === SAND_MELT_METAL || nk === SAND_MELT_GLASS) && rnd() < .35) { nuke(x, y); return; }
+                    }
+                }
+                else if (k === SAND_METAL || k === SAND_GLASS) {
+                    // нагрев копится в life: лава и расплав греют быстро, огонь медленно; убрали источник — остывает
+                    let hot = 0;
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy);
+                        if (HOT_SRC(nk)) hot += 2; else if (nk === 5 && rnd() < .5) hot += 1;
+                    }
+                    if (hot) {
+                        life[i] = Math.min(255, life[i] + hot);
+                        wake(i);
+                        if (life[i] >= (k === SAND_METAL ? 200 : 90)) put(i, k === SAND_METAL ? SAND_MELT_METAL : SAND_MELT_GLASS, k === SAND_METAL ? 255 : 180);
+                    } else if (life[i] > 0) { life[i]--; wake(i); }
+                }
+                else if (k === SAND_MELT_METAL || k === SAND_MELT_GLASS) {
+                    wake(i);
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy), j = (y + dy) * W + x + dx;
+                        if (nk === 2) { put(j, SAND_STEAM, 60 + rnd() * 60 | 0); put(i, k === SAND_MELT_METAL ? SAND_METAL : SAND_GLASS, 0); return; }
+                        if (SAND_IGN[nk]) lightUp(x + dx, y + dy, 1.6);
+                    }
+                    if (life[i] <= 1) { put(i, k === SAND_MELT_METAL ? SAND_METAL : SAND_GLASS, 0); return; }
+                    let warm = false;
+                    for (const [dx, dy] of NB) { const nk = kind(x + dx, y + dy); if (nk === 7 || nk === 5) warm = true; }
+                    if (!warm) life[i]--;
+                    if (rnd() < .5 && !fall(i, x, y, k)) spread(i, x, y, k);
+                }
+                else if (k === SAND_DYNAMITE) {
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy);
+                        if ((nk === 5 || nk === 7 || nk === SAND_FUSE_LIT || nk === SAND_MELT_METAL || nk === SAND_MELT_GLASS) && rnd() < .35) { explode(x, y, 7); return; }
+                    }
+                }
+                else if (k === SAND_FUSE) {
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy);
+                        if ((nk === 5 || nk === 7 || nk === SAND_MELT_METAL || nk === SAND_MELT_GLASS) && rnd() < .4) { put(i, SAND_FUSE_LIT, 24); return; }
+                    }
+                }
+                else if (k === SAND_FUSE_LIT) {
+                    wake(i);
+                    if (life[i] <= 1) { if (rnd() < .4) put(i, SAND_SMOKE, 25 + rnd() * 25 | 0); else gone(i); return; }
+                    life[i]--;
+                    if (life[i] === 12) {
+                        for (const [dx, dy] of NB) {
+                            const nk = kind(x + dx, y + dy);
+                            if (nk === SAND_FUSE) put((y + dy) * W + x + dx, SAND_FUSE_LIT, 24);
+                            else if (nk === SAND_DYNAMITE) explode(x + dx, y + dy, 7);
+                            else if (SAND_IGN[nk]) lightUp(x + dx, y + dy, 1.5);
+                        }
+                    }
+                }
+                else if (k === SAND_PROPANE) {
+                    wake(i);
+                    let gas = 0, burn = false;
+                    for (let dy = -2; dy <= 2 && !burn; dy++) for (let dx = -2; dx <= 2; dx++) {
+                        const nk = kind(x + dx, y + dy);
+                        if (nk === 5 || nk === SAND_FUSE_LIT || nk === 7) { burn = true; break; }
+                        if (nk === SAND_PROPANE && Math.abs(dx) + Math.abs(dy) === 1) gas++;
+                    }
+                    if (burn) { put(i, 5, 8 + rnd() * 10 | 0); if (gas >= 3 && rnd() < .3) explode(x, y, 3); return; }
+                    const q = rnd(), nx = x + (rnd() * 3 | 0) - 1, ny = y + (q < .55 ? 1 : q < .75 ? -1 : 0);
+                    if (nx >= 0 && nx < W && ny >= 0 && ny < H && t[ny * W + nx] === 0) sw(i, ny * W + nx);
+                }
+                else if (k === SAND_STEAM || k === SAND_SMOKE) {
+                    wake(i);
+                    if (life[i] <= 1) { if (k === SAND_STEAM && rnd() < .3) put(i, 2); else gone(i); return; }
+                    life[i]--;
+                    const dx = (rnd() * 3 | 0) - 1;
+                    if (y > 0 && x + dx >= 0 && x + dx < W && t[(y - 1) * W + x + dx] === 0) sw(i, (y - 1) * W + x + dx);
+                    else if (x + dx >= 0 && x + dx < W && t[y * W + x + dx] === 0) sw(i, y * W + x + dx);
+                }
+            }
+            function step() {
+                fr = fr >= 250 ? (stamp.fill(0), 1) : fr + 1;
+                let any = false;
+                if (blasts.length) { blastStep(); any = true; }
+                if (holes.length) { holesStep(); any = true; }
+                for (let y = H - 1; y >= 0; y--) {
+                    const cy = (y / CS) | 0, rev = ((y + fr) & 1) === 1;
+                    for (let q = 0; q < CW; q++) {
+                        const cx = rev ? CW - 1 - q : q;
+                        if (!act[cy * CW + cx]) continue;
+                        any = true;
+                        const x0 = cx * CS;
+                        for (let r = 0; r < CS; r++) {
+                            const x = rev ? x0 + CS - 1 - r : x0 + r, i = y * W + x, k = t[i];
+                            if (k && stamp[i] !== fr) cell(i, x, y, k);
+                        }
+                    }
+                }
+                const tmp = act; act = nxt; nxt = tmp; nxt.fill(0);
+                return any;
             }
 
             let down = false, px0 = 0, py0 = 0, ptX = 0, ptY = 0;
             const gridAt = e => { const r = cv.getBoundingClientRect(); return [Math.floor((e.clientX - r.left) / r.width * W), Math.floor((e.clientY - r.top) / r.height * H)]; };
             function brush(cx, cy) {
-                const solid = mat === 3 || mat === 6, r = radius;
+                const solid = SAND_SOLID.includes(mat), r = radius;
                 for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
                     if (dx * dx + dy * dy > r * r) continue;
                     const x = cx + dx, y = cy + dy;
                     if (x < 0 || y < 0 || x >= W || y >= H) continue;
                     const i = y * W + x;
-                    if (mat === 0) { t[i] = 0; continue; }
-                    if (t[i] !== 0) { if (!(mat === 5 && (t[i] === 4 || t[i] === 6))) continue; }
+                    if (mat === 0) { if (t[i]) { gone(i); } continue; }
+                    if (mat === SAND_HOLE) return;
+                    if (t[i] !== 0) { if (!(mat === 5 && SAND_IGN[t[i]] && t[i] !== SAND_DYNAMITE)) continue; }
                     else if (!solid && rnd() > .55) continue;
                     put(i, mat, mat === 5 ? 25 + rnd() * 20 | 0 : 0);
                 }
+                dirty = true;
             }
             function stroke(x0, y0, x1, y1) {
                 const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
@@ -19996,6 +20318,7 @@ var __vpBannerAuto = (() => {
                 down = true; cv.focus({ preventScroll: true });
                 try { cv.setPointerCapture(e.pointerId); } catch (x) { }
                 [px0, py0] = gridAt(e); ptX = px0; ptY = py0;
+                if (mat === SAND_HOLE) { addHole(px0, py0); return; }
                 brush(px0, py0);
             });
             cv.addEventListener('pointermove', e => {
@@ -20013,10 +20336,16 @@ var __vpBannerAuto = (() => {
                 if (!on) return;
                 raf = requestAnimationFrame(frame);
                 if (!paused) {
-                    if (down) brush(ptX, ptY);
-                    step(); step();
+                    if (down && mat !== SAND_HOLE) brush(ptX, ptY);
+                    const a = step(), b = step();
+                    if (a || b) dirty = true;
                 }
-                draw();
+                if (flash > 0) {
+                    flash = Math.max(0, flash - .045);
+                    cv.style.transform = flash > 0 ? 'translate(' + ((rnd() * 8 - 4) * flash).toFixed(1) + 'px,' + ((rnd() * 8 - 4) * flash).toFixed(1) + 'px)' : '';
+                    dirty = true;
+                }
+                if (dirty) { dirty = false; draw(); }
                 if (now - lastScore > 500) {
                     lastScore = now;
                     let n = 0;
@@ -20029,7 +20358,7 @@ var __vpBannerAuto = (() => {
             function resize() {
                 const body = gw.el && gw.el.querySelector('.vp-games-body');
                 const availW = body ? body.clientWidth : Math.min(760, innerWidth - 24) - 32;
-                const availH = (body ? body.clientHeight : innerHeight - 140) - bar.offsetHeight - hint.offsetHeight - 24;
+                const availH = (body ? body.clientHeight : innerHeight - 140) - pal.offsetHeight - row.offsetHeight - hint.offsetHeight - 48;
                 const k = Math.max(1, Math.min(availW / W, availH / H));
                 cv.style.width = Math.floor(W * k) + 'px';
                 cv.style.height = Math.floor(H * k) + 'px';
@@ -20041,6 +20370,7 @@ var __vpBannerAuto = (() => {
                 const m = SAND_MATS.find(x => x.hot === e.key);
                 if (m) pick(m.id);
             }
+            el._vpTest = () => ({ W, H, t: Array.from(t), life: Array.from(life), act: Array.from(act), paused });
             return { el, key, pause: () => setPause(true), resize, destroy() { on = false; cancelAnimationFrame(raf); } };
         }
         const LB_KEYS = { snake: 's', mines: 'm', tetris: 't' };
@@ -20277,6 +20607,8 @@ var __vpBannerAuto = (() => {
             if (gw.cur) gw.cur.destroy();
             gw.id = id; GM_setValue('vp_game_last', id);
             gw.el.querySelectorAll('.vp-games-tab').forEach(t => t.classList.toggle('vp-on', t.dataset.g === id));
+            const onTab = gw.el.querySelector('.vp-games-tab.vp-on');
+            if (onTab && onTab.scrollIntoView) onTab.scrollIntoView({ inline: 'center', block: 'nearest' });
             const score = gw.el.querySelector('.vp-games-score'), body = gw.el.querySelector('.vp-games-body');
             score.textContent = '';
             gw.cur = GAME_MAKERS[id](text => { score.textContent = text; });
