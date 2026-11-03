@@ -1614,6 +1614,7 @@
                 'Стиль фона': svgIcon(I_BG),
                 'Стекло': svgIcon('<rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/><path d="M11.5 15.5l3-3M11.5 18.5l6-6"/>'),
                 'Звуки интерфейса': svgIcon('<path d="M4 9.5h3l4-3.5v12l-4-3.5H4z"/><path d="M15 9a4 4 0 0 1 0 6M17.5 6.5a7.5 7.5 0 0 1 0 11"/>'),
+                'Вкладка «Магазин»': svgIcon('<path d="M4 8h16l-1.2 11a2 2 0 0 1-2 1.8H7.2a2 2 0 0 1-2-1.8z"/><path d="M8.5 8V6.5a3.5 3.5 0 0 1 7 0V8"/>'),
                 'Боковая панель': svgIcon('<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M15 3v18"/><path d="M17.5 7.5h1M17.5 11h1M17.5 14.5h1"/>'),
                 'Версия для ПК на планшете': svgIcon('<rect x="2.5" y="5" width="19" height="13" rx="2"/><path d="M9 21h6"/><path d="M6 9h6M6 12h4"/>'),
                 'Карточка профиля при наведении': svgIcon('<rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="11" r="2.2"/><path d="M5.8 16.2c.6-1.6 1.9-2.4 3.2-2.4s2.6.8 3.2 2.4M14.5 10h3.5M14.5 13.5h2.5"/>'),
@@ -4463,6 +4464,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             row.onclick = e => e.stopPropagation();
             return row;
         }
+        addCss('html.vp-no-shop-tab a.vp-nav-link[href="/shop"] { display: none !important; }');
+        const applyShopTab = () => document.documentElement.classList.toggle('vp-no-shop-tab', !GM_getValue('shopTab', true));
+        applyShopTab();
         const SETTINGS = [
             { label: 'Фон', get: () => backgroundEnabled, set: v => { backgroundEnabled = v; updateBackgroundVisibility(); }, key: 'backgroundEnabled' },
             { label: 'Неоновая подсветка', get: () => neonEnabled, set: v => { neonEnabled = v; document.documentElement.classList.toggle('vp-no-neon', !v); paint(); }, key: 'neonEnabled' },
@@ -4484,6 +4488,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             { label: 'Сцена ленты', get: () => sceneEnabled, set: v => { sceneEnabled = v; sceneAutoOff = false; document.documentElement.classList.toggle('vp-scene', v); sceneKick(); }, key: 'sceneEnabled' },
             { label: 'Свечение видео', get: () => ambientEnabled, set: v => { ambientEnabled = v; applyAmbient(); }, key: 'ambientEnabled' },
             { label: 'Боковая панель', get: () => railEnabled, set: v => { railEnabled = v; placeRail(); }, key: 'railEnabled' },
+            { label: 'Вкладка «Магазин»', get: () => GM_getValue('shopTab', true), set: () => applyShopTab(), key: 'shopTab' },
             { label: 'Версия для ПК на планшете', get: () => GM_getValue('tabletDesktop', true), set: () => tabletViewport(), key: 'tabletDesktop' },
             { label: 'Мику и Тето', get: () => palsOn, set: v => { palsOn = v; palsApply(); }, key: 'palsEnabled' },
             { label: 'Мику справа', get: () => GM_getValue('palMiku', true), set: () => palsApply(), key: 'palMiku' },
@@ -4492,7 +4497,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         const SETTINGS_TABS = [
             { id: 'nick', name: 'Ник', items: ['Неоновая подсветка', 'Подсветка ника', 'Подсветка аватарок', 'Подсветка постов'] },
             { id: 'bg', name: 'Фон', items: ['Фон'] },
-            { id: 'look', name: 'Вид', items: ['Стекло', 'Листание вкладок', 'Карточка профиля при наведении', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Карточки панели', 'Версия для ПК на планшете'] },
+            { id: 'look', name: 'Вид', items: ['Стекло', 'Листание вкладок', 'Карточка профиля при наведении', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Вкладка «Магазин»', 'Карточки панели', 'Версия для ПК на планшете'] },
             { id: 'likes', name: 'Лайки', items: ['Автолайки'] },
             { id: 'pals', name: 'Мику', items: ['Мику и Тето', 'Мику справа', 'Тето слева', 'Размер персонажей'] },
             { id: 'misc', name: 'Ещё', items: ['Анти цензура', 'Звуки интерфейса', 'Громкость', 'Заставка при входе'] },
@@ -4679,6 +4684,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             'Сцена ленты': 'Посты в ленте чуть уменьшаются и тают у края экрана',
             'Свечение видео': 'Мягкое цветное свечение вокруг видео',
             'Боковая панель': 'Правая панель с карточками',
+            'Вкладка «Магазин»': 'Пункт «Магазин» в меню слева (на телефоне — в нижнем меню). Выключишь — его не будет',
             'Версия для ПК на планшете': 'На планшете открывается компьютерная вёрстка',
             'Мику и Тето': 'Персонажи по краям экрана',
             'Мику справа': 'Показывать Мику справа',
@@ -8921,6 +8927,8 @@ var __vpBannerAuto = (() => {
         };
         const CHANGELOG = [
             ['3.9.0', '3 ноября 2026', [
+                'Мини-игры: новая «Песочница» — рисуй песком, водой, камнем, маслом, огнём, растениями, лавой и кислотой, смотри как всё падает, течёт и горит (без счёта и без таблицы лидеров)',
+                'Настройки: можно выключить вкладку «Магазин» — её не будет в меню ни на компьютере, ни на телефоне (Настройки → Вид)',
                 'Сообщения: ссылки в тексте теперь синие, их видно сразу',
                 'Посты: убрана кнопка «Скопировать картинку» — она брала только первую картинку альбома, а копировать можно правой кнопкой; «Обновить» и «Скопировать ссылку» остались',
                 'Посты с картинкой: у размытого фона больше нет двойной кромки в углу, скругление фона совпадает со скруглением карточки',
@@ -18181,7 +18189,8 @@ var __vpBannerAuto = (() => {
         const GAMES = [
             { id: 'snake', name: 'Змейка', best: 'vp_snake_best', icon: '<path d="M4 17c0-3 2-4 4-4h8a3 3 0 0 0 0-6H9"/><circle cx="7" cy="7" r="1.6"/>' },
             { id: 'mines', name: 'Сапёр', best: 'vp_mines_best', icon: '<circle cx="12" cy="13" r="6"/><path d="M12 3v4M19.5 6 17 8.5M4.5 6 7 8.5"/>' },
-            { id: 'tetris', name: 'Тетрис', best: 'vp_tetris_best', icon: '<path d="M4 14h5v5H4zM9 14h5v5H9zM9 9h5v5H9zM14 14h5v5h-5z"/>' }
+            { id: 'tetris', name: 'Тетрис', best: 'vp_tetris_best', icon: '<path d="M4 14h5v5H4zM9 14h5v5H9zM9 9h5v5H9zM14 14h5v5h-5z"/>' },
+            { id: 'sand', name: 'Песочница', free: true, icon: '<path d="M3 19h18M6 19l4-8 3 4 2-3 3 7"/><circle cx="7" cy="6" r=".9"/><circle cx="12" cy="4" r=".9"/><circle cx="16" cy="7" r=".9"/>' }
         ];
         const rail = document.createElement('div');
         rail.className = 'vp-rail';
@@ -19264,6 +19273,7 @@ var __vpBannerAuto = (() => {
         onDom(profileSort);
         const gamesList = rail.querySelector('.vp-games-list');
         const bestText = g => {
+            if (g.free) return 'без счёта';
             const v = GM_getValue(acctKey(g.best), 0);
             if (!v) return 'не играл';
             return g.id === 'mines' ? `лучшее ${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}` : `рекорд ${v}`;
@@ -19764,6 +19774,275 @@ var __vpBannerAuto = (() => {
             return { el, key, pause, resize, repTo, repRes: () => ({ score, done: over }), destroy() { on = false; cancelAnimationFrame(raf); } };
         }
 
+        const SAND_W = 240, SAND_H = 180;
+        const SAND_MATS = [
+            { id: 1, name: 'Песок', rgb: [226, 190, 96], hot: '1' },
+            { id: 2, name: 'Вода', rgb: [48, 112, 232], hot: '2' },
+            { id: 3, name: 'Камень', rgb: [122, 122, 132], hot: '3' },
+            { id: 4, name: 'Масло', rgb: [112, 72, 30], hot: '4' },
+            { id: 5, name: 'Огонь', rgb: [255, 130, 20], hot: '5' },
+            { id: 6, name: 'Растение', rgb: [52, 172, 72], hot: '6' },
+            { id: 7, name: 'Лава', rgb: [242, 72, 20], hot: '7' },
+            { id: 8, name: 'Кислота', rgb: [150, 240, 62], hot: '8' },
+            { id: 0, name: 'Ластик', rgb: [30, 30, 36], hot: '0' }
+        ];
+        const SAND_STEAM = 9, SAND_SMOKE = 10;
+        const SAND_RGB = { 9: [196, 208, 226], 10: [88, 88, 96] };
+        SAND_MATS.forEach(m => { SAND_RGB[m.id] = m.rgb; });
+        const SAND_DENS = { 1: 5, 2: 3, 4: 2, 7: 4, 8: 3 };
+        const SAND_SPREAD = { 2: 4, 4: 3, 7: 1, 8: 3 };
+        let sandCssDone = false;
+        function sandGame(setScore) {
+            if (!sandCssDone) {
+                sandCssDone = true;
+                addCss(`
+                .vp-sand { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; min-width: 0; }
+                .vp-sand-cv { display: block; border-radius: 20px; background: #05060a; touch-action: none; outline: none; cursor: crosshair; image-rendering: pixelated; }
+                .vp-sand-bar { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+                .vp-sand-mat, .vp-sand-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border: 0; border-radius: 9999px; cursor: pointer; font: inherit; font-size: 13px;
+                    font-weight: 600; color: var(--text-primary, #fff); background: var(--bg-hover, rgba(255, 255, 255, .08)); }
+                .vp-sand-mat.vp-on { box-shadow: inset 0 0 0 1.5px var(--vp-accent); background: rgba(255, 255, 255, .12); }
+                .vp-sand-mat i { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; }
+                .vp-sand-size { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+                .vp-sand-size input { width: 110px; accent-color: var(--vp-accent); }
+                @media (max-width: 520px) { .vp-sand-mat, .vp-sand-btn { padding: 6px 9px; font-size: 12px; } }
+                `);
+            }
+            const W = SAND_W, H = SAND_H, N = W * H;
+            const t = new Uint8Array(N), tn = new Uint8Array(N), life = new Uint8Array(N), stamp = new Uint8Array(N);
+            const el = document.createElement('div');
+            el.className = 'vp-sand';
+            const cv = document.createElement('canvas');
+            cv.className = 'vp-sand-cv'; cv.width = W; cv.height = H; cv.tabIndex = 0;
+            const bar = document.createElement('div');
+            bar.className = 'vp-sand-bar';
+            let mat = +GM_getValue('vp_sand_mat', 1), radius = Math.max(1, Math.min(10, +GM_getValue('vp_sand_r', 3) || 3)), paused = false;
+            if (!SAND_MATS.some(m => m.id === mat)) mat = 1;
+            const matBtns = SAND_MATS.map(m => {
+                const b = document.createElement('button');
+                b.type = 'button'; b.className = 'vp-sand-mat'; b.dataset.m = m.id;
+                const dot = document.createElement('i');
+                dot.style.background = `rgb(${m.rgb.join(',')})`;
+                b.append(dot, m.name);
+                b.addEventListener('click', () => pick(m.id));
+                bar.appendChild(b);
+                return b;
+            });
+            const size = document.createElement('label');
+            size.className = 'vp-sand-size';
+            const range = document.createElement('input');
+            range.type = 'range'; range.min = 1; range.max = 10; range.value = radius;
+            range.addEventListener('input', () => { radius = +range.value; GM_setValue('vp_sand_r', radius); });
+            size.append('Кисть', range);
+            const pauseBtn = document.createElement('button');
+            pauseBtn.type = 'button'; pauseBtn.className = 'vp-sand-btn'; pauseBtn.textContent = 'Пауза';
+            pauseBtn.addEventListener('click', () => setPause(!paused));
+            const clearBtn = document.createElement('button');
+            clearBtn.type = 'button'; clearBtn.className = 'vp-sand-btn'; clearBtn.textContent = 'Очистить';
+            clearBtn.addEventListener('click', clear);
+            bar.append(size, pauseBtn, clearBtn);
+            const hint = document.createElement('div');
+            hint.className = 'vp-games-hint';
+            hint.textContent = IS_PHONE ? 'Рисуй пальцем · материал выбирай внизу' : 'Рисуй мышкой · цифры 1–8 — материал · пробел — пауза · C — очистить';
+            el.append(cv, bar, hint);
+            function pick(id) {
+                mat = id; GM_setValue('vp_sand_mat', id);
+                matBtns.forEach(b => b.classList.toggle('vp-on', +b.dataset.m === id));
+            }
+            pick(mat);
+            function setPause(v) { paused = v; pauseBtn.textContent = v ? 'Дальше' : 'Пауза'; }
+            function clear() { t.fill(0); life.fill(0); draw(); }
+
+            const g = cv.getContext('2d');
+            const img = g.createImageData(W, H);
+            const px = new Uint32Array(img.data.buffer);
+            const pack = (r, gr, b) => (255 << 24) | (Math.min(255, b) << 16) | (Math.min(255, gr) << 8) | Math.min(255, r);
+            const BG = pack(5, 6, 10);
+            function draw() {
+                for (let i = 0; i < N; i++) {
+                    const k = t[i];
+                    if (!k) { px[i] = BG; continue; }
+                    const c = SAND_RGB[k], f = 0.82 + tn[i] / 255 * 0.36;
+                    if (k === 5) { const l = life[i] / 40; px[i] = pack(255, 70 + 150 * l | 0, 10 + 40 * l | 0); }
+                    else if (k === 7) px[i] = pack(c[0] * (0.9 + tn[i] / 900), c[1] * f + 20, c[2] * f);
+                    else px[i] = pack(c[0] * f, c[1] * f, c[2] * f);
+                }
+                g.putImageData(img, 0, 0);
+            }
+
+            let fr = 1;
+            const rnd = Math.random;
+            const sw = (i, j) => {
+                const a = t[i], b = tn[i], c = life[i];
+                t[i] = t[j]; tn[i] = tn[j]; life[i] = life[j];
+                t[j] = a; tn[j] = b; life[j] = c;
+                stamp[i] = fr; stamp[j] = fr;
+            };
+            const put = (i, k, l) => { t[i] = k; tn[i] = rnd() * 255 | 0; life[i] = l || 0; stamp[i] = fr; };
+            const kind = (x, y) => x < 0 || y < 0 || x >= W || y >= H ? -1 : t[y * W + x];
+            const lighter = (k, me) => k >= 0 && (k === 0 || k === SAND_STEAM || k === SAND_SMOKE || (SAND_DENS[k] && SAND_DENS[k] < SAND_DENS[me]));
+            const NB = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+            function fall(i, x, y, me) {
+                const below = (y + 1) * W + x;
+                if (y + 1 < H && lighter(t[below], me)) { sw(i, below); return true; }
+                const d = rnd() < .5 ? -1 : 1;
+                for (const s of [d, -d]) {
+                    const nx = x + s;
+                    if (nx < 0 || nx >= W || y + 1 >= H) continue;
+                    const j = (y + 1) * W + nx;
+                    if (lighter(t[j], me) && lighter(t[y * W + nx], me)) { sw(i, j); return true; }
+                }
+                return false;
+            }
+            function spread(i, x, y, me) {
+                const d = rnd() < .5 ? -1 : 1, n = SAND_SPREAD[me] || 1;
+                let cx = x, ci = i;
+                for (let s = 0; s < n; s++) {
+                    const nx = cx + d;
+                    if (nx < 0 || nx >= W) break;
+                    const j = y * W + nx;
+                    if (!lighter(t[j], me)) break;
+                    sw(ci, j); cx = nx; ci = j;
+                }
+                return cx !== x;
+            }
+            function ignite(x, y, chance) {
+                const k = kind(x, y);
+                if (k > 0 && (k === 4 || k === 6) && rnd() < chance) put(y * W + x, 5, 25 + rnd() * 20 | 0);
+            }
+            function step() {
+                fr = fr >= 250 ? (stamp.fill(0), 1) : fr + 1;
+                for (let y = H - 1; y >= 0; y--) {
+                    const rev = ((y + fr) & 1) === 1;
+                    for (let q = 0; q < W; q++) {
+                        const x = rev ? W - 1 - q : q, i = y * W + x, k = t[i];
+                        if (!k || stamp[i] === fr) continue;
+                        if (k === 1) { fall(i, x, y, 1); }
+                        else if (k === 2) {
+                            for (const [dx, dy] of NB) { const nk = kind(x + dx, y + dy); if (nk === 5) { put(i, SAND_STEAM, 60 + rnd() * 60 | 0); break; } }
+                            if (t[i] === 2 && !fall(i, x, y, 2)) spread(i, x, y, 2);
+                        }
+                        else if (k === 4) {
+                            if (!fall(i, x, y, 4)) spread(i, x, y, 4);
+                        }
+                        else if (k === 5) {
+                            if (life[i] <= 1) { if (rnd() < .5) put(i, SAND_SMOKE, 30 + rnd() * 40 | 0); else { t[i] = 0; life[i] = 0; } continue; }
+                            life[i]--;
+                            for (const [dx, dy] of NB) {
+                                const nk = kind(x + dx, y + dy);
+                                if (nk === 4) ignite(x + dx, y + dy, .5);
+                                else if (nk === 6) ignite(x + dx, y + dy, .12);
+                                else if (nk === 2) { put(i, SAND_STEAM, 60 + rnd() * 60 | 0); put((y + dy) * W + x + dx, SAND_STEAM, 60 + rnd() * 60 | 0); break; }
+                            }
+                            if (t[i] === 5 && y > 0 && rnd() < .35) {
+                                const j = (y - 1) * W + x + (rnd() * 3 | 0) - 1;
+                                if (x > 0 && x < W - 1 && t[j] === 0) sw(i, j);
+                            }
+                        }
+                        else if (k === 6) {
+                            if (rnd() < .03) {
+                                const [dx, dy] = NB[rnd() * 4 | 0];
+                                if (kind(x + dx, y + dy) === 2) put((y + dy) * W + x + dx, 6);
+                            }
+                        }
+                        else if (k === 7) {
+                            for (const [dx, dy] of NB) {
+                                const nk = kind(x + dx, y + dy), j = (y + dy) * W + x + dx;
+                                if (nk === 2) { put(j, SAND_STEAM, 60 + rnd() * 60 | 0); put(i, 3); break; }
+                                if (nk === 4 || nk === 6) { put(j, 5, 25 + rnd() * 20 | 0); }
+                            }
+                            if (t[i] === 7 && rnd() < .5 && !fall(i, x, y, 7)) spread(i, x, y, 7);
+                        }
+                        else if (k === 8) {
+                            for (const [dx, dy] of NB) {
+                                const nk = kind(x + dx, y + dy);
+                                if ((nk === 1 || nk === 3 || nk === 6) && rnd() < .08) { t[(y + dy) * W + x + dx] = 0; if (rnd() < .5) { t[i] = 0; break; } }
+                            }
+                            if (t[i] === 8 && !fall(i, x, y, 8)) spread(i, x, y, 8);
+                        }
+                        else if (k === SAND_STEAM || k === SAND_SMOKE) {
+                            if (life[i] <= 1) { if (k === SAND_STEAM && rnd() < .3) put(i, 2); else t[i] = 0; continue; }
+                            life[i]--;
+                            const dx = (rnd() * 3 | 0) - 1;
+                            if (y > 0 && x + dx >= 0 && x + dx < W && t[(y - 1) * W + x + dx] === 0) sw(i, (y - 1) * W + x + dx);
+                            else if (x + dx >= 0 && x + dx < W && t[y * W + x + dx] === 0) sw(i, y * W + x + dx);
+                        }
+                    }
+                }
+            }
+
+            let down = false, px0 = 0, py0 = 0, ptX = 0, ptY = 0;
+            const gridAt = e => { const r = cv.getBoundingClientRect(); return [Math.floor((e.clientX - r.left) / r.width * W), Math.floor((e.clientY - r.top) / r.height * H)]; };
+            function brush(cx, cy) {
+                const solid = mat === 3 || mat === 6, r = radius;
+                for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+                    if (dx * dx + dy * dy > r * r) continue;
+                    const x = cx + dx, y = cy + dy;
+                    if (x < 0 || y < 0 || x >= W || y >= H) continue;
+                    const i = y * W + x;
+                    if (mat === 0) { t[i] = 0; continue; }
+                    if (t[i] !== 0) { if (!(mat === 5 && (t[i] === 4 || t[i] === 6))) continue; }
+                    else if (!solid && rnd() > .55) continue;
+                    put(i, mat, mat === 5 ? 25 + rnd() * 20 | 0 : 0);
+                }
+            }
+            function stroke(x0, y0, x1, y1) {
+                const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
+                for (let s = 0; s <= n; s++) brush(Math.round(x0 + (x1 - x0) * s / n), Math.round(y0 + (y1 - y0) * s / n));
+            }
+            cv.addEventListener('pointerdown', e => {
+                e.preventDefault();
+                down = true; cv.focus({ preventScroll: true });
+                try { cv.setPointerCapture(e.pointerId); } catch (x) { }
+                [px0, py0] = gridAt(e); ptX = px0; ptY = py0;
+                brush(px0, py0);
+            });
+            cv.addEventListener('pointermove', e => {
+                if (!down) return;
+                const [x, y] = gridAt(e);
+                stroke(px0, py0, x, y);
+                px0 = x; py0 = y; ptX = x; ptY = y;
+            });
+            const up = () => { down = false; };
+            cv.addEventListener('pointerup', up);
+            cv.addEventListener('pointercancel', up);
+
+            let on = true, raf = 0, lastScore = 0;
+            function frame(now) {
+                if (!on) return;
+                raf = requestAnimationFrame(frame);
+                if (!paused) {
+                    if (down) brush(ptX, ptY);
+                    step(); step();
+                }
+                draw();
+                if (now - lastScore > 500) {
+                    lastScore = now;
+                    let n = 0;
+                    for (let i = 0; i < N; i++) if (t[i]) n++;
+                    setScore(`частиц ${n}`);
+                }
+            }
+            raf = requestAnimationFrame(frame);
+
+            function resize() {
+                const body = gw.el && gw.el.querySelector('.vp-games-body');
+                const availW = body ? body.clientWidth : Math.min(760, innerWidth - 24) - 32;
+                const availH = (body ? body.clientHeight : innerHeight - 140) - bar.offsetHeight - hint.offsetHeight - 24;
+                const k = Math.max(1, Math.min(availW / W, availH / H));
+                cv.style.width = Math.floor(W * k) + 'px';
+                cv.style.height = Math.floor(H * k) + 'px';
+            }
+            function key(e) {
+                const k = e.key.toLowerCase();
+                if (k === ' ') { e.preventDefault(); setPause(!paused); return; }
+                if (k === 'c' || k === 'с') { clear(); return; }
+                const m = SAND_MATS.find(x => x.hot === e.key);
+                if (m) pick(m.id);
+            }
+            return { el, key, pause: () => setPause(true), resize, destroy() { on = false; cancelAnimationFrame(raf); } };
+        }
         const LB_KEYS = { snake: 's', mines: 'm', tetris: 't' };
         const LB_KEY = 'ITDX-LB-KEY-2026-Kiwe-NSFW-Visual-Pack-games';
         function lbEncode(text) {
@@ -19952,7 +20231,7 @@ var __vpBannerAuto = (() => {
         function gamesRecord() { clearTimeout(lbT); lbT = setTimeout(lbSubmit, 2000); }
         function lbRender() {
             const view = gw.el && gw.el.querySelector('.vp-games-leads');
-            if (view) GAMES.forEach(g => lbRenderInto(view.querySelector(`[data-lead="${g.id}"]`), g.id));
+            if (view) GAMES.filter(g => !g.free).forEach(g => lbRenderInto(view.querySelector(`[data-lead="${g.id}"]`), g.id));
         }
         async function lbRenderInto(box, id) {
             if (!box) return;
@@ -19989,10 +20268,10 @@ var __vpBannerAuto = (() => {
         function leadersView() {
             const el = document.createElement('div');
             el.className = 'vp-games-leads';
-            el.innerHTML = GAMES.map(g => `<section data-lead="${g.id}"></section>`).join('');
+            el.innerHTML = GAMES.filter(g => !g.free).map(g => `<section data-lead="${g.id}"></section>`).join('');
             return { el, key() { }, pause() { }, resize() { }, destroy() { } };
         }
-        const GAME_MAKERS = { snake: snakeGame, mines: minesGame, tetris: tetrisGame, lead: leadersView };
+        const GAME_MAKERS = { snake: snakeGame, mines: minesGame, tetris: tetrisGame, sand: sandGame, lead: leadersView };
         function showGame(id) {
             if (!gw.el) return;
             if (gw.cur) gw.cur.destroy();
