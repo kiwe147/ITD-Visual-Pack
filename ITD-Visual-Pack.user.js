@@ -1608,6 +1608,7 @@
                 'Неоновая подсветка': svgIcon('<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0 0 12 3z"/>'),
                 'Подсветка ника': svgIcon('<path d="M4 19 9 5h1l5 14M5.8 14.5h7.4"/><path d="M18.5 3.5v4M16.5 5.5h4"/><path d="M19 11.5v2M18 12.5h2"/>'),
                 'Подсветка аватарок': svgIcon('<circle cx="12" cy="10" r="3"/><path d="M7 17.5a5.5 5.5 0 0 1 10 0"/><circle cx="12" cy="12" r="9.5" stroke-dasharray="2.2 2.6"/>'),
+                'Аватарки мода': svgIcon('<circle cx="12" cy="10" r="3"/><path d="M7 17.5a5.5 5.5 0 0 1 10 0"/><rect x="3.5" y="3.5" width="17" height="17" rx="5"/>'),
                 'Подсветка постов': svgIcon('<rect x="5" y="6" width="14" height="12" rx="2.5"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/><rect x="2" y="3" width="20" height="18" rx="4.5" stroke-dasharray="2.2 2.6"/>'),
                 'Размытый фон постов': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="12" r="5" stroke-dasharray="1.4 2"/>'),
                 'Анти цензура': svgIcon('<path d="M12 3 5 6v5.2c0 4.3 2.9 7.9 7 9.8 1.6-.7 3-1.7 4.1-3M19 13.5c.1-.8.2-1.5.2-2.3V6L12 3"/><path d="m3 3 18 18"/>'),
@@ -4489,6 +4490,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             { label: 'Стекло', get: () => glassEnabled, set: v => { glassEnabled = v; applyGlass(); }, key: 'glassEnabled' },
             { label: 'Звуки интерфейса', get: () => uiSoundEnabled, set: v => { uiSoundEnabled = v; if (v) uiSound('toggle'); }, key: 'uiSoundEnabled' },
             { label: 'Стили других', get: () => showLooks, set: v => { showLooks = v; document.documentElement.classList.toggle('vp-looks', v); if (!v) setBgGuest(null); }, key: 'showLooks' },
+            { label: 'Аватарки мода', get: () => GM_getValue('modAvatars', true), set: () => avatarRefresh(), key: 'modAvatars' },
             { label: 'Листание вкладок', get: () => GM_getValue('tabSlide', true), set: v => { if (!v) tabSlide.end(); }, key: 'tabSlide' },
             { label: 'Карточка профиля при наведении', get: () => GM_getValue('hoverCard', true), set: v => { if (!v) hcOff(); }, key: 'hoverCard' },
             { label: 'Сцена ленты', get: () => sceneEnabled, set: v => { sceneEnabled = v; sceneAutoOff = false; document.documentElement.classList.toggle('vp-scene', v); sceneKick(); }, key: 'sceneEnabled' },
@@ -4501,7 +4503,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             { label: 'Тето слева', get: () => GM_getValue('palTeto', true), set: () => palsApply(), key: 'palTeto' }
         ];
         const SETTINGS_TABS = [
-            { id: 'nick', name: 'Ник', items: ['Неоновая подсветка', 'Подсветка ника', 'Подсветка аватарок', 'Подсветка постов'] },
+            { id: 'nick', name: 'Ник', items: ['Неоновая подсветка', 'Подсветка ника', 'Подсветка аватарок', 'Аватарки мода', 'Подсветка постов'] },
             { id: 'bg', name: 'Фон', items: ['Фон'] },
             { id: 'look', name: 'Вид', items: ['Стекло', 'Листание вкладок', 'Карточка профиля при наведении', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Вкладка «Магазин»', 'Карточки панели', 'Версия для ПК на планшете'] },
             { id: 'likes', name: 'Лайки', items: ['Автолайки'] },
@@ -4678,6 +4680,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             'Неоновая подсветка': 'Общий выключатель свечения: ник, аватарки, посты, иконки',
             'Подсветка ника': 'Свечение вокруг ника',
             'Подсветка аватарок': 'Свечение вокруг аватарок',
+            'Аватарки мода': 'Выключено: везде настоящие аватарки сайта, и твоя и чужие',
             'Подсветка постов': 'Цветная рамка у постов',
             'Заставка при входе': 'Короткая заставка при открытии сайта',
             'Размытый фон постов': 'Размытая подложка за карточками постов с картинкой',
@@ -8951,6 +8954,7 @@ var __vpBannerAuto = (() => {
             ['3.9.0', '3 ноября 2026', [
                 'Мини-игры: новая «Песочница» — рисуй песком, водой, камнем, маслом, огнём, растениями, лавой, кислотой, ядом, пропаном, динамитом с фитилём, металлом, стеклом, атомной бомбой и чёрной дырой, смотри как всё падает, течёт, горит, плавится и взрывается (без счёта и без таблицы лидеров)',
                 'Настройки: можно выключить вкладку «Магазин» — её не будет в меню ни на компьютере, ни на телефоне (Настройки → Вид)',
+                'Настройки: переключатель «Аватарки мода» (Настройки → Ник) — выключи, и везде будут обычные аватарки сайта, и твоя и чужие',
                 'Аватарка мода синхронизируется между устройствами одного аккаунта: сменил или убрал на одном — на другом подтянется само',
                 'Сообщения: ссылки в тексте теперь синие, их видно сразу',
                 'Посты: убрана кнопка «Скопировать картинку» — она брала только первую картинку альбома, а копировать можно правой кнопкой; «Обновить» и «Скопировать ссылку» остались',
@@ -10054,7 +10058,9 @@ var __vpBannerAuto = (() => {
                         if (typeof v.play === 'function') { try { v.play().catch(() => { }); } catch (e) { } }
                     }
                 }
+                const modAvaOn = () => GM_getValue('modAvatars', true) !== false;
                 avaLookOf = u => {
+                    if (!modAvaOn()) return '';
                     const own = (GM_getValue(acctKey('vp_ava'), null) || {}).ref || '';
                     if (u === (myUsername || '').toLowerCase()) {
                         const ref = own || (showLooks && lookBy.get(u) && lookBy.get(u).a) || '';
@@ -10066,7 +10072,8 @@ var __vpBannerAuto = (() => {
                 function markAvatars(me, pu, others) {
                     const own = GM_getValue(acctKey('vp_ava'), null) || {};
                     const refOf = u => u === me ? { a: own.ref || (others && lookBy.get(u) && lookBy.get(u).a) || '', va: own.vid || (others && lookBy.get(u) && lookBy.get(u).va) || '' } : others && lookBy.get(u) || {};
-                    const put = (av, u) => { try { const r = refOf(u); avaPut(av, r.a || '', r.va || ''); } catch (e) {   } };
+                    const off = !modAvaOn();
+                    const put = (av, u) => { try { const r = off ? {} : refOf(u); avaPut(av, r.a || '', r.va || ''); } catch (e) {   } };
                     document.querySelectorAll(PROFILE_LINK).forEach(link => {
                         const av = link.querySelector('.' + SELECTORS.avatar);
                         if (av) put(av, userOf(link.getAttribute('href')));
