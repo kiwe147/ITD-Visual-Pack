@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.0.1
+// @version      3.9.0.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -8951,6 +8951,9 @@ var __vpBannerAuto = (() => {
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.9.0.2', '3 ноября 2026', [
+                'Сообщения: если забыл пароль — в окне ввода пароля появилась кнопка «Забыл пароль». Она создаёт новый ключ с новым паролем: старая переписка пропадёт и у тебя, и у собеседников, новая пойдёт как обычно'
+            ]],
             ['3.9.0.1', '3 ноября 2026', [
                 'Настройки: переключатель «Аватарки мода» переехал в конец вкладки «Ник» — он больше не разрывает группу «Неоновая подсветка»'
             ]],
@@ -12676,6 +12679,8 @@ var __vpBannerAuto = (() => {
         .vp-msgs-key input:focus { border-color: var(--vp-accent); }
         .vp-msgs-key button { padding: 11px; border: 0; border-radius: 14px; cursor: pointer; font: inherit; font-weight: 600; background: var(--vp-accent); color: #000; }
         .vp-msgs-key button:disabled { opacity: .5; cursor: default; }
+        .vp-msgs-key button.vp-msgs-keyalt { padding: 4px; background: none; color: var(--text-secondary); font-weight: 400; font-size: 13px; }
+        .vp-msgs-key button.vp-msgs-keyalt:hover { color: var(--vp-accent); }
         .vp-msgs-keyerr { min-height: 18px; font-size: 13px; text-align: center; color: var(--text-secondary); }
     `);
 
@@ -13531,22 +13536,25 @@ var __vpBannerAuto = (() => {
                     msgSendRead(t.uid, inTs, t.sup).catch(e => logErr('прочитано', e));
                 }
             }
-            function msgKeyForm(d) {
-                const has = !!msgNet.keys.get(msgMyId());
+            function msgKeyForm(d, reset) {
+                const has = !!msgNet.keys.get(msgMyId()), unlock = has && !reset;
                 feed.innerHTML = `<form class="vp-msgs-key"><div class="vp-msgs-note"></div><input type="password" minlength="8" required>`
-                    + (has ? '' : '<input type="password" minlength="8" required>') + `<button type="submit"></button><div class="vp-msgs-keyerr"></div></form>`;
-                const f = feed.firstChild, [p1, p2] = f.querySelectorAll('input'), err = f.querySelector('.vp-msgs-keyerr'), btn = f.querySelector('button');
+                    + (unlock ? '' : '<input type="password" minlength="8" required>') + `<button type="submit"></button>`
+                    + (has ? '<button type="button" class="vp-msgs-keyalt"></button>' : '') + `<div class="vp-msgs-keyerr"></div></form>`;
+                const f = feed.firstChild, [p1, p2] = f.querySelectorAll('input'), err = f.querySelector('.vp-msgs-keyerr'), btn = f.querySelector('button[type=submit]'), alt = f.querySelector('.vp-msgs-keyalt');
                 f.firstChild.insertAdjacentHTML('afterbegin', uiIcon('lock', 14));
-                f.firstChild.appendChild(document.createTextNode(has ? 'Введи пароль сообщений — он откроет твой ключ на этом устройстве'
-                    : 'Придумай пароль для сообщений: им шифруется твой ключ, с ним переписка откроется на любом устройстве. Лучше несколько слов или 10+ символов — простой пароль можно подобрать. Забудешь — старые сообщения не прочитать'));
-                p1.placeholder = 'Пароль'; p1.autocomplete = has ? 'current-password' : 'new-password';
+                f.firstChild.appendChild(document.createTextNode(unlock ? 'Введи пароль сообщений — он откроет твой ключ на этом устройстве'
+                    : reset ? 'Забыл пароль — придумай новый. Старая переписка пропадёт насовсем, и у тебя, и у собеседников: прочитать её уже не получится. Новая переписка пойдёт как обычно'
+                        : 'Придумай пароль для сообщений: им шифруется твой ключ, с ним переписка откроется на любом устройстве. Лучше несколько слов или 10+ символов — простой пароль можно подобрать. Забудешь — старые сообщения не прочитать'));
+                p1.placeholder = unlock ? 'Пароль' : reset ? 'Новый пароль' : 'Пароль'; p1.autocomplete = unlock ? 'current-password' : 'new-password';
                 if (p2) { p2.placeholder = 'Ещё раз'; p2.autocomplete = 'new-password'; }
-                btn.textContent = has ? 'Открыть' : 'Создать ключ';
+                btn.textContent = unlock ? 'Открыть' : reset ? 'Забыть старые сообщения и создать ключ' : 'Создать ключ';
+                if (alt) { alt.textContent = unlock ? 'Забыл пароль' : 'Назад'; alt.addEventListener('click', () => msgKeyForm(d, unlock)); }
                 f.addEventListener('submit', async e => {
                     e.preventDefault();
                     if (p2 && p1.value !== p2.value) { err.textContent = 'Пароли не совпадают'; return; }
-                    btn.disabled = true; err.textContent = has ? 'Открываю…' : 'Создаю ключ…';
-                    try { has ? await msgUnlock(p1.value) : await msgCreateKey(p1.value); msgOpenPerson(d); }
+                    btn.disabled = true; err.textContent = unlock ? 'Открываю…' : 'Создаю ключ…';
+                    try { unlock ? await msgUnlock(p1.value) : await msgCreateKey(p1.value); msgOpenPerson(d); }
                     catch (x) { err.textContent = x.message || 'Не вышло'; btn.disabled = false; }
                 });
                 p1.focus();
