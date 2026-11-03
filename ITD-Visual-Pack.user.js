@@ -5056,6 +5056,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         .vp-screen-flip { display: none; width: 30px; height: 30px; flex: 0 0 30px; align-items: center; justify-content: center; padding: 0; border: 1px solid rgba(255,255,255,.36); border-radius: 50%; background: rgba(24,26,28,.76); color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.22); cursor: pointer; pointer-events: auto; transition: background .18s ease, transform .18s ease; }
         .vp-call.vp-remote-available .vp-screen-flip { display: flex; }
         .vp-screen-flip[hidden] { display: none !important; }
+        .vp-screen-mode { height: 30px; padding: 0 12px; border: 1px solid rgba(255,255,255,.36); border-radius: 15px; background: rgba(24,26,28,.76); color: #fff; font: 600 11px/1 inherit; cursor: pointer; pointer-events: auto; box-shadow: 0 2px 8px rgba(0,0,0,.22); transition: background .18s ease; }
+        .vp-screen-mode:hover { background: rgba(24,26,28,.94); }
+        .vp-screen-mode[hidden] { display: none !important; }
         .vp-screen-flip:hover { background: rgba(24,26,28,.94); transform: scale(1.06); }
         .vp-screen-flip:active { transform: scale(.94); }
         .vp-screen-flip svg { width: 16px; height: 16px; }
@@ -5279,30 +5282,97 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 for (let i = 0; i < h.buf.length; i++) { const v = (h.buf[i] - 128) / 128; sum += v * v; }
                 return Math.sqrt(sum / h.buf.length);
             };
-            const me = c.rawStream ? mk(c.rawStream) : null;
-            let last = 0;
+            let me = c.rawStream ? mk(c.rawStream) : null, last = 0;
             c.voiceT = setInterval(() => {
                 if (c.state !== 'talk' || !c.el) { clearInterval(c.voiceT); if (c.el) c.el.classList.remove('vp-voice'); return; }
                 const now = Date.now();
+                if (c.rawStream && (!me || me.stream !== c.rawStream)) me = mk(c.rawStream);
                 if (me && level(me) > 0.025) last = now;
                 c.el.classList.toggle('vp-voice', now - last < 400);
             }, 80);
         }
-        async function callMicCheck(c) {
-            if (c.state !== 'talk' || !c.pc || !c.rawStream || c.stream === c.rawStream) return;
-            let sent = 0;
-            try { (await c.pc.getStats()).forEach(r => { if (r.type === 'outbound-rtp' && r.kind === 'audio') sent += r.bytesSent || 0; }); } catch (e) { return; }
-            if (sent > 0) return;
+        async function callMicFallback(c) {
+            if (!c.pc || !c.rawStream || c.stream === c.rawStream) return false;
             const cur = c.stream.getAudioTracks()[0], raw = c.rawStream.getAudioTracks()[0];
-            const snd = c.pc.getSenders().find(x => x.track === cur);
-            if (!snd || !raw) return;
+            const snd = c.micSender || c.pc.getSenders().find(x => x.track === cur);
+            if (!snd || !raw || raw.readyState !== 'live') return false;
             try {
                 await snd.replaceTrack(raw);
                 raw.enabled = !c.muted;
                 clearInterval(c.noiseT); c.noiseT = null;
                 c.stream = c.rawStream;
                 logErr('звонок: шумоподавление не отдало звук, взят обычный микрофон', new Error('noise-fallback'));
-            } catch (e) { logErr('звонок: возврат микрофона', e); }
+                return true;
+            } catch (e) { logErr('звонок: возврат микрофона', e); return false; }
+        }
+        async function callMicReopen(c) {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !c.micSender) return false;
+            try {
+                const raw = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+                if (c.state === 'end' || !c.pc) { raw.getTracks().forEach(t => t.stop()); return false; }
+                clearInterval(c.noiseT); c.noiseT = null;
+                const next = await callNoiseClean(c, raw), nt = next.getAudioTracks()[0];
+                if (!nt) { raw.getTracks().forEach(t => t.stop()); return false; }
+                await c.micSender.replaceTrack(nt);
+                nt.enabled = !c.muted;
+                if (c.rawStream && c.rawStream !== raw) c.rawStream.getTracks().forEach(t => t.stop());
+                c.rawStream = raw;
+                c.stream = next;
+                logErr('звонок: микрофон открыт заново', new Error('mic-reopen'));
+                return true;
+            } catch (e) { logErr('звонок: микрофон заново', e); return false; }
+        }
+        async function callAudioFix(c) {
+            c.audioFixes = (c.audioFixes || 0) + 1;
+            const mic = c.stream && c.stream.getAudioTracks()[0];
+            if (!mic || mic.readyState === 'ended') { if (await callMicReopen(c)) return; }
+            if (await callMicFallback(c)) return;
+            if (c.audioFixes === 1 && c.micSender && mic && mic.readyState === 'live') { try { await c.micSender.replaceTrack(mic); return; } catch (e) { } }
+            if (c.audioFixes === 2 && await callMicReopen(c)) return;
+            if (Date.now() - (c.audioRestartAt || 0) > 30000) { c.audioRestartAt = Date.now(); callIceRestart(c, 'audio-flat'); }
+        }
+        async function callMicCheck(c) {
+            if (c.state !== 'talk' || !c.pc || !c.rawStream || c.stream === c.rawStream) return;
+            let sent = 0;
+            try { (await c.pc.getStats()).forEach(r => { if (r.type === 'outbound-rtp' && r.kind === 'audio') sent += r.bytesSent || 0; }); } catch (e) { return; }
+            if (sent > 0) return;
+            await callMicFallback(c);
+        }
+        function callAudioWatch(c) {
+            if (!c.pc || c.audioWT) return;
+            let last = null, outFlat = 0, inFlat = 0, inFixes = 0;
+            const read = async (obj, type, field) => {
+                let v = -1;
+                if (obj) (await obj.getStats()).forEach(r => { if (r.type === type) v = r[field]; });
+                return v;
+            };
+            c.audioWT = setInterval(async () => {
+                const pc = c.pc;
+                if (c.state !== 'talk' || !pc) { clearInterval(c.audioWT); return; }
+                if (pc.connectionState !== 'connected' || c.iceRestarting) return;
+                let out = -1, inn = -1;
+                try {
+                    const rt = c.remote && c.remote.getAudioTracks()[0];
+                    const rcv = rt && pc.getReceivers().find(x => x.track === rt);
+                    out = await read(c.micSender, 'outbound-rtp', 'packetsSent');
+                    inn = await read(rcv, 'inbound-rtp', 'packetsReceived');
+                } catch (e) { return; }
+                if (last) {
+                    outFlat = out >= 0 && out === last.out ? outFlat + 1 : 0;
+                    inFlat = inn >= 0 && inn === last.inn ? inFlat + 1 : 0;
+                    if (out > last.out) callWarn(c, 'out', '');
+                    if (inn > last.inn) callWarn(c, 'in', '');
+                }
+                last = { out, inn };
+                if (outFlat >= 2) {
+                    callWarn(c, 'out', 'собеседник вас не слышит');
+                    if (outFlat % 2 === 0 && c.audioFixes < 6 || !c.audioFixes) callAudioFix(c);
+                }
+                if (inFlat >= 3) {
+                    callWarn(c, 'in', 'звук от собеседника не приходит');
+                    if ((inFlat === 3 || (inFlat - 3) % 9 === 0) && inFixes < 2) { inFixes++; callIceRestart(c, 'in-flat'); }
+                }
+            }, 5000);
         }
         async function callMedia(c) {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('Браузер не даёт микрофон');
@@ -5437,6 +5507,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (st === 'connected') {
                     clearTimeout(c.lostT); clearTimeout(c.iceGraceT); clearTimeout(c.iceRetryT);
                     c.lostSince = 0;
+                    callWarn(c, 'net', '');
                     c.iceRestartTries = 0;
                     callLive(c);
                 } else if (st === 'failed') {
@@ -5566,7 +5637,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                         <div class="vp-screen-face vp-screen-face--self">
                             <video class="vp-screen-video" data-side="self" autoplay playsinline muted></video>
                             <div class="vp-screen-empty" data-empty="self">Твой экран не расшарен</div>
-                            <div class="vp-screen-controls"><span class="vp-screen-label" data-screen-side="self">Мой экран</span><button type="button" class="vp-screen-flip" aria-label="Показать экран собеседника" title="Показать экран собеседника" hidden>${svgIcon('<path d="M8 3 4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4"/>', 16)}</button></div>
+                            <div class="vp-screen-controls"><span class="vp-screen-label" data-screen-side="self">Мой экран</span><button type="button" class="vp-screen-mode" hidden></button><button type="button" class="vp-screen-flip" aria-label="Показать экран собеседника" title="Показать экран собеседника" hidden>${svgIcon('<path d="M8 3 4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4"/>', 16)}</button></div>
                         </div>
                         <div class="vp-screen-face vp-screen-face--remote">
                             <video class="vp-screen-video" data-side="remote" autoplay playsinline muted></video>
@@ -5596,6 +5667,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (c.blocked) callPlay(c);
             });
             el.querySelectorAll('.vp-screen-flip').forEach(btn => btn.onclick = e => { e.stopPropagation(); callFlip(c); });
+            el.querySelector('.vp-screen-mode').onclick = e => { e.stopPropagation(); callShareSetMode(c, callShareModeKey() === 'motion' ? 'text' : 'motion'); };
             el.querySelector('.vp-screen-fullscreen').onclick = e => { e.stopPropagation(); callRemoteFullscreenToggle(c); };
             document.body.appendChild(el);
             c.el = el;
@@ -5610,7 +5682,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const bottom = docked || connecting || ending;
             el.classList.toggle('vp-incoming', ring || (bottom && c.dir === 'in'));
             el.classList.toggle('vp-outgoing', calling || (bottom && c.dir === 'out'));
-            el.classList.toggle('vp-call-docked', docked || (ending && (c.dir === 'out' || el.classList.contains('vp-call-docked'))));
+            el.classList.toggle('vp-call-docked', docked || (ending && el.classList.contains('vp-call-docked')));
             if (el.dataset.k !== key) {
                 el.dataset.k = key;
                 const btns = el.querySelector('.vp-call-btns');
@@ -5635,6 +5707,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             }
             callSub(c);
             callSharePaint(c);
+        }
+        function callWarn(c, key, text) {
+            const m = c.warns || (c.warns = {});
+            if ((m[key] || '') === (text || '')) return;
+            m[key] = text || '';
+            c.warn = m.net || m.out || m.in || '';
+            callSub(c);
         }
         function callSub(c, text) {
             if (text !== undefined) c.subText = text;
@@ -5662,6 +5741,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             callPlay(c);
             c.timers.push(setTimeout(() => callMicCheck(c), 1000));
             callVoiceWatch(c);
+            callAudioWatch(c);
             c.timers.push(setTimeout(async () => {
                 if (c.state !== 'talk' || !c.pc) return;
                 let got = 0;
@@ -5670,8 +5750,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     if (c.audio && c.audio.paused && !c.blocked) { c.blocked = true; callPaint(c); }
                     return;
                 }
-                c.warn = 'звук от собеседника не приходит';
-                callSub(c);
+                callWarn(c, 'in', 'звук от собеседника не приходит');
                 callInfo(c).then(t => logErr('звонок: звук не приходит', new Error(t.split('\n').slice(2, 5).join('; '))));
             }, 6000));
             callPaint(c);
@@ -5711,7 +5790,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (reason !== null) callSig(c.uid, 3, c.id, dur ? cat(new Uint8Array([reason]), be32(dur)) : new Uint8Array([reason])).catch(e => logErr('звонок: отбой', e));
             c.stops.splice(0).forEach(f => f());
             c.timers.forEach(clearTimeout);
-            clearInterval(c.tick); clearInterval(c.syncT); clearInterval(c.voiceT); clearTimeout(c.lostT); clearTimeout(c.connT);
+            clearInterval(c.tick); clearInterval(c.syncT); clearInterval(c.voiceT); clearInterval(c.audioWT); clearTimeout(c.lostT); clearTimeout(c.connT);
             if (c.el) c.el.classList.remove('vp-voice');
             if (c.noiseT) { clearInterval(c.noiseT); c.noiseT = null; }
             if (c.rawStream) { c.rawStream.getTracks().forEach(t => t.stop()); c.rawStream = null; }
@@ -5863,7 +5942,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (!(await callMedia(c))) return;
                 c.pc = callPeer(c);
                 callDc(c, c.pc.createDataChannel('itdx'));
-                c.stream.getTracks().forEach(t => c.pc.addTrack(t, c.stream));
+                c.stream.getTracks().forEach(t => { const sn = c.pc.addTrack(t, c.stream); if (t.kind === 'audio') c.micSender = sn; });
                 await c.pc.setLocalDescription(await c.pc.createOffer());
                 callSub(c, 'Соединяю…');
                 await callGather(c.pc);
@@ -5878,7 +5957,12 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 callNet.lastSync = 0;
             } catch (e) { logErr('звонок', e); callEnd(c, e.message || 'Не вышло позвонить', c.offered ? 0 : null); }
         }
-        const CALL_SCREEN = { w: 2560, h: 1440, fps: 60, bitrate: 20000000 };
+        const CALL_SCREEN = { bitrate: 20000000 };
+        const CALL_SHARE_MODES = {
+            motion: { label: 'Движение', hint: 'motion', degr: 'maintain-framerate', w: 1920, h: 1080, fps: 60 },
+            text: { label: 'Текст', hint: 'detail', degr: 'maintain-resolution', w: 1920, h: 1080, fps: 30 }
+        };
+        const callShareModeKey = () => GM_getValue('callShareMode', 'text') === 'motion' ? 'motion' : 'text';
         const CFG = {
             noise: true,
             noiseHighpass: 90,
@@ -5888,15 +5972,16 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         function callShareSupported() {
             return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) && !matchMedia('(pointer: coarse)').matches;
         }
-        async function callShareTune(sender) {
+        async function callShareTune(sender, mode) {
+            const m = mode || CALL_SHARE_MODES[callShareModeKey()];
             if (!sender || !sender.getParameters) return;
             const apply = async (withPriority) => {
                 const p = sender.getParameters();
                 if (!p.encodings || !p.encodings.length) p.encodings = [{}];
                 p.encodings[0].maxBitrate = CALL_SCREEN.bitrate;
-                p.encodings[0].maxFramerate = CALL_SCREEN.fps;
+                p.encodings[0].maxFramerate = m.fps;
                 if (withPriority) { p.encodings[0].priority = 'high'; p.encodings[0].networkPriority = 'high'; }
-                p.degradationPreference = 'maintain-resolution';
+                p.degradationPreference = m.degr;
                 await sender.setParameters(p);
             };
             try { await apply(true); return; } catch (e) { }
@@ -5906,17 +5991,18 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (!c.pc || c.state !== 'talk') return;
             if (c.screen) { callUnshare(c); return; }
             try {
+                const mode = CALL_SHARE_MODES[callShareModeKey()];
                 const gmReq = {
-                    video: { width: { ideal: CALL_SCREEN.w }, height: { ideal: CALL_SCREEN.h }, frameRate: { ideal: CALL_SCREEN.fps, max: CALL_SCREEN.fps } },
+                    video: { width: { ideal: mode.w, max: mode.w }, height: { ideal: mode.h, max: mode.h }, frameRate: { ideal: mode.fps, max: mode.fps } },
                     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
                 };
                 const stream = await navigator.mediaDevices.getDisplayMedia(gmReq);
                 if (c.state !== 'talk') { stream.getTracks().forEach(t => t.stop()); return; }
                 const vt = stream.getVideoTracks()[0], at = stream.getAudioTracks()[0] || null;
-                try { vt.contentHint = 'detail'; } catch (e) { }
+                try { vt.contentHint = mode.hint; } catch (e) { }
                 if (at) { try { at.contentHint = 'music'; } catch (e) { } }
                 const vs = c.pc.addTrack(vt, stream);
-                await callShareTune(vs);
+                await callShareTune(vs, mode);
                 const as = at ? c.pc.addTrack(at, stream) : null;
                 c.screen = { stream, vt, at, vs, as };
                 vt.addEventListener('ended', () => { if (c.screen) callUnshare(c); });
@@ -5929,6 +6015,16 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 logErr('звонок: экран', e);
                 callSub(c, 'Не удалось показать экран');
             }
+        }
+        async function callShareSetMode(c, key) {
+            GM_setValue('callShareMode', key);
+            const m = CALL_SHARE_MODES[key];
+            if (c.screen) {
+                try { c.screen.vt.contentHint = m.hint; } catch (e) { }
+                try { await c.screen.vt.applyConstraints({ width: { ideal: m.w, max: m.w }, height: { ideal: m.h, max: m.h }, frameRate: { ideal: m.fps, max: m.fps } }); } catch (e) { }
+                await callShareTune(c.screen.vs, m);
+            }
+            callSharePaint(c);
         }
         function callUnshare(c) {
             const s = c.screen;
@@ -5994,6 +6090,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             el.querySelectorAll('.vp-screen-flip').forEach(flip => {
                 flip.hidden = !canFlip || c.remoteFullscreen || c.remoteFullscreenClosing;
             });
+            const modeBtn = el.querySelector('.vp-screen-mode');
+            if (modeBtn) {
+                const m = CALL_SHARE_MODES[callShareModeKey()];
+                modeBtn.hidden = !c.screen;
+                modeBtn.textContent = m.label;
+                modeBtn.title = 'Режим показа: ' + m.label.toLowerCase() + ' (нажми, чтобы сменить)';
+            }
             callUpdateFullscreenButton(c);
             callUpdateSelfPip(c);
         }
@@ -6134,6 +6237,17 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (v.srcObject !== st) v.srcObject = st;
             if (st) { const p = v.play(); if (p && p.catch) p.catch(() => { }); }
         }
+        const callNetBack = why => {
+            const c = callNet.cur;
+            if (!c || c.state !== 'talk' || !c.pc) return;
+            if (c.pc.connectionState === 'connected' && why !== 'online') return;
+            callWarn(c, 'net', '');
+            callIceRestart(c, why);
+        };
+        window.addEventListener('online', () => callNetBack('online'));
+        window.addEventListener('offline', () => { const c = callNet.cur; if (c && c.state === 'talk') callWarn(c, 'net', 'нет интернета'); });
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) callNetBack('visible'); });
+        document.addEventListener('resume', () => callNetBack('resume'));
         window.addEventListener('pagehide', () => {
             const c = callNet.cur;
             if (c && c.state === 'talk' && c.dc && c.dc.readyState === 'open') try { c.dc.send('bye'); } catch (e) { }
@@ -6229,7 +6343,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (!(await callMedia(c))) return;
                 c.pc = callPeer(c);
                 c.pc.ondatachannel = e => callDc(c, e.channel);
-                c.stream.getTracks().forEach(t => c.pc.addTrack(t, c.stream));
+                c.stream.getTracks().forEach(t => { const sn = c.pc.addTrack(t, c.stream); if (t.kind === 'audio') c.micSender = sn; });
                 await c.pc.setRemoteDescription({ type: 'offer', sdp: await callUnpack(c.offer) });
                 await c.pc.setLocalDescription(await c.pc.createAnswer());
                 callSub(c, 'Соединяю…');
@@ -8814,6 +8928,11 @@ var __vpBannerAuto = (() => {
                 'Звонки: если собеседник пропал или закрыл вкладку, звонок сам завершается, а не висит на «Восстанавливаю связь»',
                 'Звонки: показ экрана включается быстрее и стабильнее, в том числе при повторном показе; если не слышно голоса, мод сам переключается на обычный микрофон',
                 'Серая галочка теперь видна у всех, кто ещё не подтверждён, а не только у части аккаунтов',
+                'Сообщения: отправка стала надёжной. Каждое сообщение ставится в очередь, проверяется по серверу и при сбое повторяется само, пока не дойдёт. Оно больше не пропадает из чата: пока идёт отправка, на нём «отправка…», а если не вышло — «нажми, чтобы повторить». Быстрая серия сообщений тоже не теряется',
+                'Звонки: во время разговора скрипт сам следит, что звук реально идёт: если микрофон завис, отключился или его выдернули, он возвращается или открывается заново, а на карточке пишет «собеседник вас не слышит»',
+                'Звонки: когда возвращается интернет или окно снова становится активным, связь восстанавливается сразу; без интернета на карточке «нет интернета»',
+                'Звонки: показ экрана — не больше 1080p; на карточке кнопка режима «Текст» (чётко, 30 к/с) и «Движение» (плавно, 60 к/с), выбор запоминается',
+                'Звонки: если сбросить или отменить вызов, пока карточка стоит по центру, она закрывается там же, а не уезжает вправо',
                 'Звонки: карточка мягко подсвечивается зелёным, когда говоришь ты (и в свёрнутом виде тоже)',
                 'Звонки: при сбросе карточка больше не прыгает в центр, а закрывается на своём месте; после выхода собеседника из показа экрана твоя демка не растягивается на весь экран; при показе экрана больше не пропадает звук собеседника',
                 'Звонки и сообщения: сайт больше не засыпается запросами (от них были ошибки 429 и обрывы), скрипт читает только новые комментарии',
@@ -11493,7 +11612,7 @@ var __vpBannerAuto = (() => {
                 ca.dirty = false;
                 return list;
             };
-            if (!ca.full || ca.dirty || !ca.light || Date.now() - ca.full > 60000) return full();
+            if (!ca.full || ca.dirty || !ca.light || Date.now() - ca.full > ((msgNet.hotUntil || 0) > Date.now() ? 10000 : 60000)) return full();
             let newest = 0, first = true, bad = false;
             ca.byId.forEach(c => { const t = Date.parse(c.createdAt || ''); if (t > newest) newest = t; });
             await allComments(MSG_POST_ID, 6, {
@@ -11516,7 +11635,8 @@ var __vpBannerAuto = (() => {
             if (bad) { ca.light = false; return full(); }
             return [...ca.byId.values()];
         }
-        function msgSync() {
+        function msgSync(force) {
+            if (force && msgNet.cache) msgNet.cache.dirty = true;
             if (msgNet.syncing) return msgNet.again || (msgNet.again = msgNet.syncing.catch(() => { }).then(() => { msgNet.again = null; return msgSync(); }));
             msgNet.syncing = (async () => {
                 const keys = new Map(), vols = [];
@@ -11584,7 +11704,13 @@ var __vpBannerAuto = (() => {
         async function msgDecryptAll() {
             const me = msgNet.me;
             if (!me) return;
-            const conv = new Map(), add = (uid, dir, m, v, i) => { if (!conv.has(uid)) conv.set(uid, []); conv.get(uid).push({ dir, ...m, _v: v, _i: i }); };
+            const conv = new Map(), seen = new Set(), add = (uid, dir, m, v, i) => {
+                const dk = uid + '|' + dir + '|' + m.ts + '|' + (m.sup ? 1 : 0) + '|' + (m.text || '') + '|' + (m.svc ? Array.prototype.join.call(m.svc, ',') : '') + '|' + (m.img ? m.img.id : '');
+                if (seen.has(dk)) return;
+                seen.add(dk);
+                if (!conv.has(uid)) conv.set(uid, []);
+                conv.get(uid).push({ dir, ...m, _v: v, _i: i });
+            };
             const others = [...msgNet.keys.keys()].filter(id => id !== me.id);
             for (const v of msgNet.vols) {
                 let recs;
@@ -11698,10 +11824,17 @@ var __vpBannerAuto = (() => {
             return msgSend(uid, '', false, null, cat(new Uint8Array([1]), be32(m.ts), new Uint8Array([m.dir === 'out' ? 1 : 0]), te.encode(emoji || '')));
         }
         function msgSendRead(uid, upTo, sup) { return msgSend(uid, '', false, null, cat(new Uint8Array([2]), be32(upTo), new Uint8Array([sup ? 1 : 0]))); }
-        async function msgSend(uid, text, sup, img, svc) {
+        const sameBytes = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+        let msgWriteQ = Promise.resolve();
+        function msgSend(uid, text, sup, img, svc, fixedTs) {
+            const p = msgWriteQ.then(() => msgSendOne(uid, text, sup, img, svc, fixedTs));
+            msgWriteQ = p.catch(() => { });
+            return p;
+        }
+        async function msgSendOne(uid, text, sup, img, svc, fixedTs) {
             const me = msgNet.me, key = await msgPair(uid);
             if (!me || !key) throw new Error('нет ключа');
-            const ts = Math.floor(srvNow() / 1000), iv = rnd(12);
+            const ts = fixedTs || Math.floor(srvNow() / 1000), iv = rnd(12);
             const imgs = !img ? [] : Array.isArray(img) ? img.slice(0, MSG_ALBUM_MAX) : [img];
             const one = x => cat(new Uint8Array([x.ext]), msgUuidBytes(x.id));
             const imgBytes = !imgs.length ? new Uint8Array(0)
@@ -11710,25 +11843,117 @@ var __vpBannerAuto = (() => {
                 : cat(new Uint8Array([ts >>> 24, (ts >> 16) & 255, (ts >> 8) & 255, ts & 255, (sup ? 1 : 0) | (imgs.length ? 2 : 0) | (imgs.length > 1 ? 4 : 0)]),
                     imgBytes, te.encode(text.slice(0, MSG_TEXT_MAX)));
             const rec = cat(iv, new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, pt)));
-            await msgSync();
+            const mine = () => {
+                const srv = msgNet.vols.filter(v => v.author === me.id).pop();
+                let cur = null;
+                if (srv) { try { cur = { cid: srv.cid, seq: srv.seq, recs: volRecs(srv) }; } catch (e) { cur = { cid: srv.cid, seq: srv.seq, recs: [] }; } }
+                const loc = msgNet.ownVol;
+                if (loc && loc.me === me.id && loc.cid && (!cur || loc.seq > cur.seq || (loc.seq === cur.seq && loc.recs.length > cur.recs.length))) cur = loc;
+                return cur;
+            };
+            const present = () => msgNet.vols.some(v => {
+                if (v.author !== me.id) return false;
+                try { return volRecs(v).some(r => sameBytes(r, rec)); } catch (e) { return false; }
+            });
             const write = async mode => {
-                const last = msgNet.vols.filter(v => v.author === me.id).pop();
-                let recs = [], seq = 1, cid = null;
-                if (last) { try { recs = volRecs(last); } catch (e) { recs = []; } seq = last.seq; cid = last.cid; }
-                let content = volText(seq, mode, [...recs, rec]);
-                if (!last || content.length > MSG_MAX) { content = volText(last ? seq + 1 : 1, mode, [rec]); cid = null; }
+                const last = mine();
+                const recs = last ? last.recs : [];
+                if (recs.some(r => sameBytes(r, rec))) return true;
+                let seq = last ? last.seq : 1, cid = last ? last.cid : null, all = [...recs, rec];
+                let content = volText(seq, mode, all);
+                if (!last || content.length > MSG_MAX) { seq = last ? seq + 1 : 1; all = [rec]; content = volText(seq, mode, all); cid = null; }
                 const res = cid
                     ? await editComment(cid, content)
                     : await sendComment(MSG_POST_ID, content);
                 if (!res.ok) throw new Error('сообщение: ' + res.status);
-                const saved = await res.json().then(j => { const d = j && (j.data || j.comment || j); return d && d.content; }).catch(() => null);
-                return saved == null || saved === content;
+                const d = await res.json().then(j => j && (j.data || j.comment || j)).catch(() => null);
+                if (d && d.content != null && d.content !== content) return false;
+                const id = cid || (d && d.id) || null;
+                msgNet.ownVol = id ? { me: me.id, cid: id, seq, recs: all } : null;
+                return true;
             };
-            const mode = GM_getValue('msgMode', 'c');
-            if (!(await write(mode)) && mode === 'c') { GM_setValue('msgMode', 'b'); await msgSync(); await write('b'); }
-            await msgSync();
+            if (svc) {
+                await msgSync();
+                const mode = GM_getValue('msgMode', 'c');
+                if (!(await write(mode)) && mode === 'c') { GM_setValue('msgMode', 'b'); await msgSync(); await write('b'); }
+                await msgSync();
+                return ts;
+            }
+            let err = null;
+            for (let a = 0; a < 3; a++) {
+                try {
+                    if (a) await new Promise(r => setTimeout(r, a * 2000));
+                    await msgSync(a > 0);
+                    if (present()) { err = null; break; }
+                    const mode = GM_getValue('msgMode', 'c');
+                    if (!(await write(mode)) && mode === 'c') { GM_setValue('msgMode', 'b'); await write('b'); }
+                    await msgSync(true);
+                    if (present()) { err = null; break; }
+                    err = new Error('сообщение не появилось на сервере');
+                } catch (e) { err = e; }
+            }
+            if (err) throw err;
             return ts;
         }
+        const msgOutKey = () => acctKey('msgOutbox');
+        const msgOutGet = () => { let o; try { o = GM_getValue(msgOutKey(), []); } catch (e) { o = []; } return Array.isArray(o) ? o : []; };
+        const msgOutSet = l => { try { GM_setValue(msgOutKey(), l.slice(-60)); } catch (e) { } };
+        const msgDelivered = e => (msgNet.conv.get(e.uid) || []).some(m => m.dir === 'out' && m.ts === e.ts && !!m.sup === !!e.sup && m.text === e.text);
+        function msgEnqueue(uid, text, sup) {
+            const list = msgOutGet(), conv = msgNet.conv.get(uid) || [];
+            let ts = Math.floor(srvNow() / 1000);
+            while (list.some(x => x.uid === uid && x.ts === ts) || conv.some(m => m.dir === 'out' && m.ts === ts)) ts++;
+            const e = { id: ts + '-' + Math.random().toString(36).slice(2, 7), uid, sup: !!sup, text, ts, tries: 0, st: 'send', next: 0 };
+            list.push(e);
+            msgOutSet(list);
+            msgNet.hotUntil = Date.now() + 120000;
+            setTimeout(msgPump, 0);
+            return e;
+        }
+        function msgRetry(uid, ts) {
+            const l = msgOutGet();
+            l.forEach(e => { if (e.uid === uid && e.ts === ts) { e.st = 'send'; e.tries = 0; e.next = 0; } });
+            msgOutSet(l);
+            document.dispatchEvent(new Event('vp-msg-outbox'));
+            msgPump();
+        }
+        let msgPumpBusy = false, msgPumpT = 0;
+        async function msgPump() {
+            if (msgPumpBusy) return;
+            msgPumpBusy = true;
+            try {
+                for (let guard = 0; guard < 60; guard++) {
+                    const e = msgOutGet().find(x => x.st === 'send' && (x.next || 0) <= Date.now());
+                    if (!e || !msgNet.me) break;
+                    const upd = fn => { const l = msgOutGet(), x = l.find(y => y.id === e.id); if (x) { fn(x, l); msgOutSet(l); } };
+                    if (msgDelivered(e)) { upd((x, l) => l.splice(l.indexOf(x), 1)); document.dispatchEvent(new Event('vp-msg-outbox')); continue; }
+                    try {
+                        await msgSend(e.uid, e.text, e.sup, null, null, e.ts);
+                        upd((x, l) => l.splice(l.indexOf(x), 1));
+                    } catch (err) {
+                        const why = String(err && err.message || err).slice(0, 80);
+                        upd(x => {
+                            x.tries = (x.tries || 0) + 1;
+                            x.err = why;
+                            if (x.tries >= 8) x.st = 'fail';
+                            else x.next = Date.now() + Math.min(60000, 4000 * Math.pow(2, x.tries)) * (/429/.test(why) ? 2 : 1);
+                        });
+                        logErr('сообщение (повтор)', err);
+                    }
+                    document.dispatchEvent(new Event('vp-msg-outbox'));
+                }
+            } finally { msgPumpBusy = false; }
+            clearTimeout(msgPumpT);
+            const nx = msgOutGet().filter(x => x.st === 'send').map(x => x.next || 0);
+            if (nx.length) msgPumpT = setTimeout(msgPump, Math.max(1500, Math.min(...nx) - Date.now()));
+        }
+        document.addEventListener('vp-msg-synced', () => { msgPump(); });
+        addEventListener('online', () => {
+            const l = msgOutGet();
+            l.forEach(e => { if (e.st === 'send') e.next = 0; });
+            msgOutSet(l);
+            msgPump();
+        });
         const msgKeyOf = login => [...msgNet.keys.values()].find(k => k.login.toLowerCase() === String(login).toLowerCase()) || null;
         const msgIsSupport = () => msgMyId() === OWNER_ID;
         function msgTarget(d) {
@@ -11743,7 +11968,14 @@ var __vpBannerAuto = (() => {
         const msgThread = t => {
             if (!t.uid) return [];
             const hid = msgHidden();
-            return (msgNet.conv.get(t.uid) || []).filter(m => m.sup === t.sup && !hid[hideKey(t.uid, m)]);
+            const out = (msgNet.conv.get(t.uid) || []).filter(m => m.sup === t.sup && !hid[hideKey(t.uid, m)]);
+            msgOutGet().filter(e => e.uid === t.uid && !!e.sup === !!t.sup && !msgDelivered(e)).forEach(e => {
+                const p = { dir: 'out', ts: e.ts, text: e.text, sup: !!e.sup, pending: e.st === 'fail' ? 'fail' : 'send' };
+                let i = out.length;
+                while (i > 0 && out[i - 1].ts > p.ts) i--;
+                out.splice(i, 0, p);
+            });
+            return out;
         };
         addCss(`
         .vp-msgs-menu { min-width: 236px; padding: 6px; }
@@ -12621,6 +12853,7 @@ var __vpBannerAuto = (() => {
             -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M.8 6 3.9 9.1 10.8 2.2M7.4 8.1l1 1 6.9-6.9'/%3E%3C/svg%3E");
             mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M.8 6 3.9 9.1 10.8 2.2M7.4 8.1l1 1 6.9-6.9'/%3E%3C/svg%3E"); }
         .vp-msgs-b.vp-fail i { opacity: .85; }
+        .vp-msgs-b.vp-fail { cursor: pointer; }
         .vp-msgs-typing { display: flex; gap: 5px; padding: 14px 16px; }
         .vp-msgs-typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary); animation: vpMsgsDot 1s infinite; }
         .vp-msgs-typing span:nth-child(2) { animation-delay: .15s; } .vp-msgs-typing span:nth-child(3) { animation-delay: .3s; }
@@ -12969,10 +13202,17 @@ var __vpBannerAuto = (() => {
                 requestAnimationFrame(() => { if (Date.now() < stickUntil) feed.scrollTop = feed.scrollHeight; });
             };
             feed.addEventListener('load', () => { if (Date.now() < stickUntil) feed.scrollTop = feed.scrollHeight; }, true);
+            feed.addEventListener('click', e => {
+                const fb = e.target.closest && e.target.closest('.vp-msgs-b.vp-fail');
+                if (!fb || !fb._m || fb._m.pending !== 'fail' || !current) return;
+                const tt = msgTarget(current);
+                if (tt.uid) msgRetry(tt.uid, fb._m.ts);
+            });
             ['wheel', 'touchstart', 'keydown'].forEach(t => feed.addEventListener(t, () => { stickUntil = 0; }, { passive: true }));
             let renderN = 0;
             async function msgOpenPerson(d) {
                 const my = ++renderN;
+                msgNet.hotUntil = Date.now() + 120000;
                 feed.textContent = ''; input.disabled = true; input.maxLength = MSG_TEXT_MAX;
                 const wait = note('Загрузка переписки…', 'lock');
                 try { await msgSync(); } catch (e) { if (my === renderN) wait.textContent = 'Не загрузилось — открой чат ещё раз'; logErr('сообщения', e); return; }
@@ -12992,6 +13232,7 @@ var __vpBannerAuto = (() => {
                 list.forEach(m => {
                     const b = bubble(m.dir, m.text, msgMetaText(t, m), (m.imgs || (m.img ? [m.img] : [])).map(msgImgUrl));
                     b._m = m; b.dataset.ts = m.ts; b.dataset.dir = m.dir;
+                    b.classList.toggle('vp-fail', m.pending === 'fail');
                     paintReacts(b, t.uid);
                 });
                 paintCalls(t);
@@ -13027,7 +13268,7 @@ var __vpBannerAuto = (() => {
             let daysRaf = 0;
             const scheduleDays = () => { if (!daysRaf) daysRaf = requestAnimationFrame(() => { daysRaf = 0; paintDays(); }); };
             const msgClock = ts => new Date(ts * 1000).toTimeString().slice(0, 5);
-            const msgMetaText = (t, m) => msgClock(m.at || m.ts) + (m.dir === 'out' ? (readUpTo(t.uid, t.sup, 'them') >= m.ts ? ' ✓✓' : ' ✓') : '');
+            const msgMetaText = (t, m) => m.pending ? msgClock(m.ts) + (m.pending === 'fail' ? ' · не отправлено — нажми, чтобы повторить' : ' · отправка…') : msgClock(m.at || m.ts) + (m.dir === 'out' ? (readUpTo(t.uid, t.sup, 'them') >= m.ts ? ' ✓✓' : ' ✓') : '');
             function viewMark() {
                 const top = feed.getBoundingClientRect().top;
                 for (const b of feed.querySelectorAll(':scope > .vp-msgs-b')) {
@@ -13059,6 +13300,7 @@ var __vpBannerAuto = (() => {
                         b.dataset.ts = m.ts; b.dataset.dir = m.dir; added++;
                     }
                     b._m = m;
+                    b.classList.toggle('vp-fail', m.pending === 'fail');
                     const sig = JSON.stringify(msgNet.reacts && msgNet.reacts.get(reactKey(t.uid, m.dir, m.ts)) || null);
                     if (b._rs !== sig) { b._rs = sig; paintReacts(b, t.uid); }
                     const want = prev ? prev.nextElementSibling : feed.querySelector(':scope > .vp-msgs-b');
@@ -13110,6 +13352,7 @@ var __vpBannerAuto = (() => {
             const msgPoll = sched.add('msgPoll', async () => {
                 if (!root.isConnected) return msgPoll.remove();
                 if ((!msgsOpen && !(callNet.cur && callNet.cur.state === 'talk')) || !msgNet.me || apiPaused()) return;
+                if (current) msgNet.hotUntil = Date.now() + 120000;
                 if (Date.now() - callNet.lastSync > 12000) { callNet.lastSync = Date.now(); try { await msgSync(); } catch (e) { return; } }
                 msgFillDialogs();
                 if (!current) return renderList();
@@ -13120,6 +13363,11 @@ var __vpBannerAuto = (() => {
             document.addEventListener('vp-looks-ready', () => {
                 if (!root.isConnected) return;
                 if (current) headAva(); else renderList();
+            });
+            document.addEventListener('vp-msg-outbox', () => {
+                if (!root.isConnected) return;
+                if (current && msgNet.me) msgRefreshChat(current);
+                msgFillDialogs();
             });
             const onSynced = () => {
                 if (!root.isConnected) return document.removeEventListener('vp-msg-synced', onSynced);
@@ -13311,7 +13559,7 @@ var __vpBannerAuto = (() => {
                 let sg = '';
                 if (msgNet.reacts) msgNet.reacts.forEach((v, k) => { if (k.startsWith(uid + '|')) sg += k + (v.me ? v.me.emoji : '') + '/' + (v.them ? v.them.emoji : '') + ';'; });
                 const r = msgNet.reads && msgNet.reads.get(uid);
-                return sg + ((msgNet.pins && msgNet.pins.get(uid)) || []).join(',') + '|' + (r ? (r.them0 || 0) + '/' + (r.them1 || 0) : 0) + '|' + (msgNet.sigs || []).filter(x => x.uid === uid).length + '|' + (msgIsBlocked(uid) ? 1 : 0) + (msgBlockedMe(uid) ? 1 : 0);
+                return sg + ((msgNet.pins && msgNet.pins.get(uid)) || []).join(',') + '|' + (r ? (r.them0 || 0) + '/' + (r.them1 || 0) : 0) + '|' + (msgNet.sigs || []).filter(x => x.uid === uid).length + '|' + (msgIsBlocked(uid) ? 1 : 0) + (msgBlockedMe(uid) ? 1 : 0) + '|' + msgOutGet().filter(e => e.uid === uid).map(e => e.ts + e.st).join(',');
             };
             function paintCalls(t) {
                 feed.querySelectorAll(':scope > .vp-msgs-callrow').forEach(x => x.remove());
@@ -13881,9 +14129,10 @@ var __vpBannerAuto = (() => {
                 current.last = 'Ты: ' + text; current.time = now();
                 if (current.support && !(msgNet.me && msgTarget(current).uid)) { bubble('out', text, now() + ' ✓'); supportReply(); }
                 else if (msgNet.me && msgTarget(current).uid) {
-                    const full = takeReply(text), b = bubble('out', full, now() + ' · отправка…'), d = current, t = msgTarget(d);
-                    msgSend(t.uid, full, t.sup).then(ts => msgSentOk(b, d, ts),
-                        e => { setMeta(b.lastChild, now() + ' · не отправлено'); b.classList.add('vp-fail'); logErr('сообщения', e); });
+                    const full = takeReply(text), d = current, t = msgTarget(d);
+                    msgEnqueue(t.uid, full, t.sup);
+                    msgRefreshChat(d);
+                    stickEnd();
                 }
                 else bubble('out', text, now() + ' · не отправлено').classList.add('vp-fail');
             });
