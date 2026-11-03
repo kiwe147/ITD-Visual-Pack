@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.0.2
+// @version      3.9.0.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -8951,6 +8951,10 @@ var __vpBannerAuto = (() => {
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.9.0.3', '4 ноября 2026', [
+                'Змейка на телефоне: свайп теперь как джойстик — не отрывая палец, можно вести змейку и поворачивать сколько угодно раз'
+                ,'Сапёр на телефоне: долгое нажатие ставит флажок и он больше не пропадает сразу; в режиме «флажки» нажатие на цифру открывает соседние клетки'
+            ]],
             ['3.9.0.2', '3 ноября 2026', [
                 'Сообщения: если забыл пароль — в окне ввода пароля появилась кнопка «Забыл пароль». Она создаёт новый ключ с новым паролем: старая переписка пропадёт и у тебя, и у собеседников, новая пойдёт как обычно'
             ]],
@@ -19532,10 +19536,10 @@ var __vpBannerAuto = (() => {
             let sx = 0, sy = 0, swiped = false;
             cv.addEventListener('pointerdown', e => { sx = e.clientX; sy = e.clientY; swiped = false; cv.setPointerCapture(e.pointerId); });
             cv.addEventListener('pointermove', e => {
-                if (swiped || e.buttons === 0 && e.pointerType === 'mouse') return;
+                if (e.buttons === 0 && e.pointerType === 'mouse') return;
                 const dx = e.clientX - sx, dy = e.clientY - sy;
                 if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
-                swiped = true;
+                swiped = true; sx = e.clientX; sy = e.clientY;
                 Math.abs(dx) > Math.abs(dy) ? turn(Math.sign(dx), 0) : turn(0, Math.sign(dy));
             });
             cv.addEventListener('pointerup', () => { if (!swiped && !rp) (on ? pause() : start()); });
@@ -19593,11 +19597,11 @@ var __vpBannerAuto = (() => {
                     b.type = 'button'; b.className = 'vp-mine'; b.dataset.i = i;
                     c.b = b;
                     let lp = 0, longed = false;
-                    b.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') { longed = false; lp = setTimeout(() => { longed = true; userAct(i, true); }, 400); } });
+                    b.addEventListener('pointerdown', e => { longed = false; if (e.pointerType !== 'mouse') lp = setTimeout(() => { longed = true; userAct(i, true); }, 400); });
                     const cancel = () => clearTimeout(lp);
                     b.addEventListener('pointerup', cancel); b.addEventListener('pointerleave', cancel);
-                    b.addEventListener('click', () => { if (longed) { longed = false; return; } userAct(i, flagMode); });
-                    b.addEventListener('contextmenu', e => { e.preventDefault(); userAct(i, true); });
+                    b.addEventListener('click', () => { if (longed) { longed = false; return; } userAct(i, flagMode && !cells[i].open); });
+                    b.addEventListener('contextmenu', e => { e.preventDefault(); if (longed) return; userAct(i, true); });
                     grid.appendChild(b);
                 });
                 show();
