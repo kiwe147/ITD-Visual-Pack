@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.8.5
+// @version      3.9.0
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -35,7 +35,7 @@
     const TG_CHAT_URL = 'https://t.me/+P7NeR_AEc35lYjEy';
     const AUTO_LIKE_KEY = 'itd_auto_like_ids';
     const isUrl = a => /^https?:|^\//.test(a);
-    const ACCT_DEVICE = new Set(['vp_ver_at', 'vp_upd_ask', 'vp_latest', 'vp_vx', 'vp_learned', 'vp_old_cache', 'vp_posts_list', 'vp_posts_lock', 'vp_api_pause',
+    const ACCT_DEVICE = new Set(['vp_ver_at', 'vp_upd_ask', 'vp_latest', 'vp_vx', 'vp_learned', 'vp_old_cache', 'vp_old_part', 'vp_posts_list', 'vp_posts_lock', 'vp_api_pause',
         'vp_club_online', 'vp_club_ava', 'vp_club_next', 'changelogSeen', 'bgGlForce', 'tabletDesktop', 'junkOk', 'adminFabPos', 'fabFace']);
     const ACCT = { id: String(GM_get0('vp_last_acct', '') || '') };
     ACCT.boot = ACCT.id;
@@ -241,7 +241,7 @@
                 trimMap(mine);
             }
             trimMap(postIndex.byMedia); trimMap(postIndex.byRepost); trimMap(postIndex.byUser);
-        } catch (e) { }
+        } catch (e) { logErr('хук сайта: индекс постов', e); }
     }
     const USER_URL = /\/api\/users\/([\w.]+)\/?(?:[?#]|$)/;
     function keepSiteUser(url, body) {
@@ -256,7 +256,7 @@
             siteUsers.set(key, d);
             (siteUsersWait.get(key) || []).forEach(done => done(d));
             siteUsersWait.delete(key);
-        } catch (e) { }
+        } catch (e) { logErr('хук сайта: данные пользователя', e); }
     }
     function siteUser(user, ms) {
         const key = user.toLowerCase();
@@ -1259,7 +1259,7 @@
             bannerDraw: () => F('bannerButtons').map(c => $$('button', c)
                 .find(b => !/custom-/.test(b.className) && !/удал/i.test(b.title || '') && !b.innerHTML.includes('points="3 6 5 6 21 6"'))).filter(Boolean),
             nav: () => $$('nav').filter(n => n.querySelector('a[href="/"], a[href="/notifications"]')),
-            navLink: () => F('nav').flatMap(n => $$('a[href]', n).filter(a => a.parentElement === n || a.parentElement.parentElement === n)),
+            navLink: () => F('nav').flatMap(n => $$('a[href], a[title="Ивент"]', n).filter(a => a.parentElement === n || a.parentElement.parentElement === n)),
             navIcon: () => F('navLink').map(a => a.firstElementChild).filter(s => s && s.tagName === 'SPAN' && s.querySelector('svg')),
             sidebar: () => $$('aside').filter(a => a.querySelector('nav')),
             sidebarRight: () => $$('aside').filter(a => !a.querySelector('nav')),
@@ -1608,12 +1608,14 @@
                 'Неоновая подсветка': svgIcon('<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0 0 12 3z"/>'),
                 'Подсветка ника': svgIcon('<path d="M4 19 9 5h1l5 14M5.8 14.5h7.4"/><path d="M18.5 3.5v4M16.5 5.5h4"/><path d="M19 11.5v2M18 12.5h2"/>'),
                 'Подсветка аватарок': svgIcon('<circle cx="12" cy="10" r="3"/><path d="M7 17.5a5.5 5.5 0 0 1 10 0"/><circle cx="12" cy="12" r="9.5" stroke-dasharray="2.2 2.6"/>'),
+                'Аватарки мода': svgIcon('<circle cx="12" cy="10" r="3"/><path d="M7 17.5a5.5 5.5 0 0 1 10 0"/><rect x="3.5" y="3.5" width="17" height="17" rx="5"/>'),
                 'Подсветка постов': svgIcon('<rect x="5" y="6" width="14" height="12" rx="2.5"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/><rect x="2" y="3" width="20" height="18" rx="4.5" stroke-dasharray="2.2 2.6"/>'),
                 'Размытый фон постов': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="12" r="5" stroke-dasharray="1.4 2"/>'),
                 'Анти цензура': svgIcon('<path d="M12 3 5 6v5.2c0 4.3 2.9 7.9 7 9.8 1.6-.7 3-1.7 4.1-3M19 13.5c.1-.8.2-1.5.2-2.3V6L12 3"/><path d="m3 3 18 18"/>'),
                 'Стиль фона': svgIcon(I_BG),
                 'Стекло': svgIcon('<rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3"/><path d="M11.5 15.5l3-3M11.5 18.5l6-6"/>'),
                 'Звуки интерфейса': svgIcon('<path d="M4 9.5h3l4-3.5v12l-4-3.5H4z"/><path d="M15 9a4 4 0 0 1 0 6M17.5 6.5a7.5 7.5 0 0 1 0 11"/>'),
+                'Вкладка «Магазин»': svgIcon('<path d="M4 8h16l-1.2 11a2 2 0 0 1-2 1.8H7.2a2 2 0 0 1-2-1.8z"/><path d="M8.5 8V6.5a3.5 3.5 0 0 1 7 0V8"/>'),
                 'Боковая панель': svgIcon('<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M15 3v18"/><path d="M17.5 7.5h1M17.5 11h1M17.5 14.5h1"/>'),
                 'Версия для ПК на планшете': svgIcon('<rect x="2.5" y="5" width="19" height="13" rx="2"/><path d="M9 21h6"/><path d="M6 9h6M6 12h4"/>'),
                 'Карточка профиля при наведении': svgIcon('<rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="11" r="2.2"/><path d="M5.8 16.2c.6-1.6 1.9-2.4 3.2-2.4s2.6.8 3.2 2.4M14.5 10h3.5M14.5 13.5h2.5"/>'),
@@ -1754,6 +1756,14 @@
             for (let i = 0; i < 40 && isVerifying; i++) await new Promise(r => setTimeout(r, 250));
             if (!localStorage.getItem(VERIFICATION_STORAGE_KEY)) await checkAllComments();
             loadApprovedIds();
+        }
+
+        function myVerifyState() {
+            if (!myUsername) return 'loading';
+            if (!(+GM_getValue('vp_ver_at', 0) || 0)) return 'loading';
+            const info = verifiedInfo(myUsername);
+            if (info && info.state === 'approved') return 'approved';
+            return 'unverified';
         }
 
         let globalHue = 0;
@@ -2299,7 +2309,6 @@
         .vp-like-inline { max-height: none !important; }
         .vp-settings-tabs .settings-option.vp-dim { opacity: .4; pointer-events: none; }
         .vp-pals { position: fixed; inset: 0; z-index: 9000; pointer-events: none; overflow: hidden; }
-        html.vp-ev-scene:not(.vp-msgs-open):not(.vp-gal-open) .vp-pals { display: none !important; }
         .vp-pals { transition: opacity .3s ease, visibility 0s; }
         html.vp-blackout .vp-pals { opacity: 0; visibility: hidden; transition: opacity .3s ease, visibility 0s .3s; }
         .vp-pal { position: absolute; bottom: 0; box-sizing: content-box; padding: 70px; margin: -70px; width: auto; height: calc(min(var(--vp-pal-h, 45vh), calc(48vw * var(--vp-pal-r, 1))) * var(--vp-pal-k, 1)); pointer-events: none;
@@ -4058,6 +4067,11 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (!myId || lookBusy || Date.now() < lookRetryAt) return;
             lookBusy = true;
             try {
+                try {
+                    const all0 = await loadVerificationComments();
+                    const m0 = all0.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
+                    if (m0) avaReconcile(parseLook(m0.content));
+                } catch (e) { logErr('аватарка: сверка с сервером', e); }
                 const b = backgroundEnabled ? backgroundStyle : '-';
                 const today = Math.floor(srvNow() / 864e5), was = GM_getValue(acctKey('vp_look_day'), 0), day = today - was < 7 && today >= was ? was : today;
                 const own = GM_getValue(acctKey('vp_ava'), null) || {}, ownAva = own.ref || '', ownVid = ownAva && own.vid || '';
@@ -4068,12 +4082,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (text === lookSent) return;
                 const all = await loadVerificationComments();
                 const mine = all.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
-                if (mine && openText(mine.content) === text && String(mine.content).startsWith('ITDXE ')) { lookSent = text; GM_setValue(acctKey('vp_look_day'), day); return; }
+                const markSeen = () => GM_setValue(acctKey('vp_ava_seen'), { a: (text.match(/ a=([0-4][0-9a-f]{32})/) || [])[1] || '', v: (text.match(/ va=(\S+)/) || [])[1] || '' });
+                if (mine && openText(mine.content) === text && String(mine.content).startsWith('ITDXE ')) { lookSent = text; markSeen(); GM_setValue(acctKey('vp_look_day'), day); return; }
                 const content = sealText(text);
                 const res = mine
                     ? await editComment(mine.id, content)
                     : await sendComment(VERIFICATION_POST_ID, content);
-                if (res.ok) { lookSent = text; lookFails = 0; GM_setValue(acctKey('vp_look_day'), day); if (day !== was) checkAllComments(true); }
+                if (res.ok) { lookSent = text; markSeen(); lookFails = 0; GM_setValue(acctKey('vp_look_day'), day); if (day !== was) checkAllComments(true); }
                 else lookLater();
             } catch (e) { lookLater(); logErr('стиль', e); } finally { lookBusy = false; }
         }
@@ -4456,6 +4471,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             row.onclick = e => e.stopPropagation();
             return row;
         }
+        addCss('html.vp-no-shop-tab a.vp-nav-link[href="/shop"] { display: none !important; }');
+        const applyShopTab = () => document.documentElement.classList.toggle('vp-no-shop-tab', !GM_getValue('shopTab', true));
+        applyShopTab();
         const SETTINGS = [
             { label: 'Фон', get: () => backgroundEnabled, set: v => { backgroundEnabled = v; updateBackgroundVisibility(); }, key: 'backgroundEnabled' },
             { label: 'Неоновая подсветка', get: () => neonEnabled, set: v => { neonEnabled = v; document.documentElement.classList.toggle('vp-no-neon', !v); paint(); }, key: 'neonEnabled' },
@@ -4472,20 +4490,22 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             { label: 'Стекло', get: () => glassEnabled, set: v => { glassEnabled = v; applyGlass(); }, key: 'glassEnabled' },
             { label: 'Звуки интерфейса', get: () => uiSoundEnabled, set: v => { uiSoundEnabled = v; if (v) uiSound('toggle'); }, key: 'uiSoundEnabled' },
             { label: 'Стили других', get: () => showLooks, set: v => { showLooks = v; document.documentElement.classList.toggle('vp-looks', v); if (!v) setBgGuest(null); }, key: 'showLooks' },
+            { label: 'Аватарки мода', get: () => GM_getValue('modAvatars', true), set: () => avatarRefresh(), key: 'modAvatars' },
             { label: 'Листание вкладок', get: () => GM_getValue('tabSlide', true), set: v => { if (!v) tabSlide.end(); }, key: 'tabSlide' },
             { label: 'Карточка профиля при наведении', get: () => GM_getValue('hoverCard', true), set: v => { if (!v) hcOff(); }, key: 'hoverCard' },
             { label: 'Сцена ленты', get: () => sceneEnabled, set: v => { sceneEnabled = v; sceneAutoOff = false; document.documentElement.classList.toggle('vp-scene', v); sceneKick(); }, key: 'sceneEnabled' },
             { label: 'Свечение видео', get: () => ambientEnabled, set: v => { ambientEnabled = v; applyAmbient(); }, key: 'ambientEnabled' },
             { label: 'Боковая панель', get: () => railEnabled, set: v => { railEnabled = v; placeRail(); }, key: 'railEnabled' },
+            { label: 'Вкладка «Магазин»', get: () => GM_getValue('shopTab', true), set: () => applyShopTab(), key: 'shopTab' },
             { label: 'Версия для ПК на планшете', get: () => GM_getValue('tabletDesktop', true), set: () => tabletViewport(), key: 'tabletDesktop' },
             { label: 'Мику и Тето', get: () => palsOn, set: v => { palsOn = v; palsApply(); }, key: 'palsEnabled' },
             { label: 'Мику справа', get: () => GM_getValue('palMiku', true), set: () => palsApply(), key: 'palMiku' },
             { label: 'Тето слева', get: () => GM_getValue('palTeto', true), set: () => palsApply(), key: 'palTeto' }
         ];
         const SETTINGS_TABS = [
-            { id: 'nick', name: 'Ник', items: ['Неоновая подсветка', 'Подсветка ника', 'Подсветка аватарок', 'Подсветка постов'] },
+            { id: 'nick', name: 'Ник', items: ['Неоновая подсветка', 'Подсветка ника', 'Подсветка аватарок', 'Аватарки мода', 'Подсветка постов'] },
             { id: 'bg', name: 'Фон', items: ['Фон'] },
-            { id: 'look', name: 'Вид', items: ['Стекло', 'Листание вкладок', 'Карточка профиля при наведении', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Карточки панели', 'Версия для ПК на планшете'] },
+            { id: 'look', name: 'Вид', items: ['Стекло', 'Листание вкладок', 'Карточка профиля при наведении', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Вкладка «Магазин»', 'Карточки панели', 'Версия для ПК на планшете'] },
             { id: 'likes', name: 'Лайки', items: ['Автолайки'] },
             { id: 'pals', name: 'Мику', items: ['Мику и Тето', 'Мику справа', 'Тето слева', 'Размер персонажей'] },
             { id: 'misc', name: 'Ещё', items: ['Анти цензура', 'Звуки интерфейса', 'Громкость', 'Заставка при входе'] },
@@ -4660,6 +4680,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             'Неоновая подсветка': 'Общий выключатель свечения: ник, аватарки, посты, иконки',
             'Подсветка ника': 'Свечение вокруг ника',
             'Подсветка аватарок': 'Свечение вокруг аватарок',
+            'Аватарки мода': 'Выключено: везде настоящие аватарки сайта, и твоя и чужие',
             'Подсветка постов': 'Цветная рамка у постов',
             'Заставка при входе': 'Короткая заставка при открытии сайта',
             'Размытый фон постов': 'Размытая подложка за карточками постов с картинкой',
@@ -4672,6 +4693,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             'Сцена ленты': 'Посты в ленте чуть уменьшаются и тают у края экрана',
             'Свечение видео': 'Мягкое цветное свечение вокруг видео',
             'Боковая панель': 'Правая панель с карточками',
+            'Вкладка «Магазин»': 'Пункт «Магазин» в меню слева (на телефоне — в нижнем меню). Выключишь — его не будет',
             'Версия для ПК на планшете': 'На планшете открывается компьютерная вёрстка',
             'Мику и Тето': 'Персонажи по краям экрана',
             'Мику справа': 'Показывать Мику справа',
@@ -4993,136 +5015,114 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         const callCss = () => { if (!document.getElementById('vp-call-css')) addCss(CALL_CSS).id = 'vp-call-css'; };
         const CALL_CSS = `
         .vp-call { position: fixed; inset: 0; z-index: 2147483600; display: flex; align-items: center; justify-content: center; padding: 16px;
-            background: rgba(0, 0, 0, .9); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); animation: vpCallIn .25s ease; font-family: inherit; }
-        .vp-call-card { width: min(380px, 100%); box-sizing: border-box; padding: 28px 16px 20px; border-radius: 22px; background: #2b2d31; color: #f2f3f5; text-align: center;
-            box-shadow: 0 24px 70px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(255, 255, 255, .06); }
-        .vp-call-ava { position: relative; width: 132px; height: 132px; margin: 0 auto 22px; border-radius: 50%; background: #fff; display: grid; place-items: center; }
-        .vp-call-ava::before, .vp-call-ava::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .5); animation: vpCallRing 1.6s ease-out infinite; }
+            background: rgba(0,0,0,.9); color: #f2f3f5; font-family: inherit; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+        .vp-call-dock { position: relative; display: flex; width: 100%; align-items: flex-end; justify-content: center; pointer-events: none; }
+        .vp-call-stack { position: relative; display: flex; width: min(430px, 100%); flex: 0 1 auto; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; will-change: width; transition: width .46s cubic-bezier(.22,.8,.24,1); }
+        .vp-call-stack > *:not(.vp-call-fold) { width: 100%; pointer-events: auto; }
+        .vp-call-card-wrap { position: relative; z-index: 10; width: 100%; flex: 0 0 auto; }
+        .vp-call-card { position: relative; display: flex; width: 100%; min-width: 0; align-items: center; gap: 12px; overflow: hidden; padding: 12px 14px; border-radius: 16px; background: #2b2d31; color: #f2f3f5; text-align: left; box-shadow: 0 24px 70px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.06); transition: padding .42s cubic-bezier(.22,.8,.24,1), border-radius .32s ease, box-shadow .16s ease; }
+        .vp-call.vp-voice .vp-call-card { box-shadow: 0 0 0 2px rgba(67,214,120,.85), 0 0 16px 2px rgba(67,214,120,.4), 0 24px 70px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.06); }
+        .vp-call-who { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: row; align-items: center; gap: 12px; transition: gap .42s cubic-bezier(.22,.8,.24,1); }
+        .vp-call-txt { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; opacity: 1; visibility: visible; transition: opacity .16s ease, visibility 0s; }
+        .vp-call-ava { position: relative; display: grid; width: 46px; height: 46px; flex: 0 0 46px; margin: 0; place-items: center; border-radius: 50%; background: #fff; }
+        .vp-call-ava::before, .vp-call-ava::after { position: absolute; inset: -6px; border: 3px solid rgba(255,255,255,.5); border-radius: 50%; content: ''; animation: vpCallRing 1.6s ease-out infinite; }
         .vp-call-ava::after { animation-delay: .8s; }
-        .vp-call.vp-talk .vp-call-ava::before, .vp-call.vp-talk .vp-call-ava::after { animation: none; opacity: 0; }
-        .vp-call-ava img { position: relative; z-index: 1; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
-        .vp-call-name { font-size: 19px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; line-height: 1.2; }
-        .vp-call-sub { margin-top: 6px; font-size: 15px; color: #b5bac1; min-height: 0; font-variant-numeric: tabular-nums; }
-        .vp-call-btns { display: flex; gap: 8px; justify-content: center; margin-top: 20px; }
-        .vp-call-btns button { flex: 1 1 0; min-width: 0; height: 44px; padding: 0 8px; border: 0; border-radius: 12px; color: #fff; font: 700 13px/1 inherit; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; gap: 5px; transition: filter .15s, transform .15s; }
-        .vp-call-btns button span { overflow: hidden; text-overflow: ellipsis; }
-        @media (max-width: 420px) {
-            .vp-call-btns button { flex: 0 0 44px; border-radius: 50%; padding: 0; }
-            .vp-call-btns button span { display: none; }
-        }
+        .vp-call-emoji { position: relative; z-index: 1; font-size: 26px; line-height: 1; }
+        .vp-call-ava img { position: relative; z-index: 1; display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+        .vp-call-name { overflow: hidden; max-width: 180px; color: #f2f3f5; font-size: 15px; font-weight: 700; letter-spacing: 0; line-height: 1.2; text-overflow: ellipsis; text-transform: none; white-space: nowrap; }
+        .vp-call-sub { min-height: 0; margin: 1px 0 0; color: #b5bac1; font-size: 12px; font-variant-numeric: tabular-nums; }
+        .vp-call-btns { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 8px; margin: 0 0 0 auto; opacity: 1; visibility: visible; transition: opacity .16s ease, visibility 0s; }
+        .vp-call-btns button { display: flex; width: 46px; height: 46px; flex: 0 0 46px; align-items: center; justify-content: center; gap: 5px; padding: 0 8px; border: 0; border-radius: 50%; color: #fff; font: 700 13px/1 inherit; cursor: pointer; transition: filter .15s ease, transform .15s ease; }
+        .vp-call-btns button span { display: none; overflow: hidden; text-overflow: ellipsis; }
         .vp-call-btns button:hover { filter: brightness(1.12); }
         .vp-call-btns button:active { transform: scale(.96); }
-        .vp-call-btns svg { width: 16px; height: 16px; flex: 0 0 auto; }
-        .vp-call.vp-incoming { align-items: flex-end; justify-content: center; padding: 0 16px 28px; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; pointer-events: none; }
-        .vp-call.vp-incoming .vp-call-card { width: min(430px, 100%); padding: 12px 14px; border-radius: 16px; pointer-events: auto; text-align: left;
-            display: flex; align-items: center; gap: 12px; animation: vpCallRise .34s cubic-bezier(.2,.8,.3,1); }
-        .vp-call.vp-incoming .vp-call-who { flex-direction: row; align-items: center; gap: 12px; min-width: 0; }
-        .vp-call.vp-incoming .vp-call-txt { align-items: flex-start; min-width: 0; }
-        .vp-call.vp-incoming .vp-call-ava { width: 46px; height: 46px; margin: 0; flex: 0 0 auto; }
-        .vp-call.vp-incoming .vp-call-emoji { font-size: 26px; }
-        .vp-call.vp-incoming .vp-call-name { font-size: 15px; font-weight: 700; letter-spacing: 0; text-transform: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
-        .vp-call.vp-incoming .vp-call-sub { margin: 1px 0 0; font-size: 12px; color: #b5bac1; }
-        .vp-call.vp-incoming .vp-call-lv, .vp-call.vp-incoming .vp-call-tag, .vp-call.vp-incoming .vp-call-note,
-        .vp-call.vp-incoming .vp-call-info, .vp-call.vp-incoming .vp-call-stage, .vp-call.vp-incoming .vp-call-min { display: none !important; }
-        .vp-call.vp-incoming .vp-call-btns { margin: 0 0 0 auto; gap: 8px; flex: 0 0 auto; }
-        .vp-call.vp-incoming .vp-call-btns button { width: 46px; height: 46px; padding: 0; border-radius: 50%; max-width: none; flex: 0 0 auto; }
-        .vp-call.vp-incoming .vp-call-btns button span { display: none; }
-        @keyframes vpCallRise { from { transform: translateY(120%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .vp-call.vp-breaking { pointer-events: none; }
-        .vp-call.vp-breaking .vp-call-card { animation: vpRedWave .4s ease-out forwards; }
-        @keyframes vpRedWave {
-            0% { box-shadow: inset 0 0 0 0 rgba(218,55,60,0), 0 24px 70px rgba(0,0,0,.6); }
-            100% { box-shadow: inset 0 0 0 400px rgba(218,55,60,.55), 0 24px 70px rgba(0,0,0,.6); }
-        }
-        .vp-break-half { position: fixed !important; pointer-events: none; z-index: 2147483699; transition: none; }
-        .vp-break-top { animation: vpBreakTop .7s cubic-bezier(.3,.1,.6,1) forwards; }
-        .vp-break-bot { animation: vpBreakBot .7s cubic-bezier(.3,.1,.6,1) forwards; }
-        @keyframes vpBreakTop {
-            0% { transform: translate(0,0) rotate(0); opacity: 1; }
-            100% { transform: translate(-45px, 260px) rotate(-22deg); opacity: 0; }
-        }
-        @keyframes vpBreakBot {
-            0% { transform: translate(0,0) rotate(0); opacity: 1; }
-            100% { transform: translate(45px, 260px) rotate(22deg); opacity: 0; }
-        }
-        .vp-call-no { background: #248046; }
-        .vp-call-yes { background: #248046; }
-        .vp-call.vp-out { animation: vpCallOut .3s ease forwards; }
-        @keyframes vpCallIn { from { opacity: 0; } }
-        @keyframes vpCallOut { to { opacity: 0; } }
-        @keyframes vpCallRing { from { transform: scale(1); opacity: .8; } to { transform: scale(1.35); opacity: 0; } }
-        @media (prefers-reduced-motion: reduce) { .vp-call-ava::before, .vp-call-ava::after { animation: none; opacity: .4; } }
-        .vp-call-real .vp-call-card { position: relative; }
-        .vp-call-min { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .08);
-            color: #b5bac1; cursor: pointer; display: grid; place-items: center; }
-        .vp-call-min:hover { background: rgba(255, 255, 255, .16); color: #fff; }
-        .vp-call-emoji { position: relative; z-index: 1; font-size: 64px; line-height: 1; }
-        .vp-call-real .vp-call-btns button span { white-space: nowrap; }
+        .vp-call-btns svg { width: 18px; height: 18px; flex: 0 0 auto; }
+        .vp-call-no, .vp-call-yes { background: #248046; }
         .vp-call-end { background: #da373c; }
         .vp-call-end svg { transform: rotate(135deg); }
         .vp-call-mute { background: #4e5058; }
         .vp-call-mute.vp-on { background: #f2f3f5; color: #111; }
-        .vp-call-note { margin-top: 10px; font-size: 11px; line-height: 1.35; color: #80848e; }
-        .vp-call-audio { display: none; }
-        .vp-call-tag { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 14px; font-size: 12px; font-weight: 600; color: #23a55a; }
-        .vp-call-mini .vp-call-tag { display: none; }
-        .vp-call-lv { display: none; gap: 14px; justify-content: center; margin-top: 12px; font-size: 12px; color: #b5bac1; }
-        .vp-call-real.vp-live:not(.vp-call-mini) .vp-call-lv { display: flex; }
-        .vp-call-lv span { display: flex; align-items: center; gap: 6px; min-width: 0; }
-        .vp-call-lv em { font-style: normal; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .vp-call-lv b { display: block; width: 44px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; }
-        .vp-call-lv i { display: block; height: 100%; background: #23a55a; transform-origin: 0 50%; transform: scaleX(.04); transition: transform .1s linear; }
-        .vp-call-info { margin-top: 8px; padding: 4px 8px; border: 0; background: none; color: #80848e; font: inherit; font-size: 11.5px; text-decoration: underline; cursor: pointer; }
-        .vp-call-info:hover { color: #b5bac1; }
-        .vp-call-mini .vp-call-info { display: none; }
-        .vp-call-real.vp-live .vp-call-ava::before, .vp-call-real.vp-live .vp-call-ava::after { animation: none; opacity: 0; }
-        .vp-call.vp-call-mini { inset: auto 16px 16px auto; padding: 0; background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
-        .vp-call-screenwrap.vp-full { bottom: 0 !important; right: 0 !important; }
-        .vp-call-mini .vp-call-card { width: auto; max-width: calc(100vw - 32px); padding: 8px 8px 8px 16px; display: flex; align-items: center; gap: 12px; text-align: left; cursor: pointer; }
-        .vp-call-mini .vp-call-ava, .vp-call-mini .vp-call-note, .vp-call-mini .vp-call-min { display: none; }
-        .vp-call-mini .vp-call-name { font-size: 14px; text-transform: none; letter-spacing: 0; }
-        .vp-call-mini .vp-call-sub { margin: 0; font-size: 13px; }
-        .vp-call-mini .vp-call-btns { margin: 0; gap: 6px; }
-        .vp-call-mini .vp-call-btns button { width: 40px; height: 40px; flex: 0 0 auto; padding: 0; border-radius: 50%; }
-        .vp-call-mini .vp-call-btns button span { display: none; }
-        .vp-call-stage { display: none; }
-        .vp-call-preview { display: none; }
-        .vp-call-screenwrap { position: fixed; right: 16px; bottom: 92px; width: min(38vw, 620px); aspect-ratio: 16/9; z-index: 2147483601; display: none;
-            border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,.18); box-shadow: 0 10px 40px rgba(0,0,0,.7); background: #000; cursor: zoom-in; }
-        .vp-call-screenwrap.vp-on { display: block; }
-        .vp-call-screenwrap.vp-full { left: 0; top: 0; right: auto; bottom: auto; width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0; border: 0; box-shadow: none; cursor: zoom-out; }
-        .vp-call-screenvid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
-        .vp-call-screentag { position: absolute; left: 8px; bottom: 8px; padding: 3px 9px; border-radius: 7px; font-size: 10.5px; font-weight: 600; color: #fff; background: rgba(0,0,0,.62); pointer-events: none; }
-        
         .vp-call-screen { background: #4e5058; }
-        .vp-call-screen.vp-on { background: #248046; }
-        .vp-call-who { display: flex; flex-direction: column; align-items: center; }
-        .vp-call-txt { display: flex; flex-direction: column; align-items: center; }
-        .vp-call.vp-watching { align-items: flex-end; justify-content: center; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 0 0 14px; pointer-events: none; }
-        .vp-call.vp-watching .vp-call-card { width: min(560px, 96vw); padding: 8px 14px; border-radius: 16px; margin: 0 auto; pointer-events: auto;
-            display: flex; flex-direction: row; align-items: center; gap: 12px; text-align: left;
-            background: rgba(20, 21, 23, .96); box-shadow: 0 8px 30px rgba(0,0,0,.55); }
-        .vp-call.vp-watching .vp-call-who { flex-direction: row; gap: 10px; min-width: 0; }
-        .vp-call.vp-watching .vp-call-txt { align-items: flex-start; min-width: 0; }
-        .vp-call.vp-watching .vp-call-ava { width: 38px; height: 38px; margin: 0; flex: 0 0 auto; }
-        .vp-call.vp-watching .vp-call-emoji { font-size: 22px; }
-        .vp-call.vp-watching .vp-call-name { font-size: 14px; font-weight: 700; letter-spacing: 0; text-transform: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
-        .vp-call.vp-watching .vp-call-sub { margin: 1px 0 0; font-size: 12px; color: #b5bac1; }
-        .vp-call.vp-watching .vp-call-note, .vp-call.vp-watching .vp-call-tag, .vp-call.vp-watching .vp-call-min, .vp-call.vp-watching .vp-call-info { display: none; }
-        .vp-call.vp-watching .vp-call-lv { display: none !important; }
-        .vp-call.vp-watching .vp-call-btns { margin: 0 0 0 auto; gap: 8px; flex: 0 0 auto; }
-        .vp-call.vp-watching .vp-call-btns button { max-width: none; width: 40px; height: 40px; padding: 0; border-radius: 50%; flex: 0 0 auto; }
-        .vp-call.vp-watching .vp-call-btns button span { display: none; }
-        .vp-call.vp-watching.vp-sharing .vp-call-stage { display: block; position: fixed; left: 16px; bottom: 16px; width: 220px; aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; box-shadow: 0 6px 22px rgba(0,0,0,.7); z-index: 2147483601; background: #000; border: 1px solid rgba(255,255,255,.14); }
-        .vp-call.vp-watching.vp-sharing .vp-call-stage::after { content: 'твой экран'; position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 600; color: #fff; background: rgba(0,0,0,.6); pointer-events: none; }
-        .vp-call.vp-sharing:not(.vp-watching) .vp-call-stage::after { content: 'твой экран'; position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 600; color: #fff; background: rgba(0,0,0,.6); pointer-events: none; }
-        .vp-call-stage { position: relative; }
-        .vp-call.vp-watching .vp-call-preview { display: block; width: 100%; height: 100%; object-fit: contain; background: #000; }
-        .vp-call.vp-sharing:not(.vp-watching) .vp-call-stage { display: block; margin: 0 auto 14px; width: 100%; max-width: 260px; aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; background: #000; }
-        .vp-call.vp-sharing:not(.vp-watching) .vp-call-preview { display: block; width: 100%; height: 100%; object-fit: contain; }
-        .vp-call.vp-sharing:not(.vp-watching) .vp-call-ava { width: 72px; height: 72px; margin-bottom: 12px; }
-        .vp-call-screen.vp-on { background: #248046; }`;
+        .vp-call-screen.vp-on { background: #248046; }        .vp-call.vp-incoming, .vp-call.vp-outgoing { align-items: flex-end; justify-content: center; padding: 0 16px 28px; background: transparent; pointer-events: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+        .vp-call.vp-incoming .vp-call-card, .vp-call.vp-outgoing .vp-call-card { width: 100%; }
+        .vp-call.vp-incoming .vp-call-ava, .vp-call.vp-outgoing .vp-call-ava { width: 46px; height: 46px; margin: 0; }
+        .vp-call.vp-incoming .vp-call-ava::before, .vp-call.vp-incoming .vp-call-ava::after, .vp-call.vp-outgoing .vp-call-ava::before, .vp-call.vp-outgoing .vp-call-ava::after { animation: none; opacity: 0; }
+        .vp-call.vp-incoming .vp-call-btns, .vp-call.vp-outgoing .vp-call-btns { margin-left: auto; }
+        .vp-call.vp-incoming .vp-call-dock { pointer-events: none; }
+        .vp-call.vp-call-docked .vp-call-dock { justify-content: flex-end; }
+        .vp-call.vp-call-docked .vp-call-ava::before, .vp-call.vp-call-docked .vp-call-ava::after { animation: none; opacity: 0; }
+        .vp-call-fold { position: absolute; z-index: 3; top: 50%; right: calc(100% + 8px); display: flex; width: 34px; height: 34px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 50%; background: #2b2d31; color: #f2f3f5; opacity: 0; pointer-events: none; transform: translate(100%, -50%); box-shadow: 0 8px 24px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.06); transition: transform .32s cubic-bezier(.2,.8,.3,1), opacity .18s ease, background .15s ease; cursor: pointer; }
+        .vp-call-fold svg { width: 18px; height: 18px; }
+        .vp-call-fold:hover { background: #36393f; }
+        .vp-call.vp-call-docked:not(.vp-folded) .vp-call-fold { opacity: 1; pointer-events: auto; transform: translate(0, -50%); transition-delay: .28s; }
+        .vp-call.vp-folded .vp-call-fold { opacity: 0; pointer-events: none; transform: translate(100%, -50%); transition-delay: 0s; }
+        .vp-call-preview-float { position: relative; display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; max-height: 0; flex: 0 0 auto; margin-top: -8px; overflow: visible; border-radius: 14px; background: transparent; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(24px) scale(.97); perspective: 1200px; transition: max-height .30s cubic-bezier(.22,.8,.24,1), margin-top .30s cubic-bezier(.22,.8,.24,1), opacity .20s ease, transform .30s cubic-bezier(.22,.8,.24,1), visibility 0s .30s; }
+        .vp-call.vp-has-preview:not(.vp-folded):not(.vp-folding) .vp-call-preview-float { max-height: 260px; margin-top: 0; opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0) scale(1); transition: max-height .34s cubic-bezier(.22,.8,.24,1), margin-top .34s cubic-bezier(.22,.8,.24,1), opacity .22s .04s ease, transform .34s .02s cubic-bezier(.22,.8,.24,1), visibility 0s; }
+        .vp-screen-flipper { position: absolute; inset: 0; box-sizing: border-box; overflow: visible; border: 1px solid rgba(255,255,255,.14); border-radius: 14px; background: #0d0e10; box-shadow: 0 24px 70px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.06); transform-style: preserve-3d; transform: rotateY(0deg); transition: transform .72s cubic-bezier(.2,.72,.2,1); will-change: transform; }
+        .vp-call.vp-show-remote .vp-screen-flipper { transform: rotateY(180deg); }
+        .vp-screen-face { position: absolute; inset: 0; overflow: hidden; border-radius: 13px; backface-visibility: hidden; -webkit-backface-visibility: hidden; background: #000; }
+        .vp-screen-face--self { pointer-events: auto; }
+        .vp-screen-face--remote { transform: rotateY(180deg); pointer-events: none; }
+        .vp-call:not(.vp-show-remote) .vp-screen-face--remote, .vp-call:not(.vp-show-remote) .vp-screen-face--remote *, .vp-call.vp-show-remote .vp-screen-face--self, .vp-call.vp-show-remote .vp-screen-face--self * { pointer-events: none !important; }
+        .vp-screen-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
+        .vp-screen-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #80848e; font-size: 13px; background: #0d0e10; }        .vp-screen-controls { position: absolute; z-index: 5; top: 9px; right: 9px; display: flex; align-items: center; gap: 8px; pointer-events: none; }
+        .vp-screen-label { color: #fff; font-size: 10px; font-weight: 600; line-height: 30px; text-shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 8px rgba(0,0,0,.65); white-space: nowrap; }
+        .vp-screen-flip { display: none; width: 30px; height: 30px; flex: 0 0 30px; align-items: center; justify-content: center; padding: 0; border: 1px solid rgba(255,255,255,.36); border-radius: 50%; background: rgba(24,26,28,.76); color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.22); cursor: pointer; pointer-events: auto; transition: background .18s ease, transform .18s ease; }
+        .vp-call.vp-remote-available .vp-screen-flip { display: flex; }
+        .vp-screen-flip[hidden] { display: none !important; }
+        .vp-screen-mode { height: 30px; padding: 0 12px; border: 1px solid rgba(255,255,255,.36); border-radius: 15px; background: rgba(24,26,28,.76); color: #fff; font: 600 11px/1 inherit; cursor: pointer; pointer-events: auto; box-shadow: 0 2px 8px rgba(0,0,0,.22); transition: background .18s ease; }
+        .vp-screen-mode:hover { background: rgba(24,26,28,.94); }
+        .vp-screen-mode[hidden] { display: none !important; }
+        .vp-screen-flip:hover { background: rgba(24,26,28,.94); transform: scale(1.06); }
+        .vp-screen-flip:active { transform: scale(.94); }
+        .vp-screen-flip svg { width: 16px; height: 16px; }
+        .vp-screen-fullscreen-control { position: absolute; z-index: 7; top: 9px; left: 9px; display: flex; align-items: center; pointer-events: none; }
+        .vp-screen-fullscreen { display: flex; width: 30px; height: 30px; flex: 0 0 30px; align-items: center; justify-content: center; padding: 0; border: 1px solid rgba(255,255,255,.36); border-radius: 50%; background: rgba(24,26,28,.76); color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.22); cursor: pointer; pointer-events: auto; transition: background .18s ease, transform .18s ease; }
+        .vp-screen-fullscreen[hidden] { display: none !important; }
+        .vp-screen-fullscreen:hover { background: rgba(24,26,28,.94); transform: scale(1.06); }
+        .vp-screen-fullscreen:active { transform: scale(.94); }
+        .vp-screen-fullscreen svg { width: 16px; height: 16px; }
+        .vp-call-preview-float.vp-preview-fullscreen { position: fixed !important; z-index: 1 !important; max-height: none !important; aspect-ratio: auto !important; margin: 0 !important; opacity: 1 !important; visibility: visible !important; pointer-events: auto !important; transform: none !important; }
+        .vp-self-pip { position: fixed; z-index: 2; right: 16px; bottom: 112px; display: none; width: min(430px, calc(100vw - 32px)); aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid rgba(255,255,255,.18); border-radius: 14px; background: #000; box-shadow: 0 18px 48px rgba(0,0,0,.42), 0 0 0 1px rgba(255,255,255,.06); pointer-events: none; }
+        .vp-self-pip.is-visible { display: block; }
+        .vp-self-pip-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
+        .vp-self-pip-label { position: absolute; z-index: 2; top: 9px; right: 10px; color: #fff; font-size: 10px; font-weight: 600; line-height: 20px; text-shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 8px rgba(0,0,0,.65); white-space: nowrap; }
+        .vp-call.vp-remote-fullscreen .vp-call-fold { display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
+        .vp-call.vp-remote-fullscreen .vp-screen-flip { display: none !important; }
+        @media (max-width: 520px) {
+            .vp-self-pip { right: 12px; bottom: 106px; width: min( min(430px, calc(100vw - 24px)), 56vw ); }
+        }
+        .vp-call.vp-folding .vp-call-preview-float, .vp-call.vp-folded .vp-call-preview-float { max-height: 0; margin-top: -8px; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(28px) scale(.96); transition: max-height .30s cubic-bezier(.22,.8,.24,1), margin-top .30s cubic-bezier(.22,.8,.24,1), opacity .16s ease, transform .30s cubic-bezier(.22,.8,.24,1), visibility 0s .30s; }
+        .vp-call.vp-folding .vp-call-fold { opacity: 0; pointer-events: none; transform: translate(100%, -50%); transition-delay: 0s; }
+        .vp-call.vp-folding .vp-call-txt, .vp-call.vp-folding .vp-call-btns { opacity: 0; pointer-events: none; transform: translateX(-7px); transition: opacity .18s ease, transform .22s cubic-bezier(.22,.8,.24,1), visibility 0s .20s; }
+        .vp-call.vp-folded .vp-call-stack { width: 74px; }
+        .vp-call.vp-folded .vp-call-card { width: 100%; padding: 12px 14px; cursor: pointer; }
+        .vp-call.vp-folded .vp-call-who { width: 100%; flex: 1 1 auto; justify-content: center; gap: 0; }
+        .vp-call.vp-folded .vp-call-ava { width: 46px; height: 46px; flex-basis: 46px; margin: 0; }
+        .vp-call.vp-folded .vp-call-txt, .vp-call.vp-folded .vp-call-btns { position: absolute; width: 0; height: 0; overflow: hidden; opacity: 0; visibility: hidden; pointer-events: none; transform: translateX(-7px); transition: opacity .14s ease, transform .18s ease, visibility 0s .18s; }
+        .vp-call.vp-folded .vp-call-fold { transition-delay: 0s; }
+        .vp-call.vp-unfolding .vp-call-txt, .vp-call.vp-unfolding .vp-call-btns { transition: opacity .18s .10s ease, transform .22s .10s cubic-bezier(.22,.8,.24,1), visibility 0s .10s; }
+        .vp-call.vp-unfolding.vp-has-preview:not(.vp-folding) .vp-call-preview-float { transition-delay: .30s, .30s, .30s, .30s, .30s; }        @keyframes vpCallEnterBottom { from { transform: translate3d(0, 112%, 0); opacity: 0; } to { transform: translate3d(0, 0, 0); opacity: 1; } }
+        @keyframes vpCallLeaveAnim { from { transform: translate3d(0, 0, 0); opacity: 1; } to { transform: translate3d(0, 112%, 0); opacity: 0; } }
+        .vp-call.vp-call-enter .vp-call-dock { animation: vpCallEnterBottom .52s cubic-bezier(.22,.82,.24,1) both; }
+        .vp-call.vp-call-leave .vp-call-dock { animation: vpCallLeaveAnim .30s cubic-bezier(.4,.1,.7,.6) both; }
+        .vp-call.vp-breaking { pointer-events: none; }
+        .vp-call.vp-breaking .vp-call-card { animation: vpRedWave .42s ease-out forwards; }
+        @keyframes vpRedWave { from { box-shadow: inset 0 0 0 0 rgba(218,55,60,0), 0 24px 70px rgba(0,0,0,.6); } to { box-shadow: inset 0 0 0 400px rgba(218,55,60,.55), 0 24px 70px rgba(0,0,0,.6); } }
+        .vp-fragment { position: fixed !important; z-index: 2147483699 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: visible; pointer-events: none !important; backface-visibility: hidden; transform-style: preserve-3d; will-change: transform, opacity, filter; }
+        .vp-fragment .vp-call-stack { position: absolute !important; display: flex !important; margin: 0 !important; pointer-events: none !important; transition: none !important; }
+        .vp-fragment .vp-call-card { width: 100% !important; height: auto !important; min-width: 0 !important; margin: 0 !important; box-sizing: border-box !important; visibility: visible !important; pointer-events: none !important; animation: none !important; transition: none !important; }
+        .vp-fragment * { animation: none !important; transition: none !important; }
+        @keyframes vpCallRing { from { transform: scale(1); opacity: .8; } to { transform: scale(1.35); opacity: 0; } }
+        @media (max-width: 420px) {
+            .vp-call.vp-incoming .vp-call-btns, .vp-call.vp-outgoing .vp-call-btns { gap: 6px; }
+            .vp-call.vp-incoming .vp-call-btns button, .vp-call.vp-outgoing .vp-call-btns button { width: 42px; height: 42px; flex-basis: 42px; }
+            .vp-call.vp-incoming .vp-call-name, .vp-call.vp-outgoing .vp-call-name { max-width: 145px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .vp-call *, .vp-call *::before, .vp-call *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+        }
+        `;
         function callTone(kind) {
             let ac, t = 0;
             try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return () => { }; }
@@ -5176,7 +5176,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         const callNet = { cur: null, done: null, lastSync: 0, title: null };
         function callDone() { if (!callNet.done) callNet.done = new Set(GM_getValue(acctKey('callDone'), [])); return callNet.done; }
         function callMarkDone(key) { const d = callDone(); d.add(key); GM_setValue(acctKey('callDone'), [...d].slice(-60)); }
-        function callSig(uid, type, id, data) { return msgSend(uid, '', false, null, cat(new Uint8Array([4, type]), be32(id), data || new Uint8Array(0))); }
+        function callSig(uid, type, id, data) { return msgSend(uid, '', false, null, cat(new Uint8Array([4, type]), be32(id), data || new Uint8Array(0)), 0, { prio: true }); }
         function sdpSlim(sdp, drop) {
             const lines = sdp.split(/\r?\n/).filter(Boolean);
             const audio = new Set(), video = new Set(), vrank = {};
@@ -5187,12 +5187,11 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (m) {
                     const name = m[2].toLowerCase();
                     if (name === 'opus') audio.add(m[1]);
-                    else { video.add(m[1]); vrank[m[1]] = name === 'vp9' ? 3 : name === 'h264' ? 2 : 1; }
+                    else { video.add(m[1]); vrank[m[1]] = name === 'h264' ? 3 : name === 'vp9' ? 2 : 1; }
                 }
             }
             const out = [];
             let sec = -1, isVideo = false, videoPt = null;
-            // Оставляем ОДИН видеокодек — иначе SDP не влезет в лимит сообщения.
             for (const l of lines) {
                 if (/^m=video /.test(l)) {
                     const pts = l.split(' ').slice(3).filter(p => video.has(p));
@@ -5265,7 +5264,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 analyser.fftSize = 512;
                 const dest = c.ac.createMediaStreamDestination();
                 src.connect(hp).connect(lp).connect(comp).connect(gate).connect(dest);
-                gate.connect(analyser);
+                comp.connect(analyser);
                 const buf = new Uint8Array(analyser.fftSize);
                 let open = true;
                 const gateT = setInterval(function () {
@@ -5281,6 +5280,114 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 return dest.stream;
             } catch (e) { logErr('звонок: шумоподавление', e); return stream; }
         }
+        function callVoiceWatch(c) {
+            if (!c.ac || c.voiceT) return;
+            const mk = stream => {
+                try {
+                    const an = c.ac.createAnalyser();
+                    an.fftSize = 512;
+                    c.ac.createMediaStreamSource(stream).connect(an);
+                    return { an, stream, buf: new Uint8Array(an.fftSize) };
+                } catch (e) { return null; }
+            };
+            const level = h => {
+                h.an.getByteTimeDomainData(h.buf);
+                let sum = 0;
+                for (let i = 0; i < h.buf.length; i++) { const v = (h.buf[i] - 128) / 128; sum += v * v; }
+                return Math.sqrt(sum / h.buf.length);
+            };
+            let me = c.rawStream ? mk(c.rawStream) : null, last = 0;
+            c.voiceT = setInterval(() => {
+                if (c.state !== 'talk' || !c.el) { clearInterval(c.voiceT); if (c.el) c.el.classList.remove('vp-voice'); return; }
+                const now = Date.now();
+                if (c.rawStream && (!me || me.stream !== c.rawStream)) me = mk(c.rawStream);
+                if (me && level(me) > 0.025) last = now;
+                c.el.classList.toggle('vp-voice', now - last < 400);
+            }, 80);
+        }
+        async function callMicFallback(c) {
+            if (!c.pc || !c.rawStream || c.stream === c.rawStream) return false;
+            const cur = c.stream.getAudioTracks()[0], raw = c.rawStream.getAudioTracks()[0];
+            const snd = c.micSender || c.pc.getSenders().find(x => x.track === cur);
+            if (!snd || !raw || raw.readyState !== 'live') return false;
+            try {
+                await snd.replaceTrack(raw);
+                raw.enabled = !c.muted;
+                clearInterval(c.noiseT); c.noiseT = null;
+                c.stream = c.rawStream;
+                logErr('звонок: шумоподавление не отдало звук, взят обычный микрофон', new Error('noise-fallback'));
+                return true;
+            } catch (e) { logErr('звонок: возврат микрофона', e); return false; }
+        }
+        async function callMicReopen(c) {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !c.micSender) return false;
+            try {
+                const raw = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+                if (c.state === 'end' || !c.pc) { raw.getTracks().forEach(t => t.stop()); return false; }
+                clearInterval(c.noiseT); c.noiseT = null;
+                const next = await callNoiseClean(c, raw), nt = next.getAudioTracks()[0];
+                if (!nt) { raw.getTracks().forEach(t => t.stop()); return false; }
+                await c.micSender.replaceTrack(nt);
+                nt.enabled = !c.muted;
+                if (c.rawStream && c.rawStream !== raw) c.rawStream.getTracks().forEach(t => t.stop());
+                c.rawStream = raw;
+                c.stream = next;
+                logErr('звонок: микрофон открыт заново', new Error('mic-reopen'));
+                return true;
+            } catch (e) { logErr('звонок: микрофон заново', e); return false; }
+        }
+        async function callAudioFix(c) {
+            c.audioFixes = (c.audioFixes || 0) + 1;
+            const mic = c.stream && c.stream.getAudioTracks()[0];
+            if (!mic || mic.readyState === 'ended') { if (await callMicReopen(c)) return; }
+            if (await callMicFallback(c)) return;
+            if (c.audioFixes === 1 && c.micSender && mic && mic.readyState === 'live') { try { await c.micSender.replaceTrack(mic); return; } catch (e) { } }
+            if (c.audioFixes === 2 && await callMicReopen(c)) return;
+            if (Date.now() - (c.audioRestartAt || 0) > 30000) { c.audioRestartAt = Date.now(); callIceRestart(c, 'audio-flat'); }
+        }
+        async function callMicCheck(c) {
+            if (c.state !== 'talk' || !c.pc || !c.rawStream || c.stream === c.rawStream) return;
+            let sent = 0;
+            try { (await c.pc.getStats()).forEach(r => { if (r.type === 'outbound-rtp' && r.kind === 'audio') sent += r.bytesSent || 0; }); } catch (e) { return; }
+            if (sent > 0) return;
+            await callMicFallback(c);
+        }
+        function callAudioWatch(c) {
+            if (!c.pc || c.audioWT) return;
+            let last = null, outFlat = 0, inFlat = 0, inFixes = 0;
+            const read = async (obj, type, field) => {
+                let v = -1;
+                if (obj) (await obj.getStats()).forEach(r => { if (r.type === type) v = r[field]; });
+                return v;
+            };
+            c.audioWT = setInterval(async () => {
+                const pc = c.pc;
+                if (c.state !== 'talk' || !pc) { clearInterval(c.audioWT); return; }
+                if (pc.connectionState !== 'connected' || c.iceRestarting) return;
+                let out = -1, inn = -1;
+                try {
+                    const rt = c.remote && c.remote.getAudioTracks()[0];
+                    const rcv = rt && pc.getReceivers().find(x => x.track === rt);
+                    out = await read(c.micSender, 'outbound-rtp', 'packetsSent');
+                    inn = await read(rcv, 'inbound-rtp', 'packetsReceived');
+                } catch (e) { return; }
+                if (last) {
+                    outFlat = out >= 0 && out === last.out ? outFlat + 1 : 0;
+                    inFlat = inn >= 0 && inn === last.inn ? inFlat + 1 : 0;
+                    if (out > last.out) callWarn(c, 'out', '');
+                    if (inn > last.inn) callWarn(c, 'in', '');
+                }
+                last = { out, inn };
+                if (outFlat >= 2) {
+                    callWarn(c, 'out', 'собеседник вас не слышит');
+                    if (outFlat % 2 === 0 && c.audioFixes < 6 || !c.audioFixes) callAudioFix(c);
+                }
+                if (inFlat >= 3) {
+                    callWarn(c, 'in', 'звук от собеседника не приходит');
+                    if ((inFlat === 3 || (inFlat - 3) % 9 === 0) && inFixes < 2) { inFixes++; callIceRestart(c, 'in-flat'); }
+                }
+            }, 5000);
+        }
         async function callMedia(c) {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('Браузер не даёт микрофон');
             const hint = setTimeout(() => c.state !== 'end' && callSub(c, 'Разреши микрофон — значок в адресной строке'), 6000);
@@ -5295,7 +5402,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (c.state === 'end') { c.stream.getTracks().forEach(t => t.stop()); return false; }
             c.rawStream = c.stream;
             c.stream = await callNoiseClean(c, c.stream);
-            callMeter(c, 'me', c.stream);
             return true;
         }
         function callAudioPrep(c) {
@@ -5306,23 +5412,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             document.body.appendChild(a);
             c.audio = a;
             try { c.ac = new (window.AudioContext || window.webkitAudioContext)(); if (c.ac.state === 'suspended') c.ac.resume().catch(() => { }); } catch (e) { c.ac = null; }
-        }
-        function callScreenPrep(c) {
-            const w = document.createElement('div');
-            w.className = 'vp-call-screenwrap';
-            const v = document.createElement('video');
-            v.className = 'vp-call-screenvid';
-            v.autoplay = true; v.playsInline = true; v.muted = true;
-            w.appendChild(v);
-            const tag = document.createElement('div');
-            tag.className = 'vp-call-screentag';
-            tag.textContent = 'экран собеседника · клик = во весь экран';
-            w.appendChild(tag);
-            w.addEventListener('click', function () { w.classList.toggle('vp-full'); });
-            document.body.appendChild(w);
-            c.screenVideo = v;
-            c.screenWrap = w;
-            c.screenTag = tag;
         }
         function callScreenAudioPrep(c) {
             if (c.screenAudio) return;
@@ -5337,7 +5426,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             c.screenAudio.srcObject = st;
             const p = c.screenAudio.play();
             if (p && p.catch) p.catch(() => {
-                // Браузер не дал autoplay — покажем кнопку «включить звук» (та же, что для звонка).
                 if (!c.blocked) { c.blocked = true; callPaint(c); }
             });
         }
@@ -5345,9 +5433,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             c.remoteScreenOn = false;
             c.remoteScreen = null;
             c.screenStreamId = null;
-            if (c.screenVideo) { c.screenVideo.srcObject = null; c.screenVideo = null; }
-            if (c.screenTag) { c.screenTag = null; }
-            if (c.screenWrap) { c.screenWrap.remove(); c.screenWrap = null; }
+            c.remoteScreenTrack = null;
             if (c.screenAudio) { c.screenAudio.srcObject = null; c.screenAudio.remove(); c.screenAudio = null; }
             callSharePaint(c);
             callPaint(c);
@@ -5355,40 +5441,19 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         function callPlay(c) {
             if (c.state === 'end') return;
             if (c.ac && c.ac.state === 'suspended') c.ac.resume().catch(() => { });
-            if (c.screenAudio && c.screenAudio.srcObject) { const sp = c.screenAudio.play(); if (sp && sp.catch) sp.catch(() => { }); }
+            const markBlocked = (e, tag) => {
+                if (!e || e.name !== 'NotAllowedError') return;
+                logErr('звонок: браузер не дал включить ' + tag, e);
+                if (!c.blocked) { c.blocked = true; callPaint(c); }
+            };
+            if (c.screenAudio && c.screenAudio.srcObject) {
+                const sp = c.screenAudio.play();
+                if (sp && sp.catch) sp.catch(e => markBlocked(e, 'звук экрана'));
+            }
             const a = c.audio;
             if (!a || !a.srcObject) return;
             const p = a.play();
-            if (p) p.then(() => { if (c.blocked) { c.blocked = false; callPaint(c); } }, e => {
-                if (!e || e.name !== 'NotAllowedError' || c.blocked) return;
-                c.blocked = true;
-                logErr('звонок: браузер не дал включить звук', e);
-                callPaint(c);
-            });
-        }
-        function callMeter(c, who, stream) {
-            if (!c.ac || (c.meters && c.meters[who])) return;
-            try {
-                const an = c.ac.createAnalyser();
-                an.fftSize = 256;
-                c.ac.createMediaStreamSource(stream).connect(an);
-                (c.meters || (c.meters = {}))[who] = an;
-            } catch (e) { logErr('звонок: индикатор', e); }
-        }
-        function callLevels(c) {
-            const lv = c.el && c.el.querySelector('.vp-call-lv');
-            if (!lv || !c.meters) return;
-            const buf = new Uint8Array(128);
-            for (const who of ['me', 'them']) {
-                const an = c.meters[who], bar = lv.querySelector(`[data-who="${who}"] i`);
-                if (!an || !bar) continue;
-                an.getByteTimeDomainData(buf);
-                let sum = 0;
-                for (const v of buf) sum += (v - 128) * (v - 128);
-                const lvl = Math.min(1, Math.sqrt(sum / buf.length) / 40);
-                bar.style.transform = `scaleX(${Math.max(.04, lvl).toFixed(2)})`;
-                if (lvl > .06) c.heard = Object.assign(c.heard || {}, { [who]: true });
-            }
+            if (p) p.then(() => { if (c.blocked) { c.blocked = false; callPaint(c); } }, e => markBlocked(e, 'звук звонка'));
         }
         async function callInfo(c) {
             const out = [`ИТД X ${GM_info.script.version} · ${navigator.userAgent}`, `звонок: ${c.dir === 'out' ? 'исходящий' : 'входящий'}, ${c.state}`];
@@ -5417,38 +5482,25 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         function callPeer(c) {
             const pc = new RTCPeerConnection({ iceServers: CALL_ICE });
-            // Perfect negotiation (MDN): оба могут начать ре-негоциацию одновременно.
-            // Вызывающий — impolite (его offer побеждает), принимающий — polite (откатывает свой).
-            c.polite = c.dir !== 'out';
+            const myCallId = String((typeof msgMyId === 'function' && msgMyId()) || (msgNet && msgNet.me && msgNet.me.id) || '');
+            const peerCallId = String(c.uid || '');
+            c.polite = !!(myCallId && peerCallId && myCallId > peerCallId);
             c.makingOffer = false;
             c.ignoreOffer = false;
             pc.onnegotiationneeded = () => { callNegotiate(c); };
             pc.ontrack = e => {
                 const sid = e.streams[0] ? e.streams[0].id : ('t:' + e.track.id);
                 if (e.track.kind === 'video') {
-                    // Видео = демонстрация экрана (камера в звонке не используется).
+                    const vtrack = e.track;
                     c.screenStreamId = sid;
-                    if (!c.screenVideo) callScreenPrep(c);
-                    const st = e.streams[0] || new MediaStream([e.track]);
-                    c.remoteScreen = st;
-                    if (c.screenVideo.srcObject !== st) c.screenVideo.srcObject = st;
-                    c.screenVideo.play().catch(() => { });
-                    if (!c.screenVideo._vpPlay) {
-                        c.screenVideo._vpPlay = true;
-                        c.screenVideo.addEventListener('canplay', function () { c.screenVideo && c.screenVideo.play().catch(function () { }); });
-                        setTimeout(function () { c.screenVideo && c.screenVideo.play().catch(function () { }); }, 500);
-                    }
-                    // Если аудио экрана пришло раньше видео — теперь знаем его поток, переносим.
-                    if (c.pendingScreenAudio && c.pendingScreenAudioId === sid) {
-                        callScreenAudioAttach(c, c.pendingScreenAudio);
-                        c.pendingScreenAudio = null; c.pendingScreenAudioId = null;
-                    }
+                    c.remoteScreen = e.streams[0] || new MediaStream([vtrack]);
+                    c.remoteScreenTrack = vtrack;
+                    vtrack.addEventListener('ended', () => { if (c.remoteScreenTrack === vtrack && c.state !== 'end') callScreenDrop(c); });
                     c.remoteScreenOn = true;
                     callSharePaint(c);
                     callPaint(c);
                     return;
                 }
-                // Аудио: различаем микрофон и звук экрана по id потока.
                 let isScreenAudio = false;
                 if (c.screenStreamId) isScreenAudio = (sid === c.screenStreamId);
                 else if (c.micStreamId) isScreenAudio = (sid !== c.micStreamId);
@@ -5462,46 +5514,118 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 c.remote = e.streams[0] || new MediaStream([e.track]);
                 if (c.audio.srcObject !== c.remote) c.audio.srcObject = c.remote;
                 callPlay(c);
-                callMeter(c, 'them', c.remote);
             };
             pc.onconnectionstatechange = () => {
                 const st = pc.connectionState;
                 if (c.state === 'end') return;
-                if (st === 'connected') { clearTimeout(c.lostT); callLive(c); }
-                else if (st === 'failed') { callInfo(c).then(t => logErr('звонок: не соединились', new Error(t.split('\n').slice(2, 4).join('; ')))); callEnd(c, 'Не удалось соединиться напрямую — обычно мешает мобильный интернет. Попробуйте, чтобы хотя бы у одного был Wi-Fi', 0); }
-                else if (st === 'disconnected' && c.state === 'talk') {
+                if (st === 'connected') {
+                    clearTimeout(c.lostT); clearTimeout(c.iceGraceT); clearTimeout(c.iceRetryT);
+                    c.lostSince = 0;
+                    callWarn(c, 'net', '');
+                    c.iceRestartTries = 0;
+                    callLive(c);
+                } else if (st === 'failed') {
+                    clearTimeout(c.iceGraceT);
+                    if (c.state === 'talk') { callLostWatch(c); callIceRestart(c, 'failed'); }
+                    else callEnd(c, 'Не удалось соединиться напрямую — обычно мешает мобильный интернет. Попробуйте, чтобы хотя бы у одного был Wi-Fi', 0, 'connect-failed');
+                } else if (st === 'disconnected' && c.state === 'talk') {
                     callSub(c, 'Связь прерывается…');
-                    clearTimeout(c.lostT);
-                    c.lostT = setTimeout(() => pc.connectionState !== 'connected' && callEnd(c, 'Связь потеряна', 0), 10000);
+                    callLostWatch(c);
+                    clearTimeout(c.iceGraceT);
+                    c.iceGraceT = setTimeout(() => {
+                        if (pc.connectionState === 'connected' || c.state === 'end') return;
+                        callIceRestart(c, 'disconnected');
+                    }, 4500);
                 }
             };
             return pc;
         }
+        function callLostWatch(c) {
+            if (c.lostSince) return;
+            c.lostSince = Date.now();
+            clearTimeout(c.lostT);
+            c.lostT = setTimeout(() => { if (c.state === 'talk' && c.pc && c.pc.connectionState !== 'connected') callEnd(c, 'Связь потеряна', 0, 'ice-gone'); }, 25000);
+        }
+        async function callUnstick(c) {
+            const pc = c.pc;
+            if (!pc || pc.signalingState !== 'have-local-offer' || !c.offerAt || Date.now() - c.offerAt < 8000) return false;
+            try { await pc.setLocalDescription({ type: 'rollback' }); } catch (e) { return false; }
+            c.offerAt = 0;
+            return true;
+        }
+        function callOps(c, fn) {
+            const run = async () => { try { await fn(); } catch (e) { logErr('звонок: операция', e); } };
+            c.opChain = (c.opChain || Promise.resolve()).then(run, run);
+            return c.opChain;
+        }
+        function callIceRestart(c, reason) {
+            if (!c.pc || c.state === 'end' || c.iceRestarting) return;
+            c.iceRestarting = true;
+            callSub(c, 'Восстанавливаю связь…');
+            callOps(c, async () => {
+                try {
+                    const pc = c.pc;
+                    if (!pc || c.state === 'end') return;
+                    if (pc.signalingState === 'have-local-offer') await callUnstick(c);
+                    if (pc.signalingState !== 'stable') {
+                        clearTimeout(c.iceRetryT);
+                        c.iceRetryT = setTimeout(() => { if (c.state === 'talk') callIceRestart(c, reason); }, 1200);
+                        return;
+                    }
+                    c.iceRestartTries = (c.iceRestartTries || 0) + 1;
+                    if (c.iceRestartTries > 3) return callEnd(c, 'Связь потеряна', 0, 'ice-restart-max');
+                    await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
+                    c.offerAt = Date.now();
+                    await callGather(pc);
+                    if (c.state === 'end') return;
+                    await callSig(c.uid, 4, c.id, await callPackFit(pc.localDescription.sdp));
+                    callPoke(c);
+                    setTimeout(function () { msgSync().catch(e => logErr('звонок: синхронизация', e)) }, 300);
+                } catch (e) { logErr('звонок: ICE restart не удался', e); }
+                finally { c.iceRestarting = false; }
+            });
+        }
         async function callNegotiate(c) {
             if (!c.pc || c.state !== 'talk') return;
-            const pc = c.pc;
-            if (pc.signalingState !== 'stable' || c.makingOffer) {
-                if (!c.negT) c.negT = setTimeout(function () { c.negT = null; callNegotiate(c); }, 500);
-                return;
-            }
-            try {
-                c.makingOffer = true;
-                await pc.setLocalDescription();
-                await callGather(pc);
-                if (c.state === 'end') return;
-                const sdp = await callPackFit(pc.localDescription.sdp);
-                await callSig(c.uid, 4, c.id, sdp);
-                setTimeout(function () { try { msgSync(); } catch (err) { } }, 1500);
-            } catch (e) { logErr('звонок: ре-негоциация', e); }
-            finally { c.makingOffer = false; }
+            return callOps(c, async () => {
+                const pc = c.pc;
+                if (!pc || c.state !== 'talk') return;
+                if (pc.signalingState === 'have-local-offer' && !c.makingOffer) await callUnstick(c);
+                if (pc.signalingState !== 'stable' || c.makingOffer) {
+                    clearTimeout(c.negRetryT);
+                    c.negRetryT = setTimeout(() => { if (c.state === 'talk') callNegotiate(c); }, 400);
+                    return;
+                }
+                try {
+                    c.makingOffer = true;
+                    await pc.setLocalDescription();
+                    c.offerAt = Date.now();
+                    await callGather(pc);
+                    if (c.state === 'end') return;
+                    await callSig(c.uid, 4, c.id, await callPackFit(pc.localDescription.sdp));
+                    callPoke(c);
+                    setTimeout(function () { msgSync().catch(e => logErr('звонок: синхронизация', e)) }, 300);
+                } catch (e) { logErr('звонок: ре-негоциация', e); }
+                finally { c.makingOffer = false; }
+            });
+        }
+        function callScreenCheck(c, pc) {
+            const rt = c.remoteScreenTrack;
+            if (!rt || !c.remoteScreenOn) return;
+            const tx = pc.getTransceivers().find(t => t.receiver.track === rt);
+            if (!tx || tx.currentDirection === 'stopped' || (tx.currentDirection && !/recv/.test(tx.currentDirection))) callScreenDrop(c);
+        }
+        function callPoke(c) {
+            if (c.dc && c.dc.readyState === 'open') try { c.dc.send('poke'); } catch (e) { }
         }
         function callDc(c, dc) {
             c.dc = dc;
             dc.onmessage = e => {
-                if (e.data === 'bye') callEnd(c, 'Собеседник положил трубку', null);
+                if (e.data === 'bye') callEnd(c, 'Собеседник положил трубку', null, 'peer-bye');
                 else if (/^mute:[01]$/.test(e.data)) { c.peerMuted = e.data === 'mute:1'; callSub(c); }
-                else if (e.data === 'screen:0') { callScreenDrop(c); try { msgSync(); } catch (err) { } }
-                else if (e.data === 'screen:1') { c.remoteScreenOn = true; callSharePaint(c); try { msgSync(); } catch (err) { } }
+                else if (e.data === 'poke') { msgSync().catch(e => logErr('звонок: синхронизация', e)) }
+                else if (e.data === 'screen:0') { callScreenDrop(c); msgSync().catch(e => logErr('звонок: синхронизация', e)) }
+                else if (e.data === 'screen:1') { c.remoteScreenOn = true; callSharePaint(c); msgSync().catch(e => logErr('звонок: синхронизация', e)) }
             };
             dc.onopen = () => { if (c.muted) try { dc.send('mute:1'); } catch (e) { } };
         }
@@ -5515,30 +5639,50 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             else if (callNet.title !== null) { document.title = callNet.title; callNet.title = null; }
         }
         const callBtn = (cls, label, glyph) => `<button type="button" class="${cls}">${svgIcon(glyph, 18)}<span>${label}</span></button>`;
+        const CALL_EXPAND_ICON = '<path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3"/>';
+        const CALL_RESTORE_ICON = '<path d="M8 3v5H3M16 3v5h5M21 16h-5v5M3 16h5v5"/>';
         function callUi(c) {
             callCss();
             const el = document.createElement('div');
             el.className = 'vp-call vp-call-real';
-            el.innerHTML = `<div class="vp-call-card" role="dialog" aria-label="Звонок"><button type="button" class="vp-call-min" title="Свернуть">${svgIcon('<path d="M6 9l6 6 6-6"/>', 18)}</button>
-                <div class="vp-call-stage"><video class="vp-call-preview" autoplay playsinline muted></video></div>
-                <div class="vp-call-who"><div class="vp-call-ava"></div><div class="vp-call-txt"><div class="vp-call-name"></div><div class="vp-call-sub"></div></div></div>
-                <div class="vp-call-lv"><span data-who="me">ты<b><i></i></b></span><span data-who="them"></span></div><div class="vp-call-btns"></div>
-                <div class="vp-call-tag">${svgIcon('<path d="M4 20v-3M9 20v-7M14 20v-11M19 20V4"/>', 14)}Ловит даже на парковке</div>
-                <div class="vp-call-note">Звук идёт напрямую между вами, мимо серверов ИТД. Собеседнику виден твой IP-адрес</div>
-                <button type="button" class="vp-call-info">Скопировать сведения о звонке</button></div>`;
-            el.querySelector('[data-who="them"]').innerHTML = '<em></em><b><i></i></b>';
-            el.querySelector('[data-who="them"] em').textContent = c.name;
-            el.querySelector('.vp-call-info').onclick = async e => {
-                const b = e.currentTarget;
-                try { await navigator.clipboard.writeText(await callInfo(c)); b.textContent = 'Скопировано — отправь разработчику'; }
-                catch (er) { b.textContent = 'Не скопировалось'; }
-            };
+            el.innerHTML = `<div class="vp-call-dock"><div class="vp-call-stack">
+                <div class="vp-call-preview-float" aria-label="Демонстрация экрана">
+                    <div class="vp-screen-flipper">
+                        <div class="vp-screen-face vp-screen-face--self">
+                            <video class="vp-screen-video" data-side="self" autoplay playsinline muted></video>
+                            <div class="vp-screen-empty" data-empty="self">Твой экран не расшарен</div>
+                            <div class="vp-screen-controls"><span class="vp-screen-label" data-screen-side="self">Мой экран</span><button type="button" class="vp-screen-mode" hidden></button><button type="button" class="vp-screen-flip" aria-label="Показать экран собеседника" title="Показать экран собеседника" hidden>${svgIcon('<path d="M8 3 4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4"/>', 16)}</button></div>
+                        </div>
+                        <div class="vp-screen-face vp-screen-face--remote">
+                            <video class="vp-screen-video" data-side="remote" autoplay playsinline muted></video>
+                            <div class="vp-screen-empty" data-empty="remote">Собеседник не расшарил экран</div>
+                            <div class="vp-screen-fullscreen-control"><button type="button" class="vp-screen-fullscreen" aria-label="Развернуть экран собеседника на весь экран" title="На весь экран" hidden></button></div>
+                            <div class="vp-screen-controls"><span class="vp-screen-label" data-screen-side="remote"></span><button type="button" class="vp-screen-flip" aria-label="Показать мой экран" title="Показать мой экран" hidden>${svgIcon('<path d="M8 3 4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4"/>', 16)}</button></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="vp-call-card-wrap">
+                    <button type="button" class="vp-call-fold" title="Свернуть">${svgIcon('<path d="M9 6l6 6-6 6"/>', 18)}</button>
+                    <div class="vp-call-card" role="dialog" aria-label="Звонок">
+                        <div class="vp-call-who"><div class="vp-call-ava"></div><div class="vp-call-txt"><div class="vp-call-name"></div><div class="vp-call-sub"></div></div></div>
+                        <div class="vp-call-btns"></div>
+                    </div>
+                </div>
+            </div></div>
+            <div class="vp-self-pip" aria-label="Мой экран"><video class="vp-self-pip-video" autoplay playsinline muted></video><span class="vp-self-pip-label">Мой экран</span></div>`;
             const ava = el.querySelector('.vp-call-ava');
             if (isUrl(c.ava)) { const im = document.createElement('img'); im.src = c.ava; im.alt = ''; ava.appendChild(im); }
             else { const sp = document.createElement('span'); sp.className = 'vp-call-emoji'; sp.textContent = c.ava; ava.appendChild(sp); }
             el.querySelector('.vp-call-name').textContent = c.name;
-            el.querySelector('.vp-call-min').onclick = e => { e.stopPropagation(); el.classList.add('vp-call-mini'); };
-            el.querySelector('.vp-call-card').addEventListener('click', e => { if (el.classList.contains('vp-call-mini') && !e.target.closest('button')) el.classList.remove('vp-call-mini'); });
+            el.querySelector('[data-screen-side="remote"]').textContent = 'Экран ' + c.name;
+            el.querySelector('.vp-call-fold').onclick = e => { e.stopPropagation(); callFold(c); };
+            el.querySelector('.vp-call-card').addEventListener('click', e => {
+                if (el.classList.contains('vp-folded') && !e.target.closest('button')) callUnfold(c);
+                if (c.blocked) callPlay(c);
+            });
+            el.querySelectorAll('.vp-screen-flip').forEach(btn => btn.onclick = e => { e.stopPropagation(); callFlip(c); });
+            el.querySelector('.vp-screen-mode').onclick = e => { e.stopPropagation(); callShareSetMode(c, callShareModeKey() === 'motion' ? 'text' : 'motion'); };
+            el.querySelector('.vp-screen-fullscreen').onclick = e => { e.stopPropagation(); callRemoteFullscreenToggle(c); };
             document.body.appendChild(el);
             c.el = el;
             callPaint(c);
@@ -5546,16 +5690,21 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         function callPaint(c) {
             const el = c.el;
             if (!el) return;
-            const ring = c.dir === 'in' && c.state === 'ringing', key = c.state + (c.muted ? 1 : 0) + (c.missed ? 1 : 0) + (c.blocked ? 1 : 0) + (c.screen ? 'S' : '') + (c.remoteScreenOn ? 'R' : '');
+            const ring = c.dir === 'in' && c.state === 'ringing', calling = c.dir === 'out' && c.state === 'calling', docked = c.state === 'talk', connecting = c.state === 'connecting', ending = c.state === 'end';
+            const key = c.state + (c.muted ? 1 : 0) + (c.missed ? 1 : 0) + (c.blocked ? 1 : 0) + (c.screen ? 'S' : '') + (c.remoteScreenOn ? 'R' : '');
             el.classList.toggle('vp-live', c.state === 'talk' || c.state === 'end');
-            el.classList.toggle('vp-incoming', ring);
+            const bottom = docked || connecting || ending;
+            el.classList.toggle('vp-incoming', ring || (bottom && c.dir === 'in'));
+            el.classList.toggle('vp-outgoing', calling || (bottom && c.dir === 'out'));
+            el.classList.toggle('vp-call-docked', docked || (ending && el.classList.contains('vp-call-docked')));
             if (el.dataset.k !== key) {
                 el.dataset.k = key;
                 const btns = el.querySelector('.vp-call-btns');
                 btns.innerHTML = c.state === 'end' ? (c.missed ? callBtn('vp-call-mute vp-call-close', 'Закрыть', GLYPH.close) + callBtn('vp-call-yes vp-call-again', 'Перезвонить', GLYPH.phone) : callBtn('vp-call-mute vp-call-close', 'Закрыть', GLYPH.close))
                     : ring ? callBtn('vp-call-end', 'Отклонить', GLYPH.phone) + callBtn('vp-call-yes', 'Принять', GLYPH.phone)
+                        : calling ? callBtn('vp-call-end', 'Отмена', GLYPH.phone)
                         : callBtn('vp-call-mute' + (c.muted ? ' vp-on' : ''), c.muted ? 'Включить' : 'Микрофон', CALL_MIC + (c.muted ? '<path d="M4 4l16 16"/>' : ''))
-                        + (callShareSupported() ? callBtn('vp-call-screen' + (c.screen ? ' vp-on' : ''), c.screen ? 'Стоп' : 'Экран', '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>') : '')
+                        + (callShareSupported() && c.state === 'talk' ? callBtn('vp-call-screen' + (c.screen ? ' vp-on' : ''), c.screen ? 'Стоп' : 'Экран', '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>') : '')
                         + callBtn('vp-call-end', 'Завершить', GLYPH.phone)
                         + (c.blocked ? callBtn('vp-call-yes vp-call-sound', 'Включить звук', '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6"/>') : '');
                 const b = cls => btns.querySelector('.' + cls);
@@ -5571,6 +5720,14 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 }
             }
             callSub(c);
+            callSharePaint(c);
+        }
+        function callWarn(c, key, text) {
+            const m = c.warns || (c.warns = {});
+            if ((m[key] || '') === (text || '')) return;
+            m[key] = text || '';
+            c.warn = m.net || m.out || m.in || '';
+            callSub(c);
         }
         function callSub(c, text) {
             if (text !== undefined) c.subText = text;
@@ -5585,26 +5742,50 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         function callLive(c) {
             if (c.state === 'talk' || c.state === 'end') return;
+            const cardEl = c.el && c.el.querySelector('.vp-call-card');
+            const oldRect = cardEl ? cardEl.getBoundingClientRect() : null;
             c.state = 'talk';
             c.stops.splice(0).forEach(f => f());
             clearTimeout(c.connT);
             const t0 = c.t0 = Date.now();
             try { if (navigator.wakeLock) navigator.wakeLock.request('screen').then(w => { if (c.state === 'end') w.release().catch(() => { }); else c.wake = w; }, () => { }); } catch (e) { }
             callSub(c, '00:00');
-            c.tick = setInterval(() => callSub(c, callMmss(Math.floor((Date.now() - t0) / 1000))), 1000);
-            c.lvT = setInterval(() => callLevels(c), 120);
-            c.syncT = setInterval(function () { try { msgSync(); } catch (err) { } }, 3000);
+            c.tick = setInterval(() => { callSub(c, callMmss(Math.floor((Date.now() - t0) / 1000))); callVideoAlive(c); }, 1000);
+            c.syncT = setInterval(function () { msgSync().catch(e => logErr('звонок: синхронизация', e)) }, 3000);
             callPlay(c);
+            c.timers.push(setTimeout(() => callMicCheck(c), 1000));
+            callVoiceWatch(c);
+            callAudioWatch(c);
             c.timers.push(setTimeout(async () => {
                 if (c.state !== 'talk' || !c.pc) return;
                 let got = 0;
                 try { (await c.pc.getStats()).forEach(r => { if (r.type === 'inbound-rtp' && r.kind === 'audio') got += r.bytesReceived || 0; }); } catch (e) { }
-                if (got) return;
-                c.warn = 'звук от собеседника не приходит';
-                callSub(c);
+                if (got > 0) {
+                    if (c.audio && c.audio.paused && !c.blocked) { c.blocked = true; callPaint(c); }
+                    return;
+                }
+                callWarn(c, 'in', 'звук от собеседника не приходит');
                 callInfo(c).then(t => logErr('звонок: звук не приходит', new Error(t.split('\n').slice(2, 5).join('; '))));
             }, 6000));
             callPaint(c);
+            if (cardEl && oldRect && cardEl.isConnected) {
+                const newRect = cardEl.getBoundingClientRect();
+                const dx = oldRect.left - newRect.left;
+                const dy = oldRect.top - newRect.top;
+                if (dx || dy) {
+                    cardEl.style.transition = 'none';
+                    cardEl.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+                    void cardEl.offsetWidth;
+                    requestAnimationFrame(function () {
+                        if (!cardEl.isConnected) return;
+                        cardEl.style.transition = 'transform .42s cubic-bezier(.22,.8,.24,1)';
+                        cardEl.style.transform = '';
+                        setTimeout(function () {
+                            if (cardEl.isConnected) { cardEl.style.transition = ''; cardEl.style.transform = ''; }
+                        }, 460);
+                    });
+                }
+            }
         }
         function callMute(c) {
             c.muted = !c.muted;
@@ -5612,8 +5793,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (c.dc && c.dc.readyState === 'open') try { c.dc.send(c.muted ? 'mute:1' : 'mute:0'); } catch (e) { }
             callPaint(c);
         }
-        function callEnd(c, text, reason) {
+        function callEnd(c, text, reason, why) {
             if (c.state === 'end') return;
+            if (why && why !== 'peer-bye' && why !== 'missed' && why !== 'ring-timeout') logErr('звонок: конец · ' + why + ' · ' + text, new Error(why));
             const was = c.state;
             c.state = 'end';
             c.missed = c.dir === 'in' && was === 'ringing' && reason === null;
@@ -5622,7 +5804,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (reason !== null) callSig(c.uid, 3, c.id, dur ? cat(new Uint8Array([reason]), be32(dur)) : new Uint8Array([reason])).catch(e => logErr('звонок: отбой', e));
             c.stops.splice(0).forEach(f => f());
             c.timers.forEach(clearTimeout);
-            clearInterval(c.tick); clearInterval(c.lvT); clearInterval(c.syncT); clearTimeout(c.lostT); clearTimeout(c.connT);
+            clearInterval(c.tick); clearInterval(c.syncT); clearInterval(c.voiceT); clearInterval(c.audioWT); clearTimeout(c.lostT); clearTimeout(c.connT);
+            if (c.el) c.el.classList.remove('vp-voice');
             if (c.noiseT) { clearInterval(c.noiseT); c.noiseT = null; }
             if (c.rawStream) { c.rawStream.getTracks().forEach(t => t.stop()); c.rawStream = null; }
             if (c.wake) { c.wake.release().catch(() => { }); c.wake = null; }
@@ -5636,14 +5819,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (callNet.cur === c) callNet.cur = null;
             if (!(c.dir === 'in' && was === 'ringing')) callTone('hang');
             if (c.missed) callTitle('📞 Пропущенный звонок'); else callTitle(null);
-            if (was === 'ringing' && c.el) {
+            if (was === 'ringing' && c.el && !c.missed) {
                 callSub(c, text);
                 callBreak(c);
                 return;
             }
             callSub(c, text);
             callPaint(c);
-            if (c.el) c.el.classList.remove('vp-call-mini');
             if (c.missed) { if (c.el) c.el.addEventListener('click', () => callTitle(null), { once: true }); return; }
             callBreak(c);
         }
@@ -5651,72 +5833,120 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const el = c.el;
             if (!el || el.dataset.closing) return;
             el.dataset.closing = '1';
-            el.classList.add('vp-breaking');
+            const stack = el.querySelector('.vp-call-stack');
             const card = el.querySelector('.vp-call-card');
-            if (!card) { callClose(c, 900); return; }
-            const r = card.getBoundingClientRect();
-            const midY = r.top + r.height / 2;
-            const zig = 10;
-            const clipTop = 'polygon(0 0,100% 0,100% calc(50% - ' + zig + 'px),85% calc(50% + ' + zig + 'px),70% calc(50% - ' + zig + 'px),55% calc(50% + ' + zig + 'px),40% calc(50% - ' + zig + 'px),25% calc(50% + ' + zig + 'px),10% calc(50% - ' + zig + 'px),0 calc(50% + ' + zig + 'px))';
-            const clipBot = 'polygon(0 calc(50% + ' + zig + 'px),10% calc(50% - ' + zig + 'px),25% calc(50% + ' + zig + 'px),40% calc(50% - ' + zig + 'px),55% calc(50% + ' + zig + 'px),70% calc(50% - ' + zig + 'px),85% calc(50% + ' + zig + 'px),100% calc(50% - ' + zig + 'px),100% 100%,0 100%)';
-            const wrapClasses = el.className.replace(/\bvp-call\b/g, '').replace(/\bvp-breaking\b/g, '').replace(/\s+/g, ' ').trim();
-            const mk = function () {
-                const w = document.createElement('div');
-                w.className = 'vp-call vp-call-real ' + wrapClasses + ' vp-break-half';
-                w.style.position = 'fixed';
-                w.style.inset = 'auto';
-                w.style.left = r.left + 'px';
-                w.style.top = r.top + 'px';
-                w.style.width = r.width + 'px';
-                w.style.height = r.height + 'px';
-                w.style.padding = '0';
-                w.style.margin = '0';
-                w.style.background = 'transparent';
-                w.style.backdropFilter = 'none';
-                w.style.webkitBackdropFilter = 'none';
-                w.style.display = 'block';
-                w.style.zIndex = '2147483699';
-                const c2 = card.cloneNode(true);
-                c2.style.width = '100%';
-                c2.style.height = '100%';
-                c2.style.boxSizing = 'border-box';
-                w.appendChild(c2);
-                document.body.appendChild(w);
-                return w;
-            };
-            const cloneTop = mk();
-            const cloneBot = mk();
-            cloneTop.style.clipPath = clipTop;
-            cloneBot.style.clipPath = clipBot;
-            const wave = document.createElement('div');
-            wave.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483698;border-radius:50%;background:radial-gradient(circle, rgba(218,55,60,.85) 0%, rgba(218,55,60,.5) 40%, rgba(218,55,60,0) 72%);';
-            const endBtn = el.querySelector('.vp-call-end');
-            const eb = endBtn ? endBtn.getBoundingClientRect() : { left: r.left + r.width / 2, top: r.top + r.height / 2, width: 0, height: 0 };
-            const cx = eb.left + eb.width / 2, cy = eb.top + eb.height / 2;
-            const size = Math.max(window.innerWidth, window.innerHeight) * 2.2;
-            wave.style.left = (cx - size / 2) + 'px';
-            wave.style.top = (cy - size / 2) + 'px';
-            wave.style.width = size + 'px';
-            wave.style.height = size + 'px';
-            wave.style.transform = 'scale(0)'; wave.style.opacity = '0.9';
-            document.body.appendChild(wave);
-            requestAnimationFrame(function () {
-                wave.style.transition = 'transform .38s ease-out, opacity .5s ease-out';
-                wave.style.transform = 'scale(1)';
-                wave.style.opacity = '0';
-            });
-            card.style.visibility = 'hidden';
-            setTimeout(function () {
-                cloneTop.classList.add('vp-break-top');
-                cloneBot.classList.add('vp-break-bot');
-            }, 360);
-            setTimeout(function () {
-                wave.remove(); cloneTop.remove(); cloneBot.remove();
+            if (!stack || !card) {
                 el.classList.add('vp-out'); setTimeout(function () { el.remove(); }, 320);
-            }, 1150);
+                if (callNet.cur === c) callNet.cur = null;
+                return;
+            }
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                el.classList.add('vp-out'); setTimeout(function () { el.remove(); }, 320);
+                if (callNet.cur === c) callNet.cur = null;
+                return;
+            }
+            el.classList.add('vp-breaking');
+            card.style.transition = 'none';
+            card.style.backgroundColor = '#da373c';
+            const stackRect = stack.getBoundingClientRect();
+            const fold = stack.querySelector('.vp-call-fold');
+            const bounds = { left: stackRect.left, top: stackRect.top, right: stackRect.right, bottom: stackRect.bottom };
+            if (fold && getComputedStyle(fold).display !== 'none' && getComputedStyle(fold).opacity !== '0') {
+                const foldRect = fold.getBoundingClientRect();
+                bounds.left = Math.min(bounds.left, foldRect.left);
+                bounds.top = Math.min(bounds.top, foldRect.top);
+                bounds.right = Math.max(bounds.right, foldRect.right);
+                bounds.bottom = Math.max(bounds.bottom, foldRect.bottom);
+            }
+            const r = { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom, width: bounds.right - bounds.left, height: bounds.bottom - bounds.top };
+            const mid = stackRect.left + stackRect.width / 2 - r.left;
+            const amp = Math.min(7, Math.max(3, r.width * 0.015));
+            const cracks = [
+                { x: mid - amp * 0.5, y: 13 },
+                { x: mid + amp,       y: 32 },
+                { x: mid - amp,       y: 51 },
+                { x: mid + amp * 0.7, y: 72 },
+                { x: mid - amp * 0.5, y: 89 }
+            ];
+            let leftPath = 'polygon(0 0, ' + mid + 'px 0';
+            for (let q = 0; q < cracks.length; q++) leftPath += ', ' + cracks[q].x + 'px ' + cracks[q].y + '%';
+            leftPath += ', ' + mid + 'px 100%, 0 100%)';
+            let rightPath = 'polygon(' + mid + 'px 0, 100% 0, 100% 100%, ' + mid + 'px 100%';
+            for (let j = cracks.length - 1; j >= 0; j--) rightPath += ', ' + cracks[j].x + 'px ' + cracks[j].y + '%';
+            rightPath += ')';
+            const wrapClasses = el.className.split(/\s+/).filter(function (cn) { return cn && cn !== 'vp-call' && cn !== 'vp-breaking'; }).join(' ');
+            const mk = function (path, side) {
+                const frag = document.createElement('div');
+                frag.className = 'vp-call vp-fragment ' + wrapClasses;
+                frag.style.setProperty('position', 'fixed', 'important');
+                frag.style.setProperty('inset', 'auto', 'important');
+                frag.style.setProperty('left', r.left + 'px', 'important');
+                frag.style.setProperty('top', r.top + 'px', 'important');
+                frag.style.setProperty('right', 'auto', 'important');
+                frag.style.setProperty('bottom', 'auto', 'important');
+                frag.style.setProperty('width', r.width + 'px', 'important');
+                frag.style.setProperty('height', r.height + 'px', 'important');
+                frag.style.setProperty('padding', '0', 'important');
+                frag.style.setProperty('margin', '0', 'important');
+                frag.style.background = 'transparent';
+                frag.style.backdropFilter = 'none';
+                frag.style.webkitBackdropFilter = 'none';
+                frag.style.display = 'block';
+                frag.style.transformOrigin = side < 0 ? '100% 50%' : '0% 50%';
+                frag.style.clipPath = path;
+                frag.style.webkitClipPath = path;
+                const clone = stack.cloneNode(true);
+                clone.style.position = 'absolute';
+                clone.style.left = (stackRect.left - r.left) + 'px';
+                clone.style.top = (stackRect.top - r.top) + 'px';
+                clone.style.width = stackRect.width + 'px';
+                clone.style.height = stackRect.height + 'px';
+                clone.style.margin = '0';
+                clone.style.transform = 'none';
+                clone.style.transition = 'none';
+                clone.style.pointerEvents = 'none';
+                frag.appendChild(clone);
+                document.body.appendChild(frag);
+                return frag;
+            };
+            setTimeout(function () {
+                if (!el.isConnected) return;
+                const left = mk(leftPath, -1);
+                const right = mk(rightPath, 1);
+                stack.style.setProperty('display', 'none', 'important');
+                const fragments = [
+                    { el: left, side: -1, vx: -34, vy: -8, gravity: 360, av: -0.045, aa: -0.018 },
+                    { el: right, side: 1, vx: 34, vy: -6, gravity: 360, av: 0.045, aa: 0.018 }
+                ];
+                const duration = 1850;
+                let startTime = null;
+                function frame(now) {
+                    if (startTime === null) startTime = now;
+                    const elapsed = Math.min((now - startTime) / 1000, duration / 1000);
+                    const progress = elapsed / (duration / 1000);
+                    for (let fi = 0; fi < fragments.length; fi++) {
+                        const f = fragments[fi];
+                        const x = f.vx * elapsed + 0.5 * f.side * 20 * elapsed * elapsed;
+                        const y = f.vy * elapsed + 0.5 * f.gravity * elapsed * elapsed;
+                        const angle = f.av * elapsed + 0.5 * f.aa * elapsed * elapsed;
+                        const tilt = f.side * (4 * progress);
+                        const opacity = progress < 0.82 ? 1 : Math.max(0, 1 - (progress - 0.82) / 0.18);
+                        const blur = progress * 1.0;
+                        f.el.style.transform = 'perspective(900px) translate3d(' + x + 'px,' + y + 'px,0) rotateZ(' + angle + 'rad) rotateY(' + tilt + 'deg)';
+                        f.el.style.opacity = opacity;
+                        f.el.style.filter = 'blur(' + blur + 'px)';
+                    }
+                    if (now - startTime < duration) requestAnimationFrame(frame);
+                    else {
+                        left.remove(); right.remove(); el.remove();
+                        if (callNet.cur === c) callNet.cur = null;
+                    }
+                }
+                requestAnimationFrame(frame);
+            }, 120);
         }
         async function callStart(uid, name, ava) {
-            if (callNet.cur) { if (callNet.cur.el) callNet.cur.el.classList.remove('vp-call-mini'); return; }
+            if (callNet.cur) { if (callNet.cur.el && callNet.cur.el.classList.contains('vp-folded')) callUnfold(callNet.cur); return; }
             const c = { uid, dir: 'out', id: crypto.getRandomValues(new Uint32Array(1))[0], name, ava, state: 'calling', stops: [], timers: [] };
             callNet.cur = c;
             callAudioPrep(c);
@@ -5726,7 +5956,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (!(await callMedia(c))) return;
                 c.pc = callPeer(c);
                 callDc(c, c.pc.createDataChannel('itdx'));
-                c.stream.getTracks().forEach(t => c.pc.addTrack(t, c.stream));
+                c.stream.getTracks().forEach(t => { const sn = c.pc.addTrack(t, c.stream); if (t.kind === 'audio') c.micSender = sn; });
                 await c.pc.setLocalDescription(await c.pc.createOffer());
                 callSub(c, 'Соединяю…');
                 await callGather(c.pc);
@@ -5737,116 +5967,360 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (c.state === 'end') return;
                 callSub(c, 'Вызываю…');
                 c.stops.push(callTone('back'));
-                c.timers.push(setTimeout(() => callEnd(c, 'Не отвечает', 3), (CALL_RING_S + 15) * 1000));
+                c.timers.push(setTimeout(() => callEnd(c, 'Не отвечает', 3, 'ring-timeout'), (CALL_RING_S + 15) * 1000));
                 callNet.lastSync = 0;
             } catch (e) { logErr('звонок', e); callEnd(c, e.message || 'Не вышло позвонить', c.offered ? 0 : null); }
         }
-        const CALL_SCREEN = { w: 2560, h: 1440, fps: 60, bitrate: 40000000 };
+        const CALL_SCREEN = { bitrate: 20000000 };
+        const CALL_SHARE_MODES = {
+            motion: { label: 'Движение', hint: 'motion', degr: 'maintain-framerate', w: 1920, h: 1080, fps: 60 },
+            text: { label: 'Текст', hint: 'detail', degr: 'maintain-resolution', w: 1920, h: 1080, fps: 30 }
+        };
+        const callShareModeKey = () => GM_getValue('callShareMode', 'text') === 'motion' ? 'motion' : 'text';
         const CFG = {
-            noise: true,          // своё шумоподавление поверх браузерного
-            noiseHighpass: 90,    // режем гул/ветер/рокот ниже Гц
-            noiseLowpass: 11000,  // режем шипение/цифровой шум выше Гц
-            noiseGate: 0.012      // порог RMS: тише — гасим до 25%, не в ноль
+            noise: true,
+            noiseHighpass: 90,
+            noiseLowpass: 11000,
+            noiseGate: 0.012
         };
         function callShareSupported() {
             return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) && !matchMedia('(pointer: coarse)').matches;
         }
-        async function callShareTune(sender) {
+        async function callShareTune(sender, mode) {
+            const m = mode || CALL_SHARE_MODES[callShareModeKey()];
             if (!sender || !sender.getParameters) return;
-            try {
+            const apply = async (withPriority) => {
                 const p = sender.getParameters();
                 if (!p.encodings || !p.encodings.length) p.encodings = [{}];
                 p.encodings[0].maxBitrate = CALL_SCREEN.bitrate;
-                p.encodings[0].maxFramerate = CALL_SCREEN.fps;
-                p.degradationPreference = 'maintain-resolution';
+                p.encodings[0].maxFramerate = m.fps;
+                if (withPriority) { p.encodings[0].priority = 'high'; p.encodings[0].networkPriority = 'high'; }
+                p.degradationPreference = m.degr;
                 await sender.setParameters(p);
-            } catch (e) { logErr('звонок: настройки экрана', e); }
+            };
+            try { await apply(true); return; } catch (e) { }
+            try { await apply(false); } catch (e) { logErr('звонок: настройки экрана', e); }
         }
         async function callShare(c) {
             if (!c.pc || c.state !== 'talk') return;
             if (c.screen) { callUnshare(c); return; }
             try {
-                const stream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { width: { ideal: CALL_SCREEN.w }, height: { ideal: CALL_SCREEN.h }, frameRate: { ideal: CALL_SCREEN.fps, max: CALL_SCREEN.fps } },
-                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-                });
+                const mode = CALL_SHARE_MODES[callShareModeKey()];
+                const gmReq = {
+                    video: { width: { ideal: mode.w, max: mode.w }, height: { ideal: mode.h, max: mode.h }, frameRate: { ideal: mode.fps, max: mode.fps } },
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+                };
+                const stream = await navigator.mediaDevices.getDisplayMedia(gmReq);
                 if (c.state !== 'talk') { stream.getTracks().forEach(t => t.stop()); return; }
                 const vt = stream.getVideoTracks()[0], at = stream.getAudioTracks()[0] || null;
-                try { vt.contentHint = 'detail'; } catch (e) { }
+                try { vt.contentHint = mode.hint; } catch (e) { }
                 if (at) { try { at.contentHint = 'music'; } catch (e) { } }
                 const vs = c.pc.addTrack(vt, stream);
-                await callShareTune(vs);
-                if (at) c.pc.addTrack(at, stream);
-                c.screen = { stream, vt, at, vs };
-                // Кнопка «Показать экран» у браузера — остановка шаринга
+                await callShareTune(vs, mode);
+                const as = at ? c.pc.addTrack(at, stream) : null;
+                c.screen = { stream, vt, at, vs, as };
                 vt.addEventListener('ended', () => { if (c.screen) callUnshare(c); });
                 if (c.dc && c.dc.readyState === 'open') try { c.dc.send('screen:1'); } catch (e) { }
                 callSharePaint(c);
                 callPaint(c);
+                callNegotiate(c);
             } catch (e) {
-                if (e && e.name === 'NotAllowedError') return;   // отменил выбор — не ошибка
+                if (e && e.name === 'NotAllowedError') return;
                 logErr('звонок: экран', e);
                 callSub(c, 'Не удалось показать экран');
             }
+        }
+        async function callShareSetMode(c, key) {
+            GM_setValue('callShareMode', key);
+            const m = CALL_SHARE_MODES[key];
+            if (c.screen) {
+                try { c.screen.vt.contentHint = m.hint; } catch (e) { }
+                try { await c.screen.vt.applyConstraints({ width: { ideal: m.w, max: m.w }, height: { ideal: m.h, max: m.h }, frameRate: { ideal: m.fps, max: m.fps } }); } catch (e) { }
+                await callShareTune(c.screen.vs, m);
+            }
+            callSharePaint(c);
         }
         function callUnshare(c) {
             const s = c.screen;
             if (!s) return;
             c.screen = null;
+            const txs = c.pc ? c.pc.getTransceivers().filter(t => t.sender === s.vs || (s.as && t.sender === s.as)) : [];
             try { if (s.vs) c.pc.removeTrack(s.vs); } catch (e) { }
+            try { if (s.as) c.pc.removeTrack(s.as); } catch (e) { }
             try { s.stream.getTracks().forEach(t => t.stop()); } catch (e) { }
+            const live = new Set([c.remoteScreenTrack, c.screenAudio && c.screenAudio.srcObject && c.screenAudio.srcObject.getAudioTracks()[0]].filter(Boolean));
+            txs.forEach(t => { if (live.has(t.receiver.track)) return; try { t.stop(); } catch (e) { } });
             if (c.dc && c.dc.readyState === 'open') try { c.dc.send('screen:0'); } catch (e) { }
             callSharePaint(c);
             callPaint(c);
+            callNegotiate(c);
+        }
+        function callVideoAlive(c) {
+            if (!c.el) return;
+            c.el.querySelectorAll('video').forEach(v => {
+                if (v.srcObject && v.paused && v.offsetWidth) { const p = v.play(); if (p && p.catch) p.catch(() => { }); }
+            });
         }
         function callSharePaint(c) {
             const el = c.el;
             if (!el) return;
-            el.classList.toggle('vp-sharing', !!c.screen);
-            el.classList.toggle('vp-watching', !!c.remoteScreenOn);
-            if (c.screenWrap) c.screenWrap.classList.toggle('vp-on', !!c.remoteScreenOn);
-            const pv = el.querySelector('.vp-call-preview');
-            if (!pv) return;
-            if (c.screen) {
-                if (pv.srcObject !== c.screen.stream) pv.srcObject = c.screen.stream;
-                pv.play().catch(() => { });
-            } else {
-                pv.srcObject = null;
+            if (c.state === 'end') {
+                if (c.remoteFullscreen || c.remoteFullscreenClosing) callRemoteFullscreenExit(c, true);
+                el.classList.remove('vp-has-preview', 'vp-show-remote', 'vp-remote-available', 'vp-remote-fullscreen');
+                return;
             }
-
+            const hasPreview = c.state === 'talk' && (!!c.screen || !!c.remoteScreenOn);
+            if (!c.remoteScreenOn && (c.remoteFullscreen || c.remoteFullscreenClosing)) { callRemoteFullscreenExit(c, true); return; }
+            el.classList.toggle('vp-has-preview', hasPreview);
+            if (!hasPreview) {
+                if (c.remoteFullscreen || c.remoteFullscreenClosing) callRemoteFullscreenExit(c, true);
+                el.classList.remove('vp-show-remote', 'vp-remote-available', 'vp-remote-fullscreen');
+                c.showingRemote = false;
+                callUpdateSelfPip(c);
+                return;
+            }
+            const selfVideo = el.querySelector('.vp-screen-video[data-side="self"]');
+            const remoteVideo = el.querySelector('.vp-screen-video[data-side="remote"]');
+            const selfEmpty = el.querySelector('[data-empty="self"]');
+            const remoteEmpty = el.querySelector('[data-empty="remote"]');
+            if (selfVideo) {
+                const st = c.screen && c.screen.vt ? (c.screen.pv || (c.screen.pv = new MediaStream([c.screen.vt]))) : null;
+                if (selfVideo.srcObject !== st) selfVideo.srcObject = st;
+                if (st) { const p = selfVideo.play(); if (p && p.catch) p.catch(() => { }); }
+            }
+            if (remoteVideo) {
+                const st = c.remoteScreen || null;
+                if (remoteVideo.srcObject !== st) remoteVideo.srcObject = st;
+                if (st) { const p = remoteVideo.play(); if (p && p.catch) p.catch(() => { }); }
+            }
+            if (selfEmpty) selfEmpty.style.display = c.screen ? 'none' : 'flex';
+            if (remoteEmpty) remoteEmpty.style.display = c.remoteScreenOn ? 'none' : 'flex';
+            const canFlip = !!c.screen && !!c.remoteScreenOn;
+            el.classList.toggle('vp-remote-available', canFlip);
+            if (c.remoteFullscreen || c.remoteFullscreenClosing) c.showingRemote = true;
+            else if (!c.screen && c.remoteScreenOn) c.showingRemote = true;
+            if (!c.remoteScreenOn) c.showingRemote = false;
+            el.classList.toggle('vp-show-remote', !!c.remoteScreenOn && !!c.showingRemote);
+            el.querySelectorAll('.vp-screen-flip').forEach(flip => {
+                flip.hidden = !canFlip || c.remoteFullscreen || c.remoteFullscreenClosing;
+            });
+            const modeBtn = el.querySelector('.vp-screen-mode');
+            if (modeBtn) {
+                const m = CALL_SHARE_MODES[callShareModeKey()];
+                modeBtn.hidden = !c.screen;
+                modeBtn.textContent = m.label;
+                modeBtn.title = 'Режим показа: ' + m.label.toLowerCase() + ' (нажми, чтобы сменить)';
+            }
+            callUpdateFullscreenButton(c);
+            callUpdateSelfPip(c);
         }
+        function callFold(c) {
+            const el = c.el;
+            if (!el || el.classList.contains('vp-folded') || el.classList.contains('vp-folding')) return;
+            el.classList.add('vp-folding');
+            const hasPreview = el.classList.contains('vp-has-preview');
+            const foldDelay = hasPreview ? 310 : 205;
+            const activeEl = el;
+            c.foldT = setTimeout(() => {
+                c.foldT = null;
+                if (!activeEl.isConnected || !activeEl.classList.contains('vp-folding')) return;
+                activeEl.classList.remove('vp-folding');
+                activeEl.classList.add('vp-folded');
+            }, foldDelay);
+        }
+        function callUnfold(c) {
+            const el = c.el;
+            if (!el || !el.classList.contains('vp-folded')) return;
+            clearTimeout(c.foldT); c.foldT = null;
+            el.classList.remove('vp-folded');
+            el.classList.add('vp-unfolding');
+            setTimeout(() => { if (el.isConnected) el.classList.remove('vp-unfolding'); }, 720);
+        }
+        function callFlip(c) {
+            if (!c.screen || !c.remoteScreenOn) return;
+            if (c.remoteFullscreen) callRemoteFullscreenExit(c, true);
+            c.showingRemote = !c.showingRemote;
+            callSharePaint(c);
+        }
+        function callRemoteFullscreenToggle(c) {
+            if (!c.remoteScreenOn || c.remoteFullscreenClosing) return;
+            if (c.remoteFullscreen) callRemoteFullscreenExit(c, false);
+            else callRemoteFullscreenEnter(c);
+        }
+        function callRemoteFullscreenEnter(c) {
+            const el = c.el;
+            if (!el || !c.remoteScreenOn || c.remoteFullscreen || c.remoteFullscreenClosing) return;
+            const preview = el.querySelector('.vp-call-preview-float');
+            if (!preview) return;
+            const rect = preview.getBoundingClientRect();
+            if (!rect.width || !rect.height) return;
+            c.remoteFullscreenRect = { left: rect.left, top: rect.top, width: rect.width, height: rect.height, borderRadius: getComputedStyle(preview).borderRadius };
+            c.remoteFullscreen = true;
+            c.remoteFullscreenClosing = false;
+            clearTimeout(c.remoteFullscreenT);
+            preview.classList.add('vp-preview-fullscreen');
+            preview.style.transition = 'none';
+            preview.style.position = 'fixed';
+            preview.style.left = rect.left + 'px';
+            preview.style.top = rect.top + 'px';
+            preview.style.right = 'auto';
+            preview.style.bottom = 'auto';
+            preview.style.width = rect.width + 'px';
+            preview.style.height = rect.height + 'px';
+            preview.style.maxHeight = 'none';
+            preview.style.aspectRatio = 'auto';
+            preview.style.margin = '0';
+            preview.style.zIndex = '1';
+            preview.style.borderRadius = c.remoteFullscreenRect.borderRadius;
+            preview.style.opacity = '1';
+            preview.style.visibility = 'visible';
+            preview.style.pointerEvents = 'auto';
+            preview.style.transform = 'none';
+            void preview.offsetWidth;
+            requestAnimationFrame(() => {
+                if (!c.remoteFullscreen || !preview.isConnected) return;
+                preview.style.transition = 'left .44s cubic-bezier(.2,.8,.2,1), top .44s cubic-bezier(.2,.8,.2,1), width .44s cubic-bezier(.2,.8,.2,1), height .44s cubic-bezier(.2,.8,.2,1), border-radius .38s ease';
+                preview.style.left = '0px';
+                preview.style.top = '0px';
+                preview.style.width = window.innerWidth + 'px';
+                preview.style.height = window.innerHeight + 'px';
+                preview.style.borderRadius = '0px';
+            });
+            callSharePaint(c);
+        }
+        function callRemoteFullscreenExit(c, immediate) {
+            const el = c.el;
+            if (!el) return;
+            if (!c.remoteFullscreen && !c.remoteFullscreenRect && !c.remoteFullscreenClosing) return;
+            const preview = el.querySelector('.vp-call-preview-float');
+            const rect = c.remoteFullscreenRect;
+            c.remoteFullscreen = false;
+            clearTimeout(c.remoteFullscreenT);
+            const clearStyles = () => {
+                if (!preview) return;
+                preview.classList.remove('vp-preview-fullscreen');
+                ['position','left','top','right','bottom','width','height','max-height','aspect-ratio','margin','z-index','border-radius','opacity','visibility','pointer-events','transform','transition'].forEach(p => preview.style.removeProperty(p));
+            };
+            if (!preview || !rect || immediate) {
+                clearStyles();
+                c.remoteFullscreenClosing = false;
+                c.remoteFullscreenRect = null;
+                callSharePaint(c);
+                return;
+            }
+            c.remoteFullscreenClosing = true;
+            preview.style.transition = 'left .40s cubic-bezier(.2,.8,.2,1), top .40s cubic-bezier(.2,.8,.2,1), width .40s cubic-bezier(.2,.8,.2,1), height .40s cubic-bezier(.2,.8,.2,1), border-radius .34s ease';
+            preview.style.left = rect.left + 'px';
+            preview.style.top = rect.top + 'px';
+            preview.style.width = rect.width + 'px';
+            preview.style.height = rect.height + 'px';
+            preview.style.borderRadius = rect.borderRadius;
+            callSharePaint(c);
+            c.remoteFullscreenT = setTimeout(() => {
+                if (preview.isConnected) clearStyles();
+                c.remoteFullscreenClosing = false;
+                c.remoteFullscreenRect = null;
+                c.remoteFullscreenT = null;
+                callSharePaint(c);
+            }, 430);
+        }
+        function callUpdateFullscreenButton(c) {
+            const el = c.el;
+            if (!el) return;
+            el.classList.toggle('vp-remote-fullscreen', !!(c.remoteFullscreen || c.remoteFullscreenClosing));
+            const btn = el.querySelector('.vp-screen-fullscreen');
+            if (!btn) return;
+            btn.hidden = !c.remoteScreenOn;
+            btn.disabled = !!c.remoteFullscreenClosing;
+            const label = c.remoteFullscreen ? 'Свернуть демонстрацию' : 'Развернуть экран собеседника на весь экран';
+            btn.setAttribute('aria-label', label);
+            btn.title = c.remoteFullscreen ? 'Вернуть прежний размер' : 'На весь экран';
+            btn.innerHTML = svgIcon(c.remoteFullscreen ? CALL_RESTORE_ICON : CALL_EXPAND_ICON, 16);
+        }
+        function callUpdateSelfPip(c) {
+            const el = c.el;
+            if (!el) return;
+            const pip = el.querySelector('.vp-self-pip');
+            if (!pip) return;
+            const show = !!(c.remoteFullscreen || c.remoteFullscreenClosing) && !!c.remoteScreenOn && !!c.screen && c.state === 'talk';
+            pip.classList.toggle('is-visible', show);
+            const v = pip.querySelector('.vp-self-pip-video');
+            if (!v) return;
+            if (!show) { if (v.srcObject) v.srcObject = null; return; }
+            const st = c.screen && c.screen.vt ? (c.screen.pv || (c.screen.pv = new MediaStream([c.screen.vt]))) : null;
+            if (v.srcObject !== st) v.srcObject = st;
+            if (st) { const p = v.play(); if (p && p.catch) p.catch(() => { }); }
+        }
+        const callNetBack = why => {
+            const c = callNet.cur;
+            if (!c || c.state !== 'talk' || !c.pc) return;
+            if (c.pc.connectionState === 'connected' && why !== 'online') return;
+            callWarn(c, 'net', '');
+            callIceRestart(c, why);
+        };
+        window.addEventListener('online', () => callNetBack('online'));
+        window.addEventListener('offline', () => { const c = callNet.cur; if (c && c.state === 'talk') callWarn(c, 'net', 'нет интернета'); });
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) callNetBack('visible'); });
+        document.addEventListener('resume', () => callNetBack('resume'));
+        window.addEventListener('pagehide', () => {
+            const c = callNet.cur;
+            if (c && c.state === 'talk' && c.dc && c.dc.readyState === 'open') try { c.dc.send('bye'); } catch (e) { }
+        });
+        window.addEventListener('keydown', e => {
+            if (e.key !== 'Escape') return;
+            const cur = callNet.cur;
+            if (cur && cur.remoteFullscreen) { e.preventDefault(); callRemoteFullscreenExit(cur, false); }
+        });
+        window.addEventListener('resize', () => {
+            const cur = callNet.cur;
+            if (!cur || !cur.remoteFullscreen || !cur.el) return;
+            const preview = cur.el.querySelector('.vp-call-preview-float');
+            if (preview) { preview.style.width = window.innerWidth + 'px'; preview.style.height = window.innerHeight + 'px'; }
+        });
         async function callRenegotiateIn(c, data) {
             const pc = c.pc;
             if (!pc || c.state === 'end') return;
-            const desc = { type: 'offer', sdp: await callUnpack(data) };
-            try {
-                const collision = c.makingOffer || pc.signalingState !== 'stable';
-                c.ignoreOffer = !c.polite && collision;
-                if (c.ignoreOffer) return;
-                if (collision && c.polite && pc.signalingState === 'have-local-offer') {
-                    await pc.setLocalDescription({ type: 'rollback' });
+            const offer = await callUnpack(data);
+            return callOps(c, async () => {
+                const pc2 = c.pc;
+                if (!pc2 || c.state === 'end') return;
+                const desc = { type: 'offer', sdp: offer };
+                try {
+                    const collision = c.makingOffer || pc2.signalingState !== 'stable';
+                    c.ignoreOffer = !c.polite && collision;
+                    if (c.ignoreOffer) return;
+                    const rolledBack = collision && c.polite && pc2.signalingState === 'have-local-offer';
+                    if (rolledBack) {
+                        await pc2.setLocalDescription({ type: 'rollback' });
+                    }
+                    await pc2.setRemoteDescription(desc);
+                    await pc2.setLocalDescription();
+                    callScreenCheck(c, pc2);
+                    await callGather(pc2);
+                    if (c.state === 'end') return;
+                    await callSig(c.uid, 5, c.id, await callPackFit(pc2.localDescription.sdp));
+                    callPoke(c);
+                    setTimeout(function () { msgSync().catch(e => logErr('звонок: синхронизация', e)) }, 300);
+                    if (rolledBack) callNegotiate(c);
+                } catch (e) {
+                    logErr('звонок: входящая ре-негоциация', e);
                 }
-                await pc.setRemoteDescription(desc);
-                await pc.setLocalDescription();
-                await callGather(pc);
-                if (c.state === 'end') return;
-                await callSig(c.uid, 5, c.id, await callPackFit(pc.localDescription.sdp));
-                setTimeout(function () { try { msgSync(); } catch (err) { } }, 1500);
-            } catch (e) {
-                logErr('звонок: входящая ре-негоциация', e);
-            }
+            });
         }
         async function callRenegotiateOut(c, data) {
             const pc = c.pc;
             if (!pc || c.state === 'end') return;
-            // Пришёл ответ на НАШ offer — просто применяем. Никакого rollback:
-            // после отката состояние 'stable', и answer уже не принять.
-            if (pc.signalingState !== 'have-local-offer') return;
-            try {
-                await pc.setRemoteDescription({ type: 'answer', sdp: await callUnpack(data) });
-            } catch (e) {
-                logErr('звонок: ответ ре-негоциации', e);
-            }
+            const answer = await callUnpack(data);
+            return callOps(c, async () => {
+                const pc2 = c.pc;
+                if (!pc2 || c.state === 'end') return;
+                if (pc2.signalingState !== 'have-local-offer') return;
+                try {
+                    await pc2.setRemoteDescription({ type: 'answer', sdp: answer });
+                } catch (e) {
+                    logErr('звонок: ответ ре-негоциации', e);
+                }
+            });
         }
         async function callAnswered(c, data) {
             if (c.answering) return;
@@ -5858,7 +6332,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             callSub(c, 'Соединяю…');
             try { await c.pc.setRemoteDescription({ type: 'answer', sdp: await callUnpack(data) }); }
             catch (e) { logErr('звонок: ответ', e); return callEnd(c, 'Не удалось соединиться', 0); }
-            c.connT = setTimeout(() => c.state !== 'talk' && callEnd(c, 'Не удалось соединиться: мешает сеть', 0), 25000);
+            c.connT = setTimeout(() => c.state !== 'talk' && callEnd(c, 'Не удалось соединиться: мешает сеть', 0, 'conn-timeout'), 25000);
         }
         function callIncoming(s) {
             const w = callWho(s.uid);
@@ -5868,7 +6342,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             callSub(c, 'Звонит тебе…');
             callTitle('📞 ' + c.name + ' звонит');
             const left = Math.max(5, CALL_RING_S + 15 - (srvNow() / 1000 - s.ts));
-            c.timers.push(setTimeout(() => callEnd(c, 'Пропущенный звонок', null), left * 1000));
+            c.timers.push(setTimeout(() => callEnd(c, 'Пропущенный звонок', null, 'missed'), left * 1000));
         }
         async function callAccept(c) {
             if (c.state !== 'ringing') return;
@@ -5883,14 +6357,14 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 if (!(await callMedia(c))) return;
                 c.pc = callPeer(c);
                 c.pc.ondatachannel = e => callDc(c, e.channel);
-                c.stream.getTracks().forEach(t => c.pc.addTrack(t, c.stream));
+                c.stream.getTracks().forEach(t => { const sn = c.pc.addTrack(t, c.stream); if (t.kind === 'audio') c.micSender = sn; });
                 await c.pc.setRemoteDescription({ type: 'offer', sdp: await callUnpack(c.offer) });
                 await c.pc.setLocalDescription(await c.pc.createAnswer());
                 callSub(c, 'Соединяю…');
                 await callGather(c.pc);
                 if (c.state === 'end') return;
                 await callSig(c.uid, 2, c.id, await callPackFit(c.pc.localDescription.sdp));
-                if (c.state !== 'talk') c.connT = setTimeout(() => c.state !== 'talk' && callEnd(c, 'Не удалось соединиться: мешает сеть', 0), 30000);
+                if (c.state !== 'talk') c.connT = setTimeout(() => c.state !== 'talk' && callEnd(c, 'Не удалось соединиться: мешает сеть', 0, 'conn-timeout'), 30000);
             } catch (e) { logErr('звонок: принять', e); callEnd(c, e.message || 'Не вышло ответить', 0); }
         }
         const callMmss = sec => String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
@@ -5913,6 +6387,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (!out) return r === 1 ? { text: 'Входящий звонок · отклонён', miss: false } : { text: 'Пропущенный звонок' + (r === 2 ? ' · было занято' : ''), miss: true };
             return { text: 'Исходящий звонок · ' + (r === 1 ? 'отклонён' : r === 2 ? 'занято' : r === 0 ? 'отменён' : 'не ответил'), miss: false };
         }
+        const callSigKey = s => { let h = 2166136261; for (const b of s.data) h = Math.imul(h ^ b, 16777619) >>> 0; return s.ts + '|' + s.data.length + '|' + h; };
         function callCheck() {
             const sigs = msgNet.sigs || [], now = srvNow() / 1000, c = callNet.cur;
             const ended = new Map(sigs.filter(s => s.type === 3).map(s => [s.uid + '|' + s.id, s.data[0] || 0]));
@@ -5922,7 +6397,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const endIn = sigs.find(s => s.dir === 'in' && s.type === 3 && s.uid === c.uid && s.id === c.id);
                 if (endIn) {
                     const r = ended.get(key);
-                    if (c.dir === 'in' && c.state === 'ringing') callEnd(c, 'Пропущенный звонок', null);
+                    if (c.dir === 'in' && c.state === 'ringing') callEnd(c, 'Пропущенный звонок', null, 'missed');
                     else callEnd(c, r === 1 ? 'Звонок отклонён' : r === 2 ? 'Занято: у собеседника другой звонок' : r === 3 ? 'Не отвечает'
                         : c.state === 'talk' ? 'Собеседник положил трубку' : c.dir === 'out' ? 'Звонок сброшен' : 'Звонок отменён', null);
                 } else if (ans) callAnswered(c, ans.data);
@@ -5930,8 +6405,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const reOuts = sigs.filter(s => s.dir === 'in' && s.type === 5 && s.uid === c.uid && s.id === c.id);
                 const reIn = reIns.length ? reIns[reIns.length - 1] : null;
                 const reOut = reOuts.length ? reOuts[reOuts.length - 1] : null;
-                const reInKey = reIn ? reIn.ts + '|' + reIn.data.length : '';
-                const reOutKey = reOut ? reOut.ts + '|' + reOut.data.length : '';
+                const reInKey = reIn ? callSigKey(reIn) : '';
+                const reOutKey = reOut ? callSigKey(reOut) : '';
                 if (reIn && c.state === 'talk' && reInKey !== c.lastReInKey) {
                     c.lastReInKey = reInKey;
                     callRenegotiateIn(c, reIn.data);
@@ -7595,6 +8070,7 @@ var __vpBannerAuto = (() => {
             B.row = row;
             B.draw = row.querySelector('button:not(.' + SELECTORS.bannerDelete + ')');
             B.del = row.querySelector('.' + SELECTORS.bannerDelete);
+            if (myVerifyState() !== 'approved') return;
             B.image = bannerButton('custom-image-btn', 'Добавить картинку', ICONS.BANNER_IMAGE);
             B.change = bannerButton('custom-change-btn', 'Сменить картинку', ICONS.BANNER_CHANGE);
             B.cancel = bannerButton('custom-cancel-btn', 'Отмена', ICONS.BANNER_CANCEL);
@@ -7607,6 +8083,10 @@ var __vpBannerAuto = (() => {
         }
 
         function pickBannerFile() {
+            if (myVerifyState() !== 'approved') {
+                console.warn('[ITD VP] смена баннера доступна после верификации');
+                return;
+            }
             const input = document.createElement('input');
             input.type = 'file';
             input.accept = 'image/jpeg,image/png,image/webp,image/gif';
@@ -7685,27 +8165,6 @@ var __vpBannerAuto = (() => {
             if (bannerMovable()) moveBannerImage(E.top + (e.deltaY > 0 ? -30 : 30));
         }, { passive: false });
 
-        function cropBannerImage() {
-            return new Promise((resolve, reject) => {
-                const img = bannerEdit.img;
-                const br = bannerEdit.banner.getBoundingClientRect(), ir = img.getBoundingClientRect();
-                const sx = img.naturalWidth / img.offsetWidth, sy = img.naturalHeight / img.offsetHeight;
-                const x = Math.max(0, br.left - ir.left) * sx, y = Math.max(0, br.top - ir.top) * sy;
-                const w = (Math.min(ir.right, br.right) - Math.max(ir.left, br.left)) * sx;
-                const h = (Math.min(ir.bottom, br.bottom) - Math.max(ir.top, br.top)) * sy;
-                const canvas = document.createElement('canvas');
-                canvas.width = w;
-                canvas.height = h;
-                const src = new Image();
-                src.crossOrigin = 'anonymous';
-                src.onload = () => {
-                    canvas.getContext('2d').drawImage(src, x, y, w, h, 0, 0, w, h);
-                    canvas.toBlob(resolve, 'image/jpeg', 0.95);
-                };
-                src.onerror = reject;
-                src.src = img.src;
-            });
-        }
 
         function bannerImageData() {
             return new Promise((resolve, reject) => {
@@ -7734,89 +8193,8 @@ var __vpBannerAuto = (() => {
             });
         }
 
-        function bannerQuantStep(colors) {
-            const n = Math.max(2, Math.min(16, Math.round(Math.cbrt(colors))));
-            return Math.round(255 / (n - 1));
-        }
 
-        const BANNER_MAX_OPS = 1990, BANNER_MAX_POINTS = 55000;
-        function bannerBlocksToOps(imgData, bw, bh, thr, skipLight, useAnchor) {
-            const W = imgData.width, H = imgData.height, d = imgData.data;
-            const hex = (r, g, b) => '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
-            const th2 = thr * thr;
-            const ops = [];
-            const nCols = Math.ceil(W / bw);
-            const SK = skipLight || 0;
-            for (let y = 0; y < H; y += bh) {
-                const y1 = Math.min(y + bh, H);
-                const yc = Math.min(y + (bh >> 1), H - 1);
-                const cols = new Array(nCols);
-                for (let c = 0; c < nCols; c++) {
-                    const x0 = c * bw, x1 = Math.min(x0 + bw, W);
-                    let sr = 0, sg = 0, sb = 0, n = 0;
-                    for (let yy = y; yy < y1; yy++) {
-                        let o = (yy * W + x0) * 4;
-                        for (let xx = x0; xx < x1; xx++, o += 4) { sr += d[o]; sg += d[o + 1]; sb += d[o + 2]; n++; }
-                    }
-                    const ar = sr / n, ag = sg / n, ab = sb / n;
-                    cols[c] = (SK && ar > SK && ag > SK && ab > SK) ? null : [ar, ag, ab];
-                }
-                let start = -1, csr = 0, csg = 0, csb = 0, cnt = 0, aR = 0, aG = 0, aB = 0;
-                const flush = (endCol) => {
-                    if (start < 0) return;
-                    if (endCol <= start) return;
-                    const rr = Math.round(csr / cnt), gg = Math.round(csg / cnt), bb = Math.round(csb / cnt);
-                    ops.push({ tool: 'brush', color: hex(rr, gg, bb), width: bh,
-                               points: [[start * bw, yc], [endCol * bw - 1, yc]] });
-                };
-                for (let c = 0; c < nCols; c++) {
-                    if (cols[c] === null) { flush(c); start = -1; continue; }
-                    if (start < 0) {
-                        start = c; csr = cols[c][0]; csg = cols[c][1]; csb = cols[c][2]; cnt = 1;
-                        aR = csr; aG = csg; aB = csb; continue;
-                    }
-                    const refR = useAnchor ? aR : csr / cnt;
-                    const refG = useAnchor ? aG : csg / cnt;
-                    const refB = useAnchor ? aB : csb / cnt;
-                    const dr = cols[c][0] - refR, dg = cols[c][1] - refG, db = cols[c][2] - refB;
-                    if (dr * dr + dg * dg + db * db < th2) {
-                        csr += cols[c][0]; csg += cols[c][1]; csb += cols[c][2]; cnt++;
-                    } else {
-                        flush(c);
-                        start = c; csr = cols[c][0]; csg = cols[c][1]; csb = cols[c][2]; cnt = 1;
-                        aR = csr; aG = csg; aB = csb;
-                    }
-                }
-                flush(nCols);
-            }
-            return { version: 1, width: W, height: H, ops: ops, _points: ops.length * 2 };
-        }
 
-        function bannerScore(imgData, body) {
-            const W = imgData.width, H = imgData.height;
-            const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-            const cx = cv.getContext('2d', { willReadFrequently: true });
-            cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, W, H);   
-            for (const op of body.ops) {
-                cx.strokeStyle = op.color;
-                cx.fillStyle = op.color;
-                cx.lineWidth = op.width;
-                cx.lineCap = 'round';
-                const p = op.points;
-                cx.beginPath();
-                cx.moveTo(p[0][0] + 0.5, p[0][1] + 0.5);
-                cx.lineTo(p[1][0] + 0.5, p[1][1] + 0.5);
-                cx.stroke();
-            }
-            const rd = cx.getImageData(0, 0, W, H).data;
-            const od = imgData.data;
-            let sum = 0, n = 0;
-            for (let i = 0; i < od.length; i += 16) {  
-                const dr = od[i] - rd[i], dg = od[i+1] - rd[i+1], db = od[i+2] - rd[i+2];
-                sum += dr*dr + dg*dg + db*db; n += 3;
-            }
-            return Math.sqrt(sum / n);
-        }
 
         function bannerPixelToOps(imgData, brush, thr) {
             const W = imgData.width, H = imgData.height, d = imgData.data;
@@ -7869,23 +8247,6 @@ var __vpBannerAuto = (() => {
             return data;
         }
 
-        async function uploadBannerFile(blob, token) {
-            return new Promise((resolve, reject) => {
-                const form = new FormData();
-                form.append('file', blob, blob.name || 'banner.jpg');
-                const xhr = new XMLHttpRequest();
-                xhr.open('POST', '/api/files/upload');
-                xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-                xhr.onload = () => {
-                    let data = null;
-                    try { data = JSON.parse(xhr.responseText); } catch (e) { }
-                    if (xhr.status >= 200 && xhr.status < 300) return data ? resolve(data) : reject(new Error('Ошибка загрузки: ответ не JSON'));
-                    reject(new Error(data ? (data.error?.message || data.message || `Ошибка ${xhr.status}`) : `Ошибка загрузки: ${xhr.status}`));
-                };
-                xhr.onerror = () => reject(new Error('Ошибка сети'));
-                xhr.send(form);
-            });
-        }
 
         async function applyBanner() {
             const E = bannerEdit, apply = bannerBtns.apply;
@@ -8077,6 +8438,22 @@ var __vpBannerAuto = (() => {
         @media (prefers-reduced-motion: reduce) { .vp-ave { animation: none; } }
     `);
 
+        // Своя аватарка между устройствами: сервер (стиль look.a/va) главный, локальная копия vp_ava следует за ним.
+        // vp_ava_seen помнит, что было на сервере при последней сверке: если локально с тех пор ничего не меняли, а на сервере стало другое
+        // (сменили или убрали на другом устройстве), берём серверное. Если локально поменяли — оно уходит на сервер.
+        function avaReconcile(look) {
+            const sa = look && look.a || '', sv = sa ? look.va || '' : '';
+            const own = GM_getValue(acctKey('vp_ava'), null) || {}, la = own.ref || '', lv = la ? own.vid || '' : '';
+            const seen = GM_getValue(acctKey('vp_ava_seen'), null);
+            const mark = () => GM_setValue(acctKey('vp_ava_seen'), { a: sa, v: sv });
+            if (la === sa && lv === sv) { if (!seen || seen.a !== sa || seen.v !== sv) mark(); return false; }
+            const untouched = seen && typeof seen.a === 'string' ? seen.a === la && (seen.v || '') === lv : !!sa;
+            if (!untouched) return false;
+            GM_setValue(acctKey('vp_ava'), sa ? (sv ? { ref: sa, vid: sv, at: Date.now() } : { ref: sa, at: Date.now() }) : null);
+            mark();
+            avatarRefresh();
+            return true;
+        }
         const aveOwnRef = () => { const o = GM_getValue(acctKey('vp_ava'), null); return o && o.ref || ''; };
         const aveOwnPage = () => {
             const m = location.pathname.match(/^\/@([^/]+)\/?$/);
@@ -8574,6 +8951,34 @@ var __vpBannerAuto = (() => {
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.9.0', '3 ноября 2026', [
+                'Мини-игры: новая «Песочница» — рисуй песком, водой, камнем, маслом, огнём, растениями, лавой, кислотой, ядом, пропаном, динамитом с фитилём, металлом, стеклом, атомной бомбой и чёрной дырой, смотри как всё падает, течёт, горит, плавится и взрывается (без счёта и без таблицы лидеров)',
+                'Настройки: можно выключить вкладку «Магазин» — её не будет в меню ни на компьютере, ни на телефоне (Настройки → Вид)',
+                'Настройки: переключатель «Аватарки мода» (Настройки → Ник) — выключи, и везде будут обычные аватарки сайта, и твоя и чужие',
+                'Аватарка мода синхронизируется между устройствами одного аккаунта: сменил или убрал на одном — на другом подтянется само',
+                'Сообщения: ссылки в тексте теперь синие, их видно сразу',
+                'Посты: убрана кнопка «Скопировать картинку» — она брала только первую картинку альбома, а копировать можно правой кнопкой; «Обновить» и «Скопировать ссылку» остались',
+                'Посты с картинкой: у размытого фона больше нет двойной кромки в углу, скругление фона совпадает со скруглением карточки',
+                'Убраны остатки ивента на баннере профиля: кнопки «убрать стекло» и «скрыть стикеры» (ивент закончился, кнопки не появлялись)',
+                'Звонки: новый дизайн — компактная карточка снизу экрана, плавно сворачивается в аватарку и так же разворачивается',
+                'Звонки: демонстрация экрана в новом виде — переворот между своим и чужим экраном, кнопка «на весь экран», в полноэкранном режиме свой экран показывается отдельным окошком справа снизу',
+                'Без подтверждённой галочки нельзя менять баннер профиля и видеть клуб — вместо клуба будет надпись «Не верифицирован»',
+                'Звонки: если собеседник пропал или закрыл вкладку, звонок сам завершается, а не висит на «Восстанавливаю связь»',
+                'Звонки: показ экрана включается быстрее и стабильнее, в том числе при повторном показе; если не слышно голоса, мод сам переключается на обычный микрофон',
+                'Серая галочка теперь видна у всех, кто ещё не подтверждён, а не только у части аккаунтов',
+                'Сообщения: отправка стала надёжной. Каждое сообщение ставится в очередь, проверяется по серверу и при сбое повторяется само, пока не дойдёт. Оно больше не пропадает из чата: пока идёт отправка, на нём «отправка…», а если не вышло — «нажми, чтобы повторить». Быстрая серия сообщений тоже не теряется',
+                'Звонки: во время разговора скрипт сам следит, что звук реально идёт: если микрофон завис, отключился или его выдернули, он возвращается или открывается заново, а на карточке пишет «собеседник вас не слышит»',
+                'Звонки: когда возвращается интернет или окно снова становится активным, связь восстанавливается сразу; без интернета на карточке «нет интернета»',
+                'Звонки: показ экрана — не больше 1080p; на карточке кнопка режима «Текст» (чётко, 30 к/с) и «Движение» (плавно, 60 к/с), выбор запоминается',
+                'Звонки: если сбросить или отменить вызов, пока карточка стоит по центру, она закрывается там же, а не уезжает вправо',
+                'Звонки: карточка мягко подсвечивается зелёным, когда говоришь ты (и в свёрнутом виде тоже)',
+                'Звонки: при сбросе карточка больше не прыгает в центр, а закрывается на своём месте; после выхода собеседника из показа экрана твоя демка не растягивается на весь экран; при показе экрана больше не пропадает звук собеседника',
+                'Звонки и сообщения: сайт больше не засыпается запросами (от них были ошибки 429 и обрывы), скрипт читает только новые комментарии',
+                'Звонки: демка экрана больше не бывает чёрной или замершей, когда открыты сообщения или галерея; если один перестаёт показывать экран, у другого не пропадает чужой экран',
+                'Меню: кнопка «Ивент» реагирует на курсор, даже когда сайт её выключил',
+                'Сообщения: чат больше не прокручивается сам вверх, пока читаешь старые сообщения',
+                'Профиль: сортировка «Старые» при ошибке пишет настоящую причину, тянет до 10000 постов и после паузы продолжает с того же места'
+            ]],
             ['3.8.5', '1 ноября 2026', [
                 'Звонки: добавлена демонстрация экрана (WIP)'
             ]],
@@ -9168,6 +9573,7 @@ var __vpBannerAuto = (() => {
             let res = await call(await getAccessToken());
             if (res.status === 401) res = await call(await getAccessToken(true));
             apiPause(res);
+            if (opts.method && opts.method !== 'GET' && opts.method !== 'POST' && /\/comments/.test(path)) try { if (msgNet.cache) msgNet.cache.dirty = true; } catch (e) { }
             return res;
         }
 
@@ -9279,16 +9685,17 @@ var __vpBannerAuto = (() => {
 
 
         let verifyLoad = null, verifyLoadAt = 0;
-        async function allComments(postId, maxPages = 30) {
+        async function allComments(postId, maxPages = 30, opts = {}) {
             const all = [];
             let cursor = null;
             for (let page = 0; page < maxPages; page++) {
-                const res = await api(`/api/posts/${postId}/comments?limit=100` + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
+                const res = await api(`/api/posts/${postId}/comments?limit=${opts.limit || 100}` + (opts.sort ? '&sort=' + opts.sort : '') + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
                 if (!res.ok) throw new Error('комментарии: ' + res.status);
                 const j = await res.json(), d = j.data || j;
                 const list = d.comments || [];
                 if (page && list.length && all.some(c => c.id === list[0].id)) break;
                 all.push(...list);
+                if (opts.stop && opts.stop(list)) break;
                 cursor = d.nextCursor || null;
                 if (!cursor || !d.hasMore && d.hasMore !== undefined || !list.length) break;
             }
@@ -9302,7 +9709,14 @@ var __vpBannerAuto = (() => {
             return verifyLoad;
         }
         function verifiedInfo(name) {
-            try { return readVerified()[name] || null; } catch (e) { return null; }
+            try {
+                const all = readVerified();
+                if (all[name]) return all[name];
+                const k = String(name || '').toLowerCase();
+                if (!k) return null;
+                for (const n in all) if (n.toLowerCase() === k) return all[n];
+                return null;
+            } catch (e) { return null; }
         }
 
         async function checkAllComments(fresh) {
@@ -9598,7 +10012,7 @@ var __vpBannerAuto = (() => {
                             if (info.state === 'approved') {
                                 verifiedSet.add(name.toLowerCase());
                                 if (info.id) approvedIds.add(String(info.id).toLowerCase());
-                            } else if (info.state === 'quarantine' || info.state === 'revoked') verifiedPendingSet.add(name.toLowerCase());
+                            } else verifiedPendingSet.add(name.toLowerCase());
                         }
                     }
                     const allNames = new Set([...verifiedSet, ...verifiedPendingSet]);
@@ -9644,7 +10058,9 @@ var __vpBannerAuto = (() => {
                         if (typeof v.play === 'function') { try { v.play().catch(() => { }); } catch (e) { } }
                     }
                 }
+                const modAvaOn = () => GM_getValue('modAvatars', true) !== false;
                 avaLookOf = u => {
+                    if (!modAvaOn()) return '';
                     const own = (GM_getValue(acctKey('vp_ava'), null) || {}).ref || '';
                     if (u === (myUsername || '').toLowerCase()) {
                         const ref = own || (showLooks && lookBy.get(u) && lookBy.get(u).a) || '';
@@ -9656,7 +10072,8 @@ var __vpBannerAuto = (() => {
                 function markAvatars(me, pu, others) {
                     const own = GM_getValue(acctKey('vp_ava'), null) || {};
                     const refOf = u => u === me ? { a: own.ref || (others && lookBy.get(u) && lookBy.get(u).a) || '', va: own.vid || (others && lookBy.get(u) && lookBy.get(u).va) || '' } : others && lookBy.get(u) || {};
-                    const put = (av, u) => { try { const r = refOf(u); avaPut(av, r.a || '', r.va || ''); } catch (e) {   } };
+                    const off = !modAvaOn();
+                    const put = (av, u) => { try { const r = off ? {} : refOf(u); avaPut(av, r.a || '', r.va || ''); } catch (e) {   } };
                     document.querySelectorAll(PROFILE_LINK).forEach(link => {
                         const av = link.querySelector('.' + SELECTORS.avatar);
                         if (av) put(av, userOf(link.getAttribute('href')));
@@ -9682,6 +10099,7 @@ var __vpBannerAuto = (() => {
                         try { parsed = JSON.parse(raw) || {}; } catch (e) { }
                         for (const [name, info] of Object.entries(parsed)) if (info && info.look) lookBy.set(name.toLowerCase(), info.look);
                     }
+                    if (me && lookBy.has(me)) { try { avaReconcile(lookBy.get(me)); } catch (e) { logErr('аватарка: сверка', e); } }
                     avaReady = true;
                     document.dispatchEvent(new Event('vp-looks-ready'));
                     const cover = document.documentElement.classList.contains('vp-gal-open') || document.documentElement.classList.contains('vp-msgs-open');
@@ -10036,285 +10454,7 @@ var __vpBannerAuto = (() => {
         sched.add('look', publishLook, { every: 60000, net: true });
         initBanner();
 
-        (function () {
-            const STORAGE_KEY = 'user_sticker_packs_v1';
-            const RECENT_STORAGE_KEY = 'recent_stickers_v1';
-            const MAX_NAME_LENGTH = 20;
-            const DEFAULT_PACK_NAME = 'Новый пакет';
-            const PANEL_WIDTH = 320;
-
-            const readList = key => { try { return JSON.parse(localStorage.getItem(key)) || []; } catch (e) { return []; } };
-            const writeList = (key, v) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) { } };
-            let userPacks = readList(STORAGE_KEY);
-            let recentStickers = readList(RECENT_STORAGE_KEY);
-            const saveUserPacks = () => { writeList(STORAGE_KEY, userPacks); packsChanged(); };
-            const saveRecent = () => writeList(RECENT_STORAGE_KEY, recentStickers);
-            const packStickers = key => key === 'recent' ? recentStickers : (userPacks.find(p => p.id === key) || { stickers: [] }).stickers;
-            const packName = key => key === 'recent' ? 'Недавние' : ((userPacks.find(p => p.id === key) || {}).name || DEFAULT_PACK_NAME);
-            const allPackKeys = () => ['recent', ...userPacks.map(p => p.id)];
-            function savePack(key) { if (key === 'recent') saveRecent(); else saveUserPacks(); }
-
-            const SYNC_TAG = 'ITDXS';
-            const PACKS_AT_KEY = 'user_sticker_packs_at';
-            const EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
-            const CDN_IMG = /^https:\/\/cdn\.xn--d1ah4a\.com\/images\/([0-9a-f-]{36})\.(\w+)$/i;
-            let packsAt = +(localStorage.getItem(PACKS_AT_KEY) || 0), syncTimer = 0, syncing = false, applyingRemote = false;
-            const hexToBytes = h => Uint8Array.from(h.replace(/-/g, '').match(/../g), x => parseInt(x, 16));
-            const bytesToUuid = b => [...b].map(x => x.toString(16).padStart(2, '0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
-            const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            function encodePacks(packs, at) {
-                const out = [1], put = (...b) => out.push(...b), str = t => { const u = new TextEncoder().encode(t).slice(0, 255); put(u.length, ...u); };
-                const sec = Math.floor(at / 1000);
-                put((sec >>> 24) & 255, (sec >>> 16) & 255, (sec >>> 8) & 255, sec & 255, packs.length);
-                for (const pk of packs) {
-                    str(pk.id || ''); str(pk.name || '');
-                    const list = pk.stickers.slice(0, 65535);
-                    put(list.length >> 8, list.length & 255);
-                    for (const st of list) {
-                        const m = String(st.url || '').match(CDN_IMG), ext = m ? EXT.indexOf(m[2].toLowerCase()) : -1;
-                        if (m && ext >= 0 && UUID.test(st.id || '')) { put(ext, ...hexToBytes(st.id), ...hexToBytes(m[1])); }
-                        else { put(255); str(st.id || ''); str(st.url || ''); }
-                    }
-                }
-                out[0] = 2;
-                for (let i = 1; i < out.length; i++) out[i] ^= OBF_KEY[i % OBF_KEY.length];
-                let bin = '';
-                out.forEach(b => { bin += String.fromCharCode(b); });
-                return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-            }
-            function decodePacks(b64) {
-                const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
-                const b = Uint8Array.from(bin, c => c.charCodeAt(0));
-                if (b[0] === 2) { for (let i = 1; i < b.length; i++) b[i] ^= OBF_KEY[i % OBF_KEY.length]; b[0] = 1; }
-                let i = 0;
-                const byte = () => { if (i >= b.length) throw new Error('обрыв данных'); return b[i++]; };
-                const str = () => { const n = byte(), t = new TextDecoder().decode(b.slice(i, i + n)); i += n; return t; };
-                if (byte() !== 1) throw new Error('версия паков');
-                const at = ((byte() << 24) >>> 0) + (byte() << 16) + (byte() << 8) + byte();
-                const packs = [];
-                for (let n = byte(); n > 0; n--) {
-                    const pk = { id: str(), name: str(), stickers: [] };
-                    for (let k = (byte() << 8) + byte(); k > 0; k--) {
-                        const ext = byte();
-                        if (ext === 255) { const id = str(), url = str(); pk.stickers.push({ id, url }); continue; }
-                        const id = bytesToUuid(b.slice(i, i + 16)), img = bytesToUuid(b.slice(i + 16, i + 32));
-                        i += 32;
-                        pk.stickers.push({ id, url: `https://cdn.xn--d1ah4a.com/images/${img}.${EXT[ext] || 'png'}` });
-                    }
-                    packs.push(pk);
-                }
-                return { at: at * 1000, packs };
-            }
-            const myAccountId = () => (meData && meData.id) || (verifiedInfo(myUsername || '') || {}).id || null;
-            const partsKey = () => 'vp_sticker_parts_' + myAccountId();
-            const remotePacksAt = () => { const f = String((verifiedInfo(myUsername || '') || {}).flags || ''); return f.length > 1 ? +f.slice(1) * 1000 : 0; };
-            async function packParts(scan) {
-                if (!scan) { const saved = GM_getValue(partsKey(), null); if (saved) return saved; }
-                const me = myAccountId();
-                const list = (await allComments(STICKER_POST_ID)).filter(c => c.author && c.author.id === me && /^ITDXS \d+\/\d+ /.test(c.content || ''))
-                    .map(c => { const m = c.content.match(/^ITDXS (\d+)\/(\d+) (\S*)/); return { id: c.id, i: +m[1], n: +m[2], d: m[3] }; });
-                GM_setValue(partsKey(), list.map(({ id, i, n }) => ({ id, i, n })));
-                return list;
-            }
-            function applyRemotePacks(remote) {
-                applyingRemote = true;
-                userPacks = remote.packs;
-                writeList(STORAGE_KEY, userPacks);
-                packsAt = remote.at;
-                localStorage.setItem(PACKS_AT_KEY, String(packsAt));
-                applyingRemote = false;
-                if (scrollContainer) { updateTabButtons(); refreshAllPackGrids(); }
-            }
-            const patchComment = (id, content) => editComment(id, content);
-            async function pullPacks() {
-                const at = remotePacksAt();
-                if (!at || at <= packsAt + 999) return;
-                const parts = (await packParts(true)).filter(p => p.n).sort((a, b) => a.i - b.i);
-                const n = parts.length && parts[0].n;
-                if (!n || parts.length < n || !parts.slice(0, n).every((p, k) => p.i === k + 1 && p.n === n)) return;
-                const remote = decodePacks(parts.slice(0, n).map(p => p.d).join(''));
-                if (remote.at <= packsAt + 999) return;
-                const legacy = !packsAt && userPacks.length ? userPacks.filter(pk => !remote.packs.some(r => r.id === pk.id)) : [];
-                applyRemotePacks({ at: remote.at, packs: [...remote.packs, ...legacy] });
-                if (legacy.length) { packsAt = Date.now(); localStorage.setItem(PACKS_AT_KEY, String(packsAt)); return 'push'; }
-            }
-            async function pushPacks() {
-                const mine = verifiedInfo(myUsername || '');
-                if (!mine || !mine.commentId) return;
-                let parts = await packParts(false);
-                if (!parts.length) parts = await packParts(true);
-                if (!packsAt) { packsAt = Date.now(); localStorage.setItem(PACKS_AT_KEY, String(packsAt)); }
-                const data = encodePacks(userPacks, packsAt), CH = 1900, chunks = [];
-                for (let k = 0; k < data.length || !chunks.length; k += CH) chunks.push(data.slice(k, k + CH));
-                const slots = parts.map(p => p.id), saved = [];
-                for (let k = 0; k < Math.max(chunks.length, slots.length); k++) {
-                    const content = k < chunks.length ? `${SYNC_TAG} ${k + 1}/${chunks.length} ${chunks[k]}` : `${SYNC_TAG} 0/0 -`;
-                    if (slots[k]) {
-                        const res = await patchComment(slots[k], content);
-                        if (!res.ok) throw new Error('паки: правка ' + res.status);
-                        saved.push({ id: slots[k], i: k < chunks.length ? k + 1 : 0, n: k < chunks.length ? chunks.length : 0 });
-                    } else {
-                        const res = await sendComment(STICKER_POST_ID, content);
-                        if (!res.ok) throw new Error('паки: запись ' + res.status);
-                        const j = await res.json();
-                        saved.push({ id: (j.data || j).id, i: k + 1, n: chunks.length });
-                    }
-                }
-                GM_setValue(partsKey(), saved);
-                const code = String(mine.code) + '1' + Math.floor(packsAt / 1000);
-                const res = await patchComment(mine.commentId, code);
-                if (res.ok) await checkAllComments(true);
-            }
-            async function syncPacks(up) {
-                if (!STICKER_POST_ID || syncing || !myUsername || !myAccountId()) return;
-                syncing = true;
-                try {
-                    if (up) await pushPacks();
-                    else {
-                        const merged = await pullPacks();
-                        const at = remotePacksAt();
-                        if (merged === 'push' || (userPacks.length && (!packsAt || packsAt > at + 999))) await pushPacks();
-                    }
-                } catch (e) {
-                    logErr('паки: синхронизация', e);
-                } finally {
-                    syncing = false;
-                }
-            }
-            function packsChanged() {
-                if (applyingRemote) return;
-                packsAt = Date.now();
-                localStorage.setItem(PACKS_AT_KEY, String(packsAt));
-                clearTimeout(syncTimer);
-                syncTimer = setTimeout(() => syncPacks(true), 4000);
-            }
-            (function syncLoop() {
-                if (!STICKER_POST_ID) return;
-                const tick = () => myUsername && myAccountId() && verifiedInfo(myUsername) ? syncPacks(false) : setTimeout(tick, 3000);
-                setTimeout(tick, 6000);
-                sched.add('packs', () => syncPacks(false), { every: 10 * 60 * 1000, net: true, visible: true });
-            })();
-
-            const ZIP_IMG = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
-            const ZIP_LIMITS = { packs: 20, perPack: 120, total: 300, bytes: 5 * 1024 * 1024 };
-            async function readZip(file) {
-                const buf = new Uint8Array(await file.arrayBuffer()), dv = new DataView(buf.buffer);
-                let eocd = -1;
-                for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
-                if (eocd < 0) throw new Error('это не zip-архив');
-                const count = dv.getUint16(eocd + 10, true);
-                let at = dv.getUint32(eocd + 16, true);
-                const utf8 = new TextDecoder('utf-8', { fatal: true }), dos = new TextDecoder('ibm866');
-                const entries = [];
-                for (let k = 0; k < count; k++) {
-                    if (dv.getUint32(at, true) !== 0x02014b50) throw new Error('архив повреждён');
-                    const flags = dv.getUint16(at + 8, true), method = dv.getUint16(at + 10, true);
-                    const csize = dv.getUint32(at + 20, true), size = dv.getUint32(at + 24, true);
-                    const nlen = dv.getUint16(at + 28, true), xlen = dv.getUint16(at + 30, true), clen = dv.getUint16(at + 32, true);
-                    const local = dv.getUint32(at + 42, true), raw = buf.subarray(at + 46, at + 46 + nlen);
-                    let name;
-                    try { name = flags & 0x800 ? new TextDecoder().decode(raw) : utf8.decode(raw); } catch (e) { name = dos.decode(raw); }
-                    entries.push({ name: name.replace(/\\/g, '/'), method, csize, size, local });
-                    at += 46 + nlen + xlen + clen;
-                }
-                entries.data = async e => {
-                    const start = e.local + 30 + dv.getUint16(e.local + 26, true) + dv.getUint16(e.local + 28, true);
-                    const bytes = buf.slice(start, start + e.csize);
-                    if (e.method === 0) return bytes;
-                    if (e.method !== 8) throw new Error('неизвестное сжатие');
-                    return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
-                };
-                return entries;
-            }
-            function zipPacks(entries, zipName) {
-                const imgs = entries.filter(e => {
-                    const parts = e.name.split('/');
-                    return !e.name.endsWith('/') && !parts.some(p => p.startsWith('.') || p === '__MACOSX') && ZIP_IMG[(parts.pop().split('.').pop() || '').toLowerCase()];
-                });
-                let paths = imgs.map(e => e.name.split('/'));
-                while (paths.length && paths.every(p => p.length > 2 && p[0] === paths[0][0])) paths = paths.map(p => p.slice(1));
-                const groups = new Map();
-                imgs.forEach((e, i) => {
-                    const p = paths[i], pack = p.length > 1 ? p[0] : zipName.replace(/\.zip$/i, '');
-                    if (!groups.has(pack)) groups.set(pack, []);
-                    groups.get(pack).push(e);
-                });
-                return [...groups].map(([name, files]) => ({ name: name.trim().slice(0, MAX_NAME_LENGTH) || DEFAULT_PACK_NAME, files: files.sort((a, b) => a.name.localeCompare(b.name, 'ru', { numeric: true })) }));
-            }
-            function openZipImport() {
-                if (!stickerPanel || stickerPanel.querySelector('.vp-sp-import')) return;
-                exitEditMode();
-                const card = el('div', 'vp-sp-import', `<b>Паки из архива</b>
-                <ul>
-                    <li>Архив <b style="font-size:inherit">.zip</b></li>
-                    <li>Папка в архиве = пак, имя папки = название пака</li>
-                    <li>В папке — картинки png, jpg, gif, webp (до 5 МБ); встают как есть, без обрезки</li>
-                    <li>Картинки прямо в архиве, без папки, — пак с именем архива</li>
-                </ul>
-                <pre>стикеры.zip
-├ Коты/
-│  ├ 1.png
-│  └ 2.gif
-└ Мемы/
-   └ шрек.jpg</pre>
-                <div class="vp-imp-status"></div>
-                <div class="vp-imp-btns"><button type="button" class="vp-imp-cancel">Отмена</button><button type="button" class="vp-imp-go">Выбрать архив</button></div>`);
-                stickerPanel.appendChild(card);
-                const status = card.querySelector('.vp-imp-status'), go = card.querySelector('.vp-imp-go'), cancel = card.querySelector('.vp-imp-cancel');
-                let busy = false, stop = false;
-                cancel.onclick = () => { if (busy) { stop = true; cancel.disabled = true; status.textContent = 'Останавливаю…'; } else card.remove(); };
-                go.onclick = () => {
-                    const input = el('input');
-                    input.type = 'file';
-                    input.accept = '.zip,application/zip';
-                    input.onchange = async () => {
-                        const file = input.files[0];
-                        if (!file) return;
-                        busy = true; go.disabled = true;
-                        try {
-                            status.textContent = 'Читаю архив…';
-                            const entries = await readZip(file);
-                            const packs = zipPacks(entries, file.name).slice(0, ZIP_LIMITS.packs);
-                            const total = Math.min(ZIP_LIMITS.total, packs.reduce((n, pk) => n + Math.min(pk.files.length, ZIP_LIMITS.perPack), 0));
-                            if (!total) throw new Error('в архиве нет картинок по правилам');
-                            let done = 0, skipped = 0;
-                            for (const pk of packs) {
-                                if (stop || done >= total) break;
-                                const pack = { id: 'user_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), name: pk.name, stickers: [] };
-                                for (const e of pk.files.slice(0, ZIP_LIMITS.perPack)) {
-                                    if (stop || done >= total) break;
-                                    status.textContent = `Загружаю «${pk.name}»: ${done + 1} из ${total}…`;
-                                    try {
-                                        if (e.size > ZIP_LIMITS.bytes) throw new Error('больше 5 МБ');
-                                        const base = e.name.split('/').pop(), type = ZIP_IMG[base.split('.').pop().toLowerCase()];
-                                        const data = await uploadImageToServer(new File([await entries.data(e)], base, { type }));
-                                        pack.stickers.push(data);
-                                    } catch (err) { skipped++; }
-                                    done++;
-                                }
-                                if (pack.stickers.length) { userPacks.push(pack); saveUserPacks(); }
-                            }
-                            rebuildPanel();
-                            const left = stickerPanel.querySelector('.vp-sp-import');
-                            if (left) left.remove();
-                            showPanel();
-                            if (skipped) alert(`Готово. Не загрузились: ${skipped} (слишком большие или битые картинки)`);
-                        } catch (err) {
-                            status.textContent = 'Не вышло: ' + (err && err.message || err);
-                            logErr('паки из архива', err);
-                            busy = false; go.disabled = false;
-                        }
-                    };
-                    input.click();
-                };
-            }
-
-            function addToRecent(sticker) {
-                recentStickers = [sticker, ...recentStickers.filter(s => s.id !== sticker.id)].slice(0, 30);
-                saveRecent();
-            }
-
-            const style = addCss(`
+        const stickerCss = panelWidth => `
             @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
             .spin{animation:spin 1s linear infinite;transform-origin:center}
             .sticker-dragging{opacity:0.3!important;pointer-events:none!important}
@@ -10361,7 +10501,7 @@ var __vpBannerAuto = (() => {
 
             .sticker-panel { position: fixed; display: none; flex-direction: column; background: var(--block-bg);
                 border-radius: 20px; border: 1px solid var(--border-color,rgba(255,255,255,0.1)); z-index: 10000;
-                width: ${PANEL_WIDTH}px; height: 440px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); overflow: hidden; }
+                width: ${panelWidth}px; height: 440px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); overflow: hidden; }
             .sticker-panel.vp-open { display: flex; }
             .vp-sp-import { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; gap: 10px; padding: 16px;
                 background: var(--block-bg); border-radius: inherit; font-size: 13px; line-height: 1.4; color: var(--text-primary,#fff); overflow: auto; }
@@ -10445,14 +10585,21 @@ var __vpBannerAuto = (() => {
             .vp-crop-actions > button { padding: 8px 16px; border-radius: 8px; cursor: pointer; color: var(--text-primary,#fff); }
             .vp-crop-cancel { background: transparent; border: 1px solid var(--border-color,rgba(255,255,255,0.3)); }
             .vp-crop-actions > .vp-crop-ok { background: #0080FF; border: none; color: white; }
-        `);
+        `;
+        (function () {
+            const K = {};
+            K.uploadImageToServer = uploadImageToServer; K.updateTabButtons = updateTabButtons; K.rebuildPanel = rebuildPanel; K.createStickerButton = createStickerButton; K.showPanel = showPanel;
+            stickerPartData(K);
+            stickerPartZip(K);
+
+            addCss(stickerCss(K.PANEL_WIDTH));
 
             const el = (tag, cls, html) => {
                 const e = document.createElement(tag);
                 if (cls) e.className = cls;
                 if (html) e.innerHTML = html;
                 return e;
-            };
+            }; K.el = el;
 
             async function uploadImageToServer(file) {
                 const accessToken = await getAccessToken();
@@ -10501,10 +10648,10 @@ var __vpBannerAuto = (() => {
                 return stickerFile(sticker).then(uploadImageToServer)
                     .then(data => {
                         const oldId = sticker.id;
-                        [recentStickers, ...userPacks.map(p => p.stickers)].forEach(list => list.forEach(s => { if (s.id === oldId) Object.assign(s, data); }));
+                        [K.recentStickers, ...K.userPacks.map(p => p.stickers)].forEach(list => list.forEach(s => { if (s.id === oldId) Object.assign(s, data); }));
                         Object.assign(sticker, data);
-                        saveRecent();
-                        saveUserPacks();
+                        K.saveRecent();
+                        K.saveUserPacks();
                         return data;
                     });
             }
@@ -10575,9 +10722,9 @@ var __vpBannerAuto = (() => {
                 attached.send.click();
             }, true);
 
-            let stickerPanel = null, scrollContainer = null, tabsRow = null, recentBtn = null;
+            K.stickerPanel = null, K.scrollContainer = null, K.tabsRow = null, K.recentBtn = null;
             let stickerBtn = null, hideTimeout = null;
-            let editPack = null;
+            K.editPack = null;
 
             let blockWheel = null;
             function disablePageScroll() {
@@ -10594,7 +10741,7 @@ var __vpBannerAuto = (() => {
             }
 
             function adjustInputWidth(input) {
-                const n = Math.max(1, Math.min(MAX_NAME_LENGTH, input.value.length || input.placeholder.length || DEFAULT_PACK_NAME.length));
+                const n = Math.max(1, Math.min(K.MAX_NAME_LENGTH, input.value.length || input.placeholder.length || K.DEFAULT_PACK_NAME.length));
                 input.style.width = `${n * (14 - n * 0.2)}px`;
                 input.style.minWidth = 'auto';
             }
@@ -10604,140 +10751,530 @@ var __vpBannerAuto = (() => {
                 const first = pack.stickers[0];
                 if (first && first.url) { const img = el('img'); img.src = first.url; btn.appendChild(img); }
                 else btn.innerHTML = ICONS.EMPTY_PACK;
-                btn.title = pack.name || DEFAULT_PACK_NAME;
+                btn.title = pack.name || K.DEFAULT_PACK_NAME;
                 btn.dataset.pack = pack.id;
-                btn.onclick = () => { exitEditMode(); scrollToPack(pack.id); };
+                btn.onclick = () => { K.exitEditMode(); scrollToPack(pack.id); };
                 return btn;
             }
             function updateTabButtons() {
-                const wrap = tabsRow && tabsRow.firstElementChild;
-                if (wrap) wrap.replaceChildren(...userPacks.map(packTab));
+                const wrap = K.tabsRow && K.tabsRow.firstElementChild;
+                if (wrap) wrap.replaceChildren(...K.userPacks.map(packTab));
             }
 
             function createStickerPanel() {
-                if (stickerPanel) return;
-                stickerPanel = el('div', 'sticker-panel');
+                if (K.stickerPanel) return;
+                K.stickerPanel = el('div', 'sticker-panel');
                 const header = el('div', 'vp-sp-head');
-                recentBtn = el('button', 'vp-sp-tab vp-recent vp-on', ICONS.RECENT);
-                recentBtn.title = 'Недавние';
-                recentBtn.onclick = () => { exitEditMode(); scrollToPack('recent'); };
-                tabsRow = el('div', 'vp-sp-tabs', '<div></div>');
-                tabsRow.addEventListener('wheel', e => {
-                    if (e.deltaY !== 0) { e.preventDefault(); tabsRow.scrollLeft += e.deltaY * 0.4; }
+                K.recentBtn = el('button', 'vp-sp-tab vp-recent vp-on', ICONS.RECENT);
+                K.recentBtn.title = 'Недавние';
+                K.recentBtn.onclick = () => { K.exitEditMode(); scrollToPack('recent'); };
+                K.tabsRow = el('div', 'vp-sp-tabs', '<div></div>');
+                K.tabsRow.addEventListener('wheel', e => {
+                    if (e.deltaY !== 0) { e.preventDefault(); K.tabsRow.scrollLeft += e.deltaY * 0.4; }
                 }, { passive: false });
                 updateTabButtons();
                 const addPackBtn = el('button', 'vp-sp-tab', ICONS.ADD_PACK);
                 addPackBtn.title = 'Создать стикерпак';
                 addPackBtn.onclick = () => {
                     const pack = { id: 'user_' + Date.now(), name: '', stickers: [] };
-                    userPacks.push(pack);
-                    saveUserPacks();
+                    K.userPacks.push(pack);
+                    K.saveUserPacks();
                     rebuildPanel();
-                    enterEditMode(pack.id);
+                    K.enterEditMode(pack.id);
                     showPanel();
                 };
                 const zipBtn = el('button', 'vp-sp-tab', ICONS.ZIP_PACK);
                 zipBtn.title = 'Паки из архива';
-                zipBtn.onclick = () => openZipImport();
-                header.append(recentBtn, tabsRow, addPackBtn, zipBtn);
+                zipBtn.onclick = () => K.openZipImport();
+                header.append(K.recentBtn, K.tabsRow, addPackBtn, zipBtn);
 
-                scrollContainer = el('div', 'vp-sp-body');
-                scrollContainer.addEventListener('wheel', e => e.stopPropagation(), { passive: true });
-                scrollContainer.addEventListener('touchmove', e => e.stopPropagation(), { passive: true });
-                scrollContainer.addEventListener('scroll', updateActiveTabFromScroll, { passive: true });
-                stickerPanel.append(header, scrollContainer);
-                stickerPanel.addEventListener('mouseenter', () => {
+                K.scrollContainer = el('div', 'vp-sp-body');
+                K.scrollContainer.addEventListener('wheel', e => e.stopPropagation(), { passive: true });
+                K.scrollContainer.addEventListener('touchmove', e => e.stopPropagation(), { passive: true });
+                K.scrollContainer.addEventListener('scroll', updateActiveTabFromScroll, { passive: true });
+                K.stickerPanel.append(header, K.scrollContainer);
+                K.stickerPanel.addEventListener('mouseenter', () => {
                     clearTimeout(hideTimeout);
-                    stickerPanel.querySelectorAll('.pack-name-input').forEach(adjustInputWidth);
+                    K.stickerPanel.querySelectorAll('.pack-name-input').forEach(adjustInputWidth);
                 });
-                stickerPanel.addEventListener('mouseleave', () => hidePanel(200));
-                document.body.appendChild(stickerPanel);
+                K.stickerPanel.addEventListener('mouseleave', () => hidePanel(200));
+                document.body.appendChild(K.stickerPanel);
             }
             function rebuildPanel() {
-                if (stickerPanel) stickerPanel.remove();
-                stickerPanel = scrollContainer = tabsRow = recentBtn = null;
-                editPack = null;
+                if (K.stickerPanel) K.stickerPanel.remove();
+                K.stickerPanel = K.scrollContainer = K.tabsRow = K.recentBtn = null;
+                K.editPack = null;
                 createStickerPanel();
                 renderAllContent();
             }
 
             function renderAllContent() {
-                if (!scrollContainer) return;
-                scrollContainer.replaceChildren();
-                for (const key of allPackKeys()) {
+                if (!K.scrollContainer) return;
+                K.scrollContainer.replaceChildren();
+                for (const key of K.allPackKeys()) {
                     const header = el('div', 'pack-header');
                     header.dataset.pack = key;
                     const name = el('div', 'vp-sp-name');
                     const input = el('input', 'pack-name-input');
                     input.type = 'text';
-                    input.value = packName(key);
+                    input.value = K.packName(key);
                     input.placeholder = 'Название...';
-                    input.maxLength = MAX_NAME_LENGTH;
+                    input.maxLength = K.MAX_NAME_LENGTH;
                     name.appendChild(input);
                     if (key !== 'recent') {
-                        const pack = () => userPacks.find(p => p.id === key);
-                        const locked = () => editPack !== key;
+                        const pack = () => K.userPacks.find(p => p.id === key);
+                        const locked = () => K.editPack !== key;
                         input.addEventListener('input', () => {
-                            if (locked()) input.value = packName(key);
+                            if (locked()) input.value = K.packName(key);
                             else {
-                                input.value = input.value.slice(0, MAX_NAME_LENGTH);
-                                if (pack()) { pack().name = input.value; saveUserPacks(); }
+                                input.value = input.value.slice(0, K.MAX_NAME_LENGTH);
+                                if (pack()) { pack().name = input.value; K.saveUserPacks(); }
                             }
                             adjustInputWidth(input);
                         });
                         input.addEventListener('blur', () => {
-                            if (locked()) input.value = packName(key);
+                            if (locked()) input.value = K.packName(key);
                             else if (!input.value.trim()) {
-                                input.value = DEFAULT_PACK_NAME;
-                                if (pack()) { pack().name = DEFAULT_PACK_NAME; saveUserPacks(); }
+                                input.value = K.DEFAULT_PACK_NAME;
+                                if (pack()) { pack().name = K.DEFAULT_PACK_NAME; K.saveUserPacks(); }
                             }
                             adjustInputWidth(input);
                         });
                         const editBtn = el('button', 'vp-sp-edit', ICONS.EDIT);
                         editBtn.title = 'Редактировать';
-                        editBtn.onclick = () => { if (editPack === key) exitEditMode(); else { exitEditMode(); enterEditMode(key); } };
+                        editBtn.onclick = () => { if (K.editPack === key) K.exitEditMode(); else { K.exitEditMode(); K.enterEditMode(key); } };
                         const delPack = el('button', 'delete-pack-btn', ICONS.TRASH);
                         delPack.title = 'Удалить пак';
-                        delPack.onclick = () => { if (confirm('Удалить пак?')) deleteStickerPack(key); };
+                        delPack.onclick = () => { if (confirm('Удалить пак?')) K.deleteStickerPack(key); };
                         const done = el('button', 'vp-sp-done', ICONS.CHECK);
                         done.title = 'Готово';
-                        done.onclick = exitEditMode;
+                        done.onclick = K.exitEditMode;
                         name.append(editBtn, delPack, done);
                     }
                     header.appendChild(name);
                     const grid = el('div', 'pack-grid');
                     grid.dataset.pack = key;
-                    scrollContainer.append(header, grid);
-                    refreshPackGrid(key);
+                    K.scrollContainer.append(header, grid);
+                    K.refreshPackGrid(key);
                 }
-                markEditing();
+                K.markEditing();
             }
 
+            stickerPartEdit(K);
+            async function attachAsSiteFile(sticker) {
+                const row = stickerBtn && stickerBtn.closest('.' + SELECTORS.stickerContainer);
+                let input = null;
+                for (let e = row, i = 0; e && !input && i < 5; e = e.parentElement, i++) input = e.querySelector('input[type="file"]');
+                if (!input) return false;
+                const file = await stickerFile(sticker);
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                input.files = dt.files;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+            }
+            function pickSticker(sticker) {
+                if (sticker && sticker.id && sticker.url) {
+                    K.addToRecent(sticker);
+                    const fallback = e => {
+                        if (e) { console.warn('[ITD VP] стикер через сайт', e); logErr('стикер через сайт', e); }
+                        try { insertStickerToComment(sticker); } catch (err) { console.warn('[ITD VP] стикер', err); logErr('стикер', err); }
+                    };
+                    if (stickerBtn) stickerBtn.innerHTML = ICONS.LOADING;
+                    attachAsSiteFile(sticker).then(ok => { if (!ok) fallback(); }, fallback)
+                        .finally(() => { if (stickerBtn) stickerBtn.innerHTML = ICONS.STICKER_BUTTON; });
+                }
+                K.stickerPanel.classList.remove('vp-open');
+                K.exitEditMode();
+                enablePageScroll();
+            }
+            function createStickerButton(sticker, key, index, editing) {
+                const btn = el('button', 'vp-sticker-item');
+                btn.dataset.packKey = key;
+                btn.dataset.stickerIndex = index;
+                if (sticker && sticker.url) { const img = el('img'); img.src = sticker.url; btn.appendChild(img); }
+                else btn.appendChild(el('div', 'vp-sticker-empty'));
+                btn.onclick = () => { if (btn._vpDragged) { btn._vpDragged = false; return; } pickSticker(sticker); };
+                if (!editing) return btn;
+
+                btn.classList.add('sticker-editing', `sticker-shake-${(index % 8) + 1}`);
+                btn.draggable = false;
+                const del = el('div', 'vp-sticker-del', ICONS.DELETE);
+                del.onmousedown = e => { e.stopPropagation(); e.preventDefault(); };
+                del.onclick = e => { e.stopPropagation(); e.preventDefault(); K.deleteSticker(key, index); };
+                btn.appendChild(del);
+                btn.addEventListener('pointerdown', e => K.startStickerDrag(e, btn, key));
+                return btn;
+            }
+
+            function scrollToPack(key) {
+                const header = K.scrollContainer && K.scrollContainer.querySelector(`.pack-header[data-pack="${key}"]`);
+                if (header) header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            function updateActiveTabFromScroll() {
+                if (K.editPack || !K.scrollContainer) return;
+                const top = K.scrollContainer.getBoundingClientRect().top + 50;
+                let active = 'recent', min = Infinity;
+                for (const h of K.scrollContainer.querySelectorAll(':scope > .pack-header')) {
+                    const d = h.getBoundingClientRect().top - top;
+                    if (d <= 0 && -d < min) { min = -d; active = h.dataset.pack; }
+                }
+                K.recentBtn.classList.toggle('vp-on', active === 'recent');
+                K.tabsRow.querySelectorAll('.vp-sp-tab').forEach(t => t.classList.toggle('vp-on', t.dataset.pack === active));
+            }
+
+            function showPanel() {
+                if (!stickerBtn || !stickerBtn.isConnected) return;
+                clearTimeout(hideTimeout);
+                createStickerPanel();
+                if (!K.scrollContainer.children.length) renderAllContent();
+                const rect = stickerBtn.getBoundingClientRect();
+                K.stickerPanel.style.bottom = `${window.innerHeight - rect.top + 8}px`;
+                K.stickerPanel.style.left = `${Math.min(rect.left, window.innerWidth - K.PANEL_WIDTH - 20)}px`;
+                K.stickerPanel.classList.add('vp-open');
+                disablePageScroll();
+            }
+            function hidePanel(delay) {
+                clearTimeout(hideTimeout);
+                hideTimeout = setTimeout(() => {
+                    if (!K.stickerPanel || !K.stickerPanel.classList.contains('vp-open')) return;
+                    if (K.stickerPanel.classList.contains('vp-drag')) return hidePanel(delay);
+                    if (K.stickerPanel.querySelector('.vp-sp-import')) return hidePanel(delay);
+                    K.stickerPanel.classList.remove('vp-open');
+                    K.exitEditMode();
+                    enablePageScroll();
+                }, delay);
+            }
+
+            stickerPartCrop(K);
+
+            onDom(function stickerButton() {
+                const row = siteEl('stickerContainer');
+                if (!row || row.querySelector('.sticker-btn')) return;
+                const before = row.querySelector('.' + SELECTORS.stickerMicBtn) || row.querySelector('.' + SELECTORS.stickerSendBtn);
+                if (!before) return;
+                stickerBtn = el('button', 'sticker-btn', ICONS.STICKER_BUTTON);
+                stickerBtn.onmouseenter = showPanel;
+                stickerBtn.onmouseleave = () => hidePanel(300);
+                row.insertBefore(stickerBtn, before);
+            });
+        })();
+
+        // Стикеры: хранение паков, кодирование, синхронизация между устройствами (часть стикерной системы, общее состояние — объект K)
+        function stickerPartData(K) {
+            const { updateTabButtons } = K;
+            K.savePack = savePack;
+            const STORAGE_KEY = 'user_sticker_packs_v1';
+            const RECENT_STORAGE_KEY = 'recent_stickers_v1';
+            const MAX_NAME_LENGTH = 20; K.MAX_NAME_LENGTH = MAX_NAME_LENGTH;
+            const DEFAULT_PACK_NAME = 'Новый пакет'; K.DEFAULT_PACK_NAME = DEFAULT_PACK_NAME;
+            const PANEL_WIDTH = 320; K.PANEL_WIDTH = PANEL_WIDTH;
+
+            const readList = key => { try { return JSON.parse(localStorage.getItem(key)) || []; } catch (e) { return []; } };
+            const writeList = (key, v) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) { } };
+            K.userPacks = readList(STORAGE_KEY);
+            K.recentStickers = readList(RECENT_STORAGE_KEY);
+            const saveUserPacks = () => { writeList(STORAGE_KEY, K.userPacks); packsChanged(); }; K.saveUserPacks = saveUserPacks;
+            const saveRecent = () => writeList(RECENT_STORAGE_KEY, K.recentStickers); K.saveRecent = saveRecent;
+            const packStickers = key => key === 'recent' ? K.recentStickers : (K.userPacks.find(p => p.id === key) || { stickers: [] }).stickers; K.packStickers = packStickers;
+            const packName = key => key === 'recent' ? 'Недавние' : ((K.userPacks.find(p => p.id === key) || {}).name || DEFAULT_PACK_NAME); K.packName = packName;
+            const allPackKeys = () => ['recent', ...K.userPacks.map(p => p.id)]; K.allPackKeys = allPackKeys;
+            function savePack(key) { if (key === 'recent') saveRecent(); else saveUserPacks(); }
+
+            const SYNC_TAG = 'ITDXS';
+            const PACKS_AT_KEY = 'user_sticker_packs_at';
+            const EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+            const CDN_IMG = /^https:\/\/cdn\.xn--d1ah4a\.com\/images\/([0-9a-f-]{36})\.(\w+)$/i;
+            let packsAt = +(localStorage.getItem(PACKS_AT_KEY) || 0), syncTimer = 0, syncing = false, applyingRemote = false;
+            const hexToBytes = h => Uint8Array.from(h.replace(/-/g, '').match(/../g), x => parseInt(x, 16));
+            const bytesToUuid = b => [...b].map(x => x.toString(16).padStart(2, '0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+            const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            function encodePacks(packs, at) {
+                const out = [1], put = (...b) => out.push(...b), str = t => { const u = new TextEncoder().encode(t).slice(0, 255); put(u.length, ...u); };
+                const sec = Math.floor(at / 1000);
+                put((sec >>> 24) & 255, (sec >>> 16) & 255, (sec >>> 8) & 255, sec & 255, packs.length);
+                for (const pk of packs) {
+                    str(pk.id || ''); str(pk.name || '');
+                    const list = pk.stickers.slice(0, 65535);
+                    put(list.length >> 8, list.length & 255);
+                    for (const st of list) {
+                        const m = String(st.url || '').match(CDN_IMG), ext = m ? EXT.indexOf(m[2].toLowerCase()) : -1;
+                        if (m && ext >= 0 && UUID.test(st.id || '')) { put(ext, ...hexToBytes(st.id), ...hexToBytes(m[1])); }
+                        else { put(255); str(st.id || ''); str(st.url || ''); }
+                    }
+                }
+                out[0] = 2;
+                for (let i = 1; i < out.length; i++) out[i] ^= OBF_KEY[i % OBF_KEY.length];
+                let bin = '';
+                out.forEach(b => { bin += String.fromCharCode(b); });
+                return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            }
+            function decodePacks(b64) {
+                const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
+                const b = Uint8Array.from(bin, c => c.charCodeAt(0));
+                if (b[0] === 2) { for (let i = 1; i < b.length; i++) b[i] ^= OBF_KEY[i % OBF_KEY.length]; b[0] = 1; }
+                let i = 0;
+                const byte = () => { if (i >= b.length) throw new Error('обрыв данных'); return b[i++]; };
+                const str = () => { const n = byte(), t = new TextDecoder().decode(b.slice(i, i + n)); i += n; return t; };
+                if (byte() !== 1) throw new Error('версия паков');
+                const at = ((byte() << 24) >>> 0) + (byte() << 16) + (byte() << 8) + byte();
+                const packs = [];
+                for (let n = byte(); n > 0; n--) {
+                    const pk = { id: str(), name: str(), stickers: [] };
+                    for (let k = (byte() << 8) + byte(); k > 0; k--) {
+                        const ext = byte();
+                        if (ext === 255) { const id = str(), url = str(); pk.stickers.push({ id, url }); continue; }
+                        const id = bytesToUuid(b.slice(i, i + 16)), img = bytesToUuid(b.slice(i + 16, i + 32));
+                        i += 32;
+                        pk.stickers.push({ id, url: `https://cdn.xn--d1ah4a.com/images/${img}.${EXT[ext] || 'png'}` });
+                    }
+                    packs.push(pk);
+                }
+                return { at: at * 1000, packs };
+            }
+            const myAccountId = () => (meData && meData.id) || (verifiedInfo(myUsername || '') || {}).id || null;
+            const partsKey = () => 'vp_sticker_parts_' + myAccountId();
+            const remotePacksAt = () => { const f = String((verifiedInfo(myUsername || '') || {}).flags || ''); return f.length > 1 ? +f.slice(1) * 1000 : 0; };
+            async function packParts(scan) {
+                if (!scan) { const saved = GM_getValue(partsKey(), null); if (saved) return saved; }
+                const me = myAccountId();
+                const list = (await allComments(STICKER_POST_ID)).filter(c => c.author && c.author.id === me && /^ITDXS \d+\/\d+ /.test(c.content || ''))
+                    .map(c => { const m = c.content.match(/^ITDXS (\d+)\/(\d+) (\S*)/); return { id: c.id, i: +m[1], n: +m[2], d: m[3] }; });
+                GM_setValue(partsKey(), list.map(({ id, i, n }) => ({ id, i, n })));
+                return list;
+            }
+            function applyRemotePacks(remote) {
+                applyingRemote = true;
+                K.userPacks = remote.packs;
+                writeList(STORAGE_KEY, K.userPacks);
+                packsAt = remote.at;
+                localStorage.setItem(PACKS_AT_KEY, String(packsAt));
+                applyingRemote = false;
+                if (K.scrollContainer) { updateTabButtons(); K.refreshAllPackGrids(); }
+            }
+            const patchComment = (id, content) => editComment(id, content);
+            async function pullPacks() {
+                const at = remotePacksAt();
+                if (!at || at <= packsAt + 999) return;
+                const parts = (await packParts(true)).filter(p => p.n).sort((a, b) => a.i - b.i);
+                const n = parts.length && parts[0].n;
+                if (!n || parts.length < n || !parts.slice(0, n).every((p, k) => p.i === k + 1 && p.n === n)) return;
+                const remote = decodePacks(parts.slice(0, n).map(p => p.d).join(''));
+                if (remote.at <= packsAt + 999) return;
+                const legacy = !packsAt && K.userPacks.length ? K.userPacks.filter(pk => !remote.packs.some(r => r.id === pk.id)) : [];
+                applyRemotePacks({ at: remote.at, packs: [...remote.packs, ...legacy] });
+                if (legacy.length) { packsAt = Date.now(); localStorage.setItem(PACKS_AT_KEY, String(packsAt)); return 'push'; }
+            }
+            async function pushPacks() {
+                const mine = verifiedInfo(myUsername || '');
+                if (!mine || !mine.commentId) return;
+                let parts = await packParts(false);
+                if (!parts.length) parts = await packParts(true);
+                if (!packsAt) { packsAt = Date.now(); localStorage.setItem(PACKS_AT_KEY, String(packsAt)); }
+                const data = encodePacks(K.userPacks, packsAt), CH = 1900, chunks = [];
+                for (let k = 0; k < data.length || !chunks.length; k += CH) chunks.push(data.slice(k, k + CH));
+                const slots = parts.map(p => p.id), saved = [];
+                for (let k = 0; k < Math.max(chunks.length, slots.length); k++) {
+                    const content = k < chunks.length ? `${SYNC_TAG} ${k + 1}/${chunks.length} ${chunks[k]}` : `${SYNC_TAG} 0/0 -`;
+                    if (slots[k]) {
+                        const res = await patchComment(slots[k], content);
+                        if (!res.ok) throw new Error('паки: правка ' + res.status);
+                        saved.push({ id: slots[k], i: k < chunks.length ? k + 1 : 0, n: k < chunks.length ? chunks.length : 0 });
+                    } else {
+                        const res = await sendComment(STICKER_POST_ID, content);
+                        if (!res.ok) throw new Error('паки: запись ' + res.status);
+                        const j = await res.json();
+                        saved.push({ id: (j.data || j).id, i: k + 1, n: chunks.length });
+                    }
+                }
+                GM_setValue(partsKey(), saved);
+                const code = String(mine.code) + '1' + Math.floor(packsAt / 1000);
+                const res = await patchComment(mine.commentId, code);
+                if (res.ok) await checkAllComments(true);
+            }
+            async function syncPacks(up) {
+                if (!STICKER_POST_ID || syncing || !myUsername || !myAccountId()) return;
+                syncing = true;
+                try {
+                    if (up) await pushPacks();
+                    else {
+                        const merged = await pullPacks();
+                        const at = remotePacksAt();
+                        if (merged === 'push' || (K.userPacks.length && (!packsAt || packsAt > at + 999))) await pushPacks();
+                    }
+                } catch (e) {
+                    logErr('паки: синхронизация', e);
+                } finally {
+                    syncing = false;
+                }
+            }
+            function packsChanged() {
+                if (applyingRemote) return;
+                packsAt = Date.now();
+                localStorage.setItem(PACKS_AT_KEY, String(packsAt));
+                clearTimeout(syncTimer);
+                syncTimer = setTimeout(() => syncPacks(true), 4000);
+            }
+            (function syncLoop() {
+                if (!STICKER_POST_ID) return;
+                const tick = () => myUsername && myAccountId() && verifiedInfo(myUsername) ? syncPacks(false) : setTimeout(tick, 3000);
+                setTimeout(tick, 6000);
+                sched.add('packs', () => syncPacks(false), { every: 10 * 60 * 1000, net: true, visible: true });
+            })();
+
+        }
+        // Стикеры: импорт и экспорт паков из ZIP
+        function stickerPartZip(K) {
+            const { DEFAULT_PACK_NAME, MAX_NAME_LENGTH, rebuildPanel, saveRecent, saveUserPacks, showPanel, uploadImageToServer } = K;
+            K.openZipImport = openZipImport; K.addToRecent = addToRecent;
+            const ZIP_IMG = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+            const ZIP_LIMITS = { packs: 20, perPack: 120, total: 300, bytes: 5 * 1024 * 1024 };
+            async function readZip(file) {
+                const buf = new Uint8Array(await file.arrayBuffer()), dv = new DataView(buf.buffer);
+                let eocd = -1;
+                for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+                if (eocd < 0) throw new Error('это не zip-архив');
+                const count = dv.getUint16(eocd + 10, true);
+                let at = dv.getUint32(eocd + 16, true);
+                const utf8 = new TextDecoder('utf-8', { fatal: true }), dos = new TextDecoder('ibm866');
+                const entries = [];
+                for (let k = 0; k < count; k++) {
+                    if (dv.getUint32(at, true) !== 0x02014b50) throw new Error('архив повреждён');
+                    const flags = dv.getUint16(at + 8, true), method = dv.getUint16(at + 10, true);
+                    const csize = dv.getUint32(at + 20, true), size = dv.getUint32(at + 24, true);
+                    const nlen = dv.getUint16(at + 28, true), xlen = dv.getUint16(at + 30, true), clen = dv.getUint16(at + 32, true);
+                    const local = dv.getUint32(at + 42, true), raw = buf.subarray(at + 46, at + 46 + nlen);
+                    let name;
+                    try { name = flags & 0x800 ? new TextDecoder().decode(raw) : utf8.decode(raw); } catch (e) { name = dos.decode(raw); }
+                    entries.push({ name: name.replace(/\\/g, '/'), method, csize, size, local });
+                    at += 46 + nlen + xlen + clen;
+                }
+                entries.data = async e => {
+                    const start = e.local + 30 + dv.getUint16(e.local + 26, true) + dv.getUint16(e.local + 28, true);
+                    const bytes = buf.slice(start, start + e.csize);
+                    if (e.method === 0) return bytes;
+                    if (e.method !== 8) throw new Error('неизвестное сжатие');
+                    return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+                };
+                return entries;
+            }
+            function zipPacks(entries, zipName) {
+                const imgs = entries.filter(e => {
+                    const parts = e.name.split('/');
+                    return !e.name.endsWith('/') && !parts.some(p => p.startsWith('.') || p === '__MACOSX') && ZIP_IMG[(parts.pop().split('.').pop() || '').toLowerCase()];
+                });
+                let paths = imgs.map(e => e.name.split('/'));
+                while (paths.length && paths.every(p => p.length > 2 && p[0] === paths[0][0])) paths = paths.map(p => p.slice(1));
+                const groups = new Map();
+                imgs.forEach((e, i) => {
+                    const p = paths[i], pack = p.length > 1 ? p[0] : zipName.replace(/\.zip$/i, '');
+                    if (!groups.has(pack)) groups.set(pack, []);
+                    groups.get(pack).push(e);
+                });
+                return [...groups].map(([name, files]) => ({ name: name.trim().slice(0, MAX_NAME_LENGTH) || DEFAULT_PACK_NAME, files: files.sort((a, b) => a.name.localeCompare(b.name, 'ru', { numeric: true })) }));
+            }
+            function openZipImport() {
+                if (!K.stickerPanel || K.stickerPanel.querySelector('.vp-sp-import')) return;
+                K.exitEditMode();
+                const card = K.el('div', 'vp-sp-import', `<b>Паки из архива</b>
+                <ul>
+                    <li>Архив <b style="font-size:inherit">.zip</b></li>
+                    <li>Папка в архиве = пак, имя папки = название пака</li>
+                    <li>В папке — картинки png, jpg, gif, webp (до 5 МБ); встают как есть, без обрезки</li>
+                    <li>Картинки прямо в архиве, без папки, — пак с именем архива</li>
+                </ul>
+                <pre>стикеры.zip
+├ Коты/
+│  ├ 1.png
+│  └ 2.gif
+└ Мемы/
+   └ шрек.jpg</pre>
+                <div class="vp-imp-status"></div>
+                <div class="vp-imp-btns"><button type="button" class="vp-imp-cancel">Отмена</button><button type="button" class="vp-imp-go">Выбрать архив</button></div>`);
+                K.stickerPanel.appendChild(card);
+                const status = card.querySelector('.vp-imp-status'), go = card.querySelector('.vp-imp-go'), cancel = card.querySelector('.vp-imp-cancel');
+                let busy = false, stop = false;
+                cancel.onclick = () => { if (busy) { stop = true; cancel.disabled = true; status.textContent = 'Останавливаю…'; } else card.remove(); };
+                go.onclick = () => {
+                    const input = K.el('input');
+                    input.type = 'file';
+                    input.accept = '.zip,application/zip';
+                    input.onchange = async () => {
+                        const file = input.files[0];
+                        if (!file) return;
+                        busy = true; go.disabled = true;
+                        try {
+                            status.textContent = 'Читаю архив…';
+                            const entries = await readZip(file);
+                            const packs = zipPacks(entries, file.name).slice(0, ZIP_LIMITS.packs);
+                            const total = Math.min(ZIP_LIMITS.total, packs.reduce((n, pk) => n + Math.min(pk.files.length, ZIP_LIMITS.perPack), 0));
+                            if (!total) throw new Error('в архиве нет картинок по правилам');
+                            let done = 0, skipped = 0;
+                            for (const pk of packs) {
+                                if (stop || done >= total) break;
+                                const pack = { id: 'user_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), name: pk.name, stickers: [] };
+                                for (const e of pk.files.slice(0, ZIP_LIMITS.perPack)) {
+                                    if (stop || done >= total) break;
+                                    status.textContent = `Загружаю «${pk.name}»: ${done + 1} из ${total}…`;
+                                    try {
+                                        if (e.size > ZIP_LIMITS.bytes) throw new Error('больше 5 МБ');
+                                        const base = e.name.split('/').pop(), type = ZIP_IMG[base.split('.').pop().toLowerCase()];
+                                        const data = await uploadImageToServer(new File([await entries.data(e)], base, { type }));
+                                        pack.stickers.push(data);
+                                    } catch (err) { skipped++; }
+                                    done++;
+                                }
+                                if (pack.stickers.length) { K.userPacks.push(pack); saveUserPacks(); }
+                            }
+                            rebuildPanel();
+                            const left = K.stickerPanel.querySelector('.vp-sp-import');
+                            if (left) left.remove();
+                            showPanel();
+                            if (skipped) alert(`Готово. Не загрузились: ${skipped} (слишком большие или битые картинки)`);
+                        } catch (err) {
+                            status.textContent = 'Не вышло: ' + (err && err.message || err);
+                            logErr('паки из архива', err);
+                            busy = false; go.disabled = false;
+                        }
+                    };
+                    input.click();
+                };
+            }
+
+            function addToRecent(sticker) {
+                K.recentStickers = [sticker, ...K.recentStickers.filter(s => s.id !== sticker.id)].slice(0, 30);
+                saveRecent();
+            }
+        }
+        // Стикеры: режим правки паков, перетаскивание, добавление и удаление стикеров
+        function stickerPartEdit(K) {
+            const { allPackKeys, createStickerButton, el, packStickers, rebuildPanel, savePack, saveRecent, saveUserPacks, showPanel, updateTabButtons, uploadImageToServer } = K;
+            K.markEditing = markEditing; K.enterEditMode = enterEditMode; K.exitEditMode = exitEditMode; K.deleteStickerPack = deleteStickerPack; K.deleteSticker = deleteSticker; K.startStickerDrag = startStickerDrag; K.refreshPackGrid = refreshPackGrid; K.refreshAllPackGrids = refreshAllPackGrids;
             function markEditing() {
-                if (!scrollContainer) return;
-                scrollContainer.classList.toggle('vp-editing', !!editPack);
-                for (const e of scrollContainer.children) e.classList.toggle('vp-cur', e.dataset.pack === editPack);
+                if (!K.scrollContainer) return;
+                K.scrollContainer.classList.toggle('vp-editing', !!K.editPack);
+                for (const e of K.scrollContainer.children) e.classList.toggle('vp-cur', e.dataset.pack === K.editPack);
             }
             function enterEditMode(key) {
                 if (key === 'recent') return;
-                editPack = key;
+                K.editPack = key;
                 markEditing();
                 refreshAllPackGrids();
-                const header = scrollContainer.querySelector(`.pack-header[data-pack="${key}"]`);
+                const header = K.scrollContainer.querySelector(`.pack-header[data-pack="${key}"]`);
                 if (header) header.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
             function exitEditMode() {
-                editPack = null;
-                if (!scrollContainer) return;
+                K.editPack = null;
+                if (!K.scrollContainer) return;
                 markEditing();
                 refreshAllPackGrids();
             }
 
             function deleteStickerPack(key) {
-                userPacks = userPacks.filter(p => p.id !== key);
+                K.userPacks = K.userPacks.filter(p => p.id !== key);
                 saveUserPacks();
-                if (stickerPanel) {
-                    const open = stickerPanel.classList.contains('vp-open');
+                if (K.stickerPanel) {
+                    const open = K.stickerPanel.classList.contains('vp-open');
                     rebuildPanel();
                     if (open) showPanel();
                 }
@@ -10767,7 +11304,7 @@ var __vpBannerAuto = (() => {
                         const left = gr.left + grid.clientLeft + el.offsetLeft, top = gr.top + grid.clientTop + el.offsetTop;
                         return { el, r: { left, top, right: left + el.offsetWidth, bottom: top + el.offsetHeight } };
                     });
-                    box = scrollContainer.getBoundingClientRect();
+                    box = K.scrollContainer.getBoundingClientRect();
                 };
                 const frame = () => {
                     raf = 0;
@@ -10780,7 +11317,7 @@ var __vpBannerAuto = (() => {
                         measure();
                     }
                     if (py < box.top + 36 || py > box.bottom - 36) {
-                        scrollContainer.scrollTop += py < box.top + 36 ? -10 : 10;
+                        K.scrollContainer.scrollTop += py < box.top + 36 ? -10 : 10;
                         measure();
                         raf = raf || requestAnimationFrame(frame);
                     }
@@ -10799,7 +11336,7 @@ var __vpBannerAuto = (() => {
                         document.body.appendChild(ghost);
                         btn.classList.add('vp-hole');
                         btn._vpDragged = true;
-                        stickerPanel.classList.add('vp-drag');
+                        K.stickerPanel.classList.add('vp-drag');
                         measure();
                     }
                     ev.preventDefault();
@@ -10823,7 +11360,7 @@ var __vpBannerAuto = (() => {
                     const finish = () => {
                         ghost.remove();
                         btn.classList.remove('vp-hole');
-                        stickerPanel.classList.remove('vp-drag');
+                        K.stickerPanel.classList.remove('vp-drag');
                         const list = packStickers(key);
                         const order = [...grid.querySelectorAll('.vp-sticker-item')].map(b => list[+b.dataset.stickerIndex]);
                         list.splice(0, list.length, ...order);
@@ -10846,18 +11383,18 @@ var __vpBannerAuto = (() => {
                 input.onchange = async () => {
                     const file = input.files[0];
                     if (!file) return;
-                    const addBtn = scrollContainer && scrollContainer.querySelector(`.pack-grid[data-pack="${key}"] .add-item-btn`);
+                    const addBtn = K.scrollContainer && K.scrollContainer.querySelector(`.pack-grid[data-pack="${key}"] .add-item-btn`);
                     const busy = on => { if (addBtn) { addBtn.innerHTML = on ? ICONS.LOADING : ICONS.ADD; addBtn.classList.toggle('vp-busy', on); } };
                     busy(true);
                     try {
-                        const cropped = await showCropEditor(URL.createObjectURL(file));
+                        const cropped = await K.showCropEditor(URL.createObjectURL(file));
                         if (!cropped) { busy(false); return; }
                         const data = await uploadImageToServer(cropped);
                         if (key === 'recent') {
-                            recentStickers = [data, ...recentStickers].slice(0, 20);
+                            K.recentStickers = [data, ...K.recentStickers].slice(0, 20);
                             saveRecent();
                         } else {
-                            const pack = userPacks.find(p => p.id === key);
+                            const pack = K.userPacks.find(p => p.id === key);
                             if (pack) { pack.stickers.push(data); saveUserPacks(); }
                         }
                         refreshAllPackGrids();
@@ -10871,9 +11408,9 @@ var __vpBannerAuto = (() => {
             }
 
             function refreshPackGrid(key) {
-                const grid = scrollContainer && scrollContainer.querySelector(`.pack-grid[data-pack="${key}"]`);
+                const grid = K.scrollContainer && K.scrollContainer.querySelector(`.pack-grid[data-pack="${key}"]`);
                 if (!grid) return;
-                const editing = editPack === key;
+                const editing = K.editPack === key;
                 grid.replaceChildren(...packStickers(key).map((s, i) => createStickerButton(s, key, i, editing)));
                 if (editing) {
                     const addBtn = el('button', 'add-item-btn', ICONS.ADD);
@@ -10883,94 +11420,14 @@ var __vpBannerAuto = (() => {
                 }
             }
             function refreshAllPackGrids() {
-                if (scrollContainer) allPackKeys().forEach(refreshPackGrid);
+                if (K.scrollContainer) allPackKeys().forEach(refreshPackGrid);
             }
 
-            async function attachAsSiteFile(sticker) {
-                const row = stickerBtn && stickerBtn.closest('.' + SELECTORS.stickerContainer);
-                let input = null;
-                for (let e = row, i = 0; e && !input && i < 5; e = e.parentElement, i++) input = e.querySelector('input[type="file"]');
-                if (!input) return false;
-                const file = await stickerFile(sticker);
-                const dt = new DataTransfer();
-                dt.items.add(file);
-                input.files = dt.files;
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-                return true;
-            }
-            function pickSticker(sticker) {
-                if (sticker && sticker.id && sticker.url) {
-                    addToRecent(sticker);
-                    const fallback = e => {
-                        if (e) { console.warn('[ITD VP] стикер через сайт', e); logErr('стикер через сайт', e); }
-                        try { insertStickerToComment(sticker); } catch (err) { console.warn('[ITD VP] стикер', err); logErr('стикер', err); }
-                    };
-                    if (stickerBtn) stickerBtn.innerHTML = ICONS.LOADING;
-                    attachAsSiteFile(sticker).then(ok => { if (!ok) fallback(); }, fallback)
-                        .finally(() => { if (stickerBtn) stickerBtn.innerHTML = ICONS.STICKER_BUTTON; });
-                }
-                stickerPanel.classList.remove('vp-open');
-                exitEditMode();
-                enablePageScroll();
-            }
-            function createStickerButton(sticker, key, index, editing) {
-                const btn = el('button', 'vp-sticker-item');
-                btn.dataset.packKey = key;
-                btn.dataset.stickerIndex = index;
-                if (sticker && sticker.url) { const img = el('img'); img.src = sticker.url; btn.appendChild(img); }
-                else btn.appendChild(el('div', 'vp-sticker-empty'));
-                btn.onclick = () => { if (btn._vpDragged) { btn._vpDragged = false; return; } pickSticker(sticker); };
-                if (!editing) return btn;
-
-                btn.classList.add('sticker-editing', `sticker-shake-${(index % 8) + 1}`);
-                btn.draggable = false;
-                const del = el('div', 'vp-sticker-del', ICONS.DELETE);
-                del.onmousedown = e => { e.stopPropagation(); e.preventDefault(); };
-                del.onclick = e => { e.stopPropagation(); e.preventDefault(); deleteSticker(key, index); };
-                btn.appendChild(del);
-                btn.addEventListener('pointerdown', e => startStickerDrag(e, btn, key));
-                return btn;
-            }
-
-            function scrollToPack(key) {
-                const header = scrollContainer && scrollContainer.querySelector(`.pack-header[data-pack="${key}"]`);
-                if (header) header.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-            function updateActiveTabFromScroll() {
-                if (editPack || !scrollContainer) return;
-                const top = scrollContainer.getBoundingClientRect().top + 50;
-                let active = 'recent', min = Infinity;
-                for (const h of scrollContainer.querySelectorAll(':scope > .pack-header')) {
-                    const d = h.getBoundingClientRect().top - top;
-                    if (d <= 0 && -d < min) { min = -d; active = h.dataset.pack; }
-                }
-                recentBtn.classList.toggle('vp-on', active === 'recent');
-                tabsRow.querySelectorAll('.vp-sp-tab').forEach(t => t.classList.toggle('vp-on', t.dataset.pack === active));
-            }
-
-            function showPanel() {
-                if (!stickerBtn || !stickerBtn.isConnected) return;
-                clearTimeout(hideTimeout);
-                createStickerPanel();
-                if (!scrollContainer.children.length) renderAllContent();
-                const rect = stickerBtn.getBoundingClientRect();
-                stickerPanel.style.bottom = `${window.innerHeight - rect.top + 8}px`;
-                stickerPanel.style.left = `${Math.min(rect.left, window.innerWidth - PANEL_WIDTH - 20)}px`;
-                stickerPanel.classList.add('vp-open');
-                disablePageScroll();
-            }
-            function hidePanel(delay) {
-                clearTimeout(hideTimeout);
-                hideTimeout = setTimeout(() => {
-                    if (!stickerPanel || !stickerPanel.classList.contains('vp-open')) return;
-                    if (stickerPanel.classList.contains('vp-drag')) return hidePanel(delay);
-                    if (stickerPanel.querySelector('.vp-sp-import')) return hidePanel(delay);
-                    stickerPanel.classList.remove('vp-open');
-                    exitEditMode();
-                    enablePageScroll();
-                }, delay);
-            }
-
+        }
+        // Стикеры: окно обрезки новой картинки
+        function stickerPartCrop(K) {
+            const { el } = K;
+            K.showCropEditor = showCropEditor;
             function showCropEditor(imageUrl) {
                 return new Promise(resolve => {
                     const modal = el('div', 'vp-crop-modal');
@@ -11107,19 +11564,7 @@ var __vpBannerAuto = (() => {
                     if (img.complete) fitToImage();
                 });
             }
-
-            onDom(function stickerButton() {
-                const row = siteEl('stickerContainer');
-                if (!row || row.querySelector('.sticker-btn')) return;
-                const before = row.querySelector('.' + SELECTORS.stickerMicBtn) || row.querySelector('.' + SELECTORS.stickerSendBtn);
-                if (!before) return;
-                stickerBtn = el('button', 'sticker-btn', ICONS.STICKER_BUTTON);
-                stickerBtn.onmouseenter = showPanel;
-                stickerBtn.onmouseleave = () => hidePanel(300);
-                row.insertBefore(stickerBtn, before);
-            });
-        })();
-
+        }
         const MSG_MAX = 990, MSG_TEXT_MAX = 500;
         const MSG_IMG_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
         const MSG_IMG_RE = /\/images\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.(\w+)(?:[?#]|$)/i;
@@ -11227,14 +11672,47 @@ var __vpBannerAuto = (() => {
                 return out;
             } catch (e) { return null; }
         }
-        function msgSync() {
+        async function msgComments() {
+            const ca = msgNet.cache || (msgNet.cache = { byId: new Map(), full: 0, dirty: false, light: true });
+            const full = async () => {
+                const list = await allComments(MSG_POST_ID, 30);
+                ca.byId = new Map(list.map(c => [c.id, c]));
+                ca.full = Date.now();
+                ca.dirty = false;
+                return list;
+            };
+            if (!ca.full || ca.dirty || !ca.light || Date.now() - ca.full > ((msgNet.hotUntil || 0) > Date.now() ? 10000 : 60000)) return full();
+            let newest = 0, first = true, bad = false;
+            ca.byId.forEach(c => { const t = Date.parse(c.createdAt || ''); if (t > newest) newest = t; });
+            await allComments(MSG_POST_ID, 6, {
+                limit: 20, sort: 'newest',
+                stop: page => {
+                    if (first) {
+                        first = false;
+                        const t = Date.parse(page[0] && page[0].createdAt || '');
+                        if (page.length && (!t || t < newest)) { bad = true; return true; }
+                    }
+                    let seen = false;
+                    for (const c of page) {
+                        const o = ca.byId.get(c.id);
+                        if (o) seen = true;
+                        if (!o || o.content !== c.content) ca.byId.set(c.id, c);
+                    }
+                    return seen;
+                }
+            });
+            if (bad) { ca.light = false; return full(); }
+            return [...ca.byId.values()];
+        }
+        function msgSync(force) {
+            if (force && msgNet.cache) msgNet.cache.dirty = true;
             if (msgNet.syncing) return msgNet.again || (msgNet.again = msgNet.syncing.catch(() => { }).then(() => { msgNet.again = null; return msgSync(); }));
             msgNet.syncing = (async () => {
                 const keys = new Map(), vols = [];
                 let callNote = null;
                 await ensureApproved();
                 const meId = msgMyId(), iAmOwner = meId === OWNER_ID;
-                for (const c of await allComments(MSG_POST_ID, 30)) {
+                for (const c of await msgComments()) {
                     const a = c.author, t = String(c.content || '');
                     if (!a || !a.id) continue;
                     if (a.id !== meId && !iAmOwner && !isApprovedAuthor(a)) continue;
@@ -11259,13 +11737,13 @@ var __vpBannerAuto = (() => {
         async function msgLoadMe() {
             const id = msgMyId(), k = id && msgNet.keys.get(id);
             if (!k) return null;
-            try { const s = await msgIdb.get('me:' + id); if (s && s.pub === k.pubText) msgNet.me = { id, priv: s.priv }; } catch (e) { }
+            try { const s = await msgIdb.get('me:' + id); if (s && s.pub === k.pubText) msgNet.me = { id, priv: s.priv }; } catch (e) { logErr('сообщения: ключ в хранилище (чтение)', e); }
             return msgNet.me;
         }
         async function msgRemember(id, pk8, pubText) {
             const priv = await crypto.subtle.importKey('pkcs8', pk8, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
             msgNet.me = { id, priv }; msgNet.pairs.clear();
-            try { await msgIdb.set('me:' + id, { priv, pub: pubText }); } catch (e) { }
+            try { await msgIdb.set('me:' + id, { priv, pub: pubText }); } catch (e) { logErr('сообщения: ключ в хранилище (запись)', e); }
         }
         async function msgCreateKey(pw) {
             const id = msgMyId();
@@ -11295,7 +11773,13 @@ var __vpBannerAuto = (() => {
         async function msgDecryptAll() {
             const me = msgNet.me;
             if (!me) return;
-            const conv = new Map(), add = (uid, dir, m, v, i) => { if (!conv.has(uid)) conv.set(uid, []); conv.get(uid).push({ dir, ...m, _v: v, _i: i }); };
+            const conv = new Map(), seen = new Set(), add = (uid, dir, m, v, i) => {
+                const dk = uid + '|' + dir + '|' + m.ts + '|' + (m.sup ? 1 : 0) + '|' + (m.text || '') + '|' + (m.svc ? Array.prototype.join.call(m.svc, ',') : '') + '|' + (m.img ? m.img.id : '');
+                if (seen.has(dk)) return;
+                seen.add(dk);
+                if (!conv.has(uid)) conv.set(uid, []);
+                conv.get(uid).push({ dir, ...m, _v: v, _i: i });
+            };
             const others = [...msgNet.keys.keys()].filter(id => id !== me.id);
             for (const v of msgNet.vols) {
                 let recs;
@@ -11409,10 +11893,39 @@ var __vpBannerAuto = (() => {
             return msgSend(uid, '', false, null, cat(new Uint8Array([1]), be32(m.ts), new Uint8Array([m.dir === 'out' ? 1 : 0]), te.encode(emoji || '')));
         }
         function msgSendRead(uid, upTo, sup) { return msgSend(uid, '', false, null, cat(new Uint8Array([2]), be32(upTo), new Uint8Array([sup ? 1 : 0]))); }
-        async function msgSend(uid, text, sup, img, svc) {
+        const sameBytes = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+        // Запись в свой том идёт строго по одной. Сигналы звонка (prio) обходят обычные сообщения, а те при повторе уступают им дорогу.
+        const msgWriteJobs = [];
+        let msgWriteRun = false;
+        const msgPrioWaiting = () => msgWriteJobs.some(j => j.prio);
+        const msgBackoff = async ms => { for (const end = Date.now() + ms; Date.now() < end;) { if (msgPrioWaiting()) return false; await new Promise(r => setTimeout(r, 200)); } return true; };
+        async function msgWriteNext() {
+            if (msgWriteRun) return;
+            msgWriteRun = true;
+            try {
+                while (msgWriteJobs.length) {
+                    const j = msgWriteJobs.shift();
+                    try { j.res(await j.fn()); } catch (e) { j.rej(e); }
+                }
+            } finally { msgWriteRun = false; }
+        }
+        function msgWriteJob(fn, prio) {
+            return new Promise((res, rej) => {
+                const job = { fn, prio: !!prio, res, rej };
+                if (job.prio) {
+                    const i = msgWriteJobs.findIndex(j => !j.prio);
+                    msgWriteJobs.splice(i < 0 ? msgWriteJobs.length : i, 0, job);
+                } else msgWriteJobs.push(job);
+                msgWriteNext();
+            });
+        }
+        function msgSend(uid, text, sup, img, svc, fixedTs, opt) {
+            return msgWriteJob(() => msgSendOne(uid, text, sup, img, svc, fixedTs, opt), opt && opt.prio);
+        }
+        async function msgSendOne(uid, text, sup, img, svc, fixedTs, opt) {
             const me = msgNet.me, key = await msgPair(uid);
             if (!me || !key) throw new Error('нет ключа');
-            const ts = Math.floor(srvNow() / 1000), iv = rnd(12);
+            const ts = fixedTs || Math.floor(srvNow() / 1000), iv = rnd(12);
             const imgs = !img ? [] : Array.isArray(img) ? img.slice(0, MSG_ALBUM_MAX) : [img];
             const one = x => cat(new Uint8Array([x.ext]), msgUuidBytes(x.id));
             const imgBytes = !imgs.length ? new Uint8Array(0)
@@ -11421,25 +11934,119 @@ var __vpBannerAuto = (() => {
                 : cat(new Uint8Array([ts >>> 24, (ts >> 16) & 255, (ts >> 8) & 255, ts & 255, (sup ? 1 : 0) | (imgs.length ? 2 : 0) | (imgs.length > 1 ? 4 : 0)]),
                     imgBytes, te.encode(text.slice(0, MSG_TEXT_MAX)));
             const rec = cat(iv, new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, pt)));
-            await msgSync();
+            const mine = () => {
+                const srv = msgNet.vols.filter(v => v.author === me.id).pop();
+                let cur = null;
+                if (srv) { try { cur = { cid: srv.cid, seq: srv.seq, recs: volRecs(srv) }; } catch (e) { cur = { cid: srv.cid, seq: srv.seq, recs: [] }; } }
+                const loc = msgNet.ownVol;
+                if (loc && loc.me === me.id && loc.cid && (!cur || loc.seq > cur.seq || (loc.seq === cur.seq && loc.recs.length > cur.recs.length))) cur = loc;
+                return cur;
+            };
+            const present = () => msgNet.vols.some(v => {
+                if (v.author !== me.id) return false;
+                try { return volRecs(v).some(r => sameBytes(r, rec)); } catch (e) { return false; }
+            });
             const write = async mode => {
-                const last = msgNet.vols.filter(v => v.author === me.id).pop();
-                let recs = [], seq = 1, cid = null;
-                if (last) { try { recs = volRecs(last); } catch (e) { recs = []; } seq = last.seq; cid = last.cid; }
-                let content = volText(seq, mode, [...recs, rec]);
-                if (!last || content.length > MSG_MAX) { content = volText(last ? seq + 1 : 1, mode, [rec]); cid = null; }
+                const last = mine();
+                const recs = last ? last.recs : [];
+                if (recs.some(r => sameBytes(r, rec))) return true;
+                let seq = last ? last.seq : 1, cid = last ? last.cid : null, all = [...recs, rec];
+                let content = volText(seq, mode, all);
+                if (!last || content.length > MSG_MAX) { seq = last ? seq + 1 : 1; all = [rec]; content = volText(seq, mode, all); cid = null; }
                 const res = cid
                     ? await editComment(cid, content)
                     : await sendComment(MSG_POST_ID, content);
                 if (!res.ok) throw new Error('сообщение: ' + res.status);
-                const saved = await res.json().then(j => { const d = j && (j.data || j.comment || j); return d && d.content; }).catch(() => null);
-                return saved == null || saved === content;
+                const d = await res.json().then(j => j && (j.data || j.comment || j)).catch(() => null);
+                if (d && d.content != null && d.content !== content) return false;
+                const id = cid || (d && d.id) || null;
+                msgNet.ownVol = id ? { me: me.id, cid: id, seq, recs: all } : null;
+                return true;
             };
-            const mode = GM_getValue('msgMode', 'c');
-            if (!(await write(mode)) && mode === 'c') { GM_setValue('msgMode', 'b'); await msgSync(); await write('b'); }
-            await msgSync();
+            if (svc) {
+                await msgSync();
+                const mode = GM_getValue('msgMode', 'c');
+                if (!(await write(mode)) && mode === 'c') { GM_setValue('msgMode', 'b'); await msgSync(); await write('b'); }
+                await msgSync();
+                return ts;
+            }
+            let err = null;
+            for (let a = 0; a < 3; a++) {
+                try {
+                    if (a && !(await msgBackoff(a * 2000))) { err = new Error('уступил очередь звонку'); err.yielded = true; break; }
+                    await msgSync(a > 0);
+                    if (present()) { err = null; break; }
+                    if (a) msgNet.ownVol = null;
+                    const mode = GM_getValue('msgMode', 'c');
+                    if (!(await write(mode)) && mode === 'c') { GM_setValue('msgMode', 'b'); await write('b'); }
+                    await msgSync(true);
+                    if (present()) { err = null; break; }
+                    err = new Error('сообщение не появилось на сервере');
+                } catch (e) { err = e; }
+            }
+            if (err) throw err;
             return ts;
         }
+        const msgOutKey = () => acctKey('msgOutbox');
+        const msgOutGet = () => { let o; try { o = GM_getValue(msgOutKey(), []); } catch (e) { o = []; } return Array.isArray(o) ? o : []; };
+        const msgOutSet = l => { try { GM_setValue(msgOutKey(), l.slice(-60)); } catch (e) { logErr('сообщения: очередь отправки не сохранилась', e); } };
+        const msgDelivered = e => (msgNet.conv.get(e.uid) || []).some(m => m.dir === 'out' && m.ts === e.ts && !!m.sup === !!e.sup && m.text === e.text);
+        function msgEnqueue(uid, text, sup) {
+            const list = msgOutGet(), conv = msgNet.conv.get(uid) || [];
+            let ts = Math.floor(srvNow() / 1000);
+            while (list.some(x => x.uid === uid && x.ts === ts) || conv.some(m => m.dir === 'out' && m.ts === ts)) ts++;
+            const e = { id: ts + '-' + Math.random().toString(36).slice(2, 7), uid, sup: !!sup, text, ts, tries: 0, st: 'send', next: 0 };
+            list.push(e);
+            msgOutSet(list);
+            msgNet.hotUntil = Date.now() + 120000;
+            setTimeout(msgPump, 0);
+            return e;
+        }
+        function msgRetry(uid, ts) {
+            const l = msgOutGet();
+            l.forEach(e => { if (e.uid === uid && e.ts === ts) { e.st = 'send'; e.tries = 0; e.next = 0; } });
+            msgOutSet(l);
+            document.dispatchEvent(new Event('vp-msg-outbox'));
+            msgPump();
+        }
+        let msgPumpBusy = false, msgPumpT = 0;
+        async function msgPump() {
+            if (msgPumpBusy) return;
+            msgPumpBusy = true;
+            try {
+                for (let guard = 0; guard < 60; guard++) {
+                    const e = msgOutGet().find(x => x.st === 'send' && (x.next || 0) <= Date.now());
+                    if (!e || !msgNet.me) break;
+                    const upd = fn => { const l = msgOutGet(), x = l.find(y => y.id === e.id); if (x) { fn(x, l); msgOutSet(l); } };
+                    if (msgDelivered(e)) { upd((x, l) => l.splice(l.indexOf(x), 1)); document.dispatchEvent(new Event('vp-msg-outbox')); continue; }
+                    try {
+                        await msgSend(e.uid, e.text, e.sup, null, null, e.ts);
+                        upd((x, l) => l.splice(l.indexOf(x), 1));
+                    } catch (err) {
+                        const why = String(err && err.message || err).slice(0, 80);
+                        if (err && err.yielded) { upd(x => { x.next = Date.now() + 1500; }); continue; }
+                        upd(x => {
+                            x.tries = (x.tries || 0) + 1;
+                            x.err = why;
+                            if (x.tries >= 8) x.st = 'fail';
+                            else x.next = Date.now() + Math.min(60000, 4000 * Math.pow(2, x.tries)) * (/429/.test(why) ? 2 : 1);
+                        });
+                        logErr('сообщение (повтор)', err);
+                    }
+                    document.dispatchEvent(new Event('vp-msg-outbox'));
+                }
+            } finally { msgPumpBusy = false; }
+            clearTimeout(msgPumpT);
+            const nx = msgOutGet().filter(x => x.st === 'send').map(x => x.next || 0);
+            if (nx.length) msgPumpT = setTimeout(msgPump, Math.max(1500, Math.min(...nx) - Date.now()));
+        }
+        document.addEventListener('vp-msg-synced', () => { msgPump(); });
+        addEventListener('online', () => {
+            const l = msgOutGet();
+            l.forEach(e => { if (e.st === 'send') e.next = 0; });
+            msgOutSet(l);
+            msgPump();
+        });
         const msgKeyOf = login => [...msgNet.keys.values()].find(k => k.login.toLowerCase() === String(login).toLowerCase()) || null;
         const msgIsSupport = () => msgMyId() === OWNER_ID;
         function msgTarget(d) {
@@ -11454,7 +12061,14 @@ var __vpBannerAuto = (() => {
         const msgThread = t => {
             if (!t.uid) return [];
             const hid = msgHidden();
-            return (msgNet.conv.get(t.uid) || []).filter(m => m.sup === t.sup && !hid[hideKey(t.uid, m)]);
+            const out = (msgNet.conv.get(t.uid) || []).filter(m => m.sup === t.sup && !hid[hideKey(t.uid, m)]);
+            msgOutGet().filter(e => e.uid === t.uid && !!e.sup === !!t.sup && !msgDelivered(e)).forEach(e => {
+                const p = { dir: 'out', ts: e.ts, text: e.text, sup: !!e.sup, pending: e.st === 'fail' ? 'fail' : 'send' };
+                let i = out.length;
+                while (i > 0 && out[i - 1].ts > p.ts) i--;
+                out.splice(i, 0, p);
+            });
+            return out;
         };
         addCss(`
         .vp-msgs-menu { min-width: 236px; padding: 6px; }
@@ -12064,6 +12678,210 @@ var __vpBannerAuto = (() => {
 
         let messagesOverlay = null;
 
+        const MSG_CSS = `
+        .vp-msgs { position: fixed; z-index: 5; display: none; flex-direction: column; box-sizing: border-box; overflow: hidden;
+            background: var(--block-bg); color: var(--text-primary, #fff); font-family: inherit;
+            backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none); }
+        .vp-msgs.vp-open { display: flex; animation: vpMsgsIn .22s cubic-bezier(.2, .8, .2, 1); }
+        html.vp-msgs-open .vp-msgs-navwrap { z-index: 10 !important; }
+        html.vp-msgs-open .itd-scroll-top-btn { opacity: 0 !important; visibility: hidden !important; }
+        html.vp-msgs-open .vp-comments-sheet { visibility: hidden !important; }
+        html.vp-msgs-open .vp-nav-link.vp-site-cur { color: var(--vp-off-c) !important; opacity: var(--vp-off-o) !important; background-color: var(--vp-off-b) !important; }
+        html.vp-msgs-open .vp-nav-link[href="#"] { color: var(--vp-on-c) !important; opacity: var(--vp-on-o) !important; background-color: var(--vp-on-b) !important; }
+        .vp-msgs.vp-card { border-radius: 36px; border: 1px solid var(--border-color, rgba(255, 255, 255, .15));
+            box-shadow: 0 16px 48px rgba(0, 0, 0, .45); }
+        html.vp-light .vp-msgs.vp-card { box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
+        .vp-msgs-under { position: fixed; top: 0; bottom: 0; z-index: 4; display: none; background: var(--bg-primary, #000); pointer-events: none; }
+        html.vp-msgs-open .vp-msgs-under.vp-on { display: block; }
+        .vp-msgs-view { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+        .vp-msgs-view[hidden] { display: none; }
+        .vp-msgs-call[hidden], .vp-msgs-more[hidden] { display: none; }
+        .vp-msgs-chead { position: relative; }
+        .vp-msgs-hmenu { position: absolute; top: calc(100% - 4px); right: 12px; z-index: 5; min-width: 190px; padding: 6px; border-radius: 14px;
+            background: #202024; box-shadow: 0 12px 34px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(128, 128, 128, .2); }
+        .vp-msgs-hmenu[hidden] { display: none; }
+        html.vp-light .vp-msgs-hmenu { background: #fff; }
+        .vp-msgs-hmenu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: 10px; background: none;
+            color: var(--text-primary, #fff); font: inherit; font-size: 14px; cursor: pointer; text-align: left; }
+        .vp-msgs-hmenu button:hover { background: rgba(128, 128, 128, .16); }
+        .vp-msgs-hmenu button.vp-danger { color: #f23f43; }
+        .vp-msgs-blocked { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .vp-msgs-blocked button { padding: 6px 14px; border: 0; border-radius: 999px; background: rgba(128, 128, 128, .2); color: var(--text-primary, #fff);
+            font: inherit; font-size: 13px; cursor: pointer; }
+        .vp-msgs-blocked button:hover { background: rgba(128, 128, 128, .3); }
+        .vp-msgs-callrow { align-self: center; display: flex; align-items: center; gap: 7px; width: fit-content; margin: 8px auto; padding: 6px 12px; border-radius: 14px;
+            background: rgba(128, 128, 128, .14); color: var(--text-secondary, #b5bac1); font-size: 13px; cursor: pointer; }
+        .vp-msgs-callrow:hover { background: rgba(128, 128, 128, .22); }
+        .vp-msgs-callrow.vp-miss { color: #f23f43; }
+        .vp-msgs-callrow time { opacity: .65; font-size: 12px; }
+        .vp-msgs-top { display: flex; align-items: center; gap: 10px; padding: 18px 16px 10px; }
+        .vp-msgs-title { font-size: 24px; font-weight: 700; margin-right: auto; }
+        .vp-msgs-ib { width: 40px; height: 40px; border-radius: 50%; border: 0; padding: 0; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; background: var(--block-bg); color: var(--text-primary, #fff); flex-shrink: 0; }
+        .vp-msgs-ib:active { transform: scale(.94); }
+        .vp-msgs-search { margin: 0 16px 10px; display: flex; align-items: center; gap: 8px; padding: 0 14px; height: 42px; border-radius: 999px;
+            background: var(--block-bg); color: var(--text-secondary); }
+        .vp-msgs-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
+        .vp-msgs-sub { padding: 2px 20px 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+        .vp-msgs-ava img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+        .vp-msgs-who, .vp-msgs-chead .vp-msgs-ava { cursor: pointer; }
+        .vp-msgs-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; overscroll-behavior: contain; }
+        .vp-msgs-row { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 18px; cursor: pointer; }
+        .vp-msgs-row:hover, .vp-msgs-row:active { background: var(--block-bg); }
+        .vp-msgs-ava { position: relative; flex: 0 0 50px !important; min-width: 50px !important; min-height: 50px !important; max-width: 50px !important; max-height: 50px !important; box-sizing: border-box !important; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 26px; background: var(--block-bg); }
+        .vp-msgs-ava.vp-sm { flex: 0 0 38px !important; min-width: 38px !important; min-height: 38px !important; max-width: 38px !important; max-height: 38px !important; font-size: 20px; }
+        html.vp-glass .vp-msgs-chead .vp-msgs-ava { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+        .vp-msgs-ava.vp-sup { color: #fff; background: linear-gradient(145deg, #ff5a5f, #d0202a); box-shadow: 0 0 0 2px rgba(255, 90, 95, .28), 0 4px 14px rgba(208, 32, 42, .4); }
+        .vp-msgs-ava.vp-sup svg { width: 58%; height: 58%; stroke-width: 2.1; }
+        .vp-msgs-row.vp-sup { background: linear-gradient(90deg, rgba(255, 70, 76, .2), rgba(255, 70, 76, .06)); box-shadow: inset 0 0 0 1px rgba(255, 90, 95, .32); }
+        .vp-msgs-row.vp-sup:hover, .vp-msgs-row.vp-sup:active { background: linear-gradient(90deg, rgba(255, 70, 76, .3), rgba(255, 70, 76, .1)); }
+        .vp-msgs-row.vp-sup + .vp-msgs-row { margin-top: 6px; }
+        .vp-msgs-ava.vp-online::after { content: ""; position: absolute; right: 1px; bottom: 1px; width: 11px; height: 11px; border-radius: 50%;
+            background: #22c55e; box-shadow: 0 0 0 2.5px var(--bg-primary, #000); }
+        .vp-msgs-mid { flex: 1; min-width: 0; }
+        .vp-msgs-name { display: flex; align-items: center; gap: 5px; font-weight: 600; font-size: 15px; }
+        .vp-msgs-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msgs-last { margin-top: 3px; font-size: 14px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msgs-side > span:first-child { display: inline-flex; align-items: center; gap: 3px; }
+        .vp-msgs-tick { display: inline-flex; font-style: normal; color: var(--text-secondary); }
+        .vp-msgs-tick.vp-read { color: #4aa3ff; }
+        .vp-msgs-lthumb { width: 18px; height: 18px; border-radius: 4px; object-fit: cover; vertical-align: -4px; margin-right: 6px; }
+        .vp-msgs-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; font-size: 12px; color: var(--text-secondary); }
+        .vp-msgs-badge { min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: 700; background: var(--vp-accent); color: var(--vp-on-accent, #fff); }
+        .vp-msgs-pin { display: flex; color: var(--text-secondary); }
+        .vp-msgs-row.vp-pinned { background: color-mix(in srgb, var(--text-primary, #fff) 4%, transparent); }
+        .vp-msgs-row.vp-pinned + .vp-msgs-row:not(.vp-pinned) { margin-top: 6px; }
+        .vp-msgs-row { -webkit-touch-callout: none; user-select: none; transition: transform .15s; }
+        .vp-msgs-row.vp-held { transform: scale(.97); }
+        .vp-msgs-ctx { position: absolute; z-index: 3; display: none; padding: 5px; border-radius: 16px; min-width: 170px;
+            background: var(--block-bg); border: 1px solid var(--border-color, rgba(255, 255, 255, .1)); box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
+        .vp-msgs-ctx.vp-open { display: block; animation: vpMsgsCtx .14s ease-out; }
+        @keyframes vpMsgsCtx { from { opacity: 0; transform: scale(.94); } }
+        .vp-msgs-ctx button { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; color: var(--text-primary, #fff);
+            font: inherit; font-size: 15px; padding: 10px 12px; border-radius: 12px; cursor: pointer; }
+        .vp-msgs-ctx button:hover, .vp-msgs-ctx button:active { background: var(--bg-hover, rgba(255, 255, 255, .08)); }
+        .vp-msgs-ctx svg { width: 16px; height: 16px; }
+        .vp-msgs-empty { padding: 40px 16px; text-align: center; color: var(--text-secondary); font-size: 14px; }
+        .vp-msgs-chead { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px;
+            border-bottom: 1px solid color-mix(in srgb, var(--text-primary, #fff) 8%, transparent); }
+        .vp-msgs-who { display: flex; flex-direction: column; min-width: 0; margin-right: auto; }
+        .vp-msgs-who b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msgs-who small { font-size: 12px; color: var(--text-secondary); }
+        .vp-msgs-chat { position: relative; }
+        .vp-msgs-down { position: absolute; right: 14px; bottom: 78px; z-index: 3; width: 42px; height: 42px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+            display: grid; place-items: center; color: var(--text-primary, #fff); background: var(--block-bg, #1f1f23);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(127, 127, 127, .25); transition: opacity .18s, transform .18s; }
+        .vp-msgs-down[hidden] { display: grid !important; opacity: 0; transform: translateY(10px) scale(.9); pointer-events: none; }
+        .vp-msgs-down span { position: absolute; top: -6px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px;
+            font: 600 11px/18px system-ui, sans-serif; text-align: center; color: var(--vp-on-accent, #fff); background: var(--vp-accent, #3b82f6); }
+        .vp-msgs-down span:empty { display: none; }
+        .vp-msgs-feed { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; overscroll-behavior: contain; }
+        .vp-msgs-note { align-self: center; margin: 2px 0 8px; padding: 6px 12px; border-radius: 999px; font-size: 12px;
+            background: var(--block-bg); color: var(--text-secondary); text-align: center; }
+        .vp-msgs-day { align-self: center; margin: 10px 0 4px; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; line-height: 1.3;
+            background: color-mix(in srgb, var(--block-bg) 88%, transparent); color: var(--text-secondary); text-align: center; user-select: none; -webkit-user-select: none; }
+        .vp-msgs-b { max-width: 78%; padding: 9px 13px 7px; border-radius: 20px; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere;
+            animation: vpMsgsPop .2s ease-out; }
+        .vp-msgs-b.vp-in { align-self: flex-start; background: var(--block-bg); border-bottom-left-radius: 6px; }
+        .vp-msgs-b.vp-out { align-self: flex-end; background: color-mix(in srgb, var(--vp-accent) 26%, var(--block-bg)); color: var(--text-primary, #fff);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent) 45%, transparent); border-bottom-right-radius: 6px; }
+        .vp-msgs-b a.vp-msgs-link { color: #7ab8ff !important; font-weight: inherit; text-decoration: underline !important; text-decoration-thickness: 1px !important; text-underline-offset: 3px; word-break: break-all; }
+        .vp-msgs-b a.vp-msgs-link:hover { text-decoration-thickness: 2px !important; }
+        .vp-msgs-b i { display: block; margin-top: 2px; font-style: normal; font-size: 11px; opacity: .6; text-align: right; white-space: nowrap; }
+        .vp-msgs-b i[data-tick]::after { content: ""; display: inline-block; width: 16px; height: 11px; margin-left: 3px; vertical-align: -1px; background: currentColor;
+            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6 5.6 9.1 12.5 2.2'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6 5.6 9.1 12.5 2.2'/%3E%3C/svg%3E") center / contain no-repeat; }
+        .vp-msgs-b i[data-tick="2"]::after {
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M.8 6 3.9 9.1 10.8 2.2M7.4 8.1l1 1 6.9-6.9'/%3E%3C/svg%3E");
+            mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M.8 6 3.9 9.1 10.8 2.2M7.4 8.1l1 1 6.9-6.9'/%3E%3C/svg%3E"); }
+        .vp-msgs-b.vp-fail i { opacity: .85; }
+        .vp-msgs-b.vp-fail { cursor: pointer; }
+        .vp-msgs-typing { display: flex; gap: 5px; padding: 14px 16px; }
+        .vp-msgs-typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary); animation: vpMsgsDot 1s infinite; }
+        .vp-msgs-typing span:nth-child(2) { animation-delay: .15s; } .vp-msgs-typing span:nth-child(3) { animation-delay: .3s; }
+        .vp-msgs-bar { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px 12px; }
+        .vp-msgs-field { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 14px; min-height: 44px; border-radius: 22px;
+            background: var(--block-bg); }
+        .vp-msgs-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
+        .vp-msgs-b.vp-has-img { width: min-content; max-width: 78%; padding: 4px 4px 6px; }
+        .vp-msgs-imgw { position: relative; display: block; margin: 0 0 6px; cursor: zoom-in; }
+        .vp-msgs-imgw::after, .vp-msgs-lb-body::after { content: ''; position: absolute; inset: 0; }
+        .vp-msgs-img { display: block; width: auto; height: auto; max-width: min(330px, 66vw); max-height: 420px; min-width: 120px; min-height: 60px;
+            border-radius: 16px; background: rgba(127, 127, 127, .15); pointer-events: none; user-select: none; }
+        .vp-msgs-lb { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; background: rgba(0, 0, 0, .92); border-radius: inherit;
+            animation: vp-emoji-in .15s ease-out both; }
+        .vp-msgs-lb-top { display: flex; align-items: center; gap: 8px; padding: 10px; flex-shrink: 0; }
+        .vp-msgs-lb-top .vp-msgs-ib { color: #fff; background: rgba(255, 255, 255, .1); }
+        .vp-msgs-lb-top span { color: rgba(255, 255, 255, .8); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msgs-lb-body { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 10px 14px; }
+        .vp-msgs-lb-body img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; pointer-events: none; user-select: none; }
+        .vp-msgs-lb-top a { margin-left: auto; flex-shrink: 0; padding: 7px 12px; border-radius: 9999px; background: rgba(255, 255, 255, .1); color: #fff; font-size: 13px; text-decoration: none; }
+        .vp-msgs-pend { display: flex; align-items: center; gap: 10px; padding: 6px 8px; margin: 0 0 6px; border-radius: 16px; background: var(--block-bg); }
+        .vp-msgs-pend[hidden] { display: none; }
+        .vp-msgs-pend-list { display: flex; gap: 8px; overflow-x: auto; flex: 0 1 auto; max-width: 62%; padding: 4px 4px 2px; scrollbar-width: thin; }
+        .vp-msgs-pend .vp-msgs-pend-t { position: relative; flex-shrink: 0; }
+        .vp-msgs-pend .vp-msgs-pend-t button { position: absolute; top: -5px; right: -5px; width: 20px; height: 20px; font-size: 10px; line-height: 20px; padding: 0;
+            background: rgba(0, 0, 0, .7); color: #fff; }
+        .vp-msgs-album { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; width: min(330px, 66vw); margin: 0 0 6px; border-radius: 16px; overflow: hidden; }
+        .vp-msgs-album[data-n="2"], .vp-msgs-album[data-n="3"], .vp-msgs-album[data-n="4"] { grid-template-columns: repeat(2, 1fr); }
+        .vp-msgs-album .vp-msgs-imgw { margin: 0; aspect-ratio: 1; }
+        .vp-msgs-album .vp-wide2 { grid-column: span 2; aspect-ratio: 2 / 1; }
+        .vp-msgs-album .vp-wide3 { grid-column: span 3; aspect-ratio: 3 / 1; }
+        .vp-msgs-album[data-n] { grid-template-columns: repeat(6, 1fr); }
+        .vp-msgs-album[data-n="2"], .vp-msgs-album[data-n="3"], .vp-msgs-album[data-n="4"] { grid-template-columns: repeat(2, 1fr); }
+        .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-msgs-imgw { grid-column: span 2; }
+        .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-half { grid-column: span 3; aspect-ratio: 3 / 2; }
+        .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-wide3 { grid-column: span 6; }
+        .vp-msgs-album .vp-msgs-img { width: 100%; height: 100%; max-width: none; max-height: none; min-width: 0; min-height: 0; object-fit: cover; border-radius: 0; }
+        @media (hover: none) { .vp-msgs-feed .vp-msgs-b { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
+        .vp-msgs-reacts { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 0; }
+        .vp-msgs-reacts button { border: 0; border-radius: 9999px; padding: 2px 9px; font-size: 13px; line-height: 20px; cursor: pointer; color: inherit;
+            background: rgba(127, 127, 127, .22); }
+        .vp-msgs-reacts button.vp-mine-r { background: color-mix(in srgb, var(--vp-accent) 24%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent) 70%, transparent); }
+        .vp-msgs-menu { position: fixed; z-index: 2147483600; min-width: 210px; padding: 6px; border-radius: 16px; background: var(--block-bg);
+            color: var(--text-primary, #fff); box-shadow: 0 12px 40px rgba(0, 0, 0, .45), 0 0 0 1px var(--border-color, rgba(255, 255, 255, .08)); animation: vp-emoji-in .12s ease-out both; }
+        .vp-msgs-menu-r { display: flex; gap: 2px; padding: 2px 2px 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, .08)); }
+        .vp-msgs-menu-r button { width: 36px; height: 36px; border: 0; padding: 0; border-radius: 50%; background: transparent; font-size: 21px; cursor: pointer; transition: transform .1s; }
+        .vp-msgs-menu-r button:hover { transform: scale(1.2); background: rgba(127, 127, 127, .15); }
+        .vp-msgs-menu-i { display: block; width: 100%; text-align: left; border: 0; background: transparent; color: inherit; font: inherit; font-size: 14px; padding: 9px 12px; border-radius: 10px; cursor: pointer; }
+        .vp-msgs-menu-i:hover { background: rgba(127, 127, 127, .15); }
+        .vp-msgs-lb-n { color: rgba(255, 255, 255, .8); font-size: 13px; font-weight: 600; margin-left: auto; flex-shrink: 0; }
+        .vp-msgs-lb-n:empty { display: none; }
+        .vp-msgs-lb-n:not(:empty) + a { margin-left: 8px; }
+        .vp-msgs-lb-nav { position: absolute; top: 50%; z-index: 1; width: 44px; height: 44px; margin-top: -22px; border: 0; border-radius: 50%; cursor: pointer;
+            background: rgba(255, 255, 255, .14); color: #fff; font-size: 26px; line-height: 40px; padding: 0; }
+        .vp-msgs-lb-nav[hidden] { display: none; }
+        .vp-msgs-lb-nav.vp-prev { left: 12px; } .vp-msgs-lb-nav.vp-next { right: 12px; }
+        .vp-msgs-lb-nav { top: 0; bottom: 0; width: 20%; max-width: 180px; height: auto; margin: 0; border-radius: 0; background: none; font-size: 0; transition: background .2s; -webkit-tap-highlight-color: transparent; }
+        .vp-msgs-lb-nav.vp-prev { left: 0; }
+        .vp-msgs-lb-nav.vp-next { right: 0; }
+        .vp-msgs-lb-nav.vp-prev:active { background: linear-gradient(90deg, rgba(255, 255, 255, .16), transparent); }
+        .vp-msgs-lb-nav.vp-next:active { background: linear-gradient(270deg, rgba(255, 255, 255, .16), transparent); }
+        @media (hover: hover) and (pointer: fine) {
+            .vp-msgs-lb-nav.vp-prev:hover { background: linear-gradient(90deg, rgba(255, 255, 255, .12), transparent); }
+            .vp-msgs-lb-nav.vp-next:hover { background: linear-gradient(270deg, rgba(255, 255, 255, .12), transparent); }
+        }
+        .vp-msgs-pend img { width: 52px; height: 52px; object-fit: cover; border-radius: 10px; flex-shrink: 0; }
+        .vp-msgs-pend span { flex: 1; min-width: 0; font-size: 13px; color: var(--text-secondary); }
+        .vp-msgs-pend button { width: 30px; height: 30px; border: 0; border-radius: 50%; background: rgba(127, 127, 127, .2); color: var(--text-primary, #fff); cursor: pointer; flex-shrink: 0; }
+        .vp-msgs-b.vp-has-img { overflow-wrap: anywhere; }
+        .vp-msgs-b.vp-has-img > i { margin-right: 6px; }
+        .vp-msgs-cap { display: block; padding: 0 8px; }
+        .vp-msgs-count { font-size: 12px; color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+        .vp-msgs-count.vp-warn { color: #ff5c5c; }
+        .vp-msgs-ghost { width: 36px; height: 36px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            background: transparent; color: var(--text-secondary); cursor: pointer; flex-shrink: 0; }
+        .vp-msgs-send { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;
+            flex-shrink: 0; background: var(--vp-accent); color: var(--vp-on-accent, #fff); transition: opacity .15s, transform .15s; }
+        .vp-msgs-send:disabled { opacity: .4; cursor: default; }
+        .vp-msgs-send:not(:disabled):active { transform: scale(.92); }
+        @keyframes vpMsgsIn { from { opacity: 0; transform: translateY(10px); } }
+        @keyframes vpMsgsPop { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+        @keyframes vpMsgsDot { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
+        @media (prefers-reduced-motion: reduce) { .vp-msgs, .vp-msgs * { animation: none !important; } }
+        html.vp-msgs-open video:not(.vp-screen-video):not(.vp-self-pip-video) { visibility: hidden !important; }`;
         const MSG_SUPPORT = {
             id: 'support', ava: '🛟', name: 'Поддержка ИТД X', login: '', last: 'Нашёл баг или есть идея — пиши сюда', time: '', unread: 0, online: true, support: true,
             msgs: [['in', 'Привет! Это поддержка ИТД X 👋'], ['in', 'Нашёл баг или есть идея — опиши здесь, ответ придёт в этот чат']]
@@ -12213,212 +13031,12 @@ var __vpBannerAuto = (() => {
             return { close };
         }
         function buildMessagesOverlay() {
-            const style = addCss(`
-        .vp-msgs { position: fixed; z-index: 5; display: none; flex-direction: column; box-sizing: border-box; overflow: hidden;
-            background: var(--block-bg); color: var(--text-primary, #fff); font-family: inherit;
-            backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none); }
-        .vp-msgs.vp-open { display: flex; animation: vpMsgsIn .22s cubic-bezier(.2, .8, .2, 1); }
-        html.vp-msgs-open .vp-msgs-navwrap { z-index: 10 !important; }
-        html.vp-msgs-open .itd-scroll-top-btn { opacity: 0 !important; visibility: hidden !important; }
-        html.vp-msgs-open .vp-comments-sheet { visibility: hidden !important; }
-        html.vp-msgs-open .vp-nav-link.vp-site-cur { color: var(--vp-off-c) !important; opacity: var(--vp-off-o) !important; background-color: var(--vp-off-b) !important; }
-        html.vp-msgs-open .vp-nav-link[href="#"] { color: var(--vp-on-c) !important; opacity: var(--vp-on-o) !important; background-color: var(--vp-on-b) !important; }
-        .vp-msgs.vp-card { border-radius: 36px; border: 1px solid var(--border-color, rgba(255, 255, 255, .15));
-            box-shadow: 0 16px 48px rgba(0, 0, 0, .45); }
-        html.vp-light .vp-msgs.vp-card { box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
-        .vp-msgs-under { position: fixed; top: 0; bottom: 0; z-index: 4; display: none; background: var(--bg-primary, #000); pointer-events: none; }
-        html.vp-msgs-open .vp-msgs-under.vp-on { display: block; }
-        .vp-msgs-view { display: flex; flex-direction: column; min-height: 0; flex: 1; }
-        .vp-msgs-view[hidden] { display: none; }
-        .vp-msgs-call[hidden], .vp-msgs-more[hidden] { display: none; }
-        .vp-msgs-chead { position: relative; }
-        .vp-msgs-hmenu { position: absolute; top: calc(100% - 4px); right: 12px; z-index: 5; min-width: 190px; padding: 6px; border-radius: 14px;
-            background: #202024; box-shadow: 0 12px 34px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(128, 128, 128, .2); }
-        .vp-msgs-hmenu[hidden] { display: none; }
-        html.vp-light .vp-msgs-hmenu { background: #fff; }
-        .vp-msgs-hmenu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: 10px; background: none;
-            color: var(--text-primary, #fff); font: inherit; font-size: 14px; cursor: pointer; text-align: left; }
-        .vp-msgs-hmenu button:hover { background: rgba(128, 128, 128, .16); }
-        .vp-msgs-hmenu button.vp-danger { color: #f23f43; }
-        .vp-msgs-blocked { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-        .vp-msgs-blocked button { padding: 6px 14px; border: 0; border-radius: 999px; background: rgba(128, 128, 128, .2); color: var(--text-primary, #fff);
-            font: inherit; font-size: 13px; cursor: pointer; }
-        .vp-msgs-blocked button:hover { background: rgba(128, 128, 128, .3); }
-        .vp-msgs-callrow { align-self: center; display: flex; align-items: center; gap: 7px; width: fit-content; margin: 8px auto; padding: 6px 12px; border-radius: 14px;
-            background: rgba(128, 128, 128, .14); color: var(--text-secondary, #b5bac1); font-size: 13px; cursor: pointer; }
-        .vp-msgs-callrow:hover { background: rgba(128, 128, 128, .22); }
-        .vp-msgs-callrow.vp-miss { color: #f23f43; }
-        .vp-msgs-callrow time { opacity: .65; font-size: 12px; }
-        .vp-msgs-top { display: flex; align-items: center; gap: 10px; padding: 18px 16px 10px; }
-        .vp-msgs-title { font-size: 24px; font-weight: 700; margin-right: auto; }
-        .vp-msgs-ib { width: 40px; height: 40px; border-radius: 50%; border: 0; padding: 0; display: flex; align-items: center; justify-content: center;
-            cursor: pointer; background: var(--block-bg); color: var(--text-primary, #fff); flex-shrink: 0; }
-        .vp-msgs-ib:active { transform: scale(.94); }
-        .vp-msgs-search { margin: 0 16px 10px; display: flex; align-items: center; gap: 8px; padding: 0 14px; height: 42px; border-radius: 999px;
-            background: var(--block-bg); color: var(--text-secondary); }
-        .vp-msgs-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
-        .vp-msgs-sub { padding: 2px 20px 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
-        .vp-msgs-ava img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-        .vp-msgs-who, .vp-msgs-chead .vp-msgs-ava { cursor: pointer; }
-        .vp-msgs-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; overscroll-behavior: contain; }
-        .vp-msgs-row { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 18px; cursor: pointer; }
-        .vp-msgs-row:hover, .vp-msgs-row:active { background: var(--block-bg); }
-        .vp-msgs-ava { position: relative; flex: 0 0 50px !important; min-width: 50px !important; min-height: 50px !important; max-width: 50px !important; max-height: 50px !important; box-sizing: border-box !important; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-size: 26px; background: var(--block-bg); }
-        .vp-msgs-ava.vp-sm { flex: 0 0 38px !important; min-width: 38px !important; min-height: 38px !important; max-width: 38px !important; max-height: 38px !important; font-size: 20px; }
-        html.vp-glass .vp-msgs-chead .vp-msgs-ava { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
-        .vp-msgs-ava.vp-sup { color: #fff; background: linear-gradient(145deg, #ff5a5f, #d0202a); box-shadow: 0 0 0 2px rgba(255, 90, 95, .28), 0 4px 14px rgba(208, 32, 42, .4); }
-        .vp-msgs-ava.vp-sup svg { width: 58%; height: 58%; stroke-width: 2.1; }
-        .vp-msgs-row.vp-sup { background: linear-gradient(90deg, rgba(255, 70, 76, .2), rgba(255, 70, 76, .06)); box-shadow: inset 0 0 0 1px rgba(255, 90, 95, .32); }
-        .vp-msgs-row.vp-sup:hover, .vp-msgs-row.vp-sup:active { background: linear-gradient(90deg, rgba(255, 70, 76, .3), rgba(255, 70, 76, .1)); }
-        .vp-msgs-row.vp-sup + .vp-msgs-row { margin-top: 6px; }
-        .vp-msgs-ava.vp-online::after { content: ""; position: absolute; right: 1px; bottom: 1px; width: 11px; height: 11px; border-radius: 50%;
-            background: #22c55e; box-shadow: 0 0 0 2.5px var(--bg-primary, #000); }
-        .vp-msgs-mid { flex: 1; min-width: 0; }
-        .vp-msgs-name { display: flex; align-items: center; gap: 5px; font-weight: 600; font-size: 15px; }
-        .vp-msgs-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .vp-msgs-last { margin-top: 3px; font-size: 14px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .vp-msgs-side > span:first-child { display: inline-flex; align-items: center; gap: 3px; }
-        .vp-msgs-tick { display: inline-flex; font-style: normal; color: var(--text-secondary); }
-        .vp-msgs-tick.vp-read { color: #4aa3ff; }
-        .vp-msgs-lthumb { width: 18px; height: 18px; border-radius: 4px; object-fit: cover; vertical-align: -4px; margin-right: 6px; }
-        .vp-msgs-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; font-size: 12px; color: var(--text-secondary); }
-        .vp-msgs-badge { min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; display: flex; align-items: center; justify-content: center;
-            font-size: 12px; font-weight: 700; background: var(--vp-accent); color: var(--vp-on-accent, #fff); }
-        .vp-msgs-pin { display: flex; color: var(--text-secondary); }
-        .vp-msgs-row.vp-pinned { background: color-mix(in srgb, var(--text-primary, #fff) 4%, transparent); }
-        .vp-msgs-row.vp-pinned + .vp-msgs-row:not(.vp-pinned) { margin-top: 6px; }
-        .vp-msgs-row { -webkit-touch-callout: none; user-select: none; transition: transform .15s; }
-        .vp-msgs-row.vp-held { transform: scale(.97); }
-        .vp-msgs-ctx { position: absolute; z-index: 3; display: none; padding: 5px; border-radius: 16px; min-width: 170px;
-            background: var(--block-bg); border: 1px solid var(--border-color, rgba(255, 255, 255, .1)); box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
-        .vp-msgs-ctx.vp-open { display: block; animation: vpMsgsCtx .14s ease-out; }
-        @keyframes vpMsgsCtx { from { opacity: 0; transform: scale(.94); } }
-        .vp-msgs-ctx button { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; color: var(--text-primary, #fff);
-            font: inherit; font-size: 15px; padding: 10px 12px; border-radius: 12px; cursor: pointer; }
-        .vp-msgs-ctx button:hover, .vp-msgs-ctx button:active { background: var(--bg-hover, rgba(255, 255, 255, .08)); }
-        .vp-msgs-ctx svg { width: 16px; height: 16px; }
-        .vp-msgs-empty { padding: 40px 16px; text-align: center; color: var(--text-secondary); font-size: 14px; }
-        .vp-msgs-chead { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px;
-            border-bottom: 1px solid color-mix(in srgb, var(--text-primary, #fff) 8%, transparent); }
-        .vp-msgs-who { display: flex; flex-direction: column; min-width: 0; margin-right: auto; }
-        .vp-msgs-who b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .vp-msgs-who small { font-size: 12px; color: var(--text-secondary); }
-        .vp-msgs-chat { position: relative; }
-        .vp-msgs-down { position: absolute; right: 14px; bottom: 78px; z-index: 3; width: 42px; height: 42px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
-            display: grid; place-items: center; color: var(--text-primary, #fff); background: var(--block-bg, #1f1f23);
-            box-shadow: 0 6px 18px rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(127, 127, 127, .25); transition: opacity .18s, transform .18s; }
-        .vp-msgs-down[hidden] { display: grid !important; opacity: 0; transform: translateY(10px) scale(.9); pointer-events: none; }
-        .vp-msgs-down span { position: absolute; top: -6px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px;
-            font: 600 11px/18px system-ui, sans-serif; text-align: center; color: var(--vp-on-accent, #fff); background: var(--vp-accent, #3b82f6); }
-        .vp-msgs-down span:empty { display: none; }
-        .vp-msgs-feed { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; overscroll-behavior: contain; }
-        .vp-msgs-note { align-self: center; margin: 2px 0 8px; padding: 6px 12px; border-radius: 999px; font-size: 12px;
-            background: var(--block-bg); color: var(--text-secondary); text-align: center; }
-        .vp-msgs-day { align-self: center; margin: 10px 0 4px; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; line-height: 1.3;
-            background: color-mix(in srgb, var(--block-bg) 88%, transparent); color: var(--text-secondary); text-align: center; user-select: none; -webkit-user-select: none; }
-        .vp-msgs-b { max-width: 78%; padding: 9px 13px 7px; border-radius: 20px; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere;
-            animation: vpMsgsPop .2s ease-out; }
-        .vp-msgs-b.vp-in { align-self: flex-start; background: var(--block-bg); border-bottom-left-radius: 6px; }
-        .vp-msgs-b.vp-out { align-self: flex-end; background: color-mix(in srgb, var(--vp-accent) 26%, var(--block-bg)); color: var(--text-primary, #fff);
-            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent) 45%, transparent); border-bottom-right-radius: 6px; }
-        .vp-msgs-b a.vp-msgs-link { color: inherit; font-weight: inherit; text-decoration: underline !important; text-decoration-thickness: 1px !important; text-underline-offset: 3px; word-break: break-all; }
-        .vp-msgs-b a.vp-msgs-link:hover { text-decoration-thickness: 2px !important; }
-        .vp-msgs-b i { display: block; margin-top: 2px; font-style: normal; font-size: 11px; opacity: .6; text-align: right; white-space: nowrap; }
-        .vp-msgs-b i[data-tick]::after { content: ""; display: inline-block; width: 16px; height: 11px; margin-left: 3px; vertical-align: -1px; background: currentColor;
-            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6 5.6 9.1 12.5 2.2'/%3E%3C/svg%3E") center / contain no-repeat;
-            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6 5.6 9.1 12.5 2.2'/%3E%3C/svg%3E") center / contain no-repeat; }
-        .vp-msgs-b i[data-tick="2"]::after {
-            -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M.8 6 3.9 9.1 10.8 2.2M7.4 8.1l1 1 6.9-6.9'/%3E%3C/svg%3E");
-            mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M.8 6 3.9 9.1 10.8 2.2M7.4 8.1l1 1 6.9-6.9'/%3E%3C/svg%3E"); }
-        .vp-msgs-b.vp-fail i { opacity: .85; }
-        .vp-msgs-typing { display: flex; gap: 5px; padding: 14px 16px; }
-        .vp-msgs-typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary); animation: vpMsgsDot 1s infinite; }
-        .vp-msgs-typing span:nth-child(2) { animation-delay: .15s; } .vp-msgs-typing span:nth-child(3) { animation-delay: .3s; }
-        .vp-msgs-bar { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px 12px; }
-        .vp-msgs-field { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 14px; min-height: 44px; border-radius: 22px;
-            background: var(--block-bg); }
-        .vp-msgs-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
-        .vp-msgs-b.vp-has-img { width: min-content; max-width: 78%; padding: 4px 4px 6px; }
-        .vp-msgs-imgw { position: relative; display: block; margin: 0 0 6px; cursor: zoom-in; }
-        .vp-msgs-imgw::after, .vp-msgs-lb-body::after { content: ''; position: absolute; inset: 0; }
-        .vp-msgs-img { display: block; width: auto; height: auto; max-width: min(330px, 66vw); max-height: 420px; min-width: 120px; min-height: 60px;
-            border-radius: 16px; background: rgba(127, 127, 127, .15); pointer-events: none; user-select: none; }
-        .vp-msgs-lb { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; background: rgba(0, 0, 0, .92); border-radius: inherit;
-            animation: vp-emoji-in .15s ease-out both; }
-        .vp-msgs-lb-top { display: flex; align-items: center; gap: 8px; padding: 10px; flex-shrink: 0; }
-        .vp-msgs-lb-top .vp-msgs-ib { color: #fff; background: rgba(255, 255, 255, .1); }
-        .vp-msgs-lb-top span { color: rgba(255, 255, 255, .8); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .vp-msgs-lb-body { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 10px 14px; }
-        .vp-msgs-lb-body img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; pointer-events: none; user-select: none; }
-        .vp-msgs-lb-top a { margin-left: auto; flex-shrink: 0; padding: 7px 12px; border-radius: 9999px; background: rgba(255, 255, 255, .1); color: #fff; font-size: 13px; text-decoration: none; }
-        .vp-msgs-pend { display: flex; align-items: center; gap: 10px; padding: 6px 8px; margin: 0 0 6px; border-radius: 16px; background: var(--block-bg); }
-        .vp-msgs-pend[hidden] { display: none; }
-        .vp-msgs-pend-list { display: flex; gap: 8px; overflow-x: auto; flex: 0 1 auto; max-width: 62%; padding: 4px 4px 2px; scrollbar-width: thin; }
-        .vp-msgs-pend .vp-msgs-pend-t { position: relative; flex-shrink: 0; }
-        .vp-msgs-pend .vp-msgs-pend-t button { position: absolute; top: -5px; right: -5px; width: 20px; height: 20px; font-size: 10px; line-height: 20px; padding: 0;
-            background: rgba(0, 0, 0, .7); color: #fff; }
-        .vp-msgs-album { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; width: min(330px, 66vw); margin: 0 0 6px; border-radius: 16px; overflow: hidden; }
-        .vp-msgs-album[data-n="2"], .vp-msgs-album[data-n="3"], .vp-msgs-album[data-n="4"] { grid-template-columns: repeat(2, 1fr); }
-        .vp-msgs-album .vp-msgs-imgw { margin: 0; aspect-ratio: 1; }
-        .vp-msgs-album .vp-wide2 { grid-column: span 2; aspect-ratio: 2 / 1; }
-        .vp-msgs-album .vp-wide3 { grid-column: span 3; aspect-ratio: 3 / 1; }
-        .vp-msgs-album[data-n] { grid-template-columns: repeat(6, 1fr); }
-        .vp-msgs-album[data-n="2"], .vp-msgs-album[data-n="3"], .vp-msgs-album[data-n="4"] { grid-template-columns: repeat(2, 1fr); }
-        .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-msgs-imgw { grid-column: span 2; }
-        .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-half { grid-column: span 3; aspect-ratio: 3 / 2; }
-        .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-wide3 { grid-column: span 6; }
-        .vp-msgs-album .vp-msgs-img { width: 100%; height: 100%; max-width: none; max-height: none; min-width: 0; min-height: 0; object-fit: cover; border-radius: 0; }
-        @media (hover: none) { .vp-msgs-feed .vp-msgs-b { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
-        .vp-msgs-reacts { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 0; }
-        .vp-msgs-reacts button { border: 0; border-radius: 9999px; padding: 2px 9px; font-size: 13px; line-height: 20px; cursor: pointer; color: inherit;
-            background: rgba(127, 127, 127, .22); }
-        .vp-msgs-reacts button.vp-mine-r { background: color-mix(in srgb, var(--vp-accent) 24%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent) 70%, transparent); }
-        .vp-msgs-menu { position: fixed; z-index: 2147483600; min-width: 210px; padding: 6px; border-radius: 16px; background: var(--block-bg);
-            color: var(--text-primary, #fff); box-shadow: 0 12px 40px rgba(0, 0, 0, .45), 0 0 0 1px var(--border-color, rgba(255, 255, 255, .08)); animation: vp-emoji-in .12s ease-out both; }
-        .vp-msgs-menu-r { display: flex; gap: 2px; padding: 2px 2px 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, .08)); }
-        .vp-msgs-menu-r button { width: 36px; height: 36px; border: 0; padding: 0; border-radius: 50%; background: transparent; font-size: 21px; cursor: pointer; transition: transform .1s; }
-        .vp-msgs-menu-r button:hover { transform: scale(1.2); background: rgba(127, 127, 127, .15); }
-        .vp-msgs-menu-i { display: block; width: 100%; text-align: left; border: 0; background: transparent; color: inherit; font: inherit; font-size: 14px; padding: 9px 12px; border-radius: 10px; cursor: pointer; }
-        .vp-msgs-menu-i:hover { background: rgba(127, 127, 127, .15); }
-        .vp-msgs-lb-n { color: rgba(255, 255, 255, .8); font-size: 13px; font-weight: 600; margin-left: auto; flex-shrink: 0; }
-        .vp-msgs-lb-n:empty { display: none; }
-        .vp-msgs-lb-n:not(:empty) + a { margin-left: 8px; }
-        .vp-msgs-lb-nav { position: absolute; top: 50%; z-index: 1; width: 44px; height: 44px; margin-top: -22px; border: 0; border-radius: 50%; cursor: pointer;
-            background: rgba(255, 255, 255, .14); color: #fff; font-size: 26px; line-height: 40px; padding: 0; }
-        .vp-msgs-lb-nav[hidden] { display: none; }
-        .vp-msgs-lb-nav.vp-prev { left: 12px; } .vp-msgs-lb-nav.vp-next { right: 12px; }
-        .vp-msgs-lb-nav { top: 0; bottom: 0; width: 20%; max-width: 180px; height: auto; margin: 0; border-radius: 0; background: none; font-size: 0; transition: background .2s; -webkit-tap-highlight-color: transparent; }
-        .vp-msgs-lb-nav.vp-prev { left: 0; }
-        .vp-msgs-lb-nav.vp-next { right: 0; }
-        .vp-msgs-lb-nav.vp-prev:active { background: linear-gradient(90deg, rgba(255, 255, 255, .16), transparent); }
-        .vp-msgs-lb-nav.vp-next:active { background: linear-gradient(270deg, rgba(255, 255, 255, .16), transparent); }
-        @media (hover: hover) and (pointer: fine) {
-            .vp-msgs-lb-nav.vp-prev:hover { background: linear-gradient(90deg, rgba(255, 255, 255, .12), transparent); }
-            .vp-msgs-lb-nav.vp-next:hover { background: linear-gradient(270deg, rgba(255, 255, 255, .12), transparent); }
-        }
-        .vp-msgs-pend img { width: 52px; height: 52px; object-fit: cover; border-radius: 10px; flex-shrink: 0; }
-        .vp-msgs-pend span { flex: 1; min-width: 0; font-size: 13px; color: var(--text-secondary); }
-        .vp-msgs-pend button { width: 30px; height: 30px; border: 0; border-radius: 50%; background: rgba(127, 127, 127, .2); color: var(--text-primary, #fff); cursor: pointer; flex-shrink: 0; }
-        .vp-msgs-b.vp-has-img { overflow-wrap: anywhere; }
-        .vp-msgs-b.vp-has-img > i { margin-right: 6px; }
-        .vp-msgs-cap { display: block; padding: 0 8px; }
-        .vp-msgs-count { font-size: 12px; color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; flex-shrink: 0; }
-        .vp-msgs-count.vp-warn { color: #ff5c5c; }
-        .vp-msgs-ghost { width: 36px; height: 36px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            background: transparent; color: var(--text-secondary); cursor: pointer; flex-shrink: 0; }
-        .vp-msgs-send { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;
-            flex-shrink: 0; background: var(--vp-accent); color: var(--vp-on-accent, #fff); transition: opacity .15s, transform .15s; }
-        .vp-msgs-send:disabled { opacity: .4; cursor: default; }
-        .vp-msgs-send:not(:disabled):active { transform: scale(.92); }
-        @keyframes vpMsgsIn { from { opacity: 0; transform: translateY(10px); } }
-        @keyframes vpMsgsPop { from { opacity: 0; transform: translateY(6px) scale(.98); } }
-        @keyframes vpMsgsDot { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
-        @media (prefers-reduced-motion: reduce) { .vp-msgs, .vp-msgs * { animation: none !important; } }
-        html.vp-msgs-open video { visibility: hidden !important; }`);
+            const M = {};
+            M.close = close;
+            addCss(MSG_CSS);
 
-            const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-            const root = document.createElement('div');
+            const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); M.esc = esc;
+            const root = document.createElement('div'); M.root = root;
             root.className = 'vp-msgs';
             const blockOuterScroll = e => {
                 const area = e.target.closest && e.target.closest('.vp-msgs-list, .vp-msgs-feed, textarea');
@@ -12453,28 +13071,131 @@ var __vpBannerAuto = (() => {
             under.className = 'vp-msgs-under';
             document.body.appendChild(under);
 
-            const $ = s => root.querySelector(s);
+            const $ = s => root.querySelector(s); M.$ = $;
             const downBtn = root.querySelector('.vp-msgs-down'), downNum = downBtn.lastElementChild;
-            let downNew = 0;
+            M.downNew = 0;
             const feedEl = root.querySelector('.vp-msgs-feed');
             const downSync = () => {
                 const far = feedEl.scrollHeight - feedEl.scrollTop - feedEl.clientHeight > 320;
-                if (!far) downNew = 0;
+                if (!far) M.downNew = 0;
                 downBtn.hidden = !far;
-                downNum.textContent = downNew ? (downNew > 99 ? '99+' : String(downNew)) : '';
-            };
+                downNum.textContent = M.downNew ? (M.downNew > 99 ? '99+' : String(M.downNew)) : '';
+            }; M.downSync = downSync;
             feedEl.addEventListener('scroll', downSync, { passive: true });
-            downBtn.addEventListener('click', () => { downNew = 0; feedEl.scrollTo({ top: feedEl.scrollHeight, behavior: 'smooth' }); });
-            const list = $('.vp-msgs-list'), home = $('.vp-msgs-home'), chat = $('.vp-msgs-chat'), feed = $('.vp-msgs-feed');
-            const input = $('.vp-msgs-bar input'), send = $('.vp-msgs-send'), search = $('.vp-msgs-search input');
+            downBtn.addEventListener('click', () => { M.downNew = 0; feedEl.scrollTo({ top: feedEl.scrollHeight, behavior: 'smooth' }); });
+            const list = $('.vp-msgs-list'), home = $('.vp-msgs-home'), chat = $('.vp-msgs-chat'), feed = $('.vp-msgs-feed'); M.list = list; M.home = home; M.chat = chat; M.feed = feed;
+            const input = $('.vp-msgs-bar input'), send = $('.vp-msgs-send'), search = $('.vp-msgs-search input'); M.input = input; M.send = send; M.search = search;
             const countEl = $('.vp-msgs-count');
             const msgCount = () => {
                 const n = input.value.length, max = input.maxLength > 0 ? input.maxLength : MSG_TEXT_MAX;
                 countEl.hidden = !n;
                 countEl.textContent = `${n} / ${max}`;
                 countEl.classList.toggle('vp-warn', n >= max * 0.9);
+            }; M.msgCount = msgCount;
+            msgPartChat(M);
+            msgPartMenus(M);
+            msgPartSelect(M);
+            msgPartImages(M);
+            function place() {
+                const nav = siteEl('nav');
+                const row = nav && navIsRow(nav) && nav.getBoundingClientRect().top > innerHeight / 2;
+                document.querySelectorAll('.vp-msgs-navwrap').forEach(w => w.classList.remove('vp-msgs-navwrap'));
+                if (row) {
+                    if (nav.parentElement) nav.parentElement.classList.add('vp-msgs-navwrap');
+                    const bottom = innerHeight - nav.getBoundingClientRect().top + BUMP_H + 8;
+                    Object.assign(root.style, { left: '0px', right: '0px', top: '0px', bottom: '0px', width: '', borderRadius: '', paddingBottom: bottom + 'px' });
+                } else {
+                    let cb = contentBox() || lastCb;
+                    if (!cb || cb.right - cb.left < 300) {
+                        const side = siteEl('sidebar'), sr = side && side.getBoundingClientRect();
+                        const w = Math.min(650, innerWidth - 32), l = Math.max(sr ? sr.right + 24 : 16, Math.round(innerWidth / 2 - w / 2));
+                        cb = { left: l, right: Math.min(innerWidth - 16, l + w) };
+                    }
+                    const left = cb ? cb.left : Math.max(0, innerWidth / 2 - 300), width = cb ? cb.right - cb.left : Math.min(600, innerWidth);
+                    Object.assign(root.style, { left: left + 'px', width: width + 'px', right: '', top: '12px', bottom: '12px', borderRadius: '', paddingBottom: '0px' });
+                }
+                root.classList.toggle('vp-card', !row);
+                under.classList.remove('vp-on');
+                if (!row) Object.assign(under.style, { left: root.style.left, width: root.style.width });
+            }
+            let openPath = '';
+            function onKey(e) { if (e.key === 'Escape' && root.classList.contains('vp-open')) { e.stopPropagation(); M.lb ? M.closeImg() : M.menu ? M.closeMenu() : M.fwdEl ? M.closeFwd() : M.sel ? M.selEnd() : M.reply ? M.clearReply() : M.current ? M.closeChat() : close(); } }
+            function close(fromHistory) {
+                if (!root.classList.contains('vp-open')) return;
+                clearTimeout(M.botTimer);
+                root.classList.remove('vp-open');
+                document.documentElement.classList.remove('vp-msgs-open');
+                document.querySelectorAll('.vp-msgs-navwrap').forEach(w => w.classList.remove('vp-msgs-navwrap'));
+                document.removeEventListener('keydown', onKey, true);
+                removeEventListener('resize', place);
+                msgsOpen = false;
+                avatarRefresh();
+                placeSidebar(); placeRail();
+                if (!galOpen) galHideFeed(false);
+                markActiveNav(); moveNavBlob();
+                if (M.lb) { M.lb.remove(); M.lb = null; if (!fromHistory && overlayAt('vpImg')) { history.go(overlayAt('vpChat') ? -3 : -2); return; } }
+                if (!fromHistory) {
+                    if (overlayAt('vpChat')) history.go(-2);
+                    else if (overlayAt('vpMsgs')) history.back();
+                }
+            }
+            addEventListener('popstate', () => {
+                const open = root.classList.contains('vp-open');
+                if (M.lb && !overlayAt('vpImg')) { M.closeImg(true); return; }
+                if (M.chatBackPending) {
+                    M.chatBackPending = false;
+                    if (M.current && overlayAt('vpMsgs') && !overlayAt('vpChat')) history.pushState(Object.assign({}, history.state, { vpChat: M.current.id }), '', location.href);
+                    return;
+                }
+                if (overlayAt('vpMsgs')) {
+                    if (!open) root.open(true);
+                    const cid = history.state && history.state.vpChat;
+                    if (!cid && M.current) M.closeChat(true);
+                    else if (cid && (!M.current || M.current.id !== cid)) root.openDialog(cid, true);
+                }
+                else if (open) close(true);
+            });
+            document.addEventListener('click', e => {
+                if (!root.classList.contains('vp-open')) return;
+                const a = e.target.closest && e.target.closest('a.' + SELECTORS.navLink);
+                if (a && a.getAttribute('href') !== '#' && a.getAttribute('href') === location.pathname) { e.preventDefault(); e.stopPropagation(); close(); }
+            }, true);
+            const msgsLeft = () => { if (root.classList.contains('vp-open') && location.pathname !== openPath) close(true); };
+            onDom(msgsLeft);
+            document.addEventListener('vp-loc', msgsLeft);
+            root.open = fromHistory => {
+                if (root.classList.contains('vp-open')) { if (M.current) M.closeChat(); return; }
+                const lead = fromHistory === true ? null : tabSlide.lead('msg');
+                openNow(fromHistory);
+                tabSlide.arrive(lead, root);
             };
-            let current = null, botTimer = 0;
+            const openNow = fromHistory => {
+                if (galOpen) closeGallery(true);
+                openPath = location.pathname;
+                msgsOpen = true;
+                M.closeChat();
+                loadMsgPeople(() => { if (!M.current) M.renderList(); else M.headAva(); });
+                msgSync().then(() => { msgFillDialogs(); if (!M.current) M.renderList(); }).catch(() => { });
+                place();
+                placeSidebar(); placeRail();
+                root.classList.add('vp-open');
+                document.documentElement.classList.add('vp-msgs-open');
+                avatarRefresh();
+                document.addEventListener('keydown', onKey, true);
+                addEventListener('resize', place);
+                if (fromHistory !== true) overlayEnter('vpMsgs');
+                galHideFeed(true);
+                markActiveNav(); moveNavBlob();
+            };
+            root.close = close;
+            return root;
+        }
+
+        // Окно «Сообщения»: список диалогов, чат, отправка, обновление (часть buildMessagesOverlay, общее состояние — объект M)
+        function msgPartChat(M) {
+            const { $, chat, close, downSync, esc, feed, home, input, list, msgCount, root, search, send } = M;
+            M.renderList = renderList; M.setMeta = setMeta; M.bubble = bubble; M.openChat = openChat; M.msgOpenPerson = msgOpenPerson; M.msgRefreshChat = msgRefreshChat; M.closeChat = closeChat; M.supportReply = supportReply;
+            M.current = null, M.botTimer = 0;
             const SUP_AVA = svgIcon('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.6"/><path d="m5.6 5.6 3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>', 28);
             const avaHtml = (a, size) => {
                 const s = size || 50;
@@ -12482,12 +13203,12 @@ var __vpBannerAuto = (() => {
                 if (!isUrl(a)) return esc(a);
                 const bg = String(a).replace(/[\\"\'()\r\n]/g, c => encodeURIComponent(c));
                 return '<div class="vp-ava-pic" style="width:' + s + 'px;height:' + s + 'px;min-width:' + s + 'px;min-height:' + s + 'px;max-width:' + s + 'px;max-height:' + s + 'px;flex:0 0 ' + s + 'px;background-image:url(' + bg + ');background-size:cover;background-position:center;background-repeat:no-repeat;border-radius:50%;"></div>';
-            };
-            const msgAva = d => { const a = d.login && d.ava !== '🛟' && !d.support ? clubAvaOf(d.login, d.ava) : d.ava; return a || '👤'; };
-            const headAva = () => { const h = current && $('.vp-msgs-chead .vp-msgs-ava'); if (h) h.innerHTML = avaHtml(msgAva(current), 38); };
+            }; M.avaHtml = avaHtml;
+            const msgAva = d => { const a = d.login && d.ava !== '🛟' && !d.support ? clubAvaOf(d.login, d.ava) : d.ava; return a || '👤'; }; M.msgAva = msgAva;
+            const headAva = () => { const h = M.current && $('.vp-msgs-chead .vp-msgs-ava'); if (h) h.innerHTML = avaHtml(msgAva(M.current), 38); }; M.headAva = headAva;
             root.addEventListener('error', e => { const im = e.target; if (im && im.tagName === 'IMG' && im.closest('.vp-msgs-ava')) im.replaceWith(document.createTextNode('👤')); }, true);
 
-            let supDir = false;
+            M.supDir = false;
             const msgLazyTried = new Set();
             let msgLazyObserver = null;
             function msgLazyLoad(d, rowEl) {
@@ -12530,7 +13251,7 @@ var __vpBannerAuto = (() => {
                 const people = MSG_DIALOGS.filter(d => d.login).length;
                 const sups = msgIsSupport() ? sortDialogs(MSG_DIALOGS.filter(d => d.supUid)) : [];
                 if (sups.length && !q) {
-                    if (supDir) rows = [{ id: '@back', ava: '←', name: 'Все чаты', last: `Обращения в поддержку: ${sups.length}`, time: '', unread: 0 }, ...sups.map(d => Object.assign({}, d, { name: d.name.replace(/^🛟\s*/, '') }))];
+                    if (M.supDir) rows = [{ id: '@back', ava: '←', name: 'Все чаты', last: `Обращения в поддержку: ${sups.length}`, time: '', unread: 0 }, ...sups.map(d => Object.assign({}, d, { name: d.name.replace(/^🛟\s*/, '') }))];
                     else {
                         const top = sups.reduce((a, d) => (d.lastTs || 0) > (a.lastTs || 0) ? d : a, sups[0]);
                         const opened = msgOpened(), act = d => Math.max(d.lastTs || 0, opened[d.id] || 0), fAct = Math.max(...sups.map(act));
@@ -12541,8 +13262,8 @@ var __vpBannerAuto = (() => {
                         rows.splice(at < 0 ? rows.length : at, 0, folder);
                     }
                 }
-                if (!sups.length) supDir = false;
-                $('.vp-msgs-sub').textContent = supDir && sups.length && !q ? 'Все, кто писал в поддержку' : people ? `Поддержка и ${people} ${plural(people, 'человек', 'человека', 'человек')} с ИТД X` : 'Пока никого с ИТД X — список обновится сам';
+                if (!sups.length) M.supDir = false;
+                $('.vp-msgs-sub').textContent = M.supDir && sups.length && !q ? 'Все, кто писал в поддержку' : people ? `Поддержка и ${people} ${plural(people, 'человек', 'человека', 'человек')} с ИТД X` : 'Пока никого с ИТД X — список обновится сам';
                 list.innerHTML = rows.length ? rows.map(d => `
                 <div class="vp-msgs-row${pins.includes(d.id) ? ' vp-pinned' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}" data-id="${d.id}">
                     <div class="vp-msgs-ava${d.online ? ' vp-online' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}">${avaHtml(msgAva(d))}</div>
@@ -12553,7 +13274,7 @@ var __vpBannerAuto = (() => {
                 </div>`).join('') : '<div class="vp-msgs-empty">Ничего не нашлось</div>';
                 msgLazyObserve();
             }
-            const now = () => new Date().toTimeString().slice(0, 5);
+            const now = () => new Date().toTimeString().slice(0, 5); M.now = now;
             function setMeta(i, str) {
                 const m = String(str).match(/^(.*?)\s*(✓✓|✓)$/), txt = m ? m[1] : String(str);
                 if (i.textContent !== txt) i.textContent = txt;
@@ -12614,7 +13335,7 @@ var __vpBannerAuto = (() => {
                         im.src = u; im.alt = ''; im.loading = 'lazy'; im.decoding = 'async'; im.draggable = false;
                         im.addEventListener('load', () => { if (feed.scrollHeight - feed.scrollTop - feed.clientHeight < 400) feed.scrollTop = feed.scrollHeight; }, { once: true });
                         wrap.appendChild(im);
-                        wrap.addEventListener('click', () => openImg(urls, i, text, [...wrap.closest('.vp-msgs-b').querySelectorAll('.vp-msgs-img')]));
+                        wrap.addEventListener('click', () => M.openImg(urls, i, text, [...wrap.closest('.vp-msgs-b').querySelectorAll('.vp-msgs-img')]));
                         return wrap;
                     };
                     let box;
@@ -12640,19 +13361,19 @@ var __vpBannerAuto = (() => {
                 scheduleDays();
                 return b;
             }
-            let chatBackPending = false;
+            M.chatBackPending = false;
             function openChat(d, fromHistory) {
-                if (fromHistory !== true && !chatBackPending && root.classList.contains('vp-open')) {
+                if (fromHistory !== true && !M.chatBackPending && root.classList.contains('vp-open')) {
                     const st = Object.assign({}, history.state, { vpChat: d.id });
                     history[overlayAt('vpChat') ? 'replaceState' : 'pushState'](st, '', location.href);
                 }
-                if (current !== d) clearPending();
-                blockUi(null);
+                if (M.current !== d) M.clearPending();
+                M.blockUi(null);
                 $('.vp-msgs-hmenu').hidden = true;
                 $('.vp-msgs-more').hidden = !d.login || !!d.support || !!d.supUid;
-                current = d;
-                downNew = 0;
-                selEnd(); clearReply(); closeFwd(); pinEl.hidden = true; pinIdx = 0;
+                M.current = d;
+                M.downNew = 0;
+                M.selEnd(); M.clearReply(); M.closeFwd(); M.pinEl.hidden = true; M.pinIdx = 0;
                 d.unread = 0;
                 msgMarkOpened(d.id);
                 $('.vp-msgs-chead .vp-msgs-ava').innerHTML = avaHtml(msgAva(d), 38);
@@ -12672,22 +13393,29 @@ var __vpBannerAuto = (() => {
                 home.hidden = true; chat.hidden = false;
                 input.value = ''; send.disabled = true; msgCount();
             }
-            const note = (t, ico) => { const n = document.createElement('div'); n.className = 'vp-msgs-note'; if (ico) n.insertAdjacentHTML('afterbegin', uiIcon(ico, 14)); n.appendChild(document.createTextNode(t)); feed.appendChild(n); return n; };
+            const note = (t, ico) => { const n = document.createElement('div'); n.className = 'vp-msgs-note'; if (ico) n.insertAdjacentHTML('afterbegin', uiIcon(ico, 14)); n.appendChild(document.createTextNode(t)); feed.appendChild(n); return n; }; M.note = note;
             let stickUntil = 0;
             const stickEnd = () => {
                 stickUntil = Date.now() + 2500;
                 feed.scrollTop = feed.scrollHeight;
                 requestAnimationFrame(() => { if (Date.now() < stickUntil) feed.scrollTop = feed.scrollHeight; });
-            };
+            }; M.stickEnd = stickEnd;
             feed.addEventListener('load', () => { if (Date.now() < stickUntil) feed.scrollTop = feed.scrollHeight; }, true);
+            feed.addEventListener('click', e => {
+                const fb = e.target.closest && e.target.closest('.vp-msgs-b.vp-fail');
+                if (!fb || !fb._m || fb._m.pending !== 'fail' || !M.current) return;
+                const tt = msgTarget(M.current);
+                if (tt.uid) msgRetry(tt.uid, fb._m.ts);
+            });
             ['wheel', 'touchstart', 'keydown'].forEach(t => feed.addEventListener(t, () => { stickUntil = 0; }, { passive: true }));
             let renderN = 0;
             async function msgOpenPerson(d) {
                 const my = ++renderN;
+                msgNet.hotUntil = Date.now() + 120000;
                 feed.textContent = ''; input.disabled = true; input.maxLength = MSG_TEXT_MAX;
                 const wait = note('Загрузка переписки…', 'lock');
                 try { await msgSync(); } catch (e) { if (my === renderN) wait.textContent = 'Не загрузилось — открой чат ещё раз'; logErr('сообщения', e); return; }
-                if (current !== d || my !== renderN) return;
+                if (M.current !== d || my !== renderN) return;
                 if (d.login && !d.support && !isApprovedId(msgMyId())) {
                     feed.textContent = '';
                     note('Переписка с людьми откроется, когда разработчик подтвердит твою галочку ИТД X. Поддержка работает уже сейчас.', 'lock');
@@ -12703,16 +13431,17 @@ var __vpBannerAuto = (() => {
                 list.forEach(m => {
                     const b = bubble(m.dir, m.text, msgMetaText(t, m), (m.imgs || (m.img ? [m.img] : [])).map(msgImgUrl));
                     b._m = m; b.dataset.ts = m.ts; b.dataset.dir = m.dir;
-                    paintReacts(b, t.uid);
+                    b.classList.toggle('vp-fail', m.pending === 'fail');
+                    M.paintReacts(b, t.uid);
                 });
-                paintCalls(t);
-                paintPin(t);
+                M.paintCalls(t);
+                M.paintPin(t);
                 paintDays(true);
-                d.shown = list.length; d.sig = chatSig(t.uid);
+                d.shown = list.length; d.sig = M.chatSig(t.uid);
                 input.disabled = false; input.focus();
                 stickEnd();
                 msgReadNow(d, t, list);
-                blockUi(d, t);
+                M.blockUi(d, t);
             }
             const dayLabel = ts => {
                 const d = new Date(ts * 1000), now = new Date(), yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
@@ -12737,17 +13466,29 @@ var __vpBannerAuto = (() => {
             }
             let daysRaf = 0;
             const scheduleDays = () => { if (!daysRaf) daysRaf = requestAnimationFrame(() => { daysRaf = 0; paintDays(); }); };
-            const msgClock = ts => new Date(ts * 1000).toTimeString().slice(0, 5);
-            const msgMetaText = (t, m) => msgClock(m.at || m.ts) + (m.dir === 'out' ? (readUpTo(t.uid, t.sup, 'them') >= m.ts ? ' ✓✓' : ' ✓') : '');
+            const msgClock = ts => new Date(ts * 1000).toTimeString().slice(0, 5); M.msgClock = msgClock;
+            const msgMetaText = (t, m) => m.pending ? msgClock(m.ts) + (m.pending === 'fail' ? ' · не отправлено — нажми, чтобы повторить' : ' · отправка…') : msgClock(m.at || m.ts) + (m.dir === 'out' ? (readUpTo(t.uid, t.sup, 'them') >= m.ts ? ' ✓✓' : ' ✓') : '');
+            function viewMark() {
+                const top = feed.getBoundingClientRect().top;
+                for (const b of feed.querySelectorAll(':scope > .vp-msgs-b')) {
+                    const r = b.getBoundingClientRect();
+                    if (r.bottom > top + 1) return () => {
+                        if (!b.isConnected) return;
+                        const dy = b.getBoundingClientRect().top - feed.getBoundingClientRect().top - (r.top - top);
+                        if (Math.abs(dy) > 0.5) feed.scrollTop += dy;
+                    };
+                }
+                return () => { };
+            }
             function msgRefreshChat(d) {
                 const t = msgTarget(d);
-                if (input.dataset.vpBlocked && t.uid) blockUi(d, t);
+                if (input.dataset.vpBlocked && t.uid) M.blockUi(d, t);
                 if (!t.uid || !msgNet.me || input.disabled) return;
-                blockUi(d, t);
+                M.blockUi(d, t);
                 if (input.disabled) return;
                 const list = msgThread(t), have = new Map();
                 feed.querySelectorAll(':scope > .vp-msgs-b[data-ts]').forEach(b => { const k = b.dataset.dir + '|' + b.dataset.ts; if (!have.has(k)) have.set(k, []); have.get(k).push(b); });
-                const nearEnd = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80, keep = feed.scrollTop;
+                const nearEnd = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80, restore = nearEnd ? null : viewMark();
                 feed.querySelectorAll(':scope > .vp-msgs-day').forEach(e => e.remove());
                 let prev = null, added = 0;
                 for (const m of list) {
@@ -12758,22 +13499,23 @@ var __vpBannerAuto = (() => {
                         b.dataset.ts = m.ts; b.dataset.dir = m.dir; added++;
                     }
                     b._m = m;
+                    b.classList.toggle('vp-fail', m.pending === 'fail');
                     const sig = JSON.stringify(msgNet.reacts && msgNet.reacts.get(reactKey(t.uid, m.dir, m.ts)) || null);
-                    if (b._rs !== sig) { b._rs = sig; paintReacts(b, t.uid); }
+                    if (b._rs !== sig) { b._rs = sig; M.paintReacts(b, t.uid); }
                     const want = prev ? prev.nextElementSibling : feed.querySelector(':scope > .vp-msgs-b');
                     if (want !== b) { if (prev) prev.after(b); else feed.insertBefore(b, want); }
                     prev = b;
                 }
                 have.forEach(arr => arr.forEach(x => x.remove()));
                 if (added) feed.querySelectorAll(':scope > .vp-msgs-note.vp-msgs-first').forEach(n => n.remove());
-                feed.scrollTop = nearEnd ? feed.scrollHeight : keep;
-                if (added && !nearEnd && d.shown) downNew += list.slice(-added).filter(m => m.dir === 'in').length;
+                if (nearEnd) feed.scrollTop = feed.scrollHeight; else restore();
+                if (added && !nearEnd && d.shown) M.downNew += list.slice(-added).filter(m => m.dir === 'in').length;
                 downSync();
-                paintCalls(t);
-                paintPin(t);
+                M.paintCalls(t);
+                M.paintPin(t);
                 paintDays(true);
-                feed.scrollTop = nearEnd ? feed.scrollHeight : keep;
-                d.shown = list.length; d.sig = chatSig(t.uid);
+                if (nearEnd) feed.scrollTop = feed.scrollHeight; else restore();
+                d.shown = list.length; d.sig = M.chatSig(t.uid);
                 msgReadNow(d, t, list);
             }
             function msgReadNow(d, t, list) {
@@ -12809,57 +13551,64 @@ var __vpBannerAuto = (() => {
             const msgPoll = sched.add('msgPoll', async () => {
                 if (!root.isConnected) return msgPoll.remove();
                 if ((!msgsOpen && !(callNet.cur && callNet.cur.state === 'talk')) || !msgNet.me || apiPaused()) return;
+                if (M.current) msgNet.hotUntil = Date.now() + 120000;
                 if (Date.now() - callNet.lastSync > 12000) { callNet.lastSync = Date.now(); try { await msgSync(); } catch (e) { return; } }
                 msgFillDialogs();
-                if (!current) return renderList();
-                const tt = msgTarget(current), list = msgThread(tt);
-                if (list.length !== current.shown || chatSig(tt.uid) !== current.sig) msgRefreshChat(current);
+                if (!M.current) return renderList();
+                const tt = msgTarget(M.current), list = msgThread(tt);
+                if (list.length !== M.current.shown || M.chatSig(tt.uid) !== M.current.sig) msgRefreshChat(M.current);
             }, { every: 20000, net: true });
-            root.refreshList = () => { if (!current) { msgFillDialogs(); renderList(); } };
+            root.refreshList = () => { if (!M.current) { msgFillDialogs(); renderList(); } };
             document.addEventListener('vp-looks-ready', () => {
                 if (!root.isConnected) return;
-                if (current) headAva(); else renderList();
+                if (M.current) headAva(); else renderList();
+            });
+            document.addEventListener('vp-msg-outbox', () => {
+                if (!root.isConnected) return;
+                if (M.current && msgNet.me) msgRefreshChat(M.current);
+                msgFillDialogs();
             });
             const onSynced = () => {
                 if (!root.isConnected) return document.removeEventListener('vp-msg-synced', onSynced);
-                if (!msgsOpen || !current || !msgNet.me) return;
+                if (!msgsOpen || !M.current || !msgNet.me) return;
                 msgFillDialogs();
-                const tt = msgTarget(current);
+                const tt = msgTarget(M.current);
                 if (!tt.uid) return;
-                if (msgThread(tt).length !== current.shown || chatSig(tt.uid) !== current.sig) msgRefreshChat(current);
+                if (msgThread(tt).length !== M.current.shown || M.chatSig(tt.uid) !== M.current.sig) msgRefreshChat(M.current);
             };
             document.addEventListener('vp-msg-synced', onSynced);
             document.addEventListener('visibilitychange', () => {
-                if (document.hidden || !root.isConnected || !msgsOpen || !current || !msgNet.me) return;
-                const tt = msgTarget(current);
-                if (tt.uid) msgReadNow(current, tt, msgThread(tt));
+                if (document.hidden || !root.isConnected || !msgsOpen || !M.current || !msgNet.me) return;
+                const tt = msgTarget(M.current);
+                if (tt.uid) msgReadNow(M.current, tt, msgThread(tt));
             });
             root.refreshCalls = () => {
-                if (!current || current.support || current.supUid || !msgNet.me) return;
-                const t = msgTarget(current);
+                if (!M.current || M.current.support || M.current.supUid || !msgNet.me) return;
+                const t = msgTarget(M.current);
                 if (!t.uid) return;
-                blockUi(current, t);
+                M.blockUi(M.current, t);
                 if (input.disabled) return;
                 const near = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
-                const n = feed.querySelectorAll(':scope > .vp-msgs-callrow').length;
-                paintCalls(t);
+                const n = feed.querySelectorAll(':scope > .vp-msgs-callrow').length, restore = near ? null : viewMark();
+                M.paintCalls(t);
                 if (near && feed.querySelectorAll(':scope > .vp-msgs-callrow').length !== n) feed.scrollTop = feed.scrollHeight;
+                else if (restore) restore();
             };
             root.openDialog = (id, fromHistory) => {
                 msgFillDialogs();
                 const d = MSG_DIALOGS.find(x => x.id === id) || (id.startsWith('u:') && msgPeople.get(id.slice(2)));
                 if (d) openChat(d, fromHistory);
             };
-            root.currentTarget = () => current ? msgTarget(current) : null;
+            root.currentTarget = () => M.current ? msgTarget(M.current) : null;
             function closeChat(fromHistory) {
-                clearPending();
-                closeImg(true, true);
-                closeMenu();
-                selEnd(); clearReply(); closeFwd(); pinEl.hidden = true;
-                if (fromHistory !== true && current && overlayAt('vpChat')) { chatBackPending = true; history.back(); }
-                clearTimeout(botTimer);
-                if (current && msgNet.me) msgSync().then(() => { msgFillDialogs(); msgBadge(); if (!current) renderList(); }).catch(() => { });
-                current = null;
+                M.clearPending();
+                M.closeImg(true, true);
+                M.closeMenu();
+                M.selEnd(); M.clearReply(); M.closeFwd(); M.pinEl.hidden = true;
+                if (fromHistory !== true && M.current && overlayAt('vpChat')) { M.chatBackPending = true; history.back(); }
+                clearTimeout(M.botTimer);
+                if (M.current && msgNet.me) msgSync().then(() => { msgFillDialogs(); msgBadge(); if (!M.current) renderList(); }).catch(() => { });
+                M.current = null;
                 chat.hidden = true; home.hidden = false;
                 renderList();
             }
@@ -12869,13 +13618,18 @@ var __vpBannerAuto = (() => {
                 typing.innerHTML = '<span></span><span></span><span></span>';
                 feed.appendChild(typing);
                 feed.scrollTop = feed.scrollHeight;
-                botTimer = setTimeout(() => {
+                M.botTimer = setTimeout(() => {
                     typing.remove();
                     supportTicket = supportTicket || 1000 + (Math.random() * 9000 | 0);
                     bubble('in', `Приняли, обращение №${supportTicket++}. Ответим, как только личка заработает — а по-настоящему сейчас быстрее в тг @NeuroSFW`);
                 }, 900 + Math.random() * 700);
             }
 
+        }
+        // Окно «Сообщения»: меню диалога, блокировка, плашки звонков, реакции
+        function msgPartMenus(M) {
+            const { $, close, closeChat, feed, input, list, msgAva, msgClock, msgCount, msgOpenPerson, msgRefreshChat, note, openChat, renderList, root, search, send } = M;
+            M.blockUi = blockUi; M.paintCalls = paintCalls; M.paintReacts = paintReacts; M.toggleReact = toggleReact;
             const ctx = document.createElement('div');
             ctx.className = 'vp-msgs-ctx';
             root.appendChild(ctx);
@@ -12922,12 +13676,12 @@ var __vpBannerAuto = (() => {
             list.addEventListener('click', e => {
                 const r = e.target.closest('.vp-msgs-row');
                 if (held) { held = false; return; }
-                if (r && r.dataset.id[0] === '@') { supDir = r.dataset.id === '@sup'; list.scrollTop = 0; renderList(); return; }
+                if (r && r.dataset.id[0] === '@') { M.supDir = r.dataset.id === '@sup'; list.scrollTop = 0; renderList(); return; }
                 if (r) openChat(MSG_DIALOGS.find(d => d.id === r.dataset.id));
             });
             root.querySelectorAll('.vp-msgs-who, .vp-msgs-chead .vp-msgs-ava').forEach(el => el.onclick = () => {
-                if (!current || !current.login) return;
-                const login = current.login;
+                if (!M.current || !M.current.login) return;
+                const login = M.current.login;
                 close(true);
                 openProfile(login);
             });
@@ -12965,7 +13719,7 @@ var __vpBannerAuto = (() => {
                 await msgDecryptAll();
                 msgFillDialogs();
                 msgBadge();
-                if (current === d) msgOpenPerson(d);
+                if (M.current === d) msgOpenPerson(d);
                 try { await msgSend(t.uid, '', false, null, new Uint8Array([5, on ? 1 : 0])); }
                 catch (e) { logErr('блокировка', e); }
             }
@@ -12973,8 +13727,8 @@ var __vpBannerAuto = (() => {
             $('.vp-msgs-more').onclick = e => {
                 e.stopPropagation();
                 if (!blockMenu.hidden) { blockMenu.hidden = true; return; }
-                if (!current || !current.login || current.support || current.supUid) return;
-                const t = msgTarget(current), d = current;
+                if (!M.current || !M.current.login || M.current.support || M.current.supUid) return;
+                const t = msgTarget(M.current), d = M.current;
                 if (!t.uid) return note(t.missing);
                 const on = msgIsBlocked(t.uid);
                 blockMenu.innerHTML = '<button type="button"></button>';
@@ -12987,15 +13741,15 @@ var __vpBannerAuto = (() => {
             };
             root.addEventListener('click', e => { if (!blockMenu.hidden && !e.target.closest('.vp-msgs-hmenu, .vp-msgs-more')) blockMenu.hidden = true; });
             $('.vp-msgs-call').onclick = () => {
-                if (!current || !current.login || current.support) return;
-                const t = msgTarget(current);
+                if (!M.current || !M.current.login || M.current.support) return;
+                const t = msgTarget(M.current);
                 if (!msgNet.me || !isApprovedId(msgMyId())) return note('Звонки откроются вместе с перепиской', 'phone');
                 if (!t.uid) return note(t.missing);
-                callStart(t.uid, current.name, msgAva(current));
+                callStart(t.uid, M.current.name, msgAva(M.current));
             };
             search.addEventListener('input', renderList);
             $('.vp-msgs-back').onclick = closeChat;
-            input.addEventListener('input', () => { send.disabled = !input.value.trim() && !pendingImg; msgCount(); });
+            input.addEventListener('input', () => { send.disabled = !input.value.trim() && !M.pendingImg; msgCount(); });
             attachEmojiPicker($('.vp-msgs-emoji'), em => {
                 if (input.disabled) return false;
                 const max = input.maxLength > 0 ? input.maxLength : MSG_TEXT_MAX;
@@ -13004,13 +13758,13 @@ var __vpBannerAuto = (() => {
                 input.setRangeText(em, a, z, 'end');
                 input.dispatchEvent(new Event('input', { bubbles: true }));
             });
-            let lb = null;
+            M.lb = null;
             const chatSig = uid => {
                 let sg = '';
                 if (msgNet.reacts) msgNet.reacts.forEach((v, k) => { if (k.startsWith(uid + '|')) sg += k + (v.me ? v.me.emoji : '') + '/' + (v.them ? v.them.emoji : '') + ';'; });
                 const r = msgNet.reads && msgNet.reads.get(uid);
-                return sg + ((msgNet.pins && msgNet.pins.get(uid)) || []).join(',') + '|' + (r ? (r.them0 || 0) + '/' + (r.them1 || 0) : 0) + '|' + (msgNet.sigs || []).filter(x => x.uid === uid).length + '|' + (msgIsBlocked(uid) ? 1 : 0) + (msgBlockedMe(uid) ? 1 : 0);
-            };
+                return sg + ((msgNet.pins && msgNet.pins.get(uid)) || []).join(',') + '|' + (r ? (r.them0 || 0) + '/' + (r.them1 || 0) : 0) + '|' + (msgNet.sigs || []).filter(x => x.uid === uid).length + '|' + (msgIsBlocked(uid) ? 1 : 0) + (msgBlockedMe(uid) ? 1 : 0) + '|' + msgOutGet().filter(e => e.uid === uid).map(e => e.ts + e.st).join(',');
+            }; M.chatSig = chatSig;
             function paintCalls(t) {
                 feed.querySelectorAll(':scope > .vp-msgs-callrow').forEach(x => x.remove());
                 if (!t.uid || t.sup) return;
@@ -13023,7 +13777,7 @@ var __vpBannerAuto = (() => {
                     row.querySelector('span').textContent = text;
                     row.querySelector('time').textContent = msgClock(e.ts);
                     row.dataset.cts = e.ts;
-                    row.onclick = () => { if (current) callStart(t.uid, current.name, msgAva(current)); };
+                    row.onclick = () => { if (M.current) callStart(t.uid, M.current.name, msgAva(M.current)); };
                     const next = bs.find(b => +b.dataset.ts > e.ts);
                     if (next) feed.insertBefore(row, next); else feed.appendChild(row);
                 }
@@ -13050,7 +13804,7 @@ var __vpBannerAuto = (() => {
                 b.insertBefore(box, b.lastChild);
             }
             function toggleReact(b, emoji) {
-                const m = b._m, t = current && msgTarget(current);
+                const m = b._m, t = M.current && msgTarget(M.current);
                 if (!m || !t || !t.uid) return;
                 const key = reactKey(t.uid, m.dir, m.ts), e = msgNet.reacts.get(key) || {};
                 const next = e.me && e.me.emoji === emoji ? '' : emoji;
@@ -13061,11 +13815,16 @@ var __vpBannerAuto = (() => {
                 const nearEnd = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
                 paintReacts(b, t.uid);
                 if (nearEnd) feed.scrollTop = feed.scrollHeight;
-                current.sig = chatSig(t.uid);
-                const d = current;
-                msgReact(t.uid, m, next).then(() => { if (current === d) msgRefreshChat(d); })
-                    .catch(err => { pend.delete(key); logErr('реакция', err); if (current === d) msgRefreshChat(d); note('Реакция не сохранилась — попробуй ещё раз'); });
+                M.current.sig = chatSig(t.uid);
+                const d = M.current;
+                msgReact(t.uid, m, next).then(() => { if (M.current === d) msgRefreshChat(d); })
+                    .catch(err => { pend.delete(key); logErr('реакция', err); if (M.current === d) msgRefreshChat(d); note('Реакция не сохранилась — попробуй ещё раз'); });
             }
+        }
+        // Окно «Сообщения»: ответ, закреплённые, выделение, удаление, пересылка, меню пузыря
+        function msgPartSelect(M) {
+            const { $, avaHtml, chat, feed, input, msgAva, msgRefreshChat, toggleReact } = M;
+            M.clearReply = clearReply; M.takeReply = takeReply; M.paintPin = paintPin; M.selEnd = selEnd; M.closeFwd = closeFwd; M.closeMenu = closeMenu;
             const plainText = t => String(t || '').replace(/^> [^\n]*\n?/, '');
             const flashNote = text => {
                 chat.querySelectorAll(':scope > .vp-msgs-flash').forEach(x => x.remove());
@@ -13076,82 +13835,82 @@ var __vpBannerAuto = (() => {
                 setTimeout(() => n.remove(), 2400);
             };
             const copyText = t => { if (t && navigator.clipboard) navigator.clipboard.writeText(t).catch(() => { }); flashNote('Скопировано'); };
-            let reply = null;
+            M.reply = null;
             const replyEl = document.createElement('div');
             replyEl.className = 'vp-msgs-reply';
             replyEl.hidden = true;
             replyEl.innerHTML = uiIcon('reply', 18) + '<span class="vp-msgs-reply-t"><b></b><span></span></span><button type="button" class="vp-msgs-ib" title="Отмена">' + uiIcon('close', 16) + '</button>';
             $('.vp-msgs-bar').before(replyEl);
-            function clearReply() { reply = null; replyEl.hidden = true; }
+            function clearReply() { M.reply = null; replyEl.hidden = true; }
             function setReply(b) {
                 const m = b._m;
                 if (!m) return;
                 const body = plainText(m.text).replace(/\s+/g, ' ').trim();
-                reply = { name: m.dir === 'out' ? 'Ты' : current.name, text: body ? body.slice(0, 70) : 'Картинка' };
-                replyEl.querySelector('b').textContent = reply.name;
-                replyEl.querySelector('.vp-msgs-reply-t span').textContent = reply.text;
+                M.reply = { name: m.dir === 'out' ? 'Ты' : M.current.name, text: body ? body.slice(0, 70) : 'Картинка' };
+                replyEl.querySelector('b').textContent = M.reply.name;
+                replyEl.querySelector('.vp-msgs-reply-t span').textContent = M.reply.text;
                 replyEl.hidden = false;
                 input.focus();
             }
             replyEl.querySelector('button').addEventListener('click', clearReply);
             function takeReply(text) {
-                if (!reply) return text;
-                const q = '> ' + reply.name + ': ' + reply.text;
+                if (!M.reply) return text;
+                const q = '> ' + M.reply.name + ': ' + M.reply.text;
                 clearReply();
                 return text ? q + '\n' + text : q;
             }
-            const pinEl = document.createElement('div');
+            const pinEl = document.createElement('div'); M.pinEl = pinEl;
             pinEl.className = 'vp-msgs-pinbar';
             pinEl.hidden = true;
             pinEl.innerHTML = uiIcon('pin', 18) + '<span class="vp-msgs-pin-t"><b>Закреплённое сообщение</b><span></span></span><button type="button" class="vp-msgs-ib" title="Открепить">' + uiIcon('close', 16) + '</button>';
             $('.vp-msgs-chead').after(pinEl);
-            let pinIdx = 0, pinCur = null, pinCount = 0;
+            M.pinIdx = 0, M.pinCur = null, M.pinCount = 0;
             function paintPin(t) {
                 const keys = (msgNet.pins && t && t.uid && msgNet.pins.get(t.uid)) || [], list = t && t.uid ? msgThread(t) : [];
                 const items = keys.map(k => list.find(m => reactKey(t.uid, m.dir, m.ts) === k)).filter(Boolean);
-                pinCount = items.length;
-                if (!items.length) { pinEl.hidden = true; pinCur = null; return; }
-                pinIdx = pinIdx % items.length;
-                pinCur = items[items.length - 1 - pinIdx];
-                pinEl.querySelector('b').textContent = items.length > 1 ? `Закреплённое сообщение ${items.length - pinIdx} из ${items.length}` : 'Закреплённое сообщение';
-                pinEl.querySelector('.vp-msgs-pin-t span').textContent = plainText(pinCur.text).replace(/\s+/g, ' ').trim().slice(0, 90) || 'Картинка';
+                M.pinCount = items.length;
+                if (!items.length) { pinEl.hidden = true; M.pinCur = null; return; }
+                M.pinIdx = M.pinIdx % items.length;
+                M.pinCur = items[items.length - 1 - M.pinIdx];
+                pinEl.querySelector('b').textContent = items.length > 1 ? `Закреплённое сообщение ${items.length - M.pinIdx} из ${items.length}` : 'Закреплённое сообщение';
+                pinEl.querySelector('.vp-msgs-pin-t span').textContent = plainText(M.pinCur.text).replace(/\s+/g, ' ').trim().slice(0, 90) || 'Картинка';
                 pinEl.hidden = false;
             }
             const bubbleOf = m => feed.querySelector(`:scope > .vp-msgs-b[data-dir="${m.dir}"][data-ts="${m.ts}"]`);
             pinEl.addEventListener('click', e => {
-                if (!pinCur || e.target.closest('button')) return;
-                const b = bubbleOf(pinCur);
+                if (!M.pinCur || e.target.closest('button')) return;
+                const b = bubbleOf(M.pinCur);
                 if (b) { b.scrollIntoView({ block: 'center', behavior: 'smooth' }); b.classList.remove('vp-flash'); void b.offsetWidth; b.classList.add('vp-flash'); setTimeout(() => b.classList.remove('vp-flash'), 1500); }
-                if (pinCount > 1) { pinIdx++; paintPin(msgTarget(current)); }
+                if (M.pinCount > 1) { M.pinIdx++; paintPin(msgTarget(M.current)); }
             });
-            pinEl.querySelector('button').addEventListener('click', () => { if (pinCur) togglePin(pinCur, false); });
+            pinEl.querySelector('button').addEventListener('click', () => { if (M.pinCur) togglePin(M.pinCur, false); });
             async function togglePin(m, on) {
-                const t = current && msgTarget(current);
+                const t = M.current && msgTarget(M.current);
                 if (!t || !t.uid) return;
-                const d = current;
+                const d = M.current;
                 try { await msgSend(t.uid, '', false, null, cat(new Uint8Array([6]), be32(m.ts), new Uint8Array([m.dir === 'out' ? 1 : 0, on ? 1 : 0]))); }
                 catch (e) { logErr('закрепление', e); flashNote('Не получилось — попробуй ещё раз'); return; }
                 await msgSync().catch(() => { });
-                if (current === d) { msgRefreshChat(d); flashNote(on ? 'Сообщение закреплено' : 'Сообщение откреплено'); }
+                if (M.current === d) { msgRefreshChat(d); flashNote(on ? 'Сообщение закреплено' : 'Сообщение откреплено'); }
             }
-            let sel = null;
+            M.sel = null;
             const selEl = document.createElement('div');
             selEl.className = 'vp-msgs-sel';
             selEl.hidden = true;
             selEl.innerHTML = '<button type="button" class="vp-msgs-ib" title="Отмена">' + uiIcon('close', 18) + '</button><b></b><span class="vp-msgs-sel-gap"></span>'
                 + '<button type="button" data-a="copy">' + uiIcon('copy', 16) + 'Копировать</button><button type="button" data-a="fwd">' + uiIcon('fwd', 16) + 'Переслать</button><button type="button" data-a="del" class="vp-danger">' + uiIcon('trash', 16) + 'Удалить</button>';
             $('.vp-msgs-chead').appendChild(selEl);
-            function selEnd() { if (sel) sel.forEach(b => b.classList.remove('vp-sel')); sel = null; chat.classList.remove('vp-selecting'); selEl.hidden = true; }
+            function selEnd() { if (M.sel) M.sel.forEach(b => b.classList.remove('vp-sel')); M.sel = null; chat.classList.remove('vp-selecting'); selEl.hidden = true; }
             function selSet(b, on) {
-                if (!sel || !b._m) return;
-                const has = sel.has(b);
-                if (on && !has) { sel.add(b); b.classList.add('vp-sel'); }
-                else if (!on && has) { sel.delete(b); b.classList.remove('vp-sel'); }
-                if (!sel.size) selEnd(); else selEl.querySelector('b').textContent = sel.size + ' выбрано';
+                if (!M.sel || !b._m) return;
+                const has = M.sel.has(b);
+                if (on && !has) { M.sel.add(b); b.classList.add('vp-sel'); }
+                else if (!on && has) { M.sel.delete(b); b.classList.remove('vp-sel'); }
+                if (!M.sel.size) selEnd(); else selEl.querySelector('b').textContent = M.sel.size + ' выбрано';
             }
-            const selToggle = b => { if (sel && b._m) selSet(b, !sel.has(b)); };
-            function selStart(b) { selEnd(); sel = new Set(); chat.classList.add('vp-selecting'); selEl.hidden = false; selToggle(b); }
-            const selList = () => sel ? [...feed.querySelectorAll(':scope > .vp-msgs-b')].filter(b => sel.has(b)) : [];
+            const selToggle = b => { if (M.sel && b._m) selSet(b, !M.sel.has(b)); };
+            function selStart(b) { selEnd(); M.sel = new Set(); chat.classList.add('vp-selecting'); selEl.hidden = false; selToggle(b); }
+            const selList = () => M.sel ? [...feed.querySelectorAll(':scope > .vp-msgs-b')].filter(b => M.sel.has(b)) : [];
             selEl.addEventListener('click', e => {
                 const btn = e.target.closest('button');
                 if (!btn) return;
@@ -13181,17 +13940,17 @@ var __vpBannerAuto = (() => {
                 dsel.raf = requestAnimationFrame(selScroll);
             }
             feed.addEventListener('pointerdown', e => {
-                if (!sel || e.button) return;
+                if (!M.sel || e.button) return;
                 const b = hitBubble(e);
                 if (!b || !b._m) return;
-                dsel = { was: sel.has(b), b, before: new Set(sel), moved: false, x0: e.clientX, y0: e.clientY, id: e.pointerId, v: 0, x: e.clientX, y: e.clientY, raf: 0 };
+                dsel = { was: M.sel.has(b), b, before: new Set(M.sel), moved: false, x0: e.clientX, y0: e.clientY, id: e.pointerId, v: 0, x: e.clientX, y: e.clientY, raf: 0 };
                 selRange(b);
                 try { feed.setPointerCapture(e.pointerId); } catch (x) { }
                 e.preventDefault();
             }, true);
             let selHoldT = 0;
             feed.addEventListener('pointerdown', e => {
-                if (sel || e.pointerType !== 'mouse' || e.button) return;
+                if (M.sel || e.pointerType !== 'mouse' || e.button) return;
                 const b = hitBubble(e);
                 if (!b || !b._m || e.target.closest('a, button')) return;
                 const id = e.pointerId, x0 = e.clientX, y0 = e.clientY;
@@ -13200,10 +13959,10 @@ var __vpBannerAuto = (() => {
                 const mv = ev => { if (Math.hypot(ev.clientX - x0, ev.clientY - y0) > 5) cancel(); };
                 selHoldT = setTimeout(() => {
                     cancel();
-                    if (!b.isConnected || sel) return;
+                    if (!b.isConnected || M.sel) return;
                     if (window.getSelection) window.getSelection().removeAllRanges();
                     selStart(b);
-                    dsel = { was: false, b, before: new Set(sel), moved: false, x0, y0, id, v: 0, x: x0, y: y0, raf: 0 };
+                    dsel = { was: false, b, before: new Set(M.sel), moved: false, x0, y0, id, v: 0, x: x0, y: y0, raf: 0 };
                     try { feed.setPointerCapture(id); } catch (x) { }
                 }, 450);
                 feed.addEventListener('pointermove', mv);
@@ -13229,14 +13988,14 @@ var __vpBannerAuto = (() => {
             feed.addEventListener('pointerup', selDragEnd);
             feed.addEventListener('pointercancel', selDragEnd);
             feed.addEventListener('click', e => {
-                if (!sel && Date.now() > selMute) return;
+                if (!M.sel && Date.now() > selMute) return;
                 if (Date.now() < selMute) { e.preventDefault(); e.stopPropagation(); return; }
                 const b = hitBubble(e);
                 e.preventDefault(); e.stopPropagation();
                 if (b) selToggle(b);
             }, true);
             async function msgDelete(bs) {
-                const t = current && msgTarget(current);
+                const t = M.current && msgTarget(M.current);
                 bs = bs.filter(b => b._m);
                 if (!t || !t.uid || !bs.length) return;
                 const own = bs.filter(b => b._m.dir === 'out'), theirs = bs.filter(b => b._m.dir === 'in');
@@ -13244,7 +14003,7 @@ var __vpBannerAuto = (() => {
                     : !own.length ? (theirs.length === 1 ? 'Удалить сообщение у себя? У собеседника оно останется.' : `Удалить ${theirs.length} сообщ. у себя? У собеседника они останутся.`)
                         : `Удалить ${bs.length} сообщ.? Свои пропадут у обоих, чужие только у тебя.`;
                 if (!confirm(ask)) return;
-                const d = current;
+                const d = M.current;
                 theirs.forEach(b => { msgHide(t.uid, b._m); b.remove(); });
                 for (const b of own) {
                     b.classList.add('vp-gone');
@@ -13252,18 +14011,18 @@ var __vpBannerAuto = (() => {
                     catch (e) { b.classList.remove('vp-gone'); logErr('удаление', e); flashNote('Не удалилось — попробуй ещё раз'); break; }
                 }
                 await msgSync().catch(() => { });
-                if (current === d) msgRefreshChat(d);
+                if (M.current === d) msgRefreshChat(d);
             }
-            let fwdEl = null;
-            function closeFwd() { if (fwdEl) { fwdEl.remove(); fwdEl = null; } }
+            M.fwdEl = null;
+            function closeFwd() { if (M.fwdEl) { M.fwdEl.remove(); M.fwdEl = null; } }
             function openFwd(ms) {
                 closeFwd();
                 msgFillDialogs();
                 const targets = sortDialogs(MSG_DIALOGS.filter(x => !x.supUid && (x.login || x.support)));
-                fwdEl = document.createElement('div');
-                fwdEl.className = 'vp-msgs-fwd';
-                fwdEl.innerHTML = '<div class="vp-msgs-fwd-card"><div class="vp-msgs-fwd-h"><b>Переслать</b><button type="button" class="vp-msgs-ib" title="Закрыть">' + uiIcon('close', 18) + '</button></div><div class="vp-msgs-fwd-l"></div></div>';
-                const box = fwdEl.querySelector('.vp-msgs-fwd-l');
+                M.fwdEl = document.createElement('div');
+                M.fwdEl.className = 'vp-msgs-fwd';
+                M.fwdEl.innerHTML = '<div class="vp-msgs-fwd-card"><div class="vp-msgs-fwd-h"><b>Переслать</b><button type="button" class="vp-msgs-ib" title="Закрыть">' + uiIcon('close', 18) + '</button></div><div class="vp-msgs-fwd-l"></div></div>';
+                const box = M.fwdEl.querySelector('.vp-msgs-fwd-l');
                 targets.forEach(x => {
                     const row = document.createElement('button');
                     row.type = 'button';
@@ -13273,11 +14032,11 @@ var __vpBannerAuto = (() => {
                     row.addEventListener('click', () => forwardTo(x, ms));
                     box.appendChild(row);
                 });
-                fwdEl.addEventListener('click', e => { if (e.target === fwdEl || e.target.closest('.vp-msgs-fwd-h button')) closeFwd(); });
-                chat.appendChild(fwdEl);
+                M.fwdEl.addEventListener('click', e => { if (e.target === M.fwdEl || e.target.closest('.vp-msgs-fwd-h button')) closeFwd(); });
+                chat.appendChild(M.fwdEl);
             }
             async function forwardTo(x, ms) {
-                const t = msgTarget(x), me = current;
+                const t = msgTarget(x), me = M.current;
                 if (!t.uid) { flashNote('Этому человеку пока нельзя написать'); return; }
                 closeFwd(); selEnd();
                 try {
@@ -13290,7 +14049,7 @@ var __vpBannerAuto = (() => {
                 } catch (e) { logErr('пересылка', e); flashNote('Не отправилось — попробуй ещё раз'); }
                 await msgSync().catch(() => { });
                 msgFillDialogs();
-                if (current) { const c = msgTarget(current); if (c.uid === t.uid && c.sup === t.sup) msgRefreshChat(current); }
+                if (M.current) { const c = msgTarget(M.current); if (c.uid === t.uid && c.sup === t.sup) msgRefreshChat(M.current); }
             }
             async function saveImage(url) {
                 const name = decodeURIComponent(url.split('?')[0].split('/').pop() || 'image');
@@ -13304,46 +14063,46 @@ var __vpBannerAuto = (() => {
                     setTimeout(() => URL.revokeObjectURL(href), 4000);
                 } catch (e) { logErr('сохранение картинки', e); window.open(url, '_blank', 'noopener'); }
             }
-            let menu = null, pressT = 0;
+            M.menu = null, M.pressT = 0;
             function closeMenu() {
-                if (!menu) return;
-                menu.remove(); menu = null;
+                if (!M.menu) return;
+                M.menu.remove(); M.menu = null;
                 document.removeEventListener('pointerdown', menuOutside, true);
             }
-            const menuOutside = e => { if (menu && !menu.contains(e.target)) closeMenu(); };
+            const menuOutside = e => { if (M.menu && !M.menu.contains(e.target)) closeMenu(); };
             function openSelMenu(x, y) {
                 closeMenu();
-                menu = document.createElement('div');
-                menu.className = 'vp-msgs-menu';
+                M.menu = document.createElement('div');
+                M.menu.className = 'vp-msgs-menu';
                 const item = (label, fn, ico, cls) => {
                     const btn = document.createElement('button');
                     btn.type = 'button'; btn.className = 'vp-msgs-menu-i' + (cls ? ' ' + cls : '');
                     btn.insertAdjacentHTML('afterbegin', uiIcon(ico, 18));
                     btn.appendChild(document.createTextNode(label));
                     btn.addEventListener('click', () => { closeMenu(); fn(); });
-                    menu.appendChild(btn);
+                    M.menu.appendChild(btn);
                 };
                 item('Удалить выбранное', () => msgDelete(selList()).then(selEnd), 'trash', 'vp-danger');
                 item('Отменить выбор', selEnd, 'close');
                 const sp = document.createElement('div');
                 sp.className = 'vp-msgs-menu-sep';
-                menu.appendChild(sp);
+                M.menu.appendChild(sp);
                 item('Копировать выбранное как текст', () => { copyText(selList().map(b => plainText(b._m.text)).filter(Boolean).join('\n')); selEnd(); }, 'copy');
-                document.body.appendChild(menu);
-                const w = menu.offsetWidth, h = menu.offsetHeight;
-                menu.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px';
-                menu.style.top = Math.max(8, Math.min(y, innerHeight - h - 8)) + 'px';
+                document.body.appendChild(M.menu);
+                const w = M.menu.offsetWidth, h = M.menu.offsetHeight;
+                M.menu.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px';
+                M.menu.style.top = Math.max(8, Math.min(y, innerHeight - h - 8)) + 'px';
                 setTimeout(() => document.addEventListener('pointerdown', menuOutside, true), 0);
             }
             function openMenu(b, x, y) {
-                if (sel) { openSelMenu(x, y); return; }
+                if (M.sel) { openSelMenu(x, y); return; }
                 closeMenu();
-                const m = b._m, real = m && current && msgNet.me && msgTarget(current).uid;
+                const m = b._m, real = m && M.current && msgNet.me && msgTarget(M.current).uid;
                 const text = m ? plainText(m.text) : (b.querySelector('.vp-msgs-cap') || b.firstChild || {}).textContent || '';
                 const imgs = [...b.querySelectorAll('.vp-msgs-img')].map(i => i.src);
                 const under = document.elementFromPoint(x, y), hit = under && under.closest ? under.closest('.vp-msgs-img') : null;
-                menu = document.createElement('div');
-                menu.className = 'vp-msgs-menu';
+                M.menu = document.createElement('div');
+                M.menu.className = 'vp-msgs-menu';
                 if (real) {
                     const row = document.createElement('div');
                     row.className = 'vp-msgs-menu-r';
@@ -13353,7 +14112,7 @@ var __vpBannerAuto = (() => {
                         btn.addEventListener('click', () => { closeMenu(); toggleReact(b, em); });
                         row.appendChild(btn);
                     });
-                    menu.appendChild(row);
+                    M.menu.appendChild(row);
                 }
                 const item = (label, fn, ico, cls) => {
                     const btn = document.createElement('button');
@@ -13361,11 +14120,11 @@ var __vpBannerAuto = (() => {
                     if (ico) btn.insertAdjacentHTML('afterbegin', uiIcon(ico, 18));
                     btn.appendChild(document.createTextNode(label));
                     btn.addEventListener('click', () => { closeMenu(); fn(); });
-                    menu.appendChild(btn);
+                    M.menu.appendChild(btn);
                 };
-                const sep = () => { const s = document.createElement('div'); s.className = 'vp-msgs-menu-sep'; menu.appendChild(s); };
+                const sep = () => { const s = document.createElement('div'); s.className = 'vp-msgs-menu-sep'; M.menu.appendChild(s); };
                 if (real) {
-                    const t = msgTarget(current), pinned = ((msgNet.pins && msgNet.pins.get(t.uid)) || []).includes(reactKey(t.uid, m.dir, m.ts));
+                    const t = msgTarget(M.current), pinned = ((msgNet.pins && msgNet.pins.get(t.uid)) || []).includes(reactKey(t.uid, m.dir, m.ts));
                     item('Ответить', () => setReply(b), 'reply');
                     item(pinned ? 'Открепить' : 'Закрепить', () => togglePin(m, !pinned), 'pin');
                     item('Переслать', () => openFwd([m]), 'fwd');
@@ -13376,14 +14135,14 @@ var __vpBannerAuto = (() => {
                 if (text) item('Копировать текст', () => copyText(text), 'copy');
                 if (imgs.length) {
                     item('Сохранить', () => saveImage(hit ? hit.src : imgs[0]), 'save');
-                    item(imgs.length > 1 ? 'Открыть альбом' : 'Открыть картинку', () => openImg(imgs, 0, text, [...b.querySelectorAll('.vp-msgs-img')]), 'image');
+                    item(imgs.length > 1 ? 'Открыть альбом' : 'Открыть картинку', () => M.openImg(imgs, 0, text, [...b.querySelectorAll('.vp-msgs-img')]), 'image');
                 }
-                if (menu.lastChild && menu.lastChild.classList.contains('vp-msgs-menu-sep')) menu.lastChild.remove();
-                if (!menu.querySelector('.vp-msgs-menu-i')) { menu = null; return; }
-                document.body.appendChild(menu);
-                const w = menu.offsetWidth, h = menu.offsetHeight;
-                menu.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px';
-                menu.style.top = Math.max(8, Math.min(y, innerHeight - h - 8)) + 'px';
+                if (M.menu.lastChild && M.menu.lastChild.classList.contains('vp-msgs-menu-sep')) M.menu.lastChild.remove();
+                if (!M.menu.querySelector('.vp-msgs-menu-i')) { M.menu = null; return; }
+                document.body.appendChild(M.menu);
+                const w = M.menu.offsetWidth, h = M.menu.offsetHeight;
+                M.menu.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px';
+                M.menu.style.top = Math.max(8, Math.min(y, innerHeight - h - 8)) + 'px';
                 setTimeout(() => document.addEventListener('pointerdown', menuOutside, true), 0);
             }
             const bubbleAt = y => [...feed.querySelectorAll('.vp-msgs-b:not(.vp-msgs-typing)')].find(x => { const r = x.getBoundingClientRect(); return y >= r.top - 3 && y <= r.bottom + 3; });
@@ -13391,62 +14150,67 @@ var __vpBannerAuto = (() => {
                 const b = bubbleAt(e.clientY);
                 if (!b) return;
                 e.preventDefault();
-                if (sel) { openSelMenu(e.clientX, e.clientY); return; }
+                if (M.sel) { openSelMenu(e.clientX, e.clientY); return; }
                 openMenu(b, e.clientX, e.clientY);
             });
             feed.addEventListener('pointerdown', e => {
-                if (e.pointerType === 'mouse' || sel) return;
+                if (e.pointerType === 'mouse' || M.sel) return;
                 const b = bubbleAt(e.clientY), x = e.clientX, y = e.clientY;
                 if (!b) return;
-                clearTimeout(pressT);
-                pressT = setTimeout(() => { pressT = 0; openMenu(b, x, y); }, 480);
+                clearTimeout(M.pressT);
+                M.pressT = setTimeout(() => { M.pressT = 0; openMenu(b, x, y); }, 480);
             });
-            ['pointerup', 'pointercancel'].forEach(t => feed.addEventListener(t, () => clearTimeout(pressT)));
-            feed.addEventListener('pointermove', e => { if (pressT && e.pointerType !== 'mouse') clearTimeout(pressT); });
+            ['pointerup', 'pointercancel'].forEach(t => feed.addEventListener(t, () => clearTimeout(M.pressT)));
+            feed.addEventListener('pointermove', e => { if (M.pressT && e.pointerType !== 'mouse') clearTimeout(M.pressT); });
             feed.addEventListener('scroll', () => closeMenu(), { passive: true });
+        }
+        // Окно «Сообщения»: просмотр картинок, вложения, отправка картинок
+        function msgPartImages(M) {
+            const { $, bubble, feed, input, msgCount, msgRefreshChat, note, now, root, send, setMeta, stickEnd, supportReply, takeReply } = M;
+            M.openImg = openImg; M.closeImg = closeImg; M.clearPending = clearPending;
             let lbKey = null;
             function openImg(list, idx, cap, thumbs) {
                 if (typeof list === 'string') list = [list];
                 idx = idx || 0;
-                if (lb) closeImg(true, true);
-                lb = document.createElement('div');
-                lb.className = 'vp-msgs-lb';
-                lb._thumbs = thumbs || [];
-                lb._idx = () => idx;
-                lb.innerHTML = `<div class="vp-msgs-lb-top"><button type="button" class="vp-msgs-ib" title="Назад">${MSG_ICON.back}</button><span class="vp-msgs-lb-cap"></span>`
+                if (M.lb) closeImg(true, true);
+                M.lb = document.createElement('div');
+                M.lb.className = 'vp-msgs-lb';
+                M.lb._thumbs = thumbs || [];
+                M.lb._idx = () => idx;
+                M.lb.innerHTML = `<div class="vp-msgs-lb-top"><button type="button" class="vp-msgs-ib" title="Назад">${MSG_ICON.back}</button><span class="vp-msgs-lb-cap"></span>`
                     + `<b class="vp-msgs-lb-n"></b><a target="_blank" rel="noopener">Открыть оригинал ${uiIcon('out', 14, 'vp-solo')}</a></div>`
                     + `<div class="vp-msgs-lb-body"><button type="button" class="vp-msgs-lb-nav vp-prev" title="Назад">‹</button><img alt="" draggable="false"><button type="button" class="vp-msgs-lb-nav vp-next" title="Дальше">›</button></div>`;
-                const orig = lb.querySelector('a'), img = lb.querySelector('img'), num = lb.querySelector('.vp-msgs-lb-n');
-                const prev = lb.querySelector('.vp-prev'), next = lb.querySelector('.vp-next');
+                const orig = M.lb.querySelector('a'), img = M.lb.querySelector('img'), num = M.lb.querySelector('.vp-msgs-lb-n');
+                const prev = M.lb.querySelector('.vp-prev'), next = M.lb.querySelector('.vp-next');
                 const show = i => {
                     idx = (i + list.length) % list.length;
                     img.src = list[idx];
                     if (/^https:\/\/cdn\./.test(list[idx])) { orig.href = list[idx]; orig.hidden = false; } else orig.hidden = true;
                     num.textContent = list.length > 1 ? `${idx + 1} / ${list.length}` : '';
-                    if (lb && lb._flown) lb._thumbs.forEach((t, k) => { if (t) t.style.visibility = k === idx ? 'hidden' : ''; });
+                    if (M.lb && M.lb._flown) M.lb._thumbs.forEach((t, k) => { if (t) t.style.visibility = k === idx ? 'hidden' : ''; });
                 };
                 prev.hidden = next.hidden = list.length < 2;
                 prev.addEventListener('click', e => { if (downX != null && Math.abs(e.clientX - downX) > 40) return; e.stopPropagation(); show(idx - 1); });
                 next.addEventListener('click', e => { if (downX != null && Math.abs(e.clientX - downX) > 40) return; e.stopPropagation(); show(idx + 1); });
-                lb.querySelector('.vp-msgs-lb-cap').textContent = cap || '';
+                M.lb.querySelector('.vp-msgs-lb-cap').textContent = cap || '';
                 show(idx);
-                lb.querySelector('.vp-msgs-ib').addEventListener('click', () => closeImg());
+                M.lb.querySelector('.vp-msgs-ib').addEventListener('click', () => closeImg());
                 let downX = null;
-                lb.addEventListener('pointerdown', e => { downX = e.clientX; });
-                lb.addEventListener('click', e => {
+                M.lb.addEventListener('pointerdown', e => { downX = e.clientX; });
+                M.lb.addEventListener('click', e => {
                     const dx = downX == null ? 0 : e.clientX - downX;
                     downX = null;
                     if (list.length > 1 && Math.abs(dx) > 40) { show(idx + (dx < 0 ? 1 : -1)); return; }
-                    if (e.target === lb || e.target.classList.contains('vp-msgs-lb-body')) closeImg();
+                    if (e.target === M.lb || e.target.classList.contains('vp-msgs-lb-body')) closeImg();
                 });
                 lbKey = e => {
                     if (e.key === 'ArrowLeft' && list.length > 1) { e.preventDefault(); e.stopPropagation(); show(idx - 1); }
                     else if (e.key === 'ArrowRight' && list.length > 1) { e.preventDefault(); e.stopPropagation(); show(idx + 1); }
                 };
                 document.addEventListener('keydown', lbKey, true);
-                root.appendChild(lb);
+                root.appendChild(M.lb);
                 history.pushState(Object.assign({}, history.state, { vpImg: 1 }), '', location.href);
-                const el = lb, from = lb._thumbs[idx];
+                const el = M.lb, from = M.lb._thumbs[idx];
                 if (from && from.isConnected) {
                     el.style.animation = 'none';
                     el.animate([{ backgroundColor: 'rgba(0, 0, 0, 0)' }, { backgroundColor: 'rgba(0, 0, 0, .92)' }], { duration: 260, easing: 'ease-out' });
@@ -13466,9 +14230,9 @@ var __vpBannerAuto = (() => {
                 }
             }
             function closeImg(fromHistory, instant) {
-                if (!lb) return;
-                const el = lb, thumbs = el._thumbs || [], src = thumbs[el._idx()], img = el.querySelector('.vp-msgs-lb-body img');
-                lb = null;
+                if (!M.lb) return;
+                const el = M.lb, thumbs = el._thumbs || [], src = thumbs[el._idx()], img = el.querySelector('.vp-msgs-lb-body img');
+                M.lb = null;
                 if (lbKey) { document.removeEventListener('keydown', lbKey, true); lbKey = null; }
                 const done = () => { thumbs.forEach(t => { if (t) t.style.visibility = ''; }); el.remove(); };
                 let fly = false;
@@ -13488,8 +14252,8 @@ var __vpBannerAuto = (() => {
                 if (!fly) done();
                 if (fromHistory !== true && overlayAt('vpImg')) history.back();
             }
-            root.imgOpen = () => !!lb;
-            let pendingImg = null;
+            root.imgOpen = () => !!M.lb;
+            M.pendingImg = null;
             const pendEl = document.createElement('div');
             pendEl.className = 'vp-msgs-pend';
             pendEl.hidden = true;
@@ -13497,7 +14261,7 @@ var __vpBannerAuto = (() => {
             const pendList = pendEl.querySelector('.vp-msgs-pend-list');
             function renderPending() {
                 pendList.textContent = '';
-                (pendingImg || []).forEach((p, i) => {
+                (M.pendingImg || []).forEach((p, i) => {
                     const t = document.createElement('span');
                     t.className = 'vp-msgs-pend-t';
                     t.innerHTML = '<img alt=""><button type="button" title="Убрать">' + uiIcon('close', 12, 'vp-solo') + '</button>';
@@ -13505,7 +14269,7 @@ var __vpBannerAuto = (() => {
                     t.lastChild.addEventListener('click', () => removePending(i));
                     pendList.appendChild(t);
                 });
-                const n = pendingImg ? pendingImg.length : 0;
+                const n = M.pendingImg ? M.pendingImg.length : 0;
                 pendEl.querySelector('span:not(.vp-msgs-pend-t)').textContent = n > 1 ? `${n} ${plural(n, 'картинка', 'картинки', 'картинок')} из ${MSG_ALBUM_MAX} · можно добавить подпись` : 'Картинка · можно добавить подпись';
                 pendEl.hidden = !n;
                 send.disabled = !n && !input.value.trim();
@@ -13513,25 +14277,25 @@ var __vpBannerAuto = (() => {
             function setPending(files) {
                 files = (Array.isArray(files) ? files : [files]).filter(f => f && /^image\//.test(f.type));
                 if (!files.length) return;
-                const t = current && msgNet.me ? msgTarget(current) : null;
+                const t = M.current && msgNet.me ? msgTarget(M.current) : null;
                 if (!t || !t.uid) { note('Картинки можно отправлять в переписке с людьми и поддержкой'); return; }
-                pendingImg = pendingImg || [];
-                const room = MSG_ALBUM_MAX - pendingImg.length;
+                M.pendingImg = M.pendingImg || [];
+                const room = MSG_ALBUM_MAX - M.pendingImg.length;
                 if (files.length > room) note(`В одном сообщении — не больше ${MSG_ALBUM_MAX} картинок`);
-                files.slice(0, Math.max(0, room)).forEach(file => pendingImg.push({ file, url: URL.createObjectURL(file) }));
+                files.slice(0, Math.max(0, room)).forEach(file => M.pendingImg.push({ file, url: URL.createObjectURL(file) }));
                 renderPending();
                 input.focus();
             }
             function removePending(i) {
-                if (!pendingImg) return;
-                const [p] = pendingImg.splice(i, 1);
+                if (!M.pendingImg) return;
+                const [p] = M.pendingImg.splice(i, 1);
                 if (p) URL.revokeObjectURL(p.url);
-                if (!pendingImg.length) pendingImg = null;
+                if (!M.pendingImg.length) M.pendingImg = null;
                 renderPending();
             }
             function clearPending() {
-                (pendingImg || []).forEach(p => URL.revokeObjectURL(p.url));
-                pendingImg = null;
+                (M.pendingImg || []).forEach(p => URL.revokeObjectURL(p.url));
+                M.pendingImg = null;
                 renderPending();
             }
             pendEl.querySelector('.vp-msgs-pend-all').addEventListener('click', clearPending);
@@ -13540,13 +14304,13 @@ var __vpBannerAuto = (() => {
                 if (ts && feed.querySelector(`:scope > .vp-msgs-b[data-dir="out"][data-ts="${ts}"]`)) b.remove();
                 else if (ts) { b.dataset.ts = ts; b.dataset.dir = 'out'; }
                 msgFillDialogs();
-                if (current === d) msgRefreshChat(d);
+                if (M.current === d) msgRefreshChat(d);
             }
             function sendImages(files) {
-                if (!files.length || !current) return;
-                const t = msgNet.me ? msgTarget(current) : null;
+                if (!files.length || !M.current) return;
+                const t = msgNet.me ? msgTarget(M.current) : null;
                 if (!t || !t.uid) { note('Картинки можно отправлять в переписке с людьми и поддержкой'); return; }
-                const caption = takeReply(input.value.trim()), d = current, locals = files.map(f => URL.createObjectURL(f));
+                const caption = takeReply(input.value.trim()), d = M.current, locals = files.map(f => URL.createObjectURL(f));
                 input.value = ''; send.disabled = true; msgCount();
                 const b = bubble('out', caption, now() + ' · загрузка…', locals);
                 (async () => {
@@ -13571,116 +14335,23 @@ var __vpBannerAuto = (() => {
             $('.vp-msgs-bar').before(pendEl);
             $('.vp-msgs-bar').addEventListener('submit', e => {
                 e.preventDefault();
-                if (pendingImg && current) { const f = pendingImg.map(p => p.file); clearPending(); sendImages(f); return; }
+                if (M.pendingImg && M.current) { const f = M.pendingImg.map(p => p.file); clearPending(); sendImages(f); return; }
                 const text = input.value.trim();
-                if (!text || !current) return;
+                if (!text || !M.current) return;
                 input.value = ''; send.disabled = true; msgCount();
-                current.msgs.push(['out', text]);
-                current.last = 'Ты: ' + text; current.time = now();
-                if (current.support && !(msgNet.me && msgTarget(current).uid)) { bubble('out', text, now() + ' ✓'); supportReply(); }
-                else if (msgNet.me && msgTarget(current).uid) {
-                    const full = takeReply(text), b = bubble('out', full, now() + ' · отправка…'), d = current, t = msgTarget(d);
-                    msgSend(t.uid, full, t.sup).then(ts => msgSentOk(b, d, ts),
-                        e => { setMeta(b.lastChild, now() + ' · не отправлено'); b.classList.add('vp-fail'); logErr('сообщения', e); });
+                M.current.msgs.push(['out', text]);
+                M.current.last = 'Ты: ' + text; M.current.time = now();
+                if (M.current.support && !(msgNet.me && msgTarget(M.current).uid)) { bubble('out', text, now() + ' ✓'); supportReply(); }
+                else if (msgNet.me && msgTarget(M.current).uid) {
+                    const full = takeReply(text), d = M.current, t = msgTarget(d);
+                    msgEnqueue(t.uid, full, t.sup);
+                    msgRefreshChat(d);
+                    stickEnd();
                 }
                 else bubble('out', text, now() + ' · не отправлено').classList.add('vp-fail');
             });
 
-            function place() {
-                const nav = siteEl('nav');
-                const row = nav && navIsRow(nav) && nav.getBoundingClientRect().top > innerHeight / 2;
-                document.querySelectorAll('.vp-msgs-navwrap').forEach(w => w.classList.remove('vp-msgs-navwrap'));
-                if (row) {
-                    if (nav.parentElement) nav.parentElement.classList.add('vp-msgs-navwrap');
-                    const bottom = innerHeight - nav.getBoundingClientRect().top + BUMP_H + 8;
-                    Object.assign(root.style, { left: '0px', right: '0px', top: '0px', bottom: '0px', width: '', borderRadius: '', paddingBottom: bottom + 'px' });
-                } else {
-                    let cb = contentBox() || lastCb;
-                    if (!cb || cb.right - cb.left < 300) {
-                        const side = siteEl('sidebar'), sr = side && side.getBoundingClientRect();
-                        const w = Math.min(650, innerWidth - 32), l = Math.max(sr ? sr.right + 24 : 16, Math.round(innerWidth / 2 - w / 2));
-                        cb = { left: l, right: Math.min(innerWidth - 16, l + w) };
-                    }
-                    const left = cb ? cb.left : Math.max(0, innerWidth / 2 - 300), width = cb ? cb.right - cb.left : Math.min(600, innerWidth);
-                    Object.assign(root.style, { left: left + 'px', width: width + 'px', right: '', top: '12px', bottom: '12px', borderRadius: '', paddingBottom: '0px' });
-                }
-                root.classList.toggle('vp-card', !row);
-                under.classList.remove('vp-on');
-                if (!row) Object.assign(under.style, { left: root.style.left, width: root.style.width });
-            }
-            let openPath = '';
-            function onKey(e) { if (e.key === 'Escape' && root.classList.contains('vp-open')) { e.stopPropagation(); lb ? closeImg() : menu ? closeMenu() : fwdEl ? closeFwd() : sel ? selEnd() : reply ? clearReply() : current ? closeChat() : close(); } }
-            function close(fromHistory) {
-                if (!root.classList.contains('vp-open')) return;
-                clearTimeout(botTimer);
-                root.classList.remove('vp-open');
-                document.documentElement.classList.remove('vp-msgs-open');
-                document.querySelectorAll('.vp-msgs-navwrap').forEach(w => w.classList.remove('vp-msgs-navwrap'));
-                document.removeEventListener('keydown', onKey, true);
-                removeEventListener('resize', place);
-                msgsOpen = false;
-                avatarRefresh();
-                placeSidebar(); placeRail();
-                if (!galOpen) galHideFeed(false);
-                markActiveNav(); moveNavBlob();
-                if (lb) { lb.remove(); lb = null; if (!fromHistory && overlayAt('vpImg')) { history.go(overlayAt('vpChat') ? -3 : -2); return; } }
-                if (!fromHistory) {
-                    if (overlayAt('vpChat')) history.go(-2);
-                    else if (overlayAt('vpMsgs')) history.back();
-                }
-            }
-            addEventListener('popstate', () => {
-                const open = root.classList.contains('vp-open');
-                if (lb && !overlayAt('vpImg')) { closeImg(true); return; }
-                if (chatBackPending) {
-                    chatBackPending = false;
-                    if (current && overlayAt('vpMsgs') && !overlayAt('vpChat')) history.pushState(Object.assign({}, history.state, { vpChat: current.id }), '', location.href);
-                    return;
-                }
-                if (overlayAt('vpMsgs')) {
-                    if (!open) root.open(true);
-                    const cid = history.state && history.state.vpChat;
-                    if (!cid && current) closeChat(true);
-                    else if (cid && (!current || current.id !== cid)) root.openDialog(cid, true);
-                }
-                else if (open) close(true);
-            });
-            document.addEventListener('click', e => {
-                if (!root.classList.contains('vp-open')) return;
-                const a = e.target.closest && e.target.closest('a.' + SELECTORS.navLink);
-                if (a && a.getAttribute('href') !== '#' && a.getAttribute('href') === location.pathname) { e.preventDefault(); e.stopPropagation(); close(); }
-            }, true);
-            const msgsLeft = () => { if (root.classList.contains('vp-open') && location.pathname !== openPath) close(true); };
-            onDom(msgsLeft);
-            document.addEventListener('vp-loc', msgsLeft);
-            root.open = fromHistory => {
-                if (root.classList.contains('vp-open')) { if (current) closeChat(); return; }
-                const lead = fromHistory === true ? null : tabSlide.lead('msg');
-                openNow(fromHistory);
-                tabSlide.arrive(lead, root);
-            };
-            const openNow = fromHistory => {
-                if (galOpen) closeGallery(true);
-                openPath = location.pathname;
-                msgsOpen = true;
-                closeChat();
-                loadMsgPeople(() => { if (!current) renderList(); else headAva(); });
-                msgSync().then(() => { msgFillDialogs(); if (!current) renderList(); }).catch(() => { });
-                place();
-                placeSidebar(); placeRail();
-                root.classList.add('vp-open');
-                document.documentElement.classList.add('vp-msgs-open');
-                avatarRefresh();
-                document.addEventListener('keydown', onKey, true);
-                addEventListener('resize', place);
-                if (fromHistory !== true) overlayEnter('vpMsgs');
-                galHideFeed(true);
-                markActiveNav(); moveNavBlob();
-            };
-            root.close = close;
-            return root;
         }
-
         function messagesLabel(notificationsLink) {
             return /уведомления/i.test(notificationsLink.textContent) ? 'Сообщения' : 'Личка';
         }
@@ -13833,7 +14504,8 @@ var __vpBannerAuto = (() => {
         article.vp-post {
             background: var(--block-bg);
             backdrop-filter: var(--vp-glass-filter, blur(4px)) !important;
-            border-radius: 24px !important;
+            --vp-card-r: 24px;
+            border-radius: var(--vp-card-r) !important;
             margin-bottom: 16px !important;
             transition: all 0.25s ease !important;
             position: relative;
@@ -13897,7 +14569,7 @@ var __vpBannerAuto = (() => {
         a[href^="/@"], a[href*="/@"] { text-decoration: none !important; }
         a[href^="/@"] .vp-nick-text { font-weight: 600 !important; }
         a[href^="/@"]:hover .vp-nick-text { filter: brightness(0.85) !important; }
-        a[href^="/@"] svg:not([data-halloween-pumpkin] svg), a[href*="/@"] svg:not([data-halloween-pumpkin] svg), a[href^="/@"] img, a[href*="/@"] img,
+        a[href^="/@"] svg, a[href*="/@"] svg, a[href^="/@"] img, a[href*="/@"] img,
         a[href^="/@"] .mod-badge-voronoi, a[href*="/@"] .mod-badge-voronoi,
         a[href^="/@"] .vp-nick-badges {
             filter: none !important;
@@ -14070,9 +14742,21 @@ var __vpBannerAuto = (() => {
             const todo = new Set(entries.map(e => blurCards.has(e.target) ? e.target : e.target._vpBlurCard));
             todo.forEach(card => card && placeBlur(card));
         });
+        // Обрезка размытого фона берёт углы самой карточки; перечитывается, когда углы меняются (сайт и мод ставят их в разное время, плюс transition)
+        function blurClip(card) {
+            const box = card.querySelector(':scope > .itd-blur-container');
+            if (!box) return;
+            const cs = getComputedStyle(card);
+            const v = `inset(0 round ${cs.borderTopLeftRadius} ${cs.borderTopRightRadius} ${cs.borderBottomRightRadius} ${cs.borderBottomLeftRadius})`;
+            if (box.style.clipPath !== v) box.style.clipPath = v;
+        }
+        document.addEventListener('transitionend', e => {
+            if (/radius/.test(e.propertyName) && e.target.classList && e.target.classList.contains('itd-blur-active')) blurClip(e.target);
+        }, true);
         function placeBlur(card) {
             const b = blurCards.get(card);
             if (!b) return;
+            blurClip(card);
             if (!b.img.isConnected || !card.isConnected) { b.img._vpBlurDone = null; dropBlur(card); return; }
             const ar = card.getBoundingClientRect(), ir = b.img.getBoundingClientRect();
             if (!ar.width || !ir.width) return;
@@ -14103,8 +14787,8 @@ var __vpBannerAuto = (() => {
                 box.innerHTML = '<div class="vp-blur-img"></div><div class="vp-blur-dim"></div>';
                 card.insertBefore(box, card.firstChild);
             }
-            const cs = getComputedStyle(card);
-            box.style.clipPath = `inset(0 round ${cs.borderTopLeftRadius} ${cs.borderTopRightRadius} ${cs.borderBottomRightRadius} ${cs.borderBottomLeftRadius})`;
+            blurClip(card);
+            setTimeout(() => blurClip(card), 400);
             const layer = box.firstChild;
             layer.style.backgroundImage = `url("${img.src}")`;
             blurCards.set(card, { img, layer });
@@ -14140,6 +14824,7 @@ var __vpBannerAuto = (() => {
             backdrop-filter: none !important;
         }
         .vp-blur-rel { position: relative; }
+        article.vp-post > .itd-blur-container { clip-path: inset(0 round var(--vp-card-r, 24px)) !important; }
         .itd-blur-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: inherit; overflow: hidden;
             z-index: -1; pointer-events: none; background: var(--block-bg);
@@ -14843,7 +15528,6 @@ var __vpBannerAuto = (() => {
         .vp-nav-has-blob .vp-nav-link { position: relative; z-index: 1; transition: background-color .2s ease, opacity .2s ease !important; }
         .vp-nav-has-blob .vp-nav-link .vp-nav-icon { transition: none; }
         .vp-nav-has-blob .vp-nav-link:not(.vp-active):not(:hover) { background-color: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
-        html.vp-ev-scene .vp-sidebar, html.vp-ev-scene .vp-rail { z-index: 30 !important; }
         .vp-nav-has-blob .vp-nav-link.vp-active { background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
         .vp-nav-has-blob > div:not(.vp-nav-blob):not(:has(a)) { opacity: 0 !important; }
         .vp-post-slot { border-bottom: none !important; }
@@ -16543,7 +17227,7 @@ var __vpBannerAuto = (() => {
             }
             gal.el.classList.toggle('vp-card', !row);
         }
-        const OWN_MEDIA = '.vp-gal, .vp-msgs, .vp-bg-media, .vpi-overlay, .vp-call-audio';
+        const OWN_MEDIA = '.vp-gal, .vp-msgs, .vp-bg-media, .vpi-overlay, .vp-call, .vp-call-audio';
         function pauseSiteMedia() {
             document.querySelectorAll('video, audio').forEach(m => { if (!m.paused && !m.closest(OWN_MEDIA)) m.pause(); });
         }
@@ -16907,12 +17591,6 @@ var __vpBannerAuto = (() => {
             if (row.style.paddingRight !== need) row.style.paddingRight = need;
         }
         addEventListener('resize', () => document.querySelectorAll('.vp-post-tools').forEach(placeRefresh));
-        function postShownImage(card) {
-            const cr = card.getBoundingClientRect();
-            const imgs = [...card.querySelectorAll('.' + SELECTORS.postMedia + ' img, img[data-post-media-image]')]
-                .filter(i => !i.closest('header') && (i.currentSrc || i.src));
-            return imgs.find(i => { const r = i.getBoundingClientRect(), cx = r.left + r.width / 2; return r.width > 0 && cx > cr.left && cx < cr.right; }) || imgs[0] || null;
-        }
         const postHeadRow = h => [...h.children].find(c => c.querySelector(PROFILE_LINK)) || h.firstElementChild;
         onDom(function postToolButtons() {
             if (!myUsername) return;
@@ -16967,7 +17645,6 @@ var __vpBannerAuto = (() => {
                         });
                     });
                 };
-                if (postShownImage(card)) copyTool('copy', 'Скопировать картинку', () => { const img = postShownImage(card); return img ? galCopyImage(img.currentSrc || img.src) : false; });
                 copyTool('link', 'Скопировать ссылку', () => copyText(`${location.origin}/@${user}/post/${id}`));
                 if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
                 box._vpMenu = menu;
@@ -17030,7 +17707,7 @@ var __vpBannerAuto = (() => {
         if (matchMedia('(hover: hover) and (pointer: fine)').matches) {
             let hoverVid = null;
             const videoAt = t => {
-                if (!t || !t.closest) return null;
+                if (!t || !t.closest || t.closest('.vp-call')) return null;
                 const tile = t.closest('.vp-gal-tile');
                 if (tile) {
                     const strip = tile.querySelector('.vp-gal-strip'), slide = strip && strip.children[strip._vpI || 0];
@@ -17114,7 +17791,6 @@ var __vpBannerAuto = (() => {
             const r = new Range(); r.setStart(node, l.start); r.setEnd(node, l.end);
             return [...r.getClientRects()].some(b => x >= b.left - 2 && x <= b.right + 2 && y >= b.top - 2 && y <= b.bottom + 2) ? l : null;
         }
-        const JOIN_HOST_RE = /^https?:\/\/(?:xn--d1ah4a\.com|итд\.com)\/$/i;
         const JOIN_PATH_RE = /^\s*(\/[a-z]+\/[0-9a-f-]+)/i;
         function joinProfilePostLinks() {
             const root = document.getElementById('root');
@@ -17261,62 +17937,22 @@ var __vpBannerAuto = (() => {
             const r = banner.getBoundingClientRect();
             if (r.bottom < -40 || r.top > innerHeight) return;
             const past = Math.max(0, -r.top);
-            const glassEl = bannerGlassEl(banner), glass = !bannerNoGlass && glassEl;
             const tf = '', op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
-            for (const el of [img, banner.querySelector(':scope > .vp-banner-video'), glass].filter(Boolean)) {
+            for (const el of [img, banner.querySelector(':scope > .vp-banner-video')].filter(Boolean)) {
                 if (el.style.transform !== tf) el.style.transform = tf;
                 if (el.style.opacity !== op) el.style.opacity = op;
             }
             const bar = banner.querySelector(':scope > .' + SELECTORS.bannerButtons);
             if (bar) {
-                const pane = glass ? [glass, glass.firstElementChild].filter(e => e && e.offsetWidth > banner.offsetWidth / 2) : [];
-                const top = Math.max(img.getBoundingClientRect().top, ...pane.map(e => e.getBoundingClientRect().top));
-                const off = Math.max(0, Math.round(top - r.top)) + 'px';
+                const off = Math.max(0, Math.round(img.getBoundingClientRect().top - r.top)) + 'px';
                 if (bar.style.getPropertyValue('--vp-bar-top') !== off) bar.style.setProperty('--vp-bar-top', off);
             }
         }
         addEventListener('scroll', () => { if (!bannerQueued) { bannerQueued = true; requestAnimationFrame(bannerDepth); } }, { capture: true, passive: true });
         onDom(function bannerDepthDom() { bannerDepth(); });
 
-        const BANNER_GLASS_SEL = ':scope > [aria-label="Стекло"], :scope > [aria-label="Разбитое стекло"]';
-        const bannerGlassEls = b => [...b.querySelectorAll(BANNER_GLASS_SEL)];
-        const bannerGlassEl = b => bannerGlassEls(b).find(e => e.getBoundingClientRect().width > 0) || bannerGlassEls(b)[0] || null;
-        let bannerNoGlass = GM_getValue('bannerGlassOff', false), bannerNoStickers = GM_getValue('bannerStickersOff', false);
-        document.documentElement.classList.toggle('vp-no-glass', bannerNoGlass);
-        document.documentElement.classList.toggle('vp-no-banner-stickers', bannerNoStickers);
-        const BANNER_FX = [
-            { cls: 'vp-banner-glass', find: b => bannerGlassEls(b).length > 0, key: 'bannerGlassOff', html: 'vp-no-glass',
-                get: () => bannerNoGlass, set: v => { bannerNoGlass = v; }, titles: ['Убрать стекло с баннера', 'Вернуть стекло на баннер'],
-                icon: svgIcon('<rect x="3" y="5" width="18" height="14" rx="4"/><path d="M7.5 12.5l4-4M7.5 16l7.5-7.5"/>', 20) },
-            { cls: 'vp-banner-stickers', find: b => { const d = b.querySelector(':scope > [aria-label^="Оформление профиля"]'); return d && (d.firstElementChild || bannerNoStickers) ? d : null; },
-                key: 'bannerStickersOff', html: 'vp-no-banner-stickers', get: () => bannerNoStickers, set: v => { bannerNoStickers = v; },
-                titles: ['Скрыть стикеры на баннере', 'Показать стикеры на баннере'],
-                icon: svgIcon('<path d="M15 3H7a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h6l8-8V7a4 4 0 0 0-4-4z"/><path d="M13 21v-4a4 4 0 0 1 4-4h4"/>', 20) }
-        ];
         function bannerFx() {
             const banner = siteEl('banner'), row = siteEl('bannerButtons');
-            for (const fx of BANNER_FX) {
-                let btn = document.querySelector('.' + fx.cls);
-                const want = row && banner && bannerBtns.draw && fx.find(banner);
-                if (!want) { if (btn) btn.remove(); continue; }
-                if (!btn || btn.parentElement !== row) {
-                    if (btn) btn.remove();
-                    btn = bannerButton('vp-banner-fx ' + fx.cls, '', fx.icon);
-                    btn.onclick = e => {
-                        e.stopPropagation();
-                        const v = !fx.get();
-                        fx.set(v);
-                        GM_setValue(fx.key, v);
-                        document.documentElement.classList.toggle(fx.html, v);
-                        bannerFx();
-                        bannerDepth();
-                    };
-                    row.insertBefore(btn, row.querySelector('.' + SELECTORS.bannerDelete));
-                }
-                const off = fx.get();
-                btn.classList.toggle('vp-off', off);
-                if (btn.title !== fx.titles[+off]) btn.title = fx.titles[+off];
-            }
             let vb = document.querySelector('.vp-banner-vid');
             const mine = myUsername && (location.pathname.match(/^\/@([\w.]+)\/?$/) || [])[1];
             if (!(row && banner && bannerBtns.draw && mine && mine.toLowerCase() === myUsername.toLowerCase())) { if (vb) vb.remove(); return; }
@@ -17397,8 +18033,6 @@ var __vpBannerAuto = (() => {
             input.click();
         }
         addCss(`
-        html.vp-no-glass .vp-banner > [aria-label="Стекло"], html.vp-no-glass .vp-banner > [aria-label="Разбитое стекло"] { display: none !important; }
-        html.vp-no-banner-stickers .vp-banner > [aria-label^="Оформление профиля"] { display: none !important; }
         .vp-banner-fx { position: relative; }
         .vp-banner-vid.vp-on { color: var(--vp-accent); }
         .vp-banner-vid.vp-busy { opacity: .5; pointer-events: none; animation: vpBvPulse 1s ease-in-out infinite alternate; }
@@ -17406,9 +18040,6 @@ var __vpBannerAuto = (() => {
         .vp-banner-video { position: absolute; object-fit: cover; pointer-events: none; opacity: 0; transition: opacity .4s; }
         .vp-banner-video.vp-live { opacity: 1; }
         .vp-banner-video.vp-fail { display: none; }
-        .vp-banner-fx.vp-off { opacity: .55; }
-        .vp-banner-fx.vp-off::after { content: ''; position: absolute; left: 50%; top: 50%; width: 22px; height: 2px; border-radius: 2px;
-            background: currentColor; transform: translate(-50%, -50%) rotate(-45deg); pointer-events: none; }
         `);
 
         const COUNT_LABEL = /подпис|пост|лайк|друз/i;
@@ -17589,7 +18220,8 @@ var __vpBannerAuto = (() => {
         const GAMES = [
             { id: 'snake', name: 'Змейка', best: 'vp_snake_best', icon: '<path d="M4 17c0-3 2-4 4-4h8a3 3 0 0 0 0-6H9"/><circle cx="7" cy="7" r="1.6"/>' },
             { id: 'mines', name: 'Сапёр', best: 'vp_mines_best', icon: '<circle cx="12" cy="13" r="6"/><path d="M12 3v4M19.5 6 17 8.5M4.5 6 7 8.5"/>' },
-            { id: 'tetris', name: 'Тетрис', best: 'vp_tetris_best', icon: '<path d="M4 14h5v5H4zM9 14h5v5H9zM9 9h5v5H9zM14 14h5v5h-5z"/>' }
+            { id: 'tetris', name: 'Тетрис', best: 'vp_tetris_best', icon: '<path d="M4 14h5v5H4zM9 14h5v5H9zM9 9h5v5H9zM14 14h5v5h-5z"/>' },
+            { id: 'sand', name: 'Песочница', free: true, icon: '<path d="M3 19h18M6 19l4-8 3 4 2-3 3 7"/><circle cx="7" cy="6" r=".9"/><circle cx="12" cy="4" r=".9"/><circle cx="16" cy="7" r=".9"/>' }
         ];
         const rail = document.createElement('div');
         rail.className = 'vp-rail';
@@ -17777,7 +18409,6 @@ var __vpBannerAuto = (() => {
             return cbCached;
         }
         function contentBoxNow() {
-            if (msgsOpen && /^\/event\/[^/]/.test(location.pathname)) return frameColumn();
             const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail';
             let left = Infinity, right = 0;
             const memo = new Map(), tops = new Set();
@@ -17923,7 +18554,7 @@ var __vpBannerAuto = (() => {
             const right = side ? side.getBoundingClientRect().left : innerWidth;
             const gap = right - edge;
             let box = null, adj = false, sideW = 0;
-            const on = railEnabled && !!myUsername && !/^\/(login|register|signup|forgot|reset)/.test(location.pathname) && (!/^\/event\/[^/]/.test(location.pathname) || msgsOpen || galOpen) && !!rail.querySelector(':scope > .vp-rail-card:not([hidden])');
+            const on = railEnabled && !!myUsername && !/^\/(login|register|signup|forgot|reset)/.test(location.pathname) && !!rail.querySelector(':scope > .vp-rail-card:not([hidden])');
             const sideEl = siteEl('sidebar');
             if (on && galOpen && sideEl && innerWidth > PHONE_MAX) {
                 const margin = Math.max(12, Math.round(baseLeft(sideEl))), width = 250;
@@ -17954,8 +18585,7 @@ var __vpBannerAuto = (() => {
         addEventListener('resize', placeRail);
 
         function placeSidebar() {
-            document.documentElement.classList.toggle('vp-ev-scene', /^\/event\/[^/]/.test(location.pathname));
-            if (galOpen || (/^\/event\/[^/]/.test(location.pathname) && !msgsOpen)) { document.documentElement.classList.remove('vp-side-moved'); return; }
+            if (galOpen) { document.documentElement.classList.remove('vp-side-moved'); return; }
             const side = siteEl('sidebar');
             const cb = contentBox() || lastCb;
             if (!side || !cb) return;
@@ -17973,7 +18603,6 @@ var __vpBannerAuto = (() => {
 
         const railStats = rail.querySelector('.vp-stats'), railSince = rail.querySelector('.vp-stats-since');
         const seg = rail.querySelector('.vp-seg');
-        const fmtNum = n => n >= 10000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1).replace('.0', '') + 'к' : String(n);
         let statsPeriod = GM_getValue('vp_stats_tab', 'all'), statsNow = null;
         const DAY_MS = 864e5;
         function statsHistory() { try { return JSON.parse(GM_getValue(acctKey('vp_stats_hist'), '[]')); } catch (e) { return []; } }
@@ -18267,6 +18896,18 @@ var __vpBannerAuto = (() => {
             });
         }
         async function renderClub() {
+            const vs = myVerifyState();
+            const cntEl = rail.querySelector('.vp-club-count');
+            if (vs === 'loading') {
+                if (clubShown !== '__loading') { clubShown = '__loading'; railClub.innerHTML = '<div class="vp-menu-note">Загрузка…</div>'; }
+                if (cntEl) cntEl.textContent = '…';
+                return;
+            }
+            if (vs === 'unverified') {
+                if (clubShown !== '__unverified') { clubShown = '__unverified'; railClub.innerHTML = '<div class="vp-menu-note">Не верифицирован</div>'; }
+                if (cntEl) cntEl.textContent = '—';
+                return;
+            }
             const names = verifiedNames();
             if (myUsername && !names.some(n => n.toLowerCase() === myUsername.toLowerCase())) names.push(myUsername);
             const key = names.sort().join();
@@ -18346,6 +18987,7 @@ var __vpBannerAuto = (() => {
             if (d && typeof d === 'object') clubOnline.set(n, { on: !!d.online, seen: d.lastSeen || null, at: Date.now() });
         }
         async function clubPollOnline() {
+            if (myVerifyState() !== 'approved') return;
             if (clubPolling || document.hidden || apiPaused() || !railClub.isConnected || !railClub.getClientRects().length) return;
             clubOnlineLoad();
             const box = railClub.getBoundingClientRect(), now = Date.now();
@@ -18393,7 +19035,8 @@ var __vpBannerAuto = (() => {
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #4aa3ff) 55%, transparent); }
         .vp-psort.vp-busy { opacity: .6; pointer-events: none; }
         `);
-        let psortPrev = null, psortFrom = null;
+        let psortPrev = null, psortFrom = null, profOldWhy = '';
+        const PROF_OLD_PAGES = 200;
         function psortLeave(old) {
             const i = old.querySelector('.vp-psort-ind');
             if (i && i.dataset.x !== undefined) psortPrev = { login: old.dataset.login, x: i.dataset.x, w: i.dataset.w, at: Date.now() };
@@ -18497,6 +19140,7 @@ var __vpBannerAuto = (() => {
             });
         }
         async function profOldLoad(login, btn, force) {
+            profOldWhy = '';
             const same = x => x && x.u && x.u.toLowerCase() === login.toLowerCase();
             const hide = login.toLowerCase() === 'neurosfw', label = btn.textContent;
             let base = force ? null : same(profOldPosts) ? profOldPosts : null;
@@ -18504,11 +19148,18 @@ var __vpBannerAuto = (() => {
             const incr = !!base && Date.now() - base.full < 12 * 3600e3;
             if (incr && Date.now() - base.at < 120e3) { profOldPosts = base; return 'client'; }
             const baseIds = new Set(incr ? base.posts.map(p => p.id) : []), byId = new Map(incr ? base.posts.map(p => [p.id, p]) : []);
-            let cursor = null, finished = false;
+            const PART = 'vp_old_part', part = incr ? null : GM_getValue(PART, null);
+            let cursor = null, finished = false, pages = 0;
+            if (same(part) && Array.isArray(part.posts) && part.cursor && Date.now() - part.at < 30 * 60e3) { cursor = part.cursor; part.posts.forEach(p => byId.set(p.id, p)); }
+            const keep = () => {
+                if (incr || !cursor || !byId.size) return false;
+                try { GM_setValue(PART, { u: login, at: Date.now(), cursor, posts: [...byId.values()] }); return true; } catch (e) { return false; }
+            };
             try {
-                for (let n = 0; n < (incr ? 10 : 60) && !finished; n++) {
+                for (let n = 0; n < (incr ? 10 : PROF_OLD_PAGES) && !finished; n++) {
+                    pages++;
                     const r = await api(`/api/posts/user/${encodeURIComponent(login)}?limit=50&sort=new` + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
-                    if (!r.ok) return null;
+                    if (!r.ok) { profOldWhy = r.status === 429 ? 'Сайт просит подождать: слишком много запросов. Через минуту нажми снова' : 'Сайт не ответил, попробуй позже'; return null; }
                     const j = await r.json(), d = j.data || j, list = (d.posts || []).filter(p => p && p.id && !(hide && SERVICE_POSTS.includes(p.id)));
                     let hit = false;
                     list.forEach(p => { if (baseIds.has(p.id)) hit = true; byId.set(p.id, p); });
@@ -18517,14 +19168,17 @@ var __vpBannerAuto = (() => {
                     else {
                         btn.textContent = label + ' ' + byId.size;
                         await new Promise(res => setTimeout(res, 350));
-                        if (apiPaused()) return null;
+                        if (apiPaused()) { profOldWhy = 'Сайт просит подождать: слишком много запросов. Через минуту нажми снова'; return null; }
                     }
                 }
-            } finally { btn.textContent = label; }
+            } finally {
+                btn.textContent = label;
+                if (!finished && pages < PROF_OLD_PAGES && keep() && profOldWhy) profOldWhy += ', загрузка продолжится с того же места';
+            }
             if (!finished && incr) return profOldLoad(login, btn, true);
-            if (!finished) { vpNote('Слишком много постов для такой сортировки'); return null; }
+            if (!finished) { profOldWhy = 'Слишком много постов для такой сортировки'; return null; }
             profOldPosts = { u: login, at: Date.now(), full: incr ? base.full : Date.now(), posts: [...byId.values()].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)) };
-            try { GM_setValue('vp_old_cache', profOldPosts); } catch (e) { }
+            try { GM_setValue('vp_old_cache', profOldPosts); GM_setValue(PART, null); } catch (e) { logErr('старые посты: кэш не сохранился', e); }
             return 'client';
         }
         const PSORT_TRY = { old: ['old', 'oldest', 'asc'], popular: ['popular'] };
@@ -18611,7 +19265,7 @@ var __vpBannerAuto = (() => {
                                 v = await profSortProbe(login, s);
                                 if (!v && s === 'old') v = await profOldLoad(login, b);
                             } finally { profSortPause = false; }
-                            if (!v) return back('Сайт не отдаёт такую сортировку');
+                            if (!v) return back(s === 'old' && profOldWhy ? profOldWhy : 'Сайт не отдаёт такую сортировку');
                             sessionStorage.setItem(PROF_SORT_KEY, JSON.stringify({ u: login, s, v }));
                         }
                         profUnpinSoon();
@@ -18648,1403 +19302,9 @@ var __vpBannerAuto = (() => {
             if (typeof ResizeObserver === 'function') new ResizeObserver(() => psortMove(box, false)).observe(box);
         }
         onDom(profileSort);
-        const MASCOT = { file: 'mascot3.webp', cache: 'mascot-3@1', ratio: 800 / 737 };
-        const MASCOT_SAYS = ['Арра-Ара~', 'Миу', 'Мяу', 'Мь?', 'Мя', 'Мур'];
-        const MASCOT_CSS = `
-        .vp-mas { position: absolute; left: 62%; bottom: 3%; width: 36%; aspect-ratio: ${MASCOT.ratio}; z-index: 6; pointer-events: none; user-select: none; -webkit-tap-highlight-color: transparent; animation: vpMasIn .9s cubic-bezier(.2, .9, .3, 1.1) both; }
-        .vp-mas-shadow { position: absolute; left: 4%; right: -4%; bottom: -2%; height: 13%; border-radius: 50%; background: radial-gradient(closest-side, rgba(12, 4, 24, .6), rgba(12, 4, 24, 0)); pointer-events: none; }
-        .vp-mas-pic { position: relative; width: 100%; height: 100%; background: var(--vp-mas-img) center / 100% 100% no-repeat; filter: brightness(.84) saturate(.8) contrast(1.05); transform-origin: 55% 100%; }
-        .vp-mas-tint { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: soft-light; animation: vpMasFlick 3.4s ease-in-out infinite alternate;
-            -webkit-mask: var(--vp-mas-img) center / 100% 100% no-repeat; mask: var(--vp-mas-img) center / 100% 100% no-repeat;
-            background: linear-gradient(90deg, rgba(255, 150, 55, .75), rgba(255, 150, 55, 0) 62%), linear-gradient(180deg, rgba(125, 80, 200, .35), rgba(70, 35, 120, .5)); }
-        html.vp-mas-hover, html.vp-mas-hover * { cursor: pointer !important; }
-        .vp-mas-say { position: absolute; left: 76%; bottom: 97%; translate: -50% 0; padding: .45cqw 1.1cqw; border: max(1.5px, .16cqw) solid #2a170f; border-radius: 1.2cqw; background: #fff1d6; color: #3a2210; font-weight: 700; font-size: max(12px, 1.7cqw); line-height: 1.2; white-space: nowrap; pointer-events: none;
-            box-shadow: 0 .3cqw .8cqw rgba(0, 0, 0, .35); opacity: 0; transform: translateY(30%) scale(.7); transform-origin: 50% 100%; transition: opacity .35s ease, transform .5s cubic-bezier(.2, .9, .3, 1.15); }
-        .vp-mas-say::after { content: ""; position: absolute; left: 50%; top: 100%; width: .9cqw; height: .9cqw; translate: -50% -55%; rotate: 45deg; background: #fff1d6; border: max(1.5px, .16cqw) solid #2a170f; border-top: 0; border-left: 0; }
-        .vp-mas-say.vp-on { opacity: 1; transform: none; }
-        .vp-mas.vp-hop .vp-mas-pic { animation: vpMasHop .8s ease-in-out; }
-        @keyframes vpMasIn { from { opacity: 0; translate: 0 8%; } }
-        @keyframes vpMasHop { 0%, 100% { transform: none; } 30% { transform: translateY(-4%) scale(.985, 1.015); } 62% { transform: translateY(0) scale(1.015, .985); } 82% { transform: scale(.998, 1.004); } }
-        @keyframes vpMasFlick { from { opacity: .8; } to { opacity: 1; } }
-        @media (orientation: portrait), (prefers-reduced-motion: reduce) { .vp-mas { animation: none; } .vp-mas-tint { animation: none; } }
-        @media (orientation: portrait) { .vp-mas { display: none; } }`;
-        let mascotUrl = '', mascotLoading = false, mascotLast = -1, mascotMask = null;
-        function mascotMaskBuild(url) {
-            const im = new Image();
-            im.onload = () => {
-                const w = 200, h = Math.round(w / MASCOT.ratio), c = document.createElement('canvas');
-                c.width = w; c.height = h;
-                const g = c.getContext('2d', { willReadFrequently: true });
-                g.drawImage(im, 0, 0, w, h);
-                try { mascotMask = { w, h, a: g.getImageData(0, 0, w, h).data }; } catch (e) { logErr('маскот', e); }
-            };
-            im.src = url;
-        }
-        function mascotHit(d, e) {
-            const pic = mascotMask && d.querySelector('.vp-mas-pic');
-            if (!pic) return false;
-            const r = pic.getBoundingClientRect();
-            if (e.clientX < r.left || e.clientX >= r.right || e.clientY < r.top || e.clientY >= r.bottom) return false;
-            const x = Math.floor((e.clientX - r.left) / r.width * mascotMask.w), y = Math.floor((e.clientY - r.top) / r.height * mascotMask.h);
-            return mascotMask.a[(y * mascotMask.w + x) * 4 + 3] > 60;
-        }
-        async function mascotBlob() {
-            const have = await palStore(MASCOT.cache).catch(() => null);
-            if (have) return have;
-            for (const branch of ['claude/github-script-access-ihd9ne', 'main']) {
-                const b = await palFetch(`https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/${branch}/assets/${MASCOT.file}`).catch(() => null);
-                if (b) { await palStore(MASCOT.cache, b).catch(() => { }); return b; }
-            }
-            return null;
-        }
-        function mascotSay(el) {
-            let i;
-            do i = Math.floor(Math.random() * MASCOT_SAYS.length); while (i === mascotLast && MASCOT_SAYS.length > 1);
-            mascotLast = i;
-            const say = el.querySelector('.vp-mas-say');
-            say.textContent = MASCOT_SAYS[i];
-            say.classList.add('vp-on');
-            el.classList.remove('vp-hop'); el.offsetWidth; el.classList.add('vp-hop');
-            clearTimeout(say._t);
-            say._t = setTimeout(() => say.classList.remove('vp-on'), 2300);
-        }
-        function mascotInjectToggle(d) {
-            let dlg = null;
-            for (const x of d.querySelectorAll('dialog.dialog')) {
-                const label = (x.getAttribute('aria-label') || '').trim();
-                const h2 = x.querySelector('h2');
-                const title = h2 ? h2.textContent.trim() : '';
-                if (label === 'Звук и эффекты' || title === 'Звук и эффекты') { dlg = x; break; }
-            }
-            if (!dlg) return;
-            const content = dlg.querySelector('.dialog-content');
-            if (!content || content.querySelector('.vp-mas-toggle')) return;
-            const label = d.createElement('label');
-            label.className = 'toggle-line vp-mas-toggle';
-            const span = d.createElement('span');
-            const strong = d.createElement('strong');
-            strong.textContent = 'Фурри поняшка';
-            const small = d.createElement('small');
-            small.textContent = 'Маскот ИТД X у камина на сцене ивента';
-            span.appendChild(strong); span.appendChild(small);
-            const input = d.createElement('input');
-            input.type = 'checkbox';
-            input.checked = !!GM_getValue('mascotOn', true);
-            input.addEventListener('change', () => {
-                const on = !!input.checked;
-                GM_setValue('mascotOn', on);
-                for (const fr of document.querySelectorAll('iframe')) {
-                    let dd = null;
-                    try { dd = fr.contentDocument; } catch (e) { }
-                    const m = dd && dd.querySelector('.vp-mas');
-                    if (!on && m) m.remove();
-                }
-                if (on) mascotPlace();
-            });
-            label.appendChild(span); label.appendChild(input);
-            content.appendChild(label);
-        }
-        function mascotPlace() {
-            for (const fr of document.querySelectorAll('iframe')) {
-                let d = null;
-                try { d = fr.contentDocument; } catch (e) { }
-                if (d) mascotInjectToggle(d);
-            }
-            if (!GM_getValue('mascotOn', true) || !/^\/event\/[^/]/.test(location.pathname)) return;
-            for (const fr of document.querySelectorAll('iframe')) {
-                let d = null;
-                try { d = fr.contentDocument; } catch (e) { }
-                const stage = d && d.querySelector('.room-stage');
-                if (!stage || stage.querySelector(':scope > .vp-mas')) continue;
-                if (!mascotUrl) {
-                    if (mascotLoading) return;
-                    mascotLoading = true;
-                    mascotBlob().then(b => { if (b) { mascotUrl = URL.createObjectURL(b); mascotMaskBuild(mascotUrl); } }).catch(e => logErr('маскот', e)).finally(() => { mascotLoading = false; });
-                    return;
-                }
-                if (!d.getElementById('vp-mas-css')) { const st = d.createElement('style'); st.id = 'vp-mas-css'; st.textContent = MASCOT_CSS; d.head.appendChild(st); }
-                const el = d.createElement('div');
-                el.className = 'vp-mas';
-                el.style.setProperty('--vp-mas-img', `url("${mascotUrl}")`);
-                el.innerHTML = '<div class="vp-mas-shadow"></div><div class="vp-mas-pic"></div><div class="vp-mas-tint"></div><div class="vp-mas-say"></div>';
-                stage.appendChild(el);
-                if (!d._vpMas) {
-                    d._vpMas = true;
-                    const masHit = (doc, ev) => {
-                        const m = doc.querySelector('.vp-mas');
-                        if (!m || !m.isConnected) return null;
-                        if (doc.querySelector('.vp-hunt.vp-open')) return null;
-                        const t = ev.target;
-                        if (t && t.closest && t.closest('.vp-hunt')) return null;
-                        return mascotHit(doc, ev) ? m : null;
-                    };
-                    d.addEventListener('click', e => { const m = masHit(d, e); if (m) { e.stopPropagation(); e.preventDefault(); mascotSay(m); } }, true);
-                    d.addEventListener('pointermove', e => { const on = !!masHit(d, e); if (on !== d.documentElement.classList.contains('vp-mas-hover')) d.documentElement.classList.toggle('vp-mas-hover', on); }, true);
-                }
-            }
-        }
-        setInterval(mascotPlace, 900);
-        (function eventHunt() {
-            const HUNT_KEY = 'vpHuntMode';
-            const MODE_LIST = [['ghosts', 'Призраки'], ['wolves', 'Оборотни'], ['both', 'Оба']];
-            const huntMode = () => { const v = GM_getValue(HUNT_KEY, 'both'); return MODE_LIST.some(m => m[0] === v) ? v : 'both'; };
-            const huntOn = () => GM_getValue('huntOn', true);
-
-            const HUNT_CSS = `
-.vp-hunt-dev{position:absolute;left:8%;bottom:9%;width:15%;max-width:230px;min-width:110px;aspect-ratio:1/1;cursor:pointer;z-index:6;pointer-events:auto;
-  display:flex;align-items:flex-end;justify-content:center;transition:transform .2s ease,filter .25s ease;}
-.vp-hunt-dev:hover{transform:translateY(-4px) scale(1.03);filter:brightness(1.15) drop-shadow(0 0 14px rgba(160,120,255,.55));}
-.vp-hunt-dev:active{transform:translateY(-1px) scale(.98);}
-.vp-hunt-dev img{width:100%;height:auto;display:block;pointer-events:none;filter:drop-shadow(0 6px 18px rgba(0,0,0,.55));}
-.vp-hunt-dev.vp-hunt-loading{opacity:.4;}
-.vp-hunt-dev .vp-hunt-hint{position:absolute;left:50%;bottom:-6px;transform:translate(-50%,100%);padding:5px 11px;border-radius:11px;background:rgba(20,14,30,.86);color:#eee;font-family:inherit;font-weight:600;font-size:12px;line-height:1.2;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .2s;}
-.vp-hunt-dev:hover .vp-hunt-hint{opacity:1;}
-
-/* ───────── окно: те же токены и скругления, что у галереи и «Сообщений» ───────── */
-.vp-hunt{--vh-bg:#14121c;--vh-chip:var(--glass-bg,rgba(35,35,35,.5));--vh-chip-h:rgba(255,255,255,.12);
-  --vh-fg:var(--text-primary,#f5f5f5);--vh-fg2:var(--text-secondary,#b5bac1);--vh-bd:var(--border-color,rgba(255,255,255,.15));
-  --vh-ac:var(--vp-accent,#9b6bff);--vh-card:rgba(30,28,42,.97);--vh-gold:#ffd46a;--vh-web:rgba(255,255,255,.2);
-  position:fixed;inset:0;z-index:99998;display:none;box-sizing:border-box;padding:12px;overflow:hidden;
-  background:var(--vh-bg);color:var(--vh-fg);font-family:inherit;font-size:14px;line-height:1.4;}
-.vp-hunt.vp-light{--vh-bg:#f6f4fa;--vh-chip:rgba(0,0,0,.06);--vh-chip-h:rgba(0,0,0,.1);
-  --vh-fg:var(--text-primary,#141414);--vh-fg2:var(--text-secondary,#5b5f66);--vh-bd:var(--border-color,rgba(0,0,0,.12));
-  --vh-card:#fff;--vh-gold:#b7791f;--vh-web:rgba(0,0,0,.16);}
-.vp-hunt.vp-open{display:block;animation:vpHIn .22s cubic-bezier(.2,.8,.2,1);}
-@keyframes vpHIn{from{opacity:0;transform:scale(.985);}to{opacity:1;transform:none;}}
-.vp-hunt *{box-sizing:border-box;}
-.vp-hunt button{font:inherit;color:inherit;margin:0;}
-.vp-hunt button:focus-visible{outline:2px solid var(--vh-ac);outline-offset:2px;}
-
-.vp-hunt-shell{position:relative;height:100%;display:flex;flex-direction:column;overflow:hidden;border-radius:36px;border:1px solid var(--vh-bd);
-  background:radial-gradient(70% 55% at 50% 112%,rgba(155,107,255,.2),transparent 70%),var(--vh-card,rgba(30,28,42,.97));
-  box-shadow:0 16px 48px rgba(0,0,0,.45);}
-.vp-hunt.vp-light .vp-hunt-shell{box-shadow:0 16px 48px rgba(0,0,0,.12);background:radial-gradient(70% 55% at 50% 112%,rgba(155,107,255,.14),transparent 70%),var(--vh-card,#fff);}
-.vp-hunt-shell::before{content:'';position:absolute;left:0;top:0;width:190px;height:190px;pointer-events:none;opacity:.7;
-  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200' fill='none' stroke='%23ffffff' stroke-opacity='.2' stroke-linecap='round'%3E%3Cpath d='M0 0H200M0 0L196 52M0 0L173 100M0 0L141 141M0 0L100 173M0 0L52 196M0 0V200'/%3E%3Cpath d='M45 0Q26 26 0 45M85 0Q49 49 0 85M125 0Q72 72 0 125M165 0Q96 96 0 165'/%3E%3C/svg%3E") no-repeat 0 0/100% 100%;}
-.vp-hunt.vp-light .vp-hunt-shell::before{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200' fill='none' stroke='%23000000' stroke-opacity='.16' stroke-linecap='round'%3E%3Cpath d='M0 0H200M0 0L196 52M0 0L173 100M0 0L141 141M0 0L100 173M0 0L52 196M0 0V200'/%3E%3Cpath d='M45 0Q26 26 0 45M85 0Q49 49 0 85M125 0Q72 72 0 125M165 0Q96 96 0 165'/%3E%3C/svg%3E");}
-
-/* шапка: «Назад» · заголовок · переключатель режима (как табы галереи) */
-.vp-hunt-top{position:relative;z-index:3;flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:18px 16px 10px;}
-.vp-hunt-back{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;height:45px;padding:0 18px 0 12px;border:0;border-radius:9999px;cursor:pointer;
-  font-size:14px;font-weight:500;background:var(--vh-chip);transition:background-color .15s,transform .15s;}
-.vp-hunt-back:hover{background:var(--vh-chip-h);}
-.vp-hunt-back:active{transform:scale(.97);}
-.vp-hunt-back svg{width:20px;height:20px;}
-.vp-hunt-title{flex:1 1 auto;min-width:0;font-size:24px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.vp-hunt-modes{position:relative;flex:0 0 auto;display:grid;grid-template-columns:repeat(3,1fr);height:45px;padding:4px;border-radius:9999px;background:var(--vh-chip);}
-.vp-hunt-ind{position:absolute;top:4px;bottom:4px;left:4px;width:calc((100% - 8px)/3);border-radius:9999px;pointer-events:none;
-  background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px var(--vh-ac),0 0 14px -4px var(--vh-ac);
-  transform:translateX(calc(var(--i,0) * 100%));transition:transform .3s cubic-bezier(.2,.8,.2,1);}
-.vp-hunt.vp-light .vp-hunt-ind{background:#fff;}
-.vp-hunt-modes button{position:relative;display:flex;align-items:center;justify-content:center;border:0;border-radius:9999px;padding:0 16px;
-  font-size:14px;font-weight:500;line-height:21px;white-space:nowrap;cursor:pointer;background:transparent;color:var(--vh-fg2);transition:color .2s;}
-.vp-hunt-modes button.vp-on{color:var(--vh-fg);}
-
-/* сцена: радар, летающие карточки, цели */
-.vp-hunt-stage{position:relative;flex:1 1 auto;min-height:0;overflow:hidden;}
-.vp-hunt-arena{position:absolute;inset:0;overflow:hidden;pointer-events:none;}
-.vp-hunt-radar{position:absolute;left:50%;top:50%;width:0;height:0;transition:opacity .4s;}
-.vp-hunt-radar i{position:absolute;left:-130px;top:-130px;width:260px;height:260px;border-radius:50%;border:1.5px solid var(--vh-ac);opacity:0;animation:vpHRing 3.6s cubic-bezier(.2,.6,.3,1) infinite;}
-.vp-hunt-radar i:nth-child(2){animation-delay:1.2s;}
-.vp-hunt-radar i:nth-child(3){animation-delay:2.4s;}
-@keyframes vpHRing{0%{transform:scale(.3);opacity:.55;}100%{transform:scale(2.1);opacity:0;}}
-.vp-hunt-sweep{position:absolute;left:-105px;top:-105px;width:210px;height:210px;border-radius:50%;opacity:.5;
-  background:conic-gradient(from 0deg,transparent 0 50%,var(--vh-ac) 100%);
-  -webkit-mask:radial-gradient(circle,transparent 64%,#000 65%);mask:radial-gradient(circle,transparent 64%,#000 65%);animation:vpHSpin 2.4s linear infinite;}
-@keyframes vpHSpin{to{transform:rotate(360deg);}}
-.vp-hunt:not([data-state=search]) .vp-hunt-radar{opacity:.22;}
-.vp-hunt:not([data-state=search]) .vp-hunt-radar i,.vp-hunt:not([data-state=search]) .vp-hunt-sweep{animation-play-state:paused;}
-.vp-hunt[data-state=empty] .vp-hunt-radar,.vp-hunt[data-state=error] .vp-hunt-radar,.vp-hunt[data-state=empty] .vp-hunt-card,.vp-hunt[data-state=error] .vp-hunt-card{display:none;}
-.vp-hunt[data-state=pause] .vp-hunt-card:not(.vp-hero),.vp-hunt[data-state=pause] .vp-hunt-card:not(.vp-hero) .vp-hunt-card-in{animation-play-state:paused;}
-
-.vp-hunt-empty{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:0 24px;pointer-events:none;}
-.vp-hunt[data-state=empty] .vp-hunt-empty,.vp-hunt[data-state=error] .vp-hunt-empty{display:flex;}
-.vp-hunt-empty-i{font-size:44px;line-height:1;opacity:.55;filter:grayscale(.4);margin-bottom:6px;}
-.vp-hunt-empty-h{font-size:20px;font-weight:700;}
-.vp-hunt-empty-s{font-size:14px;color:var(--vh-fg2);}
-
-/* карточки-миниатюры постов */
-.vp-hunt-card{position:absolute;left:50%;top:50%;width:112px;height:148px;margin:-74px 0 0 -56px;z-index:1;pointer-events:none;
-  translate:var(--cx,0) var(--cy,0);animation:vpHCard var(--d,3.2s) cubic-bezier(.4,.05,.3,1) both;will-change:translate,rotate,scale,opacity;}
-@keyframes vpHCard{
-  0%{translate:var(--sx) var(--sy);rotate:var(--r0);scale:.6;opacity:0;}
-  14%{opacity:1;}
-  42%{translate:var(--cx) var(--cy);rotate:var(--rc);scale:1.06;}
-  62%{translate:var(--cx) var(--cy);rotate:var(--rc);scale:1.06;opacity:1;}
-  100%{translate:var(--ex) var(--ey);rotate:var(--r1);scale:.72;opacity:0;}}
-.vp-hunt-card-in{position:absolute;inset:0;transform-style:preserve-3d;animation:vpHFlip var(--d,3.2s) ease both;}
-@keyframes vpHFlip{0%,8%{transform:perspective(700px) rotateY(180deg);}38%,100%{transform:perspective(700px) rotateY(0deg);}}
-.vp-hunt-card-f,.vp-hunt-card-b{position:absolute;inset:0;border-radius:16px;overflow:hidden;-webkit-backface-visibility:hidden;backface-visibility:hidden;}
-.vp-hunt-card-f{display:flex;flex-direction:column;background:var(--vh-card);border:1px solid var(--vh-bd);box-shadow:0 10px 28px rgba(0,0,0,.45);}
-.vp-hunt.vp-light .vp-hunt-card-f{box-shadow:0 10px 28px rgba(0,0,0,.16);}
-.vp-hunt-card-b{transform:rotateY(180deg);border:1px solid var(--vh-bd);box-shadow:0 10px 28px rgba(0,0,0,.45);
-  background:linear-gradient(145deg,rgba(130,100,230,.92),rgba(30,22,60,.97));}
-.vp-hunt-card-b::before{content:'?';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:700;color:rgba(255,255,255,.5);}
-.vp-hunt-card-b::after{content:'';position:absolute;inset:8px;border-radius:11px;border:1px dashed rgba(255,255,255,.28);}
-.vp-hunt-card-img{position:relative;flex:1 1 auto;min-height:0;overflow:hidden;background:rgba(128,128,128,.18);}
-.vp-hunt-card-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .35s;}
-.vp-hunt-card-img img.ok{opacity:1;}
-.vp-hunt-card-play{position:absolute;right:6px;bottom:6px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:rgba(15,10,26,.72);color:#fff;font-size:9px;padding-left:1px;}
-.vp-hunt-card-img.vp-sil{padding:10px 10px 0;display:flex;flex-direction:column;gap:6px;background:transparent;}
-.vp-hunt-card-img.vp-sil i{display:block;height:7px;border-radius:4px;background:rgba(128,128,128,.3);}
-.vp-hunt-card-img.vp-sil p{margin:0;font-size:11px;line-height:1.35;color:var(--vh-fg);overflow:hidden;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;word-break:break-word;}
-.vp-hunt-card-meta{flex:0 0 auto;display:flex;flex-direction:column;gap:3px;padding:7px 9px 9px;border-top:1px solid var(--vh-bd);}
-.vp-hunt-card-nick{font-size:10.5px;font-weight:600;color:var(--vh-fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.vp-hunt-card-meta i{display:block;height:6px;border-radius:3px;background:rgba(128,128,128,.28);}
-.vp-hunt-card-meta i:last-child{width:62%;}
-
-/* карточка с находкой: крупнее, дрожит, подсвечивается, «бац» */
-.vp-hunt-card.vp-hero{width:150px;height:198px;margin:-99px 0 0 -75px;z-index:3;animation-name:vpHHero;animation-duration:2.2s;animation-timing-function:ease-in-out;}
-.vp-hunt-card.vp-hero .vp-hunt-card-in{animation-name:vpHFlipH;animation-duration:2.2s;}
-@keyframes vpHFlipH{0%,6%{transform:perspective(700px) rotateY(180deg);}34%,100%{transform:perspective(700px) rotateY(0deg);}}
-@keyframes vpHHero{
-  0%{translate:var(--sx) var(--sy);rotate:var(--r0);scale:.6;opacity:0;}
-  12%{opacity:1;}
-  38%{translate:0 0;rotate:0deg;scale:1.18;}
-  50%{translate:0 0;rotate:0deg;scale:1.18;}
-  54%{rotate:-3deg;}58%{rotate:3deg;}62%{rotate:-3deg;}66%{rotate:2deg;}
-  70%{translate:0 0;rotate:0deg;scale:1.28;opacity:1;}
-  76%{scale:1.14;}
-  100%{translate:0 var(--ey);rotate:8deg;scale:.7;opacity:0;}}
-.vp-hunt-card.vp-hero .vp-hunt-card-f::before{content:'';position:absolute;inset:0;border-radius:16px;z-index:2;pointer-events:none;opacity:0;animation:vpHFadeIn .3s ease 1s both;}
-.vp-hunt-card.vp-hero-poss .vp-hunt-card-f::before{padding:2px;background:linear-gradient(115deg,#ff5b5b,#ffb15b,#f8ff5b,#5bff8a,#5bd6ff,#8a5bff,#ff5bd0,#ff5b5b);background-size:400% 400%;
-  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;
-  animation:vpHFadeIn .3s ease 1s both,vpHRb2 2s linear infinite;}
-.vp-hunt-card.vp-hero-wolf .vp-hunt-card-f::before{box-shadow:inset 0 0 0 2px rgba(150,105,255,.85),inset 0 0 22px rgba(150,105,255,.5);}
-@keyframes vpHFadeIn{from{opacity:0;}to{opacity:1;}}
-@keyframes vpHRb2{to{background-position:400% 50%;}}
-.vp-hunt-burst{position:absolute;left:50%;top:50%;width:0;height:0;z-index:4;pointer-events:none;--bc:#8fd6ff;}
-.vp-hunt-burst.vp-b-wolf{--bc:#a97bff;}
-.vp-hunt-burst::before{content:'';position:absolute;left:-70px;top:-70px;width:140px;height:140px;border-radius:50%;border:2px solid var(--bc);box-shadow:0 0 22px var(--bc);opacity:0;animation:vpHBurst .8s ease-out 1.54s forwards;}
-.vp-hunt-burst i{position:absolute;left:-3px;top:-3px;width:6px;height:6px;border-radius:50%;background:var(--bc);opacity:0;animation:vpHSpark .75s ease-out 1.54s forwards;}
-@keyframes vpHBurst{0%{transform:scale(.3);opacity:.9;}100%{transform:scale(2.7);opacity:0;}}
-@keyframes vpHSpark{0%{transform:rotate(var(--a)) translateX(36px) scale(1);opacity:1;}100%{transform:rotate(var(--a)) translateX(150px) scale(.2);opacity:0;}}
-
-/* низ: состояние поиска + счётчики */
-.vp-hunt-dock{position:relative;z-index:3;flex:0 0 auto;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px;padding:6px 16px 20px;}
-.vp-hunt-state{display:inline-flex;align-items:center;gap:12px;min-height:45px;max-width:100%;padding:6px 8px 6px 16px;border:0;border-radius:9999px;text-align:left;cursor:pointer;
-  background:var(--vh-chip);transition:background-color .15s,transform .15s;}
-.vp-hunt-state:hover{background:var(--vh-chip-h);}
-.vp-hunt-state:active{transform:scale(.98);}
-.vp-hunt-state:disabled{cursor:default;transform:none;background:var(--vh-chip);}
-.vp-hunt-dot{position:relative;flex:0 0 auto;width:10px;height:10px;border-radius:50%;background:var(--vh-ac);}
-.vp-hunt-dot::after{content:'';position:absolute;inset:0;border-radius:50%;background:inherit;animation:vpHPing 1.6s cubic-bezier(0,0,.2,1) infinite;}
-@keyframes vpHPing{0%{transform:scale(1);opacity:.7;}100%{transform:scale(3.2);opacity:0;}}
-.vp-hunt:not([data-state=search]) .vp-hunt-dot::after{animation:none;opacity:0;}
-.vp-hunt[data-state=pause] .vp-hunt-dot{background:#ffb84a;}
-.vp-hunt[data-state=full] .vp-hunt-dot{background:var(--vh-gold);}
-.vp-hunt[data-state=done] .vp-hunt-dot{background:#5bff8a;}
-.vp-hunt[data-state=empty] .vp-hunt-dot{background:rgba(128,128,128,.7);}
-.vp-hunt[data-state=error] .vp-hunt-dot{background:#f23f43;}
-.vp-hunt-state-t{display:flex;flex-direction:column;min-width:0;}
-.vp-hunt-state-h{display:flex;align-items:baseline;gap:4px;font-size:14px;font-weight:600;line-height:1.25;white-space:nowrap;}
-.vp-hunt-state-s{font-size:12.5px;line-height:1.25;color:var(--vh-fg2);}
-.vp-hunt-dots{display:none;gap:3px;align-items:center;align-self:flex-end;margin-bottom:6px;}
-.vp-hunt[data-state=search] .vp-hunt-dots{display:inline-flex;}
-.vp-hunt-dots i{display:block;width:4px;height:4px;border-radius:50%;background:currentColor;animation:vpHDot 1.2s ease-in-out infinite;}
-.vp-hunt-dots i:nth-child(2){animation-delay:.15s;}
-.vp-hunt-dots i:nth-child(3){animation-delay:.3s;}
-@keyframes vpHDot{0%,60%,100%{opacity:.25;transform:translateY(0);}30%{opacity:1;transform:translateY(-2px);}}
-.vp-hunt-state-ic{flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:rgba(128,128,128,.2);}
-.vp-hunt-state-ic svg{display:none;width:15px;height:15px;}
-.vp-hunt[data-state=search] .vp-ic-pause,.vp-hunt[data-state=pause] .vp-ic-play,.vp-hunt[data-state=empty] .vp-ic-again,.vp-hunt[data-state=error] .vp-ic-again{display:block;}
-.vp-hunt[data-state=full] .vp-hunt-state-ic,.vp-hunt[data-state=done] .vp-hunt-state-ic{display:none;}
-.vp-hunt[data-state=full] .vp-hunt-state,.vp-hunt[data-state=done] .vp-hunt-state{padding-right:18px;}
-.vp-hunt-stat{display:inline-flex;align-items:center;gap:8px;height:45px;padding:0 16px;border-radius:9999px;background:var(--vh-chip);font-size:13px;color:var(--vh-fg2);white-space:nowrap;}
-.vp-hunt-stat b{color:var(--vh-fg);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;}
-.vp-hunt-stat.vp-gold b{color:var(--vh-gold);}
-.vp-hunt-slots{display:inline-flex;gap:4px;}
-.vp-hunt-slots i{display:block;width:8px;height:8px;border-radius:50%;background:rgba(128,128,128,.35);transition:background-color .3s,box-shadow .3s;}
-.vp-hunt-slots i.on{background:var(--vh-gold);box-shadow:0 0 8px var(--vh-gold);}
-
-/* цели: радужное стекло у призрака, фиолетовое у оборотня — как было */
-.vp-hunt-tgt{position:absolute;z-index:10;width:78px;height:78px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:36px;
-  background:rgba(20,14,40,.7);backdrop-filter:blur(6px);transition:transform .12s ease,filter .12s,scale .15s ease;will-change:transform;}
-.vp-hunt-tgt:hover{scale:1.08;filter:brightness(1.2);}
-.vp-hunt-tgt:focus-visible{outline:2px solid #fff;outline-offset:3px;}
-.vp-hunt-tgt.vp-poss{box-shadow:0 0 0 3px transparent,0 0 26px rgba(150,105,255,.55);border:3px solid transparent;
-  background-image:linear-gradient(rgba(20,14,40,.85),rgba(20,14,40,.85)),linear-gradient(115deg,#ff5b5b,#ffb15b,#f8ff5b,#5bff8a,#5bd6ff,#8a5bff,#ff5bd0,#ff5b5b);
-  background-origin:border-box;background-clip:padding-box,border-box;background-size:100% 100%,400% 400%;animation:vpHRainbow 4s linear infinite;}
-.vp-hunt-tgt.vp-wolf{box-shadow:0 0 0 2px rgba(150,105,255,.65),0 0 22px rgba(150,105,255,.4);}
-@keyframes vpHRainbow{0%{background-position:0 0,0% 50%;}100%{background-position:0 0,400% 50%;}}
-.vp-hunt-tgt.vp-caught{animation:vpCaught .5s ease forwards;pointer-events:none;}
-@keyframes vpCaught{to{transform:scale(1.9);opacity:0;}}
-/* вылет из карточки: двигаем отдельными свойствами translate/scale, чтобы не конфликтовать с дрейфом через transform */
-.vp-hunt-tgt.vp-launch{pointer-events:none;animation:vpHLaunch .85s cubic-bezier(.2,.9,.25,1.12) both;}
-.vp-hunt-tgt.vp-poss.vp-launch{animation:vpHLaunch .85s cubic-bezier(.2,.9,.25,1.12) both,vpHRainbow 4s linear infinite;}
-@keyframes vpHLaunch{0%{translate:var(--fx,0px) var(--fy,0px);scale:.2;opacity:0;rotate:-40deg;}14%{opacity:1;}100%{translate:0 0;scale:1;opacity:1;rotate:0deg;}}
-
-@media (max-width:640px){
-  .vp-hunt{padding:8px;}
-  .vp-hunt-shell{border-radius:28px;}
-  .vp-hunt-top{padding:12px 10px 8px;gap:8px;}
-  .vp-hunt-title{display:none;}
-  .vp-hunt-back{padding:0 12px;}
-  .vp-hunt-back span{display:none;}
-  .vp-hunt-modes{margin-left:auto;}
-  .vp-hunt-modes button{padding:0 11px;font-size:13px;}
-  .vp-hunt-dock{padding:4px 10px 14px;}
-  .vp-hunt-state{width:100%;}
-  .vp-hunt-state-t{flex:1 1 auto;}
-  .vp-hunt-stat{height:40px;padding:0 13px;}
-}
-@media (prefers-reduced-motion:reduce){
-  .vp-hunt-tgt,.vp-hunt-tgt.vp-caught{animation:none!important;transition:none!important;}
-  .vp-hunt.vp-open{animation:none;}
-  .vp-hunt-radar i,.vp-hunt-sweep,.vp-hunt-dot::after,.vp-hunt-dots i{animation:none!important;}
-  .vp-hunt-radar i:first-child{opacity:.25;}
-  .vp-hunt-card{animation:vpHFade 2.4s ease both!important;translate:var(--rx,0) var(--ry,0);}
-  .vp-hunt-card-in{animation:none!important;transform:none;}
-  .vp-hunt-card.vp-hero{animation:vpHFade 2.2s ease both!important;translate:0 0;scale:1.15;}
-  .vp-hunt-card.vp-hero .vp-hunt-card-f::before{animation:none!important;opacity:1;}
-  .vp-hunt-burst{display:none;}
-  .vp-hunt-ind{transition:none;}
-}
-@keyframes vpHFade{0%{opacity:0;}20%{opacity:1;}80%{opacity:1;}100%{opacity:0;}}
-`;
-
-            const DEV_FILE = 'hunt-dev2.webp', DEV_CACHE = 'hunt-dev2@1';
-            let devUrl = '';
-
-            let huntFrame = null, huntDoc = null, huntOpen = false, huntWin = null;
-            let huntBusy = false, huntDone = false, huntCursor = null, huntSeen = new Set(), huntSeq = 0;
-            let huntFound = 0, huntScanned = 0;
-            const huntTargets = new Map();
-            const HUNT_MAX_TARGETS = 4, HUNT_MAX_PAGES = 40, HUNT_GAP = 1200;
-
-            let huntPaused = false, huntErr = false, huntPending = 0;
-            const huntMeta = new Map(), huntCards = new Set();
-            let huntCardQ = [], huntCardTimer = 0, huntRevealAt = 0;
-            const HUNT_CARD_LIVE = 8, HUNT_HERO_MS = 2200, HUNT_HERO_BURST_MS = 1540;
-            const HUNT_WHAT = { ghosts: 'призраков', wolves: 'оборотней', both: 'нечисть' };
-
-            const HUNT_SAVE = 'vpHuntState';
-            const huntCalm = () => { try { return !!(huntDoc && huntDoc.defaultView.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } };
-
-            function huntStatsUpdate() {
-                if (!huntDoc) return;
-                const s = huntDoc.querySelector('.vp-hunt-scanned'), f = huntDoc.querySelector('.vp-hunt-found');
-                if (s) s.textContent = String(huntScanned);
-                if (f) f.textContent = String(huntFound);
-                huntDoc.querySelectorAll('.vp-hunt-slots i').forEach((x, i) => x.classList.toggle('on', i < huntFound));
-            }
-            function huntSave() {
-                try {
-                    const targets = [];
-                    huntTargets.forEach((v, id) => { targets.push({ id: id, kind: v.kind, user: v.user, label: v.label, x: v.x, y: v.y }); });
-                    sessionStorage.setItem(HUNT_SAVE, JSON.stringify({
-                        at: Date.now(), found: huntFound, scanned: huntScanned,
-                        cursor: huntCursor, seen: [...huntSeen], targets: targets
-                    }));
-                } catch (e) { }
-            }
-            function huntSaveClear() {
-                try { sessionStorage.removeItem(HUNT_SAVE); } catch (e) { }
-            }
-            function huntLoadSave() {
-                try {
-                    const raw = sessionStorage.getItem(HUNT_SAVE);
-                    if (!raw) return null;
-                    const st = JSON.parse(raw);
-                    if (!st || !st.at || Date.now() - st.at > 30 * 60 * 1000) return null;
-                    return st;
-                } catch (e) { return null; }
-            }
-
-            let huntRetryAt = 0, huntRetryT = 0;
-            function huntRetryClear() {
-                huntRetryAt = 0;
-                if (huntRetryT) { clearInterval(huntRetryT); huntRetryT = 0; }
-            }
-            function huntRetryStart(ms) {
-                huntRetryClear();
-                if (!ms) return;
-                huntRetryAt = Date.now() + ms;
-                huntRetryT = setInterval(() => {
-                    if (!huntOpen) { huntRetryClear(); return; }
-                    const left = Math.ceil((huntRetryAt - Date.now()) / 1000);
-                    huntUi();
-                    if (left <= 0) {
-                        huntRetryClear();
-                        if (huntState() === 'error') { huntErr = false; huntDone = false; huntUi(); huntLoop(); }
-                    }
-                }, 250);
-            }
-            function huntState() {
-                if (huntErr) return 'error';
-                if (huntPaused) return 'pause';
-                if (huntTargets.size + huntPending >= HUNT_MAX_TARGETS) return 'full';
-                if (huntDone) return (huntFound || huntTargets.size) ? 'done' : 'empty';
-                return 'search';
-            }
-            function huntUi() {
-                const w = huntWin;
-                if (!w || !huntDoc) return;
-                const st = huntState();
-                w.dataset.state = st;
-                const T = {
-                    search: ['Ищем ' + HUNT_WHAT[huntMode()], 'Нажми, чтобы поставить на паузу'],
-                    pause: ['Пауза', 'Нажми, чтобы продолжить'],
-                    full: ['Поле заполнено', 'Поймай кого-нибудь — и поиск продолжится'],
-                    done: ['Поиск завершён', 'Выбери цель на поле'],
-                    empty: ['Сейчас никого нет', 'Нажми, чтобы искать снова'],
-                    error: ['Поиск остановлен', 'Ошибка сети — нажми, чтобы повторить']
-                }[st];
-                let head = T[0], sub = T[1];
-                if (st === 'error' && huntRetryAt) {
-                    const left = Math.max(0, Math.ceil((huntRetryAt - Date.now()) / 1000));
-                    sub = 'Продолжу сам через ' + left + ' с — или нажми, чтобы не ждать';
-                }
-                const set = (sel, txt) => { const n = w.querySelector(sel); if (n && n.textContent !== txt) n.textContent = txt; };
-                set('.vp-hunt-state-hx', head);
-                set('.vp-hunt-state-s', sub);
-                const btn = w.querySelector('.vp-hunt-state');
-                if (btn) { btn.disabled = (st === 'full' || st === 'done'); btn.title = sub; }
-                if (st === 'empty') { set('.vp-hunt-empty-h', 'Сейчас никого нет'); set('.vp-hunt-empty-s', 'Проверено постов: ' + huntScanned + '. Загляни позже — нечисть появляется не всегда.'); }
-                if (st === 'error') { set('.vp-hunt-empty-h', 'Поиск остановлен'); set('.vp-hunt-empty-s', 'Не удалось загрузить ленту. Проверь соединение и нажми «повторить».'); }
-                if (st === 'search') huntCardKick();
-            }
-            function huntStatus() { huntUi(); }
-            function huntBar() {   }
-            function huntToggle() {
-                const st = huntState();
-                if (st === 'search') { huntPaused = true; huntUi(); }
-                else if (st === 'pause') { huntPaused = false; huntUi(); huntLoop(); }
-                else if (st === 'empty') { huntSaveClear(); huntRestart(false); }
-                else if (st === 'error') { huntRetryClear(); huntErr = false; huntDone = false; huntUi(); huntLoop(); }
-            }
-            function huntNext(seq) {
-                if (seq !== huntSeq) return;
-                huntUi();
-                if (huntDone || huntPaused || huntErr || !huntOpen) return;
-                setTimeout(huntLoop, 0);
-            }
-
-            function huntSolidBg(light) {
-                const base = light ? [255, 255, 255] : [20, 18, 28];
-                try {
-                    const cs = getComputedStyle(document.documentElement);
-                    const raw = (cs.getPropertyValue('--block-bg') || '').trim();
-                    const m = raw.match(/rgba?\(([^)]+)\)/);
-                    if (m) {
-                        const p = m[1].split(',').map(s => parseFloat(s));
-                        const r = p[0], g = p[1], b = p[2], a = p.length > 3 ? p[3] : 1;
-                        if (isFinite(r) && isFinite(g) && isFinite(b)) {
-                            if (a >= 0.95) return 'rgb(' + Math.round(r) + ',' + Math.round(g) + ',' + Math.round(b) + ')';
-                            const mix = (c, i) => Math.round(c * a + base[i] * (1 - a));
-                            return 'rgb(' + mix(r, 0) + ',' + mix(g, 1) + ',' + mix(b, 2) + ')';
-                        }
-                    }
-                    if (/^#([0-9a-f]{6})$/i.test(raw)) return raw;
-                } catch (e) { }
-                return light ? '#f6f4fa' : '#14121c';
-            }
-            function huntTheme(w) {
-                try {
-                    const light = document.documentElement.classList.contains('vp-light');
-                    const solid = huntSolidBg(light);
-                    w.style.setProperty('--vh-bg', solid);
-                    w.style.setProperty('--vh-card', light ? '#fff' : '#1e1c2a');
-                    const cs = [getComputedStyle(document.documentElement), document.body ? getComputedStyle(document.body) : null];
-                    ['--block-bg', '--glass-bg', '--text-primary', '--text-secondary', '--border-color', '--vp-accent', '--vp-glass-filter'].forEach(k => {
-                        for (const c of cs) {
-                            if (!c) continue;
-                            const v = c.getPropertyValue(k).trim();
-                            if (v) { w.style.setProperty(k, v); return; }
-                        }
-                    });
-                    const ff = cs[1] ? cs[1].fontFamily : '';
-                    if (ff) w.style.fontFamily = ff;
-                    w.classList.toggle('vp-light', document.documentElement.classList.contains('vp-light'));
-                } catch (e) { }
-            }
-
-            function huntPostMeta(p) {
-                let img = '', video = false;
-                const at = Array.isArray(p.attachments) ? p.attachments : [];
-                for (const a of at) {
-                    if (!a) continue;
-                    const u = a.thumbnailUrl || (a.type === 'image' ? a.url : '');
-                    if (u && /^(https?:)?\/\/|^\//.test(u)) { img = u; video = a.type === 'video'; break; }
-                }
-                if (!video && at.some(a => a && a.type === 'video')) video = true;
-                const txt = String(p.text || '').split('\n').map(s => s.trim()).filter(Boolean)[0] || '';
-                const au = p.author && (p.author.username || p.author.displayName);
-                return { img: img, video: video, text: txt.slice(0, 110), nick: au ? '@' + au : '' };
-            }
-            function huntCardSil(body, m) {
-                body.classList.add('vp-sil');
-                if (m.text) { const t = huntDoc.createElement('p'); t.textContent = m.text; body.appendChild(t); return; }
-                [100, 86, 94, 64].forEach(w => { const l = huntDoc.createElement('i'); l.style.width = w + '%'; body.appendChild(l); });
-            }
-            function huntCardEl(m) {
-                const d = huntDoc;
-                const mk = (tag, cls) => { const n = d.createElement(tag); if (cls) n.className = cls; return n; };
-                const c = mk('div', 'vp-hunt-card'), inn = mk('div', 'vp-hunt-card-in'), f = mk('div', 'vp-hunt-card-f'), b = mk('div', 'vp-hunt-card-b');
-                const body = mk('div', 'vp-hunt-card-img');
-                if (m.img) {
-                    const im = d.createElement('img');
-                    im.alt = ''; im.draggable = false; im.decoding = 'async';
-                    im.addEventListener('load', () => im.classList.add('ok'));
-                    im.addEventListener('error', () => { im.remove(); huntCardSil(body, m); });
-                    im.src = m.img;
-                    body.appendChild(im);
-                    if (m.video) { const pl = mk('span', 'vp-hunt-card-play'); pl.textContent = '▶'; body.appendChild(pl); }
-                } else huntCardSil(body, m);
-                f.appendChild(body);
-                const meta = mk('div', 'vp-hunt-card-meta');
-                if (m.nick) { const n = mk('div', 'vp-hunt-card-nick'); n.textContent = m.nick; meta.appendChild(n); }
-                else { meta.appendChild(d.createElement('i')); }
-                if (m.img && m.text) { const n2 = mk('div', 'vp-hunt-card-nick'); n2.textContent = m.text; meta.appendChild(n2); }
-                else if (m.img || !m.text) meta.appendChild(d.createElement('i'));
-                f.appendChild(meta);
-                inn.appendChild(f); inn.appendChild(b); c.appendChild(inn);
-                return c;
-            }
-            function huntCardLaunch(m, hero, kind) {
-                const arena = huntDoc.querySelector('.vp-hunt-arena'), stage = huntDoc.querySelector('.vp-hunt-stage');
-                if (!arena || !stage) return null;
-                const W = stage.clientWidth || 800, H = stage.clientHeight || 500;
-                const R = (a, b) => a + Math.random() * (b - a), S = () => (Math.random() < 0.5 ? -1 : 1);
-                const c = huntCardEl(m);
-                const side = Math.random();
-                let sx, sy;
-                if (side < 0.38) { sx = -(W / 2 + 160); sy = R(-0.3, 0.3) * H; }
-                else if (side < 0.76) { sx = W / 2 + 160; sy = R(-0.3, 0.3) * H; }
-                else { sx = R(-0.3, 0.3) * W; sy = -(H / 2 + 200); }
-                const cx = hero ? 0 : R(-1, 1) * Math.min(240, W * 0.28), cy = hero ? 0 : R(-1, 1) * Math.min(90, H * 0.16);
-                const dur = hero ? HUNT_HERO_MS / 1000 : R(2.9, 3.8);
-                const set = (k, v) => c.style.setProperty(k, v);
-                set('--sx', sx.toFixed(0) + 'px'); set('--sy', sy.toFixed(0) + 'px');
-                set('--cx', cx.toFixed(0) + 'px'); set('--cy', cy.toFixed(0) + 'px');
-                set('--ex', (cx + R(-60, 60)).toFixed(0) + 'px'); set('--ey', (H / 2 + 220).toFixed(0) + 'px');
-                set('--rx', (R(-0.32, 0.32) * W).toFixed(0) + 'px'); set('--ry', (R(-0.28, 0.28) * H).toFixed(0) + 'px');
-                set('--r0', (S() * R(18, 48)).toFixed(0) + 'deg'); set('--rc', (hero ? 0 : S() * R(2, 8)).toFixed(1) + 'deg'); set('--r1', (S() * R(10, 26)).toFixed(0) + 'deg');
-                set('--d', dur.toFixed(2) + 's');
-                if (hero) c.classList.add('vp-hero', 'vp-hero-' + (kind === 'wolf' ? 'wolf' : 'poss'));
-                arena.appendChild(c);
-                huntCards.add(c);
-                if (hero) setTimeout(() => { c.remove(); huntCards.delete(c); }, dur * 1000 + 250);
-                else c.addEventListener('animationend', e => { if (e.target === c) { c.remove(); huntCards.delete(c); } });
-                return c;
-            }
-            function huntCardTick() {
-                if (!huntDoc || !huntOpen) { huntCardQ = []; }
-                if (!huntCardQ.length) { clearInterval(huntCardTimer); huntCardTimer = 0; return; }
-                if (huntState() !== 'search') return;
-                let live = 0; huntCards.forEach(c => { if (!c.classList.contains('vp-hunt-burst') && !c.classList.contains('vp-hero')) live++; });
-                if (live >= HUNT_CARD_LIVE) return;
-                huntCardLaunch(huntCardQ.shift(), false);
-            }
-            function huntCardKick() {
-                if (huntCardTimer || !huntDoc || !huntOpen || !huntCardQ.length) return;
-                huntCardTimer = setInterval(huntCardTick, 260);
-            }
-            function huntCardPush(p) {
-                if (!p || !p.id || !huntDoc) return;
-                const m = huntPostMeta(p);
-                huntMeta.set(p.id, m);
-                if (huntMeta.size > 160) huntMeta.delete(huntMeta.keys().next().value);
-                if (Math.random() > (m.img ? 0.34 : 0.14)) return;
-                huntCardQ.push(m);
-                if (huntCardQ.length > 14) huntCardQ.shift();
-                huntCardKick();
-            }
-            function huntCardsReset() {
-                huntCardQ = []; huntRevealAt = 0;
-                if (huntCardTimer) { clearInterval(huntCardTimer); huntCardTimer = 0; }
-                huntCards.clear();
-                if (huntDoc) huntDoc.querySelectorAll('.vp-hunt-card,.vp-hunt-burst').forEach(n => n.remove());
-            }
-            function huntReveal(m) {
-                if (!huntDoc) return;
-                const seq = huntSeq;
-                huntPending++;
-                huntUi();
-                const now = performance.now(), startAt = Math.max(now, huntRevealAt);
-                huntRevealAt = startAt + 1250;
-                setTimeout(() => {
-                    if (seq !== huntSeq || !huntDoc) return;
-                    const stage = huntDoc.querySelector('.vp-hunt-stage'), arena = huntDoc.querySelector('.vp-hunt-arena');
-                    const W = (stage && stage.clientWidth) || 800, H = (stage && stage.clientHeight) || 500;
-                    const meta = huntMeta.get(m.postId) || { img: '', video: false, text: '', nick: m.user ? '@' + m.user : '' };
-                    huntCardLaunch(meta, true, m.kind);
-                    if (arena && !huntCalm()) {
-                        const bu = huntDoc.createElement('div');
-                        bu.className = 'vp-hunt-burst vp-b-' + (m.kind === 'wolf' ? 'wolf' : 'poss');
-                        for (let i = 0; i < 8; i++) { const s = huntDoc.createElement('i'); s.style.setProperty('--a', (i * 45) + 'deg'); bu.appendChild(s); }
-                        arena.appendChild(bu); huntCards.add(bu);
-                        setTimeout(() => { bu.remove(); huntCards.delete(bu); }, 2600);
-                    }
-                    setTimeout(() => {
-                        if (seq !== huntSeq) return;
-                        huntPending = Math.max(0, huntPending - 1);
-                        huntSpawn(m.kind, m.postId, m.user, m.label, null, { x: W / 2, y: H / 2 });
-                        huntUi();
-                    }, huntCalm() ? 600 : HUNT_HERO_BURST_MS);
-                }, Math.max(0, startAt - now));
-            }
-
-            function huntSpawn(kind, postId, user, label, at, from) {
-                if (!huntDoc || huntTargets.size >= HUNT_MAX_TARGETS) return;
-                if (huntTargets.has(postId)) return;
-                const stage = huntDoc.querySelector('.vp-hunt-stage');
-                if (!stage) return;
-                const W = stage.clientWidth || 800, H = stage.clientHeight || 600;
-                const SZ = 78, MARG = 8;
-                const el = huntDoc.createElement('div');
-                el.className = 'vp-hunt-tgt vp-' + kind;
-                el.textContent = kind === 'wolf' ? '\u{1F43A}' : '\u{1F47B}';
-                const hint = kind === 'wolf' ? ' — нажми, чтобы поставить лайк (ночная конфета)' : ' — нажми, чтобы открыть пост';
-                el.title = label + hint;
-                el.tabIndex = 0;
-                el.setAttribute('role', 'button');
-                el.setAttribute('aria-label', label + hint);
-                const clampX = v => Math.max(MARG, Math.min(W - SZ - MARG, v));
-                const clampY = v => Math.max(MARG, Math.min(H - SZ - MARG, v));
-                const x = at ? clampX(at.x) : MARG + Math.random() * Math.max(20, W - SZ - MARG * 2);
-                const y = at ? clampY(at.y) : MARG + Math.random() * Math.max(20, H - SZ - MARG * 2);
-                el.style.left = x + 'px';
-                el.style.top = y + 'px';
-                el.style.setProperty('--fx', (from ? from.x - (x + 39) : 0) + 'px');
-                el.style.setProperty('--fy', (from ? from.y - (y + 39) : 0) + 'px');
-                el.classList.add('vp-launch');
-                setTimeout(() => el.classList.remove('vp-launch'), 950);
-                const phase = Math.random() * Math.PI * 2, sx = 0.9 + Math.random() * 0.8, sy = 0.7 + Math.random() * 0.6;
-                let raf = 0, t0 = performance.now();
-                const move = now => {
-                    if (!el.isConnected) return;
-                    const t = (now - t0) / 1000;
-                    let dx = Math.sin(t * sx + phase) * 46, dy = Math.cos(t * sy + phase * 1.3) * 34;
-                    dx = Math.max(MARG - x, Math.min(W - SZ - MARG - x, dx));
-                    dy = Math.max(MARG - y, Math.min(H - SZ - MARG - y, dy));
-                    el.style.transform = 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px)';
-                    raf = requestAnimationFrame(move);
-                };
-                if (!huntCalm()) raf = requestAnimationFrame(move);
-                el.addEventListener('click', e => {
-                    e.preventDefault(); e.stopPropagation();
-                    el.classList.add('vp-caught');
-                    cancelAnimationFrame(raf);
-                    const id = postId, u = user, isWolf = kind === 'wolf';
-                    huntTargets.delete(postId);
-                    huntFound = Math.max(0, huntFound - 1);
-                    huntStatsUpdate();
-                    setTimeout(() => { if (el.parentNode) el.remove(); }, 500);
-                    if (isWolf) {
-                        huntLike(id);
-                        huntSave();
-                        huntStatus('Оборотень пойман — лайк поставлен', 'scan');
-                        return;
-                    }
-                    setTimeout(() => {
-                        huntSave();
-                        try { const st = huntLoadSave() || {}; st.wasOpen = true; st.at = Date.now(); sessionStorage.setItem(HUNT_SAVE, JSON.stringify(st)); } catch (x) { }
-                        huntBack(true);
-                        try { parent.postMessage({ vpHunt: 'open', postId: id, user: u }, '*'); } catch (x) { }
-                    }, 260);
-                }, true);
-                el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } });
-                stage.appendChild(el);
-                huntTargets.set(postId, { el, raf, kind, user, label, x, y });
-                setTimeout(huntReflow, 60);
-                huntFound++;
-                huntStatsUpdate();
-                huntSave();
-                huntStatus('Найдено: ' + huntFound + ' · проанализировано постов: ' + huntScanned);
-            }
-            function huntReflow() {
-                const stage = huntDoc && huntDoc.querySelector('.vp-hunt-stage');
-                if (!stage) return;
-                const W = stage.clientWidth, H = stage.clientHeight;
-                if (!W || !H) return;
-                const SZ = 78, MARG = 8;
-                huntTargets.forEach(t => {
-                    const el = t.el;
-                    if (!el || !el.isConnected) return;
-                    const curX = parseFloat(el.style.left) || 0;
-                    const curY = parseFloat(el.style.top) || 0;
-                    const nx = Math.max(MARG, Math.min(W - SZ - MARG, curX));
-                    const ny = Math.max(MARG, Math.min(H - SZ - MARG, curY));
-                    if (nx !== curX) { el.style.left = nx + 'px'; t.x = nx; }
-                    if (ny !== curY) { el.style.top = ny + 'px'; t.y = ny; }
-                });
-            }
-            addEventListener('resize', () => setTimeout(huntReflow, 120));
-
-            function huntClear() {
-                if (!huntDoc) return;
-                huntDoc.querySelectorAll('.vp-hunt-tgt').forEach(t => t.remove());
-                huntTargets.forEach(v => cancelAnimationFrame(v.raf));
-                huntTargets.clear();
-                huntFound = 0;
-                huntStatsUpdate();
-            }
-
-            function huntParse(v) {
-                if (!v) return null;
-                const p = v.possession, w = v.werewolf;
-                if (p) { if (p.resolved) return null; return { kind: 'poss', label: p.stage === 'taken' ? 'Пост захвачен' : 'Призрак' }; }
-                if (w && w.night) return { kind: 'wolf', label: 'Оборотень (ночь)' };
-                return null;
-            }
-
-            const huntLiked = new Set();
-            async function huntLike(postId) {
-                if (!postId || huntLiked.has(postId)) return;
-                huntLiked.add(postId);
-                try {
-                    const r = await api('/api/posts/' + encodeURIComponent(postId) + '/like', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
-                    });
-                    if (!r || (r.status !== 200 && r.status !== 201 && r.status !== 204 && r.status !== 409)) {
-                        huntLiked.delete(postId);
-                        huntStatus('Лайк не поставился (' + (r ? r.status : 'сеть') + ')', 'err');
-                    }
-                } catch (e) {
-                    huntLiked.delete(postId);
-                    logErr('охота: лайк', e);
-                }
-            }
-            let huntLastNet = 0;
-            async function huntNet(url) {
-                const wait = huntLastNet + HUNT_GAP - Date.now();
-                if (wait > 0) await new Promise(r => setTimeout(r, wait));
-                huntLastNet = Date.now();
-                return api(url);
-            }
-            function huntModeOk(kind) {
-                const m = huntMode();
-                if (m === 'both') return true;
-                if (m === 'ghosts') return kind === 'poss';
-                return kind === 'wolf';
-            }
-            async function huntLoop() {
-                if (huntBusy || huntDone || !huntFrame || !huntOpen) return;
-                if (huntPaused || huntTargets.size + huntPending >= HUNT_MAX_TARGETS) { huntUi(); return; }
-                huntBusy = true;
-                const seq = huntSeq;
-                try {
-                    const lim = 50;
-                    let url = '/api/posts?limit=' + lim + '&tab=popular' + (huntCursor ? '&cursor=' + encodeURIComponent(huntCursor) : '');
-                    const res = await huntNet(url);
-                    if (seq !== huntSeq || huntPaused) return;
-                    if (!res || !res.ok) { huntErr = true; huntDone = true; huntRetryStart(15000); huntStatus('Поиск остановлен (ошибка сети)'); huntBusy = false; return; }
-                    const j = await res.json(), d = j.data || j;
-                    let posts = d.posts || [], next = (d.pagination && d.pagination.nextCursor) || d.nextCursor || d.cursor || null;
-                    huntScanned += posts.length;
-                    for (const p of posts) huntCardPush(p);
-                    huntBar(Math.min(100, (huntFound / Math.max(6, HUNT_MAX_TARGETS)) * 100));
-                    huntStatsUpdate();
-                    huntStatus('Ищем… проанализировано ' + huntScanned + ' постов, найдено ' + huntFound);
-                    if (posts.length) {
-                        const ids = posts.map(p => p.id).filter(Boolean);
-                        if (ids.length) {
-                            const chunk = ids.slice(0, 40);
-                            const url2 = '/api/v1/halloween/feed-state?posts=' + chunk.map(encodeURIComponent).join(',');
-                            let r2 = null;
-                            try { r2 = await huntNet(url2); } catch (e) { }
-                            if (seq !== huntSeq) return;
-                            if (r2 && r2.ok) {
-                                let d2 = null;
-                                try { d2 = await r2.json(); } catch (e) { }
-                                const map = (d2 && ((d2.data && d2.data.posts) || d2.posts)) || {};
-                                for (const p of posts) {
-                                    const tag = huntParse(map[p.id]);
-                                    if (!tag || !huntModeOk(tag.kind)) continue;
-                                    if (huntSeen.has(p.id)) continue;
-                                    huntSeen.add(p.id);
-                                    const au = (p.author && (p.author.username || p.author.id)) || '';
-                                    try { huntFrame.contentWindow.postMessage({ vpHunt: 'found', kind: tag.kind === 'wolf' ? 'wolf' : 'poss', postId: p.id, user: au, label: tag.label }, '*'); } catch (x) { }
-                                    if (huntFound >= HUNT_MAX_TARGETS) break;
-                                }
-                            }
-                        }
-                    }
-                    huntCursor = next;
-                    huntSave();
-                    if (!next || huntScanned >= HUNT_MAX_PAGES * lim) { huntDone = true; huntStatus(huntFound ? 'Проанализировано ' + huntScanned + ' постов, найдено ' + huntFound : 'Сейчас никого не нашли — попробуй позже'); }
-                } catch (e) {
-                    logErr('охота', e);
-                    if (seq === huntSeq && !huntPaused) { huntErr = true; huntDone = true; huntRetryStart(15000); }
-                }
-                finally { huntBusy = false; huntNext(seq); }
-            }
-
-            const HUNT_SVG = (p, cls, extra) => '<svg class="' + cls + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (extra || 2.2) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>';
-            function huntWindow() {
-                if (huntWin && huntWin.isConnected) return huntWin;
-                const w = huntDoc.createElement('div');
-                w.className = 'vp-hunt';
-                w.dataset.state = 'search';
-                w.innerHTML = '<div class="vp-hunt-shell">'
-                    + '<div class="vp-hunt-top">'
-                    + '<button type="button" class="vp-hunt-back" aria-label="Назад">' + HUNT_SVG('<path d="M15 6l-6 6 6 6"/>', '', 2) + '<span>Назад</span></button>'
-                    + '<div class="vp-hunt-title">Охота на нечисть</div>'
-                    + '<div class="vp-hunt-modes"><i class="vp-hunt-ind"></i>' + MODE_LIST.map(m => '<button type="button" data-m="' + m[0] + '">' + m[1] + '</button>').join('') + '</div>'
-                    + '</div>'
-                    + '<div class="vp-hunt-stage">'
-                    + '<div class="vp-hunt-arena"><div class="vp-hunt-radar"><i></i><i></i><i></i><b class="vp-hunt-sweep"></b></div></div>'
-                    + '<div class="vp-hunt-empty"><div class="vp-hunt-empty-i">\u{1F47B}</div><b class="vp-hunt-empty-h"></b><span class="vp-hunt-empty-s"></span></div>'
-                    + '</div>'
-                    + '<div class="vp-hunt-dock">'
-                    + '<button type="button" class="vp-hunt-state"><span class="vp-hunt-dot"></span>'
-                    + '<span class="vp-hunt-state-t"><b class="vp-hunt-state-h"><span class="vp-hunt-state-hx">Ищем</span><span class="vp-hunt-dots"><i></i><i></i><i></i></span></b><small class="vp-hunt-state-s"></small></span>'
-                    + '<span class="vp-hunt-state-ic">'
-                    + HUNT_SVG('<path d="M8 5v14M16 5v14"/>', 'vp-ic-pause', 2.6)
-                    + HUNT_SVG('<path d="M8 5l11 7-11 7z" fill="currentColor"/>', 'vp-ic-play', 2)
-                    + HUNT_SVG('<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>', 'vp-ic-again', 2.4)
-                    + '</span></button>'
-                    + '<div class="vp-hunt-stat">Проверено<b class="vp-hunt-scanned">0</b></div>'
-                    + '<div class="vp-hunt-stat vp-gold">Найдено<b class="vp-hunt-found">0</b><span class="vp-hunt-slots">' + '<i></i>'.repeat(HUNT_MAX_TARGETS) + '</span></div>'
-                    + '</div>'
-                    + '</div>';
-                w.querySelector('.vp-hunt-back').addEventListener('click', huntBack, true);
-                w.querySelector('.vp-hunt-state').addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); huntToggle(); }, true);
-                const modes = w.querySelector('.vp-hunt-modes');
-                const modeIdx = () => Math.max(0, MODE_LIST.findIndex(m => m[0] === huntMode()));
-                modes.style.setProperty('--i', modeIdx());
-                w.querySelectorAll('.vp-hunt-modes button').forEach(b => {
-                    b.classList.toggle('vp-on', b.dataset.m === huntMode());
-                    b.addEventListener('click', e => {
-                        e.preventDefault(); e.stopPropagation();
-                        GM_setValue(HUNT_KEY, b.dataset.m);
-                        w.querySelectorAll('.vp-hunt-modes button').forEach(x => x.classList.toggle('vp-on', x.dataset.m === b.dataset.m));
-                        modes.style.setProperty('--i', modeIdx());
-                        huntSaveClear();
-                        huntRestart(false);
-                    }, true);
-                });
-                huntDoc.body.appendChild(w);
-                huntWin = w;
-                huntTheme(w);
-                return w;
-            }
-
-            function huntRestart(resume) {
-                huntSeq++;
-                huntCardsReset(); huntPaused = false; huntErr = false; huntPending = 0;
-                const em0 = huntDoc && huntDoc.querySelector('.vp-hunt-empty');
-                if (resume) {
-                    const st = huntLoadSave();
-                    if (st) {
-                        huntCursor = st.cursor || null;
-                        huntSeen = new Set(st.seen || []);
-                        huntFound = 0; huntScanned = st.scanned || 0;
-                        huntClear();
-                        huntFound = 0;
-                        for (const t of (st.targets || [])) huntSpawn(t.kind, t.id, t.user, t.label, { x: t.x, y: t.y });
-                        if ((st.targets || []).length && em0) em0.style.display = 'none';
-                        huntDone = false; huntBusy = false;
-                        huntBar(Math.min(100, (huntFound / Math.max(6, HUNT_MAX_TARGETS)) * 100));
-                        huntStatsUpdate();
-                        huntStatus('Продолжаем: проанализировано ' + huntScanned + ', найдено ' + huntFound);
-                        setTimeout(huntLoop, 800);
-                        return;
-                    }
-                }
-                huntCursor = null; huntSeen.clear(); huntFound = 0; huntScanned = 0;
-                huntDone = false; huntBusy = false;
-                huntClear();
-                huntBar(0);
-                huntStatsUpdate();
-                huntStatus('Готов');
-                if (em0) em0.style.display = '';
-                setTimeout(huntLoop, 300);
-            }
-
-            let huntAutoChecked = false;
-            function huntAutoOpen() {
-                if (huntAutoChecked || !huntDoc) return;
-                const st = huntLoadSave();
-                if (!st || !st.targets || !st.targets.length) return;
-                if (st.wasOpen === false) return;
-                if (huntDoc.querySelector('.vp-hunt.vp-open')) { huntAutoChecked = true; return; }
-                huntAutoChecked = true;
-                huntOpenWin();
-            }
-            function huntShowScene() {
-                if (!huntDoc) return;
-                const sc = huntDoc.querySelector('.room-stage');
-                if (sc && sc.style.visibility === 'hidden') sc.style.visibility = '';
-            }
-            function huntOpenWin() {
-                if (!huntDoc) return;
-                huntOpen = true;
-                try { const st = huntLoadSave() || {}; st.wasOpen = true; st.at = Date.now(); sessionStorage.setItem(HUNT_SAVE, JSON.stringify(st)); } catch (e) { }
-                let w = null;
-                try {
-                    w = huntWindow();
-                    huntTheme(w);
-                    w.classList.add('vp-open');
-                } catch (e) {
-                    logErr('охота: окно', e);
-                }
-                if (!w || !w.isConnected) {
-                    huntOpen = false;
-                    huntWin = null;
-                    huntShowScene();
-                    try { const st = huntLoadSave() || {}; st.wasOpen = false; st.at = Date.now(); sessionStorage.setItem(HUNT_SAVE, JSON.stringify(st)); } catch (e) { }
-                    return;
-                }
-                if (w.querySelector('.vp-hunt-shell')) {
-                    const sc = huntDoc.querySelector('.room-stage');
-                    if (sc) sc.style.visibility = 'hidden';
-                }
-                try { huntRestart(true); } catch (e) { logErr('охота: старт', e); }
-                setTimeout(huntReflow, 80);
-                setTimeout(huntReflow, 400);
-            }
-            function huntGuard() {
-                if (!huntOpen || !huntDoc) return;
-                const w = huntDoc.querySelector('.vp-hunt');
-                if (w && w.isConnected) return;
-                huntOpen = false;
-                huntWin = null;
-                huntShowScene();
-                try { const st = huntLoadSave() || {}; st.wasOpen = false; st.at = Date.now(); sessionStorage.setItem(HUNT_SAVE, JSON.stringify(st)); } catch (e) { }
-            }
-
-            function huntBack(silent) {
-                huntOpen = false;
-                if (!silent) { try { const st = huntLoadSave() || {}; st.wasOpen = false; st.at = Date.now(); sessionStorage.setItem(HUNT_SAVE, JSON.stringify(st)); } catch (e) { } }
-                if (huntWin) huntWin.classList.remove('vp-open');
-                huntCardsReset();
-                if (huntDoc) {
-                    const sc = huntDoc.querySelector('.room-stage');
-                    if (sc) sc.style.visibility = '';
-                }
-            }
-
-            let devLoading = false;
-            function huntDevLoad() {
-                if (devUrl || devLoading) return;
-                devLoading = true;
-                palBlobKey(DEV_FILE, DEV_CACHE).then(b => { if (b) devUrl = URL.createObjectURL(b); }).catch(e => logErr('охота: устройство', e)).finally(() => { devLoading = false; });
-            }
-            function palBlobKey(file, key) {
-                return palStore(key).then(have => {
-                    if (have) return have;
-                    return palFetch('https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/claude/github-script-access-ihd9ne/assets/' + file).then(b => {
-                        if (b) palStore(key, b).catch(() => { });
-                        return b;
-                    }).catch(() => palFetch('https://raw.githubusercontent.com/kiwe147/ITD-Visual-Pack/main/assets/' + file).catch(() => null));
-                });
-            }
-
-            function huntInstall(fr) {
-                let d = null;
-                try { d = fr.contentDocument; } catch (e) { return; }
-                if (!d || !d.body) return;
-                if (!huntOn()) return;
-                const stage = d.querySelector('.room-stage');
-                if (!stage) return;
-                if (!d.getElementById('vp-hunt-css')) {
-                    const st = d.createElement('style'); st.id = 'vp-hunt-css'; st.textContent = HUNT_CSS; d.head.appendChild(st);
-                }
-                if (!stage.querySelector(':scope > .vp-hunt-dev')) {
-                    const dev = d.createElement('div');
-                    dev.className = 'vp-hunt-dev' + (devUrl ? '' : ' vp-hunt-loading');
-                    const img = d.createElement('img');
-                    img.alt = '';
-                    img.draggable = false;
-                    if (devUrl) img.src = devUrl;
-                    dev.appendChild(img);
-                    const hint = d.createElement('div');
-                    hint.className = 'vp-hunt-hint';
-                    hint.textContent = 'Охота на нечисть';
-                    dev.appendChild(hint);
-                    dev.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); huntOpenWin(); }, true);
-                    stage.appendChild(dev);
-                    huntDevLoad();
-                }
-                const devImg = stage.querySelector(':scope > .vp-hunt-dev img');
-                if (devUrl && devImg && devImg.getAttribute('src') !== devUrl) {
-                    devImg.src = devUrl;
-                    const dv = stage.querySelector(':scope > .vp-hunt-dev');
-                    if (dv) dv.classList.remove('vp-hunt-loading');
-                }
-                huntFrame = fr; huntDoc = d;
-                setTimeout(huntAutoOpen, 600);
-                if (!d._vpHuntMsg) {
-                    d._vpHuntMsg = true;
-                    d.defaultView.addEventListener('message', ev => {
-                        const m = ev.data;
-                        if (!m || !m.vpHunt || !huntOpen) return;
-                        if (m.vpHunt === 'found') {
-                            const em = huntDoc.querySelector('.vp-hunt-empty');
-                            if (em) em.style.display = 'none';
-                            huntReveal(m);
-                        }
-                    });
-                }
-                const open = huntDoc.querySelector('.vp-hunt.vp-open');
-                if (open && !open.isConnected) huntWin = null;
-            }
-
-            function huntTick() {
-                if (!huntOn() || !/^\/event\/[^/]/.test(location.pathname)) {
-                    if (huntDoc) { try { const dev = huntDoc.querySelector('.vp-hunt-dev'); if (dev) dev.remove(); } catch (e) { } }
-                    return;
-                }
-                for (const fr of document.querySelectorAll('iframe')) {
-                    let d = null;
-                    try { d = fr.contentDocument; } catch (e) { continue; }
-                    if (d && d.querySelector && d.querySelector('.room-stage')) { huntInstall(fr); break; }
-                }
-            }
-            setInterval(huntTick, 1000);
-            setInterval(() => { if (huntOpen) { huntGuard(); huntReflow(); if (huntRetryAt) huntUi(); } }, 900);
-            onDom(huntTick);
-            document.addEventListener('vp-loc', huntTick);
-
-            window.addEventListener('message', ev => {
-                const m = ev.data;
-                if (!m || m.vpHunt !== 'open' || !m.postId) return;
-                const go = m.user
-                    ? '/@' + encodeURIComponent(m.user) + '/post/' + encodeURIComponent(m.postId)
-                    : '/post/' + encodeURIComponent(m.postId);
-                const a = document.createElement('a');
-                a.href = go; a.click();
-            });
-        })();
-        (function pumpkinStencil() {
-            const CSS = `
-.vp-ps-block{margin:12px 0 0;padding:10px 12px;border-radius:12px;background:var(--block-bg,rgba(30,26,40,.9));border:1px solid var(--border-color,rgba(255,255,255,.14));color:var(--text-primary,#fff);font:13px/1.4 inherit;}
-.vp-ps-title{display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:8px;}
-.vp-ps-title svg{width:16px;height:16px;flex:0 0 auto;opacity:.8;}
-.vp-ps-btns{display:flex;gap:6px;flex-wrap:wrap;}
-.vp-ps-btn{border:0;border-radius:8px;padding:7px 12px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;background:var(--glass-bg,rgba(128,128,128,.2));color:var(--text-primary,#fff);transition:background .15s;}
-.vp-ps-btn:hover{background:rgba(128,128,128,.35);}
-.vp-ps-btn.vp-ps-on{background:var(--vp-accent,#8a5bff);color:#fff;}
-.vp-ps-rows{margin-top:8px;display:none;}
-.vp-ps-rows.vp-ps-show{display:block;}
-.vp-ps-row{display:flex;align-items:center;gap:8px;margin-top:6px;}
-.vp-ps-row label{flex:0 0 auto;min-width:86px;font-size:12px;color:var(--text-secondary,rgba(255,255,255,.6));}
-.vp-ps-row input[type=range]{flex:1 1 auto;min-width:0;}
-.vp-ps-row b{flex:0 0 auto;min-width:34px;text-align:right;font-variant-numeric:tabular-nums;font-size:12px;}
-.vp-ps-hint{margin-top:6px;font-size:11.5px;line-height:1.3;color:var(--text-secondary,rgba(255,255,255,.55));}
-.vp-ps-img{position:absolute;pointer-events:none;user-select:none;z-index:5;display:none;}
-`;
-
-            const ICON_IMG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>';
-
-            let fr = null, doc = null, img = null, cfg = { x: 0, y: 0, w: 400, o: 50 };
-            let block = null;
-
-            function store(k, v) { try { GM_setValue('vpStencil_' + k, v); } catch (e) { } }
-            function load(k, d) { try { const v = GM_getValue('vpStencil_' + k, d); return v === undefined ? d : v; } catch (e) { return d; } }
-
-            function applyImg() {
-                if (!img) return;
-                img.style.left = cfg.x + 'px';
-                img.style.top = cfg.y + 'px';
-                img.style.width = cfg.w + 'px';
-                img.style.opacity = cfg.o / 100;
-            }
-
-            function saveCfg() {
-                ['x', 'y', 'w', 'o'].forEach(k => store(k, cfg[k]));
-            }
-
-            function makeRow(label, key, min, max, step, unit) {
-                const row = doc.createElement('div');
-                row.className = 'vp-ps-row';
-                row.innerHTML = '<label>' + label + '</label><input type="range" min="' + min + '" max="' + max + '" step="' + step + '"><b></b>';
-                const inp = row.querySelector('input'), out = row.querySelector('b');
-                inp.value = cfg[key];
-                out.textContent = cfg[key] + (unit || '');
-                inp.addEventListener('input', () => {
-                    cfg[key] = +inp.value;
-                    out.textContent = inp.value + (unit || '');
-                    applyImg(); saveCfg();
-                });
-                return row;
-            }
-
-            function buildBlock() {
-                block = doc.createElement('div');
-                block.className = 'vp-ps-block';
-                block.innerHTML = '<div class="vp-ps-title">' + ICON_IMG + '<span>Подложка для обводки</span></div>'
-                    + '<div class="vp-ps-btns">'
-                    + '<button type="button" class="vp-ps-btn vp-ps-pick">Загрузить картинку</button>'
-                    + '<button type="button" class="vp-ps-btn vp-ps-show">Настроить</button>'
-                    + '<button type="button" class="vp-ps-btn vp-ps-clear">Убрать</button>'
-                    + '</div>'
-                    + '<div class="vp-ps-rows"></div>'
-                    + '<div class="vp-ps-hint">Наложи картинку на тыкву и обводи по ней. Клики проходят сквозь подложку.</div>';
-                const rows = block.querySelector('.vp-ps-rows');
-                rows.appendChild(makeRow('X', 'x', -500, 2000, 1, 'px'));
-                rows.appendChild(makeRow('Y', 'y', -500, 1500, 1, 'px'));
-                rows.appendChild(makeRow('Размер', 'w', 40, 2000, 5, 'px'));
-                rows.appendChild(makeRow('Прозрачность', 'o', 0, 100, 5, '%'));
-
-                block.querySelector('.vp-ps-pick').addEventListener('click', pickFile, true);
-                block.querySelector('.vp-ps-show').addEventListener('click', () => {
-                    rows.classList.toggle('vp-ps-show');
-                    block.querySelector('.vp-ps-show').classList.toggle('vp-ps-on', rows.classList.contains('vp-ps-show'));
-                }, true);
-                block.querySelector('.vp-ps-clear').addEventListener('click', clearImg, true);
-                return block;
-            }
-
-            function pickFile() {
-                const inp = doc.createElement('input');
-                inp.type = 'file';
-                inp.accept = 'image/*';
-                inp.onchange = () => {
-                    const f = inp.files[0];
-                    if (!f) return;
-                    setImage(URL.createObjectURL(f));
-                };
-                inp.click();
-            }
-
-            function setImage(src) {
-                if (!doc || !doc.body) return;
-                if (img && img.parentNode) { try { URL.revokeObjectURL(img.src); } catch (e) { } img.remove(); }
-                img = doc.createElement('img');
-                img.className = 'vp-ps-img';
-                img.src = src;
-                img.draggable = false;
-                img.style.display = 'block';
-                doc.body.appendChild(img);
-                applyImg();
-            }
-
-            function clearImg() {
-                if (img) { try { URL.revokeObjectURL(img.src); } catch (e) { } img.remove(); img = null; }
-            }
-
-            function findSaveButton(d) {
-                const btns = d.querySelectorAll('button');
-                for (const b of btns) {
-                    const t = (b.textContent || '').trim();
-                    if (/^\s*сохранить\s+тыкву/i.test(t)) return b;
-                }
-                return null;
-            }
-
-            function install() {
-                if (!/\/event\//.test(location.pathname)) return;
-                for (const f of document.querySelectorAll('iframe')) {
-                    let d = null;
-                    try { d = f.contentDocument; } catch (e) { continue; }
-                    if (!d || !d.body) continue;
-                    const save = findSaveButton(d);
-                    if (!save) continue;
-                    fr = f; doc = d;
-                    if (!d.getElementById('vp-ps-css')) {
-                        const st = d.createElement('style');
-                        st.id = 'vp-ps-css';
-                        st.textContent = CSS;
-                        d.head.appendChild(st);
-                    }
-                    const old = d.querySelector('.vp-ps-block');
-                    if (old) {
-                        if (old.previousElementSibling !== save) save.parentNode.insertBefore(old, save.nextSibling);
-                        return;
-                    }
-                    cfg.x = +load('x', 100); cfg.y = +load('y', 100);
-                    cfg.w = +load('w', 400); cfg.o = +load('o', 50);
-                    const bl = buildBlock();
-                    save.parentNode.insertBefore(bl, save.nextSibling);
-                    return;
-                }
-            }
-
-            setInterval(install, 1200);
-            onDom(install);
-        })();
-        (function pumpkinViewer() {
-            const CSS = `
-.vp-pv-overlay{position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;background:rgba(10,8,16,.75);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:0;transition:opacity .18s ease;pointer-events:auto;}
-.vp-pv-overlay.vp-pv-on{opacity:1;}
-.vp-pv-card{position:relative;display:flex;flex-direction:column;align-items:center;gap:14px;padding:24px 28px 22px;border-radius:24px;background:var(--block-bg,#1a1626);border:1px solid var(--border-color,rgba(255,255,255,.14));box-shadow:0 20px 60px rgba(0,0,0,.55);transform:scale(.92);transition:transform .18s ease;}
-.vp-pv-overlay.vp-pv-on .vp-pv-card{transform:scale(1);}
-.vp-pv-close{position:absolute;top:10px;right:10px;width:32px;height:32px;border:0;border-radius:50%;background:rgba(255,255,255,.08);color:var(--text-primary,#fff);font-size:20px;line-height:1;cursor:pointer;transition:background .15s;}
-.vp-pv-close:hover{background:rgba(255,255,255,.18);}
-.vp-pv-pic{width:min(70vw,min(70vh,420px));aspect-ratio:1/1;}
-.vp-pv-pic svg{width:100%;height:100%;display:block;overflow:visible;filter:drop-shadow(0 8px 28px rgba(255,140,40,.35));}
-.vp-pv-name{font:600 16px/1.2 inherit;color:var(--text-primary,#fff);text-align:center;max-width:420px;}
-.vp-pv-hint{font:12px/1.3 inherit;color:var(--text-secondary,rgba(255,255,255,.5));text-align:center;}
-.vp-pv-actions{display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;justify-content:center;}
-.vp-pv-btn{border:1px solid var(--border-color,rgba(255,255,255,.15));border-radius:10px;padding:8px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;background:var(--glass-bg,rgba(128,128,128,.2));color:var(--text-primary,#fff);transition:background .15s;}
-.vp-pv-btn:hover{background:rgba(128,128,128,.32);}
-.vp-pv-share{background:var(--vp-accent,#ff7b3a);border-color:transparent;}
-.vp-pv-share:hover{filter:brightness(1.1);}
-.vp-pv-toast{position:fixed;left:50%;bottom:32px;transform:translateX(-50%) translateY(20px);z-index:2147483647;display:flex;flex-direction:column;gap:3px;padding:12px 18px;border-radius:14px;background:var(--block-bg,rgba(20,20,30,.94));border:1px solid var(--border-color,rgba(255,255,255,.14));color:var(--text-primary,#fff);box-shadow:0 8px 28px rgba(0,0,0,.5);font:inherit;opacity:0;transition:opacity .25s ease,transform .25s ease;pointer-events:none;max-width:min(420px,calc(100vw - 40px));}
-.vp-pv-toast.vp-pv-toast-on{opacity:1;transform:translateX(-50%) translateY(0);}
-.vp-pv-toast b{font-size:14px;font-weight:600;}
-.vp-pv-toast span{font-size:12.5px;color:var(--text-secondary,rgba(255,255,255,.55));}
-`;
-
-            let overlay = null;
-
-            function showToast(title, sub) {
-                const t = document.createElement('div');
-                t.className = 'vp-pv-toast';
-                t.innerHTML = '<b>' + title + '</b>' + (sub ? '<span>' + sub + '</span>' : '');
-                document.body.appendChild(t);
-                requestAnimationFrame(() => t.classList.add('vp-pv-toast-on'));
-                setTimeout(() => {
-                    t.classList.remove('vp-pv-toast-on');
-                    setTimeout(() => { if (t.parentNode) t.remove(); }, 300);
-                }, 2400);
-            }
-
-            function close() {
-                if (!overlay) return;
-                overlay.classList.remove('vp-pv-on');
-                const o = overlay;
-                overlay = null;
-                setTimeout(() => { if (o.parentNode) o.remove(); }, 200);
-                document.removeEventListener('keydown', onKey, true);
-            }
-            function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
-
-            function open(pumpkinBtn) {
-                if (overlay) return;
-                const svgSrc = pumpkinBtn.querySelector('svg');
-                if (!svgSrc) return;
-                const name = (pumpkinBtn.getAttribute('aria-label') || '').replace(/^Тыква:\s*/i, '') || '';
-                if (!document.getElementById('vp-pv-css')) {
-                    const st = document.createElement('style');
-                    st.id = 'vp-pv-css';
-                    st.textContent = CSS;
-                    document.head.appendChild(st);
-                }
-                const ov = document.createElement('div');
-                ov.className = 'vp-pv-overlay';
-                ov.addEventListener('click', e => { if (e.target === ov) close(); }, true);
-
-                const card = document.createElement('div');
-                card.className = 'vp-pv-card';
-
-                const xb = document.createElement('button');
-                xb.type = 'button';
-                xb.className = 'vp-pv-close';
-                xb.setAttribute('aria-label', 'Закрыть');
-                xb.textContent = '\u00d7';
-                xb.addEventListener('click', e => { e.preventDefault(); close(); }, true);
-                card.appendChild(xb);
-
-                const pic = document.createElement('div');
-                pic.className = 'vp-pv-pic';
-                pic.appendChild(svgSrc.cloneNode(true));
-                card.appendChild(pic);
-
-                if (name) {
-                    const nm = document.createElement('div');
-                    nm.className = 'vp-pv-name';
-                    nm.textContent = name;
-                    card.appendChild(nm);
-                }
-                const thanks = (svgSrc.querySelector('title') || {}).textContent || '';
-                if (/спасибо от/i.test(thanks)) {
-                    const tn = document.createElement('div');
-                    tn.className = 'vp-pv-hint';
-                    tn.textContent = 'Фонарь светит: ' + thanks.trim();
-                    card.appendChild(tn);
-                }
-                const actions = document.createElement('div');
-                actions.className = 'vp-pv-actions';
-                const share = document.createElement('button');
-                share.type = 'button'; share.className = 'vp-pv-btn vp-pv-share'; share.textContent = 'Поделиться';
-                share.addEventListener('click', async e => {
-                    e.preventDefault(); e.stopPropagation();
-                    const url = location.href;
-                    if (navigator.share) { try { await navigator.share({ title: name || 'Тыква', url: url }); } catch (er) { } }
-                    else { try { await navigator.clipboard.writeText(url); } catch (er) { } }
-                }, true);
-                const copy = document.createElement('button');
-                copy.type = 'button'; copy.className = 'vp-pv-btn'; copy.textContent = 'Скопировать';
-                copy.addEventListener('click', async e => {
-                    e.preventDefault(); e.stopPropagation();
-                    try {
-                        window.__vpPvPass = true;
-                        const btn = document.querySelector('[data-halloween-pumpkin]');
-                        if (btn) btn.click();
-                        window.__vpPvPass = false;
-
-                        const findNative = () => {
-                            const dialogs = [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')];
-                            for (const d of dialogs) {
-                                const lab = (d.getAttribute('aria-label') || '');
-                                if (!/^Тыква:/i.test(lab)) continue;
-                                const btns = [...d.querySelectorAll('button')];
-                                const copyB = btns.find(b => /^Скопировать$/i.test((b.textContent || '').trim()));
-                                const closeB = btns.find(b => /^Закрыть$/i.test((b.textContent || '').trim()));
-                                return { d, copyB, closeB };
-                            }
-                            return null;
-                        };
-                        let nat = null;
-                        for (let n = 0; n < 40 && !nat; n++) {
-                            await new Promise(r => setTimeout(r, 50));
-                            nat = findNative();
-                        }
-                        if (!nat || !nat.copyB) {
-                            showToast('Не удалось найти кнопку', 'Попробуй ещё раз');
-                            if (nat && nat.closeB) nat.closeB.click();
-                            return;
-                        }
-
-                        nat.copyB.click();
-
-                        await new Promise(r => setTimeout(r, 400));
-
-                        if (nat.closeB) nat.closeB.click();
-
-                        showToast('Картинка скопирована', 'Вставь её в пост или в чат');
-                        copy.textContent = 'Готово';
-                        setTimeout(() => copy.textContent = 'Скопировать', 1200);
-                    } catch (er) {
-                        logErr('охота: копия тыквы', er);
-                        showToast('Ошибка', 'Не удалось скопировать');
-                    }
-                }, true);
-                const cl = document.createElement('button');
-                cl.type = 'button'; cl.className = 'vp-pv-btn'; cl.textContent = 'Закрыть';
-                cl.addEventListener('click', e => { e.preventDefault(); close(); }, true);
-                actions.append(share, copy, cl);
-                card.appendChild(actions);
-                const hint = document.createElement('div');
-                hint.className = 'vp-pv-hint';
-                hint.textContent = 'Или нажми в любом месте или Esc, чтобы закрыть';
-                card.appendChild(hint);
-
-                ov.appendChild(card);
-                document.body.appendChild(ov);
-                overlay = ov;
-                requestAnimationFrame(() => ov.classList.add('vp-pv-on'));
-                document.addEventListener('keydown', onKey, true);
-            }
-
-            function isSmall(btn) {
-                const r = btn.getBoundingClientRect();
-                return r.width > 0 && r.width < 40;
-            }
-            document.addEventListener('click', e => {
-                const btn = e.target && e.target.closest && e.target.closest('[data-halloween-pumpkin]');
-                if (!btn || !isSmall(btn)) return;
-                if (window.__vpPvPass) return;
-                e.preventDefault();
-                e.stopImmediatePropagation();
-                open(btn);
-            }, true);
-
-            document.addEventListener('keydown', e => {
-                if (e.key !== 'Enter' && e.key !== ' ') return;
-                const btn = e.target && e.target.closest && e.target.closest('[data-halloween-pumpkin]');
-                if (!btn || !isSmall(btn)) return;
-                e.preventDefault();
-                e.stopImmediatePropagation();
-                open(btn);
-            }, true);
-        })();
         const gamesList = rail.querySelector('.vp-games-list');
         const bestText = g => {
+            if (g.free) return 'без счёта';
             const v = GM_getValue(acctKey(g.best), 0);
             if (!v) return 'не играл';
             return g.id === 'mines' ? `лучшее ${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}` : `рекорд ${v}`;
@@ -20078,11 +19338,16 @@ var __vpBannerAuto = (() => {
         .vp-games-win { display: flex; flex-direction: column; gap: 12px; width: min(760px, 100%); height: min(900px, 100%); max-height: 100%; padding: 16px; border-radius: 32px; box-sizing: border-box;
             background: var(--block-bg); color: var(--text-primary, #fff); border: 1px solid var(--border-color, rgba(255, 255, 255, .12));
             box-shadow: 0 24px 64px rgba(0, 0, 0, .5); overflow: auto; }
-        .vp-games-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .vp-games-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 10px; }
+        .vp-games-head .vp-games-tabs { grid-area: 1 / 1; justify-self: start; max-width: 100%; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+        .vp-games-head .vp-games-tabs::-webkit-scrollbar { display: none; }
+        .vp-games-head .vp-games-x { grid-area: 1 / 2; }
+        .vp-games-head .vp-games-score { grid-area: 2 / 1 / 3 / 3; margin: 0; text-align: center; }
+        .vp-games-head .vp-games-score:empty { display: none; }
         @media (max-width: 520px) { .vp-games-win { padding: 12px; border-radius: 26px; } .vp-games-tab { padding: 7px 10px; }
-            .vp-games-score { order: 3; flex: 1 0 100%; margin: 0; text-align: center; } .vp-g-side { min-width: 70px; font-size: 13px; } }
-        .vp-games-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 9999px; background: var(--glass-bg, rgba(35, 35, 35, .6)); }
-        .vp-games-tab { border: 0; border-radius: 9999px; padding: 7px 14px; cursor: pointer; background: none; font: inherit; font-size: 14px; font-weight: 500;
+            .vp-g-side { min-width: 70px; font-size: 13px; } }
+        .vp-games-tabs { display: flex; flex: 0 0 auto; gap: 4px; padding: 4px; border-radius: 9999px; background: var(--glass-bg, rgba(35, 35, 35, .6)); }
+        .vp-games-tab { flex: 0 0 auto; white-space: nowrap; border: 0; border-radius: 9999px; padding: 7px 14px; cursor: pointer; background: none; font: inherit; font-size: 14px; font-weight: 500;
             color: var(--text-secondary); }
         .vp-games-tab.vp-on { color: var(--text-primary, #fff); background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 1px var(--vp-accent); }
         .vp-games-score { margin-left: auto; font-size: 14px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
@@ -20545,6 +19810,576 @@ var __vpBannerAuto = (() => {
             return { el, key, pause, resize, repTo, repRes: () => ({ score, done: over }), destroy() { on = false; cancelAnimationFrame(raf); } };
         }
 
+        const SAND_W = 240, SAND_H = 180, SAND_PW = 180, SAND_PH = 240, SAND_CS = 12;
+        const SAND_MATS = [
+            { id: 1, name: 'Песок', rgb: [226, 190, 96], hot: '1' },
+            { id: 2, name: 'Вода', rgb: [48, 112, 232], hot: '2' },
+            { id: 3, name: 'Камень', rgb: [122, 122, 132], hot: '3' },
+            { id: 4, name: 'Масло', rgb: [112, 72, 30], hot: '4' },
+            { id: 5, name: 'Огонь', rgb: [255, 130, 20], hot: '5' },
+            { id: 6, name: 'Растение', rgb: [52, 172, 72], hot: '6' },
+            { id: 7, name: 'Лава', rgb: [242, 72, 20], hot: '7' },
+            { id: 8, name: 'Кислота', rgb: [150, 240, 62], hot: '8' },
+            { id: 16, name: 'Яд', rgb: [160, 70, 210], hot: '9' },
+            { id: 15, name: 'Пропан', rgb: [110, 190, 175], hot: '' },
+            { id: 17, name: 'Динамит', rgb: [196, 44, 44], hot: '' },
+            { id: 18, name: 'Фитиль', rgb: [168, 138, 92], hot: '' },
+            { id: 11, name: 'Металл', rgb: [150, 162, 178], hot: '' },
+            { id: 19, name: 'Стекло', rgb: [150, 215, 238], hot: '' },
+            { id: 21, name: 'Атом-бомба', rgb: [150, 162, 44], hot: '' },
+            { id: 22, name: 'Чёрн. дыра', rgb: [38, 18, 78], hot: '' },
+            { id: 0, name: 'Ластик', rgb: [30, 30, 36], hot: '0' }
+        ];
+        // 9 пар, 10 дым, 12 горящий фитиль, 13 жидкий металл, 14 жидкое стекло — их нельзя нарисовать, они получаются сами
+        const SAND_STEAM = 9, SAND_SMOKE = 10, SAND_FUSE_LIT = 12, SAND_MELT_METAL = 13, SAND_MELT_GLASS = 14, SAND_PROPANE = 15, SAND_POISON = 16, SAND_DYNAMITE = 17, SAND_FUSE = 18, SAND_METAL = 11, SAND_GLASS = 19, SAND_SICK = 20, SAND_NUKE = 21, SAND_HOLE = 22;
+        const SAND_RGB = { 9: [196, 208, 226], 10: [88, 88, 96], 12: [255, 200, 90], 13: [255, 175, 80], 14: [255, 205, 130] };
+        SAND_MATS.forEach(m => { SAND_RGB[m.id] = m.rgb; });
+        SAND_RGB[15] = [84, 150, 138];
+SAND_RGB[20] = [60, 170, 70];
+        const SAND_DENS = { 1: 5, 2: 3, 4: 2, 7: 4, 8: 3, 13: 6, 14: 5, 16: 3 };
+        const SAND_SPREAD = { 2: 4, 4: 3, 7: 1, 8: 3, 13: 1, 14: 1, 16: 3 };
+        const SAND_IGN = { 4: .5, 6: .12, 15: 1, 17: .35, 18: .4, 20: .12, 21: .35 };
+        const SAND_SOLID = [3, 6, 11, 17, 18, 19, 21];
+const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
+        const SAND_TONES = 32;
+        let sandCols = null, sandCssDone = false;
+        function sandColors() {
+            if (sandCols) return sandCols;
+            const pack = (r, g, b) => ((255 << 24) | (Math.min(255, b) << 16) | (Math.min(255, g) << 8) | Math.min(255, r)) >>> 0;
+            sandCols = [];
+            for (let k = 0; k <= 22; k++) {
+                const c = SAND_RGB[k] || [0, 0, 0], a = new Uint32Array(SAND_TONES);
+                for (let q = 0; q < SAND_TONES; q++) {
+                    const f = 0.82 + q / SAND_TONES * 0.36;
+                    a[q] = k === 7 ? pack(c[0] * (0.9 + q / 300), c[1] * f + 20, c[2] * f) : pack(c[0] * f, c[1] * f, c[2] * f);
+                }
+                sandCols.push(a);
+            }
+            sandCols.pack = pack;
+            return sandCols;
+        }
+        function sandGame(setScore) {
+            if (!sandCssDone) {
+                sandCssDone = true;
+                addCss(`
+                .vp-sand { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; min-width: 0; }
+                .vp-sand-cv { display: block; border-radius: 22px; background: #05060a; touch-action: none; outline: none; cursor: crosshair; image-rendering: pixelated;
+                    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06), 0 8px 26px rgba(0, 0, 0, .35); }
+                .vp-sand-pal { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 6px; width: 100%; max-width: 720px; }
+                .vp-sand-mat { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 10px 3px 8px; border: 0; border-radius: 16px; cursor: pointer;
+                    font: inherit; font-size: 12px; font-weight: 600; color: var(--text-primary, #fff); background: var(--bg-hover, rgba(255, 255, 255, .07));
+                    transition: background-color .15s, transform .12s, box-shadow .15s; -webkit-tap-highlight-color: transparent; }
+                .vp-sand-mat:hover { background: rgba(255, 255, 255, .12); }
+                .vp-sand-mat:active { transform: scale(.95); }
+                .vp-sand-mat.vp-on { background: rgba(255, 255, 255, .14); box-shadow: inset 0 0 0 2px var(--vp-accent); }
+                .vp-sand-mat i { display: block; width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto;
+                    box-shadow: inset 0 -4px 6px rgba(0, 0, 0, .35), inset 0 2px 3px rgba(255, 255, 255, .4), 0 2px 6px rgba(0, 0, 0, .3); }
+                .vp-sand-mat span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .vp-sand-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; max-width: 720px; }
+                .vp-sand-size { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+                .vp-sand-size input { flex: 1 1 auto; min-width: 70px; height: 30px; margin: 0; accent-color: var(--vp-accent); cursor: pointer; }
+                .vp-sand-pre { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; flex: 0 0 auto; }
+                .vp-sand-pre b { display: block; border-radius: 50%; background: var(--text-primary, #fff); opacity: .85; }
+                .vp-sand-acts { display: flex; gap: 8px; flex: 0 0 auto; }
+                .vp-sand-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 42px; padding: 0 18px; border: 0; border-radius: 9999px; cursor: pointer;
+                    font: inherit; font-size: 14px; font-weight: 600; color: var(--text-primary, #fff); background: var(--bg-hover, rgba(255, 255, 255, .08));
+                    transition: background-color .15s, transform .12s; -webkit-tap-highlight-color: transparent; }
+                .vp-sand-btn:hover { background: rgba(255, 255, 255, .14); }
+                .vp-sand-btn:active { transform: scale(.96); }
+                @media (max-width: 700px) {
+                    .vp-sand { gap: 10px; }
+                    .vp-sand-pal { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+                    .vp-sand-mat { padding: 9px 2px 7px; font-size: 11.5px; }
+                    .vp-sand-row { flex-wrap: wrap; }
+                    .vp-sand-size { flex: 1 0 100%; }
+                    .vp-sand-acts { flex: 1 0 100%; }
+                    .vp-sand-btn { flex: 1 1 0; height: 46px; }
+                }
+                `);
+            }
+            const portrait = innerWidth < 700 || innerHeight > innerWidth * 1.15;
+            const W = portrait ? SAND_PW : SAND_W, H = portrait ? SAND_PH : SAND_H, N = W * H;
+            const CS = SAND_CS, CW = W / CS, CH = H / CS;
+            const t = new Uint8Array(N), tn = new Uint8Array(N), life = new Uint8Array(N), stamp = new Uint8Array(N);
+            let act = new Uint8Array(CW * CH).fill(1), nxt = new Uint8Array(CW * CH);
+            const el = document.createElement('div');
+            el.className = 'vp-sand';
+            const cv = document.createElement('canvas');
+            cv.className = 'vp-sand-cv'; cv.width = W; cv.height = H; cv.tabIndex = 0;
+            const pal = document.createElement('div');
+            pal.className = 'vp-sand-pal';
+            let mat = +GM_getValue('vp_sand_mat', 1), radius = Math.max(1, Math.min(10, +GM_getValue('vp_sand_r', 3) || 3)), paused = false;
+            if (!SAND_MATS.some(m => m.id === mat)) mat = 1;
+            const matBtns = SAND_MATS.map(m => {
+                const b = document.createElement('button');
+                b.type = 'button'; b.className = 'vp-sand-mat'; b.dataset.m = m.id;
+                const dot = document.createElement('i');
+                dot.style.background = `radial-gradient(circle at 35% 30%, rgb(${m.rgb.map(c => Math.min(255, c + 45)).join(',')}), rgb(${m.rgb.join(',')}))`;
+                const nm = document.createElement('span');
+                nm.textContent = m.name;
+                b.append(dot, nm);
+                b.addEventListener('click', () => pick(m.id));
+                pal.appendChild(b);
+                return b;
+            });
+            const row = document.createElement('div');
+            row.className = 'vp-sand-row';
+            const size = document.createElement('label');
+            size.className = 'vp-sand-size';
+            const range = document.createElement('input');
+            range.type = 'range'; range.min = 1; range.max = 10; range.value = radius;
+            const pre = document.createElement('span');
+            pre.className = 'vp-sand-pre';
+            pre.innerHTML = '<b></b>';
+            const paintPre = () => { const d = 4 + radius * 2.6 + 'px'; pre.firstChild.style.width = d; pre.firstChild.style.height = d; };
+            paintPre();
+            range.addEventListener('input', () => { radius = +range.value; GM_setValue('vp_sand_r', radius); paintPre(); });
+            size.append('Кисть', range, pre);
+            const acts = document.createElement('div');
+            acts.className = 'vp-sand-acts';
+            const pauseBtn = document.createElement('button');
+            pauseBtn.type = 'button'; pauseBtn.className = 'vp-sand-btn';
+            pauseBtn.addEventListener('click', () => setPause(!paused));
+            const clearBtn = document.createElement('button');
+            clearBtn.type = 'button'; clearBtn.className = 'vp-sand-btn';
+            clearBtn.innerHTML = svgIcon('<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/>', 18) + '<span>Очистить</span>';
+            clearBtn.addEventListener('click', clear);
+            acts.append(pauseBtn, clearBtn);
+            row.append(size, acts);
+            const hint = document.createElement('div');
+            hint.className = 'vp-games-hint';
+            hint.textContent = portrait ? 'Рисуй пальцем · выбери материал выше' : 'Рисуй мышкой · цифры — материал · пробел — пауза · C — очистить';
+            el.append(cv, pal, row, hint);
+            function pick(id) {
+                mat = id; GM_setValue('vp_sand_mat', id);
+                matBtns.forEach(b => b.classList.toggle('vp-on', +b.dataset.m === id));
+            }
+            pick(mat);
+            function setPause(v) {
+                paused = v;
+                pauseBtn.innerHTML = svgIcon(v ? '<path d="m8 5 11 7-11 7z"/>' : '<path d="M8 5v14M16 5v14"/>', 18) + '<span>' + (v ? 'Дальше' : 'Пауза') + '</span>';
+            }
+            setPause(false);
+            let dirty = true;
+            function clear() { t.fill(0); life.fill(0); act.fill(1); holes.length = 0; blasts.length = 0; flash = 0; cv.style.transform = ''; dirty = true; }
+
+            const g = cv.getContext('2d');
+            const img = g.createImageData(W, H);
+            const px = new Uint32Array(img.data.buffer);
+            const COL = sandColors(), pack = COL.pack;
+            const BG = pack(5, 6, 10);
+            function draw() {
+                for (let i = 0; i < N; i++) {
+                    const k = t[i];
+                    if (!k) px[i] = BG;
+                    else if (k === 5) { const l = life[i] / 40; px[i] = pack(255, 70 + 150 * l, 10 + 40 * l); }
+                    else if (k === SAND_SICK) { const l = Math.min(1, life[i] / 100); px[i] = pack(150 - 90 * l, 110 + 60 * l, 40 + 30 * l); }
+                    else if (k === SAND_FUSE_LIT) { const l = life[i] / 24; px[i] = pack(255, 120 + 120 * l, 40 + 60 * l); }
+                    else if (k === SAND_METAL || k === SAND_GLASS) {
+                        const c = SAND_RGB[k], f = 0.82 + (tn[i] >> 3) / 32 * 0.36, h = life[i] * (k === SAND_METAL ? .45 : .9);
+                        px[i] = pack(c[0] * f + h, c[1] * f - h * .45, c[2] * f - h * .75);
+                    }
+                    else px[i] = COL[k][tn[i] >> 3];
+                }
+                g.putImageData(img, 0, 0);
+                for (const h of holes) {
+                    const cr = holeR(h);
+                    g.lineWidth = 1.4;
+                    g.strokeStyle = 'rgba(255, 190, 90, .95)';
+                    g.beginPath(); g.arc(h.x + .5, h.y + .5, cr + 1.6, 0, 6.2832); g.stroke();
+                    g.lineWidth = 1;
+                    g.strokeStyle = 'rgba(170, 110, 255, .45)';
+                    g.beginPath(); g.arc(h.x + .5, h.y + .5, cr + 3.4, 0, 6.2832); g.stroke();
+                }
+                if (flash > 0) { g.fillStyle = 'rgba(255, 255, 240, ' + Math.min(1, flash * .9) + ')'; g.fillRect(0, 0, W, H); }
+            }
+
+            // Куски поля 12x12: тот, где ничего не двигалось, спит. Спящий кусок не считается, поэтому полное поле застывшего песка почти ничего не стоит.
+            let fr = 1;
+            const rnd = Math.random;
+            const chunkOf = new Uint16Array(N);
+            for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) chunkOf[y * W + x] = ((y / CS) | 0) * CW + ((x / CS) | 0);
+            const wake = i => {
+                const c = chunkOf[i], cx = c % CW, cy = (c / CW) | 0;
+                for (let dy = cy > 0 ? -1 : 0; dy <= (cy < CH - 1 ? 1 : 0); dy++) for (let dx = cx > 0 ? -1 : 0; dx <= (cx < CW - 1 ? 1 : 0); dx++) nxt[c + dy * CW + dx] = 1;
+            };
+            const sw = (i, j) => {
+                const a = t[i], b = tn[i], c = life[i];
+                t[i] = t[j]; tn[i] = tn[j]; life[i] = life[j];
+                t[j] = a; tn[j] = b; life[j] = c;
+                stamp[i] = fr; stamp[j] = fr;
+                wake(i); wake(j);
+            };
+            const put = (i, k, l) => { t[i] = k; tn[i] = rnd() * 255 | 0; life[i] = l || 0; stamp[i] = fr; wake(i); };
+            const gone = i => { t[i] = 0; life[i] = 0; wake(i); };
+            const kind = (x, y) => x < 0 || y < 0 || x >= W || y >= H ? -1 : t[y * W + x];
+            const lighter = (k, me) => k === 0 || k === SAND_STEAM || k === SAND_SMOKE || k === SAND_PROPANE || (SAND_DENS[k] !== undefined && SAND_DENS[k] < SAND_DENS[me]);
+            const NB = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+            function fall(i, x, y, me) {
+                if (y + 1 >= H) return false;
+                const below = i + W;
+                if (lighter(t[below], me)) { sw(i, below); return true; }
+                const d = rnd() < .5 ? -1 : 1;
+                for (let q = 0; q < 2; q++) {
+                    const nx = x + (q ? -d : d);
+                    if (nx < 0 || nx >= W) continue;
+                    const s = nx - x;
+                    if (lighter(t[below + s], me) && lighter(t[i + s], me)) { sw(i, below + s); return true; }
+                }
+                return false;
+            }
+            function slide(i, x, y, me, d) {
+                const n = SAND_SPREAD[me] || 1;
+                let cx = x, ci = i;
+                for (let s = 0; s < n; s++) {
+                    const nx = cx + d;
+                    if (nx < 0 || nx >= W) break;
+                    const j = y * W + nx;
+                    if (!lighter(t[j], me)) break;
+                    sw(ci, j); cx = nx; ci = j;
+                }
+                return cx !== x;
+            }
+            function spread(i, x, y, me) {
+                const d = rnd() < .5 ? -1 : 1;
+                return slide(i, x, y, me, d) || slide(i, x, y, me, -d);
+            }
+            const FIRE_L = () => 25 + rnd() * 20 | 0;
+            // огонь/лава/расплав поджигают соседа: масло, растение, пропан, фитиль, динамит
+            function lightUp(x, y, mult) {
+                const k = kind(x, y), c = SAND_IGN[k];
+                if (!c || rnd() >= c * (mult || 1)) return;
+                const j = y * W + x;
+                if (k === SAND_FUSE) put(j, SAND_FUSE_LIT, 24);
+                else if (k === SAND_DYNAMITE) explode(x, y, 7);
+                else if (k === SAND_NUKE) nuke(x, y);
+                else if (k === SAND_PROPANE) put(j, 5, 8 + rnd() * 10 | 0);
+                else put(j, 5, FIRE_L());
+            }
+            // взрыв: камень, металл и стекло держатся дальше от центра, горючее загорается, остальное сметает
+            function explode(x, y, r) {
+                put(y * W + x, 5, 40);
+                for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+                    const d2 = dx * dx + dy * dy;
+                    if (d2 > r * r || (dx === 0 && dy === 0)) continue;
+                    const nx = x + dx, ny = y + dy;
+                    if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+                    const j = ny * W + nx, kk = t[j], d = Math.sqrt(d2) / r;
+                    if (kk === 3 || kk === SAND_METAL || kk === SAND_GLASS) { if (d > .5 || rnd() < .5) continue; }
+                    if (kk === 0) { if (rnd() < .45 * (1 - d * .5)) put(j, 5, 8 + rnd() * 18 | 0); }
+                    else if (kk === SAND_DYNAMITE || kk === SAND_NUKE || kk === 4 || kk === 6 || kk === SAND_SICK || kk === SAND_PROPANE || kk === SAND_FUSE || kk === SAND_FUSE_LIT) put(j, 5, 10 + rnd() * 20 | 0);
+                    else if (rnd() < .75) { put(j, rnd() < .5 ? 0 : SAND_SMOKE, 20 + rnd() * 30 | 0); if (t[j] === 0) life[j] = 0; }
+                }
+            }
+            // атомный взрыв: ударная волна расходится кольцом и сметает всё, даже камень и металл; вспышка и тряска
+            const blasts = [], holes = [];
+            let flash = 0;
+            function nuke(x, y) {
+                put(y * W + x, 5, 40);
+                blasts.push({ x, y, r: 0, max: Math.min(38, Math.floor(Math.min(W, H) * .22)) });
+                flash = 1;
+            }
+            function blastStep() {
+                for (let b = blasts.length - 1; b >= 0; b--) {
+                    const bl = blasts[b];
+                    bl.r += 2.2;
+                    const lo = Math.max(0, bl.r - 3.4), hi = bl.r, r2l = lo * lo, r2h = hi * hi;
+                    const x0 = Math.max(0, Math.floor(bl.x - hi)), x1 = Math.min(W - 1, Math.ceil(bl.x + hi)), y0 = Math.max(0, Math.floor(bl.y - hi)), y1 = Math.min(H - 1, Math.ceil(bl.y + hi));
+                    for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) {
+                        const d2 = (xx - bl.x) * (xx - bl.x) + (yy - bl.y) * (yy - bl.y);
+                        if (d2 > r2h || d2 < r2l) continue;
+                        const j = yy * W + xx, q = rnd();
+                        if (q < .62) put(j, 5, 12 + rnd() * 22 | 0);
+                        else if (q < .8) put(j, SAND_SMOKE, 30 + rnd() * 40 | 0);
+                        else if (t[j]) gone(j);
+                    }
+                    if (bl.r >= bl.max) blasts.splice(b, 1);
+                }
+            }
+            const holeR = h => Math.min(10, 3 + Math.floor(h.mass / 120));
+            function addHole(x, y) {
+                if (holes.length >= 4 || x < 0 || y < 0 || x >= W || y >= H) return;
+                holes.push({ x, y, mass: 0 });
+                put(y * W + x, SAND_HOLE, 0);
+                dirty = true;
+            }
+            // дыра втягивает всё подвижное в радиусе и съедает то, что дошло до её края; растёт от съеденного
+            function holesStep() {
+                for (let h = holes.length - 1; h >= 0; h--) {
+                    const ho = holes[h];
+                    if (t[ho.y * W + ho.x] !== SAND_HOLE) { holes.splice(h, 1); continue; }
+                    const cr = holeR(ho), R = 30 + cr * 2;
+                    wake(ho.y * W + ho.x);
+                    const x0 = Math.max(0, ho.x - R), x1 = Math.min(W - 1, ho.x + R), y0 = Math.max(0, ho.y - R), y1 = Math.min(H - 1, ho.y + R);
+                    for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) {
+                        const dx = ho.x - xx, dy = ho.y - yy, d2 = dx * dx + dy * dy;
+                        if (d2 > R * R) continue;
+                        const j = yy * W + xx, k = t[j];
+                        if (!k || k === SAND_HOLE) {
+                            if (d2 <= cr * cr && k !== SAND_HOLE) put(j, SAND_HOLE, 0);
+                            continue;
+                        }
+                        const d = Math.sqrt(d2);
+                        if (d <= cr + .5) { gone(j); put(j, SAND_HOLE, 0); ho.mass++; continue; }
+                        if (d <= cr + 1.8 && rnd() < .3) { gone(j); ho.mass++; continue; }
+                        if (!SAND_PULL.includes(k) || stamp[j] === fr || rnd() > 1.15 - d / R) continue;
+                        const sx = Math.sign(dx), sy = Math.sign(dy);
+                        for (const [mx, my] of [[sx, sy], [sx, 0], [0, sy]]) {
+                            if (!mx && !my) continue;
+                            const nj = (yy + my) * W + xx + mx;
+                            if (t[nj] === 0 || t[nj] === SAND_STEAM || t[nj] === SAND_SMOKE) { sw(j, nj); break; }
+                        }
+                    }
+                }
+            }
+            const HOT_SRC = nk => nk === 7 || nk === SAND_MELT_METAL || nk === SAND_MELT_GLASS;
+            function cell(i, x, y, k) {
+                if (k === 1) { fall(i, x, y, 1); }
+                else if (k === 2) {
+                    for (const [dx, dy] of NB) { if (kind(x + dx, y + dy) === 5) { put(i, SAND_STEAM, 60 + rnd() * 60 | 0); break; } }
+                    if (t[i] === 2 && !fall(i, x, y, 2)) spread(i, x, y, 2);
+                }
+                else if (k === 4) {
+                    if (!fall(i, x, y, 4)) spread(i, x, y, 4);
+                }
+                else if (k === 5) {
+                    wake(i);
+                    if (life[i] <= 1) { if (rnd() < .5) put(i, SAND_SMOKE, 30 + rnd() * 40 | 0); else gone(i); return; }
+                    life[i]--;
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy);
+                        if (nk === 2) { put(i, SAND_STEAM, 60 + rnd() * 60 | 0); put((y + dy) * W + x + dx, SAND_STEAM, 60 + rnd() * 60 | 0); break; }
+                        if (SAND_IGN[nk]) lightUp(x + dx, y + dy, 1);
+                    }
+                    if (t[i] === 5 && y > 0 && rnd() < .35) {
+                        const j = (y - 1) * W + x + (rnd() * 3 | 0) - 1;
+                        if (x > 0 && x < W - 1 && t[j] === 0) sw(i, j);
+                    }
+                }
+                else if (k === 6) {
+                    wake(i);
+                    if (rnd() < .03) {
+                        const [dx, dy] = NB[rnd() * 4 | 0];
+                        if (kind(x + dx, y + dy) === 2) put((y + dy) * W + x + dx, 6);
+                    }
+                }
+                else if (k === 7) {
+                    wake(i);
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy), j = (y + dy) * W + x + dx;
+                        if (nk === 2) { put(j, SAND_STEAM, 60 + rnd() * 60 | 0); put(i, 3); break; }
+                        if (nk === 1 && rnd() < .05) put(j, SAND_MELT_GLASS, 180);
+                        else if (SAND_IGN[nk]) lightUp(x + dx, y + dy, 1.6);
+                    }
+                    if (t[i] === 7 && rnd() < .5 && !fall(i, x, y, 7)) spread(i, x, y, 7);
+                }
+                else if (k === 8) {
+                    wake(i);
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy);
+                        const p = nk === 1 || nk === 3 || nk === 6 ? .08 : nk === SAND_METAL ? .02 : 0;
+                        if (p && rnd() < p) { gone((y + dy) * W + x + dx); if (rnd() < .5) { gone(i); break; } }
+                    }
+                    if (t[i] === 8 && !fall(i, x, y, 8)) spread(i, x, y, 8);
+                }
+                else if (k === SAND_POISON) {
+                    wake(i);
+                    for (const [dx, dy] of NB) {
+                        if (kind(x + dx, y + dy) === 6 && rnd() < .5) { put((y + dy) * W + x + dx, SAND_SICK, 50 + rnd() * 50 | 0); if (rnd() < .3) { gone(i); break; } }
+                    }
+                    if (t[i] === SAND_POISON && !fall(i, x, y, SAND_POISON)) spread(i, x, y, SAND_POISON);
+                }
+                else if (k === SAND_SICK) {
+                    // больное растение заражает соседние живые клетки и умирает само
+                    wake(i);
+                    if (life[i] <= 1) { if (rnd() < .3) put(i, SAND_SMOKE, 15 + rnd() * 20 | 0); else gone(i); return; }
+                    life[i]--;
+                    for (const [dx, dy] of NB) {
+                        if (kind(x + dx, y + dy) === 6 && rnd() < .15) put((y + dy) * W + x + dx, SAND_SICK, 50 + rnd() * 50 | 0);
+                    }
+                }
+                else if (k === SAND_NUKE) {
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy);
+                        if ((nk === 5 || nk === 7 || nk === SAND_FUSE_LIT || nk === SAND_MELT_METAL || nk === SAND_MELT_GLASS) && rnd() < .35) { nuke(x, y); return; }
+                    }
+                }
+                else if (k === SAND_METAL || k === SAND_GLASS) {
+                    // нагрев копится в life: лава и расплав греют быстро, огонь медленно; убрали источник — остывает
+                    let hot = 0;
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy);
+                        if (HOT_SRC(nk)) hot += 2; else if (nk === 5 && rnd() < .5) hot += 1;
+                    }
+                    if (hot) {
+                        life[i] = Math.min(255, life[i] + hot);
+                        wake(i);
+                        if (life[i] >= (k === SAND_METAL ? 200 : 90)) put(i, k === SAND_METAL ? SAND_MELT_METAL : SAND_MELT_GLASS, k === SAND_METAL ? 255 : 180);
+                    } else if (life[i] > 0) { life[i]--; wake(i); }
+                }
+                else if (k === SAND_MELT_METAL || k === SAND_MELT_GLASS) {
+                    wake(i);
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy), j = (y + dy) * W + x + dx;
+                        if (nk === 2) { put(j, SAND_STEAM, 60 + rnd() * 60 | 0); put(i, k === SAND_MELT_METAL ? SAND_METAL : SAND_GLASS, 0); return; }
+                        if (SAND_IGN[nk]) lightUp(x + dx, y + dy, 1.6);
+                    }
+                    if (life[i] <= 1) { put(i, k === SAND_MELT_METAL ? SAND_METAL : SAND_GLASS, 0); return; }
+                    let warm = false;
+                    for (const [dx, dy] of NB) { const nk = kind(x + dx, y + dy); if (nk === 7 || nk === 5) warm = true; }
+                    if (!warm) life[i]--;
+                    if (rnd() < .5 && !fall(i, x, y, k)) spread(i, x, y, k);
+                }
+                else if (k === SAND_DYNAMITE) {
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy);
+                        if ((nk === 5 || nk === 7 || nk === SAND_FUSE_LIT || nk === SAND_MELT_METAL || nk === SAND_MELT_GLASS) && rnd() < .35) { explode(x, y, 7); return; }
+                    }
+                }
+                else if (k === SAND_FUSE) {
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy);
+                        if ((nk === 5 || nk === 7 || nk === SAND_MELT_METAL || nk === SAND_MELT_GLASS) && rnd() < .4) { put(i, SAND_FUSE_LIT, 24); return; }
+                    }
+                }
+                else if (k === SAND_FUSE_LIT) {
+                    wake(i);
+                    if (life[i] <= 1) { if (rnd() < .4) put(i, SAND_SMOKE, 25 + rnd() * 25 | 0); else gone(i); return; }
+                    life[i]--;
+                    if (life[i] === 12) {
+                        for (const [dx, dy] of NB) {
+                            const nk = kind(x + dx, y + dy);
+                            if (nk === SAND_FUSE) put((y + dy) * W + x + dx, SAND_FUSE_LIT, 24);
+                            else if (nk === SAND_DYNAMITE) explode(x + dx, y + dy, 7);
+                            else if (SAND_IGN[nk]) lightUp(x + dx, y + dy, 1.5);
+                        }
+                    }
+                }
+                else if (k === SAND_PROPANE) {
+                    wake(i);
+                    let gas = 0, burn = false;
+                    for (let dy = -2; dy <= 2 && !burn; dy++) for (let dx = -2; dx <= 2; dx++) {
+                        const nk = kind(x + dx, y + dy);
+                        if (nk === 5 || nk === SAND_FUSE_LIT || nk === 7) { burn = true; break; }
+                        if (nk === SAND_PROPANE && Math.abs(dx) + Math.abs(dy) === 1) gas++;
+                    }
+                    if (burn) { put(i, 5, 8 + rnd() * 10 | 0); if (gas >= 3 && rnd() < .3) explode(x, y, 3); return; }
+                    const q = rnd(), nx = x + (rnd() * 3 | 0) - 1, ny = y + (q < .55 ? 1 : q < .75 ? -1 : 0);
+                    if (nx >= 0 && nx < W && ny >= 0 && ny < H && t[ny * W + nx] === 0) sw(i, ny * W + nx);
+                }
+                else if (k === SAND_STEAM || k === SAND_SMOKE) {
+                    wake(i);
+                    if (life[i] <= 1) { if (k === SAND_STEAM && rnd() < .3) put(i, 2); else gone(i); return; }
+                    life[i]--;
+                    const dx = (rnd() * 3 | 0) - 1;
+                    if (y > 0 && x + dx >= 0 && x + dx < W && t[(y - 1) * W + x + dx] === 0) sw(i, (y - 1) * W + x + dx);
+                    else if (x + dx >= 0 && x + dx < W && t[y * W + x + dx] === 0) sw(i, y * W + x + dx);
+                }
+            }
+            function step() {
+                fr = fr >= 250 ? (stamp.fill(0), 1) : fr + 1;
+                let any = false;
+                if (blasts.length) { blastStep(); any = true; }
+                if (holes.length) { holesStep(); any = true; }
+                for (let y = H - 1; y >= 0; y--) {
+                    const cy = (y / CS) | 0, rev = ((y + fr) & 1) === 1;
+                    for (let q = 0; q < CW; q++) {
+                        const cx = rev ? CW - 1 - q : q;
+                        if (!act[cy * CW + cx]) continue;
+                        any = true;
+                        const x0 = cx * CS;
+                        for (let r = 0; r < CS; r++) {
+                            const x = rev ? x0 + CS - 1 - r : x0 + r, i = y * W + x, k = t[i];
+                            if (k && stamp[i] !== fr) cell(i, x, y, k);
+                        }
+                    }
+                }
+                const tmp = act; act = nxt; nxt = tmp; nxt.fill(0);
+                return any;
+            }
+
+            let down = false, px0 = 0, py0 = 0, ptX = 0, ptY = 0;
+            const gridAt = e => { const r = cv.getBoundingClientRect(); return [Math.floor((e.clientX - r.left) / r.width * W), Math.floor((e.clientY - r.top) / r.height * H)]; };
+            function brush(cx, cy) {
+                const solid = SAND_SOLID.includes(mat), r = radius;
+                for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+                    if (dx * dx + dy * dy > r * r) continue;
+                    const x = cx + dx, y = cy + dy;
+                    if (x < 0 || y < 0 || x >= W || y >= H) continue;
+                    const i = y * W + x;
+                    if (mat === 0) { if (t[i]) { gone(i); } continue; }
+                    if (mat === SAND_HOLE) return;
+                    if (t[i] !== 0) { if (!(mat === 5 && SAND_IGN[t[i]] && t[i] !== SAND_DYNAMITE)) continue; }
+                    else if (!solid && rnd() > .55) continue;
+                    put(i, mat, mat === 5 ? 25 + rnd() * 20 | 0 : 0);
+                }
+                dirty = true;
+            }
+            function stroke(x0, y0, x1, y1) {
+                const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
+                for (let s = 0; s <= n; s++) brush(Math.round(x0 + (x1 - x0) * s / n), Math.round(y0 + (y1 - y0) * s / n));
+            }
+            cv.addEventListener('pointerdown', e => {
+                e.preventDefault();
+                down = true; cv.focus({ preventScroll: true });
+                try { cv.setPointerCapture(e.pointerId); } catch (x) { }
+                [px0, py0] = gridAt(e); ptX = px0; ptY = py0;
+                if (mat === SAND_HOLE) { addHole(px0, py0); return; }
+                brush(px0, py0);
+            });
+            cv.addEventListener('pointermove', e => {
+                if (!down) return;
+                const [x, y] = gridAt(e);
+                stroke(px0, py0, x, y);
+                px0 = x; py0 = y; ptX = x; ptY = y;
+            });
+            const up = () => { down = false; };
+            cv.addEventListener('pointerup', up);
+            cv.addEventListener('pointercancel', up);
+
+            let on = true, raf = 0, lastScore = 0;
+            function frame(now) {
+                if (!on) return;
+                raf = requestAnimationFrame(frame);
+                if (!paused) {
+                    if (down && mat !== SAND_HOLE) brush(ptX, ptY);
+                    const a = step(), b = step();
+                    if (a || b) dirty = true;
+                }
+                if (flash > 0) {
+                    flash = Math.max(0, flash - .045);
+                    cv.style.transform = flash > 0 ? 'translate(' + ((rnd() * 8 - 4) * flash).toFixed(1) + 'px,' + ((rnd() * 8 - 4) * flash).toFixed(1) + 'px)' : '';
+                    dirty = true;
+                }
+                if (dirty) { dirty = false; draw(); }
+                if (now - lastScore > 500) {
+                    lastScore = now;
+                    let n = 0;
+                    for (let i = 0; i < N; i++) if (t[i]) n++;
+                    setScore(`частиц ${n}`);
+                }
+            }
+            raf = requestAnimationFrame(frame);
+
+            function resize() {
+                const body = gw.el && gw.el.querySelector('.vp-games-body');
+                const availW = body ? body.clientWidth : Math.min(760, innerWidth - 24) - 32;
+                const availH = (body ? body.clientHeight : innerHeight - 140) - pal.offsetHeight - row.offsetHeight - hint.offsetHeight - 48;
+                const k = Math.max(1, Math.min(availW / W, availH / H));
+                cv.style.width = Math.floor(W * k) + 'px';
+                cv.style.height = Math.floor(H * k) + 'px';
+            }
+            function key(e) {
+                const k = e.key.toLowerCase();
+                if (k === ' ') { e.preventDefault(); setPause(!paused); return; }
+                if (k === 'c' || k === 'с') { clear(); return; }
+                const m = SAND_MATS.find(x => x.hot === e.key);
+                if (m) pick(m.id);
+            }
+            el._vpTest = () => ({ W, H, t: Array.from(t), life: Array.from(life), act: Array.from(act), paused });
+            return { el, key, pause: () => setPause(true), resize, destroy() { on = false; cancelAnimationFrame(raf); } };
+        }
         const LB_KEYS = { snake: 's', mines: 'm', tetris: 't' };
         const LB_KEY = 'ITDX-LB-KEY-2026-Kiwe-NSFW-Visual-Pack-games';
         function lbEncode(text) {
@@ -20694,7 +20529,7 @@ var __vpBannerAuto = (() => {
                 if (mine) lbMergeIntoLocal(remote);
                 if (mine && (hit || !String(mine.content).trim().startsWith('ITDXG2 ') || ['s', 'm', 't'].some(k => (raw[k] || 0) !== (remote[k] || 0)))) gamesRecord();
                 renderGamesMenu();
-            } catch (e) { }
+            } catch (e) { logErr('рейтинг игр', e); }
         }
         const lbIsMe = a => !!a && ((meData && meData.id && a.id === meData.id) || (!!myUsername && a.username === myUsername));
         let lbLoad = null, lbAt = 0, lbBusy = false, lbT = 0;
@@ -20733,7 +20568,7 @@ var __vpBannerAuto = (() => {
         function gamesRecord() { clearTimeout(lbT); lbT = setTimeout(lbSubmit, 2000); }
         function lbRender() {
             const view = gw.el && gw.el.querySelector('.vp-games-leads');
-            if (view) GAMES.forEach(g => lbRenderInto(view.querySelector(`[data-lead="${g.id}"]`), g.id));
+            if (view) GAMES.filter(g => !g.free).forEach(g => lbRenderInto(view.querySelector(`[data-lead="${g.id}"]`), g.id));
         }
         async function lbRenderInto(box, id) {
             if (!box) return;
@@ -20770,15 +20605,17 @@ var __vpBannerAuto = (() => {
         function leadersView() {
             const el = document.createElement('div');
             el.className = 'vp-games-leads';
-            el.innerHTML = GAMES.map(g => `<section data-lead="${g.id}"></section>`).join('');
+            el.innerHTML = GAMES.filter(g => !g.free).map(g => `<section data-lead="${g.id}"></section>`).join('');
             return { el, key() { }, pause() { }, resize() { }, destroy() { } };
         }
-        const GAME_MAKERS = { snake: snakeGame, mines: minesGame, tetris: tetrisGame, lead: leadersView };
+        const GAME_MAKERS = { snake: snakeGame, mines: minesGame, tetris: tetrisGame, sand: sandGame, lead: leadersView };
         function showGame(id) {
             if (!gw.el) return;
             if (gw.cur) gw.cur.destroy();
             gw.id = id; GM_setValue('vp_game_last', id);
             gw.el.querySelectorAll('.vp-games-tab').forEach(t => t.classList.toggle('vp-on', t.dataset.g === id));
+            const onTab = gw.el.querySelector('.vp-games-tab.vp-on');
+            if (onTab && onTab.scrollIntoView) onTab.scrollIntoView({ inline: 'center', block: 'nearest' });
             const score = gw.el.querySelector('.vp-games-score'), body = gw.el.querySelector('.vp-games-body');
             score.textContent = '';
             gw.cur = GAME_MAKERS[id](text => { score.textContent = text; });
