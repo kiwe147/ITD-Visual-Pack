@@ -241,7 +241,7 @@
                 trimMap(mine);
             }
             trimMap(postIndex.byMedia); trimMap(postIndex.byRepost); trimMap(postIndex.byUser);
-        } catch (e) { }
+        } catch (e) { logErr('хук сайта: индекс постов', e); }
     }
     const USER_URL = /\/api\/users\/([\w.]+)\/?(?:[?#]|$)/;
     function keepSiteUser(url, body) {
@@ -256,7 +256,7 @@
             siteUsers.set(key, d);
             (siteUsersWait.get(key) || []).forEach(done => done(d));
             siteUsersWait.delete(key);
-        } catch (e) { }
+        } catch (e) { logErr('хук сайта: данные пользователя', e); }
     }
     function siteUser(user, ms) {
         const key = user.toLowerCase();
@@ -2307,7 +2307,6 @@
         .vp-like-inline { max-height: none !important; }
         .vp-settings-tabs .settings-option.vp-dim { opacity: .4; pointer-events: none; }
         .vp-pals { position: fixed; inset: 0; z-index: 9000; pointer-events: none; overflow: hidden; }
-        html.vp-ev-scene:not(.vp-msgs-open):not(.vp-gal-open) .vp-pals { display: none !important; }
         .vp-pals { transition: opacity .3s ease, visibility 0s; }
         html.vp-blackout .vp-pals { opacity: 0; visibility: hidden; transition: opacity .3s ease, visibility 0s .3s; }
         .vp-pal { position: absolute; bottom: 0; box-sizing: content-box; padding: 70px; margin: -70px; width: auto; height: calc(min(var(--vp-pal-h, 45vh), calc(48vw * var(--vp-pal-r, 1))) * var(--vp-pal-k, 1)); pointer-events: none;
@@ -5162,7 +5161,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         const callNet = { cur: null, done: null, lastSync: 0, title: null };
         function callDone() { if (!callNet.done) callNet.done = new Set(GM_getValue(acctKey('callDone'), [])); return callNet.done; }
         function callMarkDone(key) { const d = callDone(); d.add(key); GM_setValue(acctKey('callDone'), [...d].slice(-60)); }
-        function callSig(uid, type, id, data) { return msgSend(uid, '', false, null, cat(new Uint8Array([4, type]), be32(id), data || new Uint8Array(0))); }
+        function callSig(uid, type, id, data) { return msgSend(uid, '', false, null, cat(new Uint8Array([4, type]), be32(id), data || new Uint8Array(0)), 0, { prio: true }); }
         function sdpSlim(sdp, drop) {
             const lines = sdp.split(/\r?\n/).filter(Boolean);
             const audio = new Set(), video = new Set(), vrank = {};
@@ -5566,7 +5565,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     if (c.state === 'end') return;
                     await callSig(c.uid, 4, c.id, await callPackFit(pc.localDescription.sdp));
                     callPoke(c);
-                    setTimeout(function () { try { msgSync(); } catch (e) { } }, 300);
+                    setTimeout(function () { msgSync().catch(e => logErr('звонок: синхронизация', e)) }, 300);
                 } catch (e) { logErr('звонок: ICE restart не удался', e); }
                 finally { c.iceRestarting = false; }
             });
@@ -5590,7 +5589,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     if (c.state === 'end') return;
                     await callSig(c.uid, 4, c.id, await callPackFit(pc.localDescription.sdp));
                     callPoke(c);
-                    setTimeout(function () { try { msgSync(); } catch (err) { } }, 300);
+                    setTimeout(function () { msgSync().catch(e => logErr('звонок: синхронизация', e)) }, 300);
                 } catch (e) { logErr('звонок: ре-негоциация', e); }
                 finally { c.makingOffer = false; }
             });
@@ -5609,9 +5608,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             dc.onmessage = e => {
                 if (e.data === 'bye') callEnd(c, 'Собеседник положил трубку', null, 'peer-bye');
                 else if (/^mute:[01]$/.test(e.data)) { c.peerMuted = e.data === 'mute:1'; callSub(c); }
-                else if (e.data === 'poke') { try { msgSync(); } catch (err) { } }
-                else if (e.data === 'screen:0') { callScreenDrop(c); try { msgSync(); } catch (err) { } }
-                else if (e.data === 'screen:1') { c.remoteScreenOn = true; callSharePaint(c); try { msgSync(); } catch (err) { } }
+                else if (e.data === 'poke') { msgSync().catch(e => logErr('звонок: синхронизация', e)) }
+                else if (e.data === 'screen:0') { callScreenDrop(c); msgSync().catch(e => logErr('звонок: синхронизация', e)) }
+                else if (e.data === 'screen:1') { c.remoteScreenOn = true; callSharePaint(c); msgSync().catch(e => logErr('звонок: синхронизация', e)) }
             };
             dc.onopen = () => { if (c.muted) try { dc.send('mute:1'); } catch (e) { } };
         }
@@ -5737,7 +5736,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             try { if (navigator.wakeLock) navigator.wakeLock.request('screen').then(w => { if (c.state === 'end') w.release().catch(() => { }); else c.wake = w; }, () => { }); } catch (e) { }
             callSub(c, '00:00');
             c.tick = setInterval(() => { callSub(c, callMmss(Math.floor((Date.now() - t0) / 1000))); callVideoAlive(c); }, 1000);
-            c.syncT = setInterval(function () { try { msgSync(); } catch (err) { } }, 3000);
+            c.syncT = setInterval(function () { msgSync().catch(e => logErr('звонок: синхронизация', e)) }, 3000);
             callPlay(c);
             c.timers.push(setTimeout(() => callMicCheck(c), 1000));
             callVoiceWatch(c);
@@ -6286,7 +6285,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     if (c.state === 'end') return;
                     await callSig(c.uid, 5, c.id, await callPackFit(pc2.localDescription.sdp));
                     callPoke(c);
-                    setTimeout(function () { try { msgSync(); } catch (err) { } }, 300);
+                    setTimeout(function () { msgSync().catch(e => logErr('звонок: синхронизация', e)) }, 300);
                     if (rolledBack) callNegotiate(c);
                 } catch (e) {
                     logErr('звонок: входящая ре-негоциация', e);
@@ -8922,6 +8921,10 @@ var __vpBannerAuto = (() => {
         };
         const CHANGELOG = [
             ['3.8.6', '2 ноября 2026', [
+                'Сообщения: ссылки в тексте теперь синие, их видно сразу',
+                'Посты: убрана кнопка «Скопировать картинку» — она брала только первую картинку альбома, а копировать можно правой кнопкой; «Обновить» и «Скопировать ссылку» остались',
+                'Посты с картинкой: у размытого фона больше нет двойной кромки в углу, скругление фона совпадает со скруглением карточки',
+                'Убраны остатки ивента на баннере профиля: кнопки «убрать стекло» и «скрыть стикеры» (ивент закончился, кнопки не появлялись)',
                 'Звонки: новый дизайн — компактная карточка снизу экрана, плавно сворачивается в аватарку и так же разворачивается',
                 'Звонки: демонстрация экрана в новом виде — переворот между своим и чужим экраном, кнопка «на весь экран», в полноэкранном режиме свой экран показывается отдельным окошком справа снизу',
                 'Без подтверждённой галочки нельзя менять баннер профиля и видеть клуб — вместо клуба будет надпись «Не верифицирован»',
@@ -10412,285 +10415,7 @@ var __vpBannerAuto = (() => {
         sched.add('look', publishLook, { every: 60000, net: true });
         initBanner();
 
-        (function () {
-            const STORAGE_KEY = 'user_sticker_packs_v1';
-            const RECENT_STORAGE_KEY = 'recent_stickers_v1';
-            const MAX_NAME_LENGTH = 20;
-            const DEFAULT_PACK_NAME = 'Новый пакет';
-            const PANEL_WIDTH = 320;
-
-            const readList = key => { try { return JSON.parse(localStorage.getItem(key)) || []; } catch (e) { return []; } };
-            const writeList = (key, v) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) { } };
-            let userPacks = readList(STORAGE_KEY);
-            let recentStickers = readList(RECENT_STORAGE_KEY);
-            const saveUserPacks = () => { writeList(STORAGE_KEY, userPacks); packsChanged(); };
-            const saveRecent = () => writeList(RECENT_STORAGE_KEY, recentStickers);
-            const packStickers = key => key === 'recent' ? recentStickers : (userPacks.find(p => p.id === key) || { stickers: [] }).stickers;
-            const packName = key => key === 'recent' ? 'Недавние' : ((userPacks.find(p => p.id === key) || {}).name || DEFAULT_PACK_NAME);
-            const allPackKeys = () => ['recent', ...userPacks.map(p => p.id)];
-            function savePack(key) { if (key === 'recent') saveRecent(); else saveUserPacks(); }
-
-            const SYNC_TAG = 'ITDXS';
-            const PACKS_AT_KEY = 'user_sticker_packs_at';
-            const EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
-            const CDN_IMG = /^https:\/\/cdn\.xn--d1ah4a\.com\/images\/([0-9a-f-]{36})\.(\w+)$/i;
-            let packsAt = +(localStorage.getItem(PACKS_AT_KEY) || 0), syncTimer = 0, syncing = false, applyingRemote = false;
-            const hexToBytes = h => Uint8Array.from(h.replace(/-/g, '').match(/../g), x => parseInt(x, 16));
-            const bytesToUuid = b => [...b].map(x => x.toString(16).padStart(2, '0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
-            const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            function encodePacks(packs, at) {
-                const out = [1], put = (...b) => out.push(...b), str = t => { const u = new TextEncoder().encode(t).slice(0, 255); put(u.length, ...u); };
-                const sec = Math.floor(at / 1000);
-                put((sec >>> 24) & 255, (sec >>> 16) & 255, (sec >>> 8) & 255, sec & 255, packs.length);
-                for (const pk of packs) {
-                    str(pk.id || ''); str(pk.name || '');
-                    const list = pk.stickers.slice(0, 65535);
-                    put(list.length >> 8, list.length & 255);
-                    for (const st of list) {
-                        const m = String(st.url || '').match(CDN_IMG), ext = m ? EXT.indexOf(m[2].toLowerCase()) : -1;
-                        if (m && ext >= 0 && UUID.test(st.id || '')) { put(ext, ...hexToBytes(st.id), ...hexToBytes(m[1])); }
-                        else { put(255); str(st.id || ''); str(st.url || ''); }
-                    }
-                }
-                out[0] = 2;
-                for (let i = 1; i < out.length; i++) out[i] ^= OBF_KEY[i % OBF_KEY.length];
-                let bin = '';
-                out.forEach(b => { bin += String.fromCharCode(b); });
-                return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-            }
-            function decodePacks(b64) {
-                const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
-                const b = Uint8Array.from(bin, c => c.charCodeAt(0));
-                if (b[0] === 2) { for (let i = 1; i < b.length; i++) b[i] ^= OBF_KEY[i % OBF_KEY.length]; b[0] = 1; }
-                let i = 0;
-                const byte = () => { if (i >= b.length) throw new Error('обрыв данных'); return b[i++]; };
-                const str = () => { const n = byte(), t = new TextDecoder().decode(b.slice(i, i + n)); i += n; return t; };
-                if (byte() !== 1) throw new Error('версия паков');
-                const at = ((byte() << 24) >>> 0) + (byte() << 16) + (byte() << 8) + byte();
-                const packs = [];
-                for (let n = byte(); n > 0; n--) {
-                    const pk = { id: str(), name: str(), stickers: [] };
-                    for (let k = (byte() << 8) + byte(); k > 0; k--) {
-                        const ext = byte();
-                        if (ext === 255) { const id = str(), url = str(); pk.stickers.push({ id, url }); continue; }
-                        const id = bytesToUuid(b.slice(i, i + 16)), img = bytesToUuid(b.slice(i + 16, i + 32));
-                        i += 32;
-                        pk.stickers.push({ id, url: `https://cdn.xn--d1ah4a.com/images/${img}.${EXT[ext] || 'png'}` });
-                    }
-                    packs.push(pk);
-                }
-                return { at: at * 1000, packs };
-            }
-            const myAccountId = () => (meData && meData.id) || (verifiedInfo(myUsername || '') || {}).id || null;
-            const partsKey = () => 'vp_sticker_parts_' + myAccountId();
-            const remotePacksAt = () => { const f = String((verifiedInfo(myUsername || '') || {}).flags || ''); return f.length > 1 ? +f.slice(1) * 1000 : 0; };
-            async function packParts(scan) {
-                if (!scan) { const saved = GM_getValue(partsKey(), null); if (saved) return saved; }
-                const me = myAccountId();
-                const list = (await allComments(STICKER_POST_ID)).filter(c => c.author && c.author.id === me && /^ITDXS \d+\/\d+ /.test(c.content || ''))
-                    .map(c => { const m = c.content.match(/^ITDXS (\d+)\/(\d+) (\S*)/); return { id: c.id, i: +m[1], n: +m[2], d: m[3] }; });
-                GM_setValue(partsKey(), list.map(({ id, i, n }) => ({ id, i, n })));
-                return list;
-            }
-            function applyRemotePacks(remote) {
-                applyingRemote = true;
-                userPacks = remote.packs;
-                writeList(STORAGE_KEY, userPacks);
-                packsAt = remote.at;
-                localStorage.setItem(PACKS_AT_KEY, String(packsAt));
-                applyingRemote = false;
-                if (scrollContainer) { updateTabButtons(); refreshAllPackGrids(); }
-            }
-            const patchComment = (id, content) => editComment(id, content);
-            async function pullPacks() {
-                const at = remotePacksAt();
-                if (!at || at <= packsAt + 999) return;
-                const parts = (await packParts(true)).filter(p => p.n).sort((a, b) => a.i - b.i);
-                const n = parts.length && parts[0].n;
-                if (!n || parts.length < n || !parts.slice(0, n).every((p, k) => p.i === k + 1 && p.n === n)) return;
-                const remote = decodePacks(parts.slice(0, n).map(p => p.d).join(''));
-                if (remote.at <= packsAt + 999) return;
-                const legacy = !packsAt && userPacks.length ? userPacks.filter(pk => !remote.packs.some(r => r.id === pk.id)) : [];
-                applyRemotePacks({ at: remote.at, packs: [...remote.packs, ...legacy] });
-                if (legacy.length) { packsAt = Date.now(); localStorage.setItem(PACKS_AT_KEY, String(packsAt)); return 'push'; }
-            }
-            async function pushPacks() {
-                const mine = verifiedInfo(myUsername || '');
-                if (!mine || !mine.commentId) return;
-                let parts = await packParts(false);
-                if (!parts.length) parts = await packParts(true);
-                if (!packsAt) { packsAt = Date.now(); localStorage.setItem(PACKS_AT_KEY, String(packsAt)); }
-                const data = encodePacks(userPacks, packsAt), CH = 1900, chunks = [];
-                for (let k = 0; k < data.length || !chunks.length; k += CH) chunks.push(data.slice(k, k + CH));
-                const slots = parts.map(p => p.id), saved = [];
-                for (let k = 0; k < Math.max(chunks.length, slots.length); k++) {
-                    const content = k < chunks.length ? `${SYNC_TAG} ${k + 1}/${chunks.length} ${chunks[k]}` : `${SYNC_TAG} 0/0 -`;
-                    if (slots[k]) {
-                        const res = await patchComment(slots[k], content);
-                        if (!res.ok) throw new Error('паки: правка ' + res.status);
-                        saved.push({ id: slots[k], i: k < chunks.length ? k + 1 : 0, n: k < chunks.length ? chunks.length : 0 });
-                    } else {
-                        const res = await sendComment(STICKER_POST_ID, content);
-                        if (!res.ok) throw new Error('паки: запись ' + res.status);
-                        const j = await res.json();
-                        saved.push({ id: (j.data || j).id, i: k + 1, n: chunks.length });
-                    }
-                }
-                GM_setValue(partsKey(), saved);
-                const code = String(mine.code) + '1' + Math.floor(packsAt / 1000);
-                const res = await patchComment(mine.commentId, code);
-                if (res.ok) await checkAllComments(true);
-            }
-            async function syncPacks(up) {
-                if (!STICKER_POST_ID || syncing || !myUsername || !myAccountId()) return;
-                syncing = true;
-                try {
-                    if (up) await pushPacks();
-                    else {
-                        const merged = await pullPacks();
-                        const at = remotePacksAt();
-                        if (merged === 'push' || (userPacks.length && (!packsAt || packsAt > at + 999))) await pushPacks();
-                    }
-                } catch (e) {
-                    logErr('паки: синхронизация', e);
-                } finally {
-                    syncing = false;
-                }
-            }
-            function packsChanged() {
-                if (applyingRemote) return;
-                packsAt = Date.now();
-                localStorage.setItem(PACKS_AT_KEY, String(packsAt));
-                clearTimeout(syncTimer);
-                syncTimer = setTimeout(() => syncPacks(true), 4000);
-            }
-            (function syncLoop() {
-                if (!STICKER_POST_ID) return;
-                const tick = () => myUsername && myAccountId() && verifiedInfo(myUsername) ? syncPacks(false) : setTimeout(tick, 3000);
-                setTimeout(tick, 6000);
-                sched.add('packs', () => syncPacks(false), { every: 10 * 60 * 1000, net: true, visible: true });
-            })();
-
-            const ZIP_IMG = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
-            const ZIP_LIMITS = { packs: 20, perPack: 120, total: 300, bytes: 5 * 1024 * 1024 };
-            async function readZip(file) {
-                const buf = new Uint8Array(await file.arrayBuffer()), dv = new DataView(buf.buffer);
-                let eocd = -1;
-                for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
-                if (eocd < 0) throw new Error('это не zip-архив');
-                const count = dv.getUint16(eocd + 10, true);
-                let at = dv.getUint32(eocd + 16, true);
-                const utf8 = new TextDecoder('utf-8', { fatal: true }), dos = new TextDecoder('ibm866');
-                const entries = [];
-                for (let k = 0; k < count; k++) {
-                    if (dv.getUint32(at, true) !== 0x02014b50) throw new Error('архив повреждён');
-                    const flags = dv.getUint16(at + 8, true), method = dv.getUint16(at + 10, true);
-                    const csize = dv.getUint32(at + 20, true), size = dv.getUint32(at + 24, true);
-                    const nlen = dv.getUint16(at + 28, true), xlen = dv.getUint16(at + 30, true), clen = dv.getUint16(at + 32, true);
-                    const local = dv.getUint32(at + 42, true), raw = buf.subarray(at + 46, at + 46 + nlen);
-                    let name;
-                    try { name = flags & 0x800 ? new TextDecoder().decode(raw) : utf8.decode(raw); } catch (e) { name = dos.decode(raw); }
-                    entries.push({ name: name.replace(/\\/g, '/'), method, csize, size, local });
-                    at += 46 + nlen + xlen + clen;
-                }
-                entries.data = async e => {
-                    const start = e.local + 30 + dv.getUint16(e.local + 26, true) + dv.getUint16(e.local + 28, true);
-                    const bytes = buf.slice(start, start + e.csize);
-                    if (e.method === 0) return bytes;
-                    if (e.method !== 8) throw new Error('неизвестное сжатие');
-                    return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
-                };
-                return entries;
-            }
-            function zipPacks(entries, zipName) {
-                const imgs = entries.filter(e => {
-                    const parts = e.name.split('/');
-                    return !e.name.endsWith('/') && !parts.some(p => p.startsWith('.') || p === '__MACOSX') && ZIP_IMG[(parts.pop().split('.').pop() || '').toLowerCase()];
-                });
-                let paths = imgs.map(e => e.name.split('/'));
-                while (paths.length && paths.every(p => p.length > 2 && p[0] === paths[0][0])) paths = paths.map(p => p.slice(1));
-                const groups = new Map();
-                imgs.forEach((e, i) => {
-                    const p = paths[i], pack = p.length > 1 ? p[0] : zipName.replace(/\.zip$/i, '');
-                    if (!groups.has(pack)) groups.set(pack, []);
-                    groups.get(pack).push(e);
-                });
-                return [...groups].map(([name, files]) => ({ name: name.trim().slice(0, MAX_NAME_LENGTH) || DEFAULT_PACK_NAME, files: files.sort((a, b) => a.name.localeCompare(b.name, 'ru', { numeric: true })) }));
-            }
-            function openZipImport() {
-                if (!stickerPanel || stickerPanel.querySelector('.vp-sp-import')) return;
-                exitEditMode();
-                const card = el('div', 'vp-sp-import', `<b>Паки из архива</b>
-                <ul>
-                    <li>Архив <b style="font-size:inherit">.zip</b></li>
-                    <li>Папка в архиве = пак, имя папки = название пака</li>
-                    <li>В папке — картинки png, jpg, gif, webp (до 5 МБ); встают как есть, без обрезки</li>
-                    <li>Картинки прямо в архиве, без папки, — пак с именем архива</li>
-                </ul>
-                <pre>стикеры.zip
-├ Коты/
-│  ├ 1.png
-│  └ 2.gif
-└ Мемы/
-   └ шрек.jpg</pre>
-                <div class="vp-imp-status"></div>
-                <div class="vp-imp-btns"><button type="button" class="vp-imp-cancel">Отмена</button><button type="button" class="vp-imp-go">Выбрать архив</button></div>`);
-                stickerPanel.appendChild(card);
-                const status = card.querySelector('.vp-imp-status'), go = card.querySelector('.vp-imp-go'), cancel = card.querySelector('.vp-imp-cancel');
-                let busy = false, stop = false;
-                cancel.onclick = () => { if (busy) { stop = true; cancel.disabled = true; status.textContent = 'Останавливаю…'; } else card.remove(); };
-                go.onclick = () => {
-                    const input = el('input');
-                    input.type = 'file';
-                    input.accept = '.zip,application/zip';
-                    input.onchange = async () => {
-                        const file = input.files[0];
-                        if (!file) return;
-                        busy = true; go.disabled = true;
-                        try {
-                            status.textContent = 'Читаю архив…';
-                            const entries = await readZip(file);
-                            const packs = zipPacks(entries, file.name).slice(0, ZIP_LIMITS.packs);
-                            const total = Math.min(ZIP_LIMITS.total, packs.reduce((n, pk) => n + Math.min(pk.files.length, ZIP_LIMITS.perPack), 0));
-                            if (!total) throw new Error('в архиве нет картинок по правилам');
-                            let done = 0, skipped = 0;
-                            for (const pk of packs) {
-                                if (stop || done >= total) break;
-                                const pack = { id: 'user_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), name: pk.name, stickers: [] };
-                                for (const e of pk.files.slice(0, ZIP_LIMITS.perPack)) {
-                                    if (stop || done >= total) break;
-                                    status.textContent = `Загружаю «${pk.name}»: ${done + 1} из ${total}…`;
-                                    try {
-                                        if (e.size > ZIP_LIMITS.bytes) throw new Error('больше 5 МБ');
-                                        const base = e.name.split('/').pop(), type = ZIP_IMG[base.split('.').pop().toLowerCase()];
-                                        const data = await uploadImageToServer(new File([await entries.data(e)], base, { type }));
-                                        pack.stickers.push(data);
-                                    } catch (err) { skipped++; }
-                                    done++;
-                                }
-                                if (pack.stickers.length) { userPacks.push(pack); saveUserPacks(); }
-                            }
-                            rebuildPanel();
-                            const left = stickerPanel.querySelector('.vp-sp-import');
-                            if (left) left.remove();
-                            showPanel();
-                            if (skipped) alert(`Готово. Не загрузились: ${skipped} (слишком большие или битые картинки)`);
-                        } catch (err) {
-                            status.textContent = 'Не вышло: ' + (err && err.message || err);
-                            logErr('паки из архива', err);
-                            busy = false; go.disabled = false;
-                        }
-                    };
-                    input.click();
-                };
-            }
-
-            function addToRecent(sticker) {
-                recentStickers = [sticker, ...recentStickers.filter(s => s.id !== sticker.id)].slice(0, 30);
-                saveRecent();
-            }
-
-            const style = addCss(`
+        const stickerCss = panelWidth => `
             @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
             .spin{animation:spin 1s linear infinite;transform-origin:center}
             .sticker-dragging{opacity:0.3!important;pointer-events:none!important}
@@ -10737,7 +10462,7 @@ var __vpBannerAuto = (() => {
 
             .sticker-panel { position: fixed; display: none; flex-direction: column; background: var(--block-bg);
                 border-radius: 20px; border: 1px solid var(--border-color,rgba(255,255,255,0.1)); z-index: 10000;
-                width: ${PANEL_WIDTH}px; height: 440px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); overflow: hidden; }
+                width: ${panelWidth}px; height: 440px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); overflow: hidden; }
             .sticker-panel.vp-open { display: flex; }
             .vp-sp-import { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; gap: 10px; padding: 16px;
                 background: var(--block-bg); border-radius: inherit; font-size: 13px; line-height: 1.4; color: var(--text-primary,#fff); overflow: auto; }
@@ -10821,14 +10546,21 @@ var __vpBannerAuto = (() => {
             .vp-crop-actions > button { padding: 8px 16px; border-radius: 8px; cursor: pointer; color: var(--text-primary,#fff); }
             .vp-crop-cancel { background: transparent; border: 1px solid var(--border-color,rgba(255,255,255,0.3)); }
             .vp-crop-actions > .vp-crop-ok { background: #0080FF; border: none; color: white; }
-        `);
+        `;
+        (function () {
+            const K = {};
+            K.uploadImageToServer = uploadImageToServer; K.updateTabButtons = updateTabButtons; K.rebuildPanel = rebuildPanel; K.createStickerButton = createStickerButton; K.showPanel = showPanel;
+            stickerPartData(K);
+            stickerPartZip(K);
+
+            addCss(stickerCss(K.PANEL_WIDTH));
 
             const el = (tag, cls, html) => {
                 const e = document.createElement(tag);
                 if (cls) e.className = cls;
                 if (html) e.innerHTML = html;
                 return e;
-            };
+            }; K.el = el;
 
             async function uploadImageToServer(file) {
                 const accessToken = await getAccessToken();
@@ -10877,10 +10609,10 @@ var __vpBannerAuto = (() => {
                 return stickerFile(sticker).then(uploadImageToServer)
                     .then(data => {
                         const oldId = sticker.id;
-                        [recentStickers, ...userPacks.map(p => p.stickers)].forEach(list => list.forEach(s => { if (s.id === oldId) Object.assign(s, data); }));
+                        [K.recentStickers, ...K.userPacks.map(p => p.stickers)].forEach(list => list.forEach(s => { if (s.id === oldId) Object.assign(s, data); }));
                         Object.assign(sticker, data);
-                        saveRecent();
-                        saveUserPacks();
+                        K.saveRecent();
+                        K.saveUserPacks();
                         return data;
                     });
             }
@@ -10951,9 +10683,9 @@ var __vpBannerAuto = (() => {
                 attached.send.click();
             }, true);
 
-            let stickerPanel = null, scrollContainer = null, tabsRow = null, recentBtn = null;
+            K.stickerPanel = null, K.scrollContainer = null, K.tabsRow = null, K.recentBtn = null;
             let stickerBtn = null, hideTimeout = null;
-            let editPack = null;
+            K.editPack = null;
 
             let blockWheel = null;
             function disablePageScroll() {
@@ -10970,7 +10702,7 @@ var __vpBannerAuto = (() => {
             }
 
             function adjustInputWidth(input) {
-                const n = Math.max(1, Math.min(MAX_NAME_LENGTH, input.value.length || input.placeholder.length || DEFAULT_PACK_NAME.length));
+                const n = Math.max(1, Math.min(K.MAX_NAME_LENGTH, input.value.length || input.placeholder.length || K.DEFAULT_PACK_NAME.length));
                 input.style.width = `${n * (14 - n * 0.2)}px`;
                 input.style.minWidth = 'auto';
             }
@@ -10980,140 +10712,530 @@ var __vpBannerAuto = (() => {
                 const first = pack.stickers[0];
                 if (first && first.url) { const img = el('img'); img.src = first.url; btn.appendChild(img); }
                 else btn.innerHTML = ICONS.EMPTY_PACK;
-                btn.title = pack.name || DEFAULT_PACK_NAME;
+                btn.title = pack.name || K.DEFAULT_PACK_NAME;
                 btn.dataset.pack = pack.id;
-                btn.onclick = () => { exitEditMode(); scrollToPack(pack.id); };
+                btn.onclick = () => { K.exitEditMode(); scrollToPack(pack.id); };
                 return btn;
             }
             function updateTabButtons() {
-                const wrap = tabsRow && tabsRow.firstElementChild;
-                if (wrap) wrap.replaceChildren(...userPacks.map(packTab));
+                const wrap = K.tabsRow && K.tabsRow.firstElementChild;
+                if (wrap) wrap.replaceChildren(...K.userPacks.map(packTab));
             }
 
             function createStickerPanel() {
-                if (stickerPanel) return;
-                stickerPanel = el('div', 'sticker-panel');
+                if (K.stickerPanel) return;
+                K.stickerPanel = el('div', 'sticker-panel');
                 const header = el('div', 'vp-sp-head');
-                recentBtn = el('button', 'vp-sp-tab vp-recent vp-on', ICONS.RECENT);
-                recentBtn.title = 'Недавние';
-                recentBtn.onclick = () => { exitEditMode(); scrollToPack('recent'); };
-                tabsRow = el('div', 'vp-sp-tabs', '<div></div>');
-                tabsRow.addEventListener('wheel', e => {
-                    if (e.deltaY !== 0) { e.preventDefault(); tabsRow.scrollLeft += e.deltaY * 0.4; }
+                K.recentBtn = el('button', 'vp-sp-tab vp-recent vp-on', ICONS.RECENT);
+                K.recentBtn.title = 'Недавние';
+                K.recentBtn.onclick = () => { K.exitEditMode(); scrollToPack('recent'); };
+                K.tabsRow = el('div', 'vp-sp-tabs', '<div></div>');
+                K.tabsRow.addEventListener('wheel', e => {
+                    if (e.deltaY !== 0) { e.preventDefault(); K.tabsRow.scrollLeft += e.deltaY * 0.4; }
                 }, { passive: false });
                 updateTabButtons();
                 const addPackBtn = el('button', 'vp-sp-tab', ICONS.ADD_PACK);
                 addPackBtn.title = 'Создать стикерпак';
                 addPackBtn.onclick = () => {
                     const pack = { id: 'user_' + Date.now(), name: '', stickers: [] };
-                    userPacks.push(pack);
-                    saveUserPacks();
+                    K.userPacks.push(pack);
+                    K.saveUserPacks();
                     rebuildPanel();
-                    enterEditMode(pack.id);
+                    K.enterEditMode(pack.id);
                     showPanel();
                 };
                 const zipBtn = el('button', 'vp-sp-tab', ICONS.ZIP_PACK);
                 zipBtn.title = 'Паки из архива';
-                zipBtn.onclick = () => openZipImport();
-                header.append(recentBtn, tabsRow, addPackBtn, zipBtn);
+                zipBtn.onclick = () => K.openZipImport();
+                header.append(K.recentBtn, K.tabsRow, addPackBtn, zipBtn);
 
-                scrollContainer = el('div', 'vp-sp-body');
-                scrollContainer.addEventListener('wheel', e => e.stopPropagation(), { passive: true });
-                scrollContainer.addEventListener('touchmove', e => e.stopPropagation(), { passive: true });
-                scrollContainer.addEventListener('scroll', updateActiveTabFromScroll, { passive: true });
-                stickerPanel.append(header, scrollContainer);
-                stickerPanel.addEventListener('mouseenter', () => {
+                K.scrollContainer = el('div', 'vp-sp-body');
+                K.scrollContainer.addEventListener('wheel', e => e.stopPropagation(), { passive: true });
+                K.scrollContainer.addEventListener('touchmove', e => e.stopPropagation(), { passive: true });
+                K.scrollContainer.addEventListener('scroll', updateActiveTabFromScroll, { passive: true });
+                K.stickerPanel.append(header, K.scrollContainer);
+                K.stickerPanel.addEventListener('mouseenter', () => {
                     clearTimeout(hideTimeout);
-                    stickerPanel.querySelectorAll('.pack-name-input').forEach(adjustInputWidth);
+                    K.stickerPanel.querySelectorAll('.pack-name-input').forEach(adjustInputWidth);
                 });
-                stickerPanel.addEventListener('mouseleave', () => hidePanel(200));
-                document.body.appendChild(stickerPanel);
+                K.stickerPanel.addEventListener('mouseleave', () => hidePanel(200));
+                document.body.appendChild(K.stickerPanel);
             }
             function rebuildPanel() {
-                if (stickerPanel) stickerPanel.remove();
-                stickerPanel = scrollContainer = tabsRow = recentBtn = null;
-                editPack = null;
+                if (K.stickerPanel) K.stickerPanel.remove();
+                K.stickerPanel = K.scrollContainer = K.tabsRow = K.recentBtn = null;
+                K.editPack = null;
                 createStickerPanel();
                 renderAllContent();
             }
 
             function renderAllContent() {
-                if (!scrollContainer) return;
-                scrollContainer.replaceChildren();
-                for (const key of allPackKeys()) {
+                if (!K.scrollContainer) return;
+                K.scrollContainer.replaceChildren();
+                for (const key of K.allPackKeys()) {
                     const header = el('div', 'pack-header');
                     header.dataset.pack = key;
                     const name = el('div', 'vp-sp-name');
                     const input = el('input', 'pack-name-input');
                     input.type = 'text';
-                    input.value = packName(key);
+                    input.value = K.packName(key);
                     input.placeholder = 'Название...';
-                    input.maxLength = MAX_NAME_LENGTH;
+                    input.maxLength = K.MAX_NAME_LENGTH;
                     name.appendChild(input);
                     if (key !== 'recent') {
-                        const pack = () => userPacks.find(p => p.id === key);
-                        const locked = () => editPack !== key;
+                        const pack = () => K.userPacks.find(p => p.id === key);
+                        const locked = () => K.editPack !== key;
                         input.addEventListener('input', () => {
-                            if (locked()) input.value = packName(key);
+                            if (locked()) input.value = K.packName(key);
                             else {
-                                input.value = input.value.slice(0, MAX_NAME_LENGTH);
-                                if (pack()) { pack().name = input.value; saveUserPacks(); }
+                                input.value = input.value.slice(0, K.MAX_NAME_LENGTH);
+                                if (pack()) { pack().name = input.value; K.saveUserPacks(); }
                             }
                             adjustInputWidth(input);
                         });
                         input.addEventListener('blur', () => {
-                            if (locked()) input.value = packName(key);
+                            if (locked()) input.value = K.packName(key);
                             else if (!input.value.trim()) {
-                                input.value = DEFAULT_PACK_NAME;
-                                if (pack()) { pack().name = DEFAULT_PACK_NAME; saveUserPacks(); }
+                                input.value = K.DEFAULT_PACK_NAME;
+                                if (pack()) { pack().name = K.DEFAULT_PACK_NAME; K.saveUserPacks(); }
                             }
                             adjustInputWidth(input);
                         });
                         const editBtn = el('button', 'vp-sp-edit', ICONS.EDIT);
                         editBtn.title = 'Редактировать';
-                        editBtn.onclick = () => { if (editPack === key) exitEditMode(); else { exitEditMode(); enterEditMode(key); } };
+                        editBtn.onclick = () => { if (K.editPack === key) K.exitEditMode(); else { K.exitEditMode(); K.enterEditMode(key); } };
                         const delPack = el('button', 'delete-pack-btn', ICONS.TRASH);
                         delPack.title = 'Удалить пак';
-                        delPack.onclick = () => { if (confirm('Удалить пак?')) deleteStickerPack(key); };
+                        delPack.onclick = () => { if (confirm('Удалить пак?')) K.deleteStickerPack(key); };
                         const done = el('button', 'vp-sp-done', ICONS.CHECK);
                         done.title = 'Готово';
-                        done.onclick = exitEditMode;
+                        done.onclick = K.exitEditMode;
                         name.append(editBtn, delPack, done);
                     }
                     header.appendChild(name);
                     const grid = el('div', 'pack-grid');
                     grid.dataset.pack = key;
-                    scrollContainer.append(header, grid);
-                    refreshPackGrid(key);
+                    K.scrollContainer.append(header, grid);
+                    K.refreshPackGrid(key);
                 }
-                markEditing();
+                K.markEditing();
             }
 
+            stickerPartEdit(K);
+            async function attachAsSiteFile(sticker) {
+                const row = stickerBtn && stickerBtn.closest('.' + SELECTORS.stickerContainer);
+                let input = null;
+                for (let e = row, i = 0; e && !input && i < 5; e = e.parentElement, i++) input = e.querySelector('input[type="file"]');
+                if (!input) return false;
+                const file = await stickerFile(sticker);
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                input.files = dt.files;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+            }
+            function pickSticker(sticker) {
+                if (sticker && sticker.id && sticker.url) {
+                    K.addToRecent(sticker);
+                    const fallback = e => {
+                        if (e) { console.warn('[ITD VP] стикер через сайт', e); logErr('стикер через сайт', e); }
+                        try { insertStickerToComment(sticker); } catch (err) { console.warn('[ITD VP] стикер', err); logErr('стикер', err); }
+                    };
+                    if (stickerBtn) stickerBtn.innerHTML = ICONS.LOADING;
+                    attachAsSiteFile(sticker).then(ok => { if (!ok) fallback(); }, fallback)
+                        .finally(() => { if (stickerBtn) stickerBtn.innerHTML = ICONS.STICKER_BUTTON; });
+                }
+                K.stickerPanel.classList.remove('vp-open');
+                K.exitEditMode();
+                enablePageScroll();
+            }
+            function createStickerButton(sticker, key, index, editing) {
+                const btn = el('button', 'vp-sticker-item');
+                btn.dataset.packKey = key;
+                btn.dataset.stickerIndex = index;
+                if (sticker && sticker.url) { const img = el('img'); img.src = sticker.url; btn.appendChild(img); }
+                else btn.appendChild(el('div', 'vp-sticker-empty'));
+                btn.onclick = () => { if (btn._vpDragged) { btn._vpDragged = false; return; } pickSticker(sticker); };
+                if (!editing) return btn;
+
+                btn.classList.add('sticker-editing', `sticker-shake-${(index % 8) + 1}`);
+                btn.draggable = false;
+                const del = el('div', 'vp-sticker-del', ICONS.DELETE);
+                del.onmousedown = e => { e.stopPropagation(); e.preventDefault(); };
+                del.onclick = e => { e.stopPropagation(); e.preventDefault(); K.deleteSticker(key, index); };
+                btn.appendChild(del);
+                btn.addEventListener('pointerdown', e => K.startStickerDrag(e, btn, key));
+                return btn;
+            }
+
+            function scrollToPack(key) {
+                const header = K.scrollContainer && K.scrollContainer.querySelector(`.pack-header[data-pack="${key}"]`);
+                if (header) header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            function updateActiveTabFromScroll() {
+                if (K.editPack || !K.scrollContainer) return;
+                const top = K.scrollContainer.getBoundingClientRect().top + 50;
+                let active = 'recent', min = Infinity;
+                for (const h of K.scrollContainer.querySelectorAll(':scope > .pack-header')) {
+                    const d = h.getBoundingClientRect().top - top;
+                    if (d <= 0 && -d < min) { min = -d; active = h.dataset.pack; }
+                }
+                K.recentBtn.classList.toggle('vp-on', active === 'recent');
+                K.tabsRow.querySelectorAll('.vp-sp-tab').forEach(t => t.classList.toggle('vp-on', t.dataset.pack === active));
+            }
+
+            function showPanel() {
+                if (!stickerBtn || !stickerBtn.isConnected) return;
+                clearTimeout(hideTimeout);
+                createStickerPanel();
+                if (!K.scrollContainer.children.length) renderAllContent();
+                const rect = stickerBtn.getBoundingClientRect();
+                K.stickerPanel.style.bottom = `${window.innerHeight - rect.top + 8}px`;
+                K.stickerPanel.style.left = `${Math.min(rect.left, window.innerWidth - K.PANEL_WIDTH - 20)}px`;
+                K.stickerPanel.classList.add('vp-open');
+                disablePageScroll();
+            }
+            function hidePanel(delay) {
+                clearTimeout(hideTimeout);
+                hideTimeout = setTimeout(() => {
+                    if (!K.stickerPanel || !K.stickerPanel.classList.contains('vp-open')) return;
+                    if (K.stickerPanel.classList.contains('vp-drag')) return hidePanel(delay);
+                    if (K.stickerPanel.querySelector('.vp-sp-import')) return hidePanel(delay);
+                    K.stickerPanel.classList.remove('vp-open');
+                    K.exitEditMode();
+                    enablePageScroll();
+                }, delay);
+            }
+
+            stickerPartCrop(K);
+
+            onDom(function stickerButton() {
+                const row = siteEl('stickerContainer');
+                if (!row || row.querySelector('.sticker-btn')) return;
+                const before = row.querySelector('.' + SELECTORS.stickerMicBtn) || row.querySelector('.' + SELECTORS.stickerSendBtn);
+                if (!before) return;
+                stickerBtn = el('button', 'sticker-btn', ICONS.STICKER_BUTTON);
+                stickerBtn.onmouseenter = showPanel;
+                stickerBtn.onmouseleave = () => hidePanel(300);
+                row.insertBefore(stickerBtn, before);
+            });
+        })();
+
+        // Стикеры: хранение паков, кодирование, синхронизация между устройствами (часть стикерной системы, общее состояние — объект K)
+        function stickerPartData(K) {
+            const { updateTabButtons } = K;
+            K.savePack = savePack;
+            const STORAGE_KEY = 'user_sticker_packs_v1';
+            const RECENT_STORAGE_KEY = 'recent_stickers_v1';
+            const MAX_NAME_LENGTH = 20; K.MAX_NAME_LENGTH = MAX_NAME_LENGTH;
+            const DEFAULT_PACK_NAME = 'Новый пакет'; K.DEFAULT_PACK_NAME = DEFAULT_PACK_NAME;
+            const PANEL_WIDTH = 320; K.PANEL_WIDTH = PANEL_WIDTH;
+
+            const readList = key => { try { return JSON.parse(localStorage.getItem(key)) || []; } catch (e) { return []; } };
+            const writeList = (key, v) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) { } };
+            K.userPacks = readList(STORAGE_KEY);
+            K.recentStickers = readList(RECENT_STORAGE_KEY);
+            const saveUserPacks = () => { writeList(STORAGE_KEY, K.userPacks); packsChanged(); }; K.saveUserPacks = saveUserPacks;
+            const saveRecent = () => writeList(RECENT_STORAGE_KEY, K.recentStickers); K.saveRecent = saveRecent;
+            const packStickers = key => key === 'recent' ? K.recentStickers : (K.userPacks.find(p => p.id === key) || { stickers: [] }).stickers; K.packStickers = packStickers;
+            const packName = key => key === 'recent' ? 'Недавние' : ((K.userPacks.find(p => p.id === key) || {}).name || DEFAULT_PACK_NAME); K.packName = packName;
+            const allPackKeys = () => ['recent', ...K.userPacks.map(p => p.id)]; K.allPackKeys = allPackKeys;
+            function savePack(key) { if (key === 'recent') saveRecent(); else saveUserPacks(); }
+
+            const SYNC_TAG = 'ITDXS';
+            const PACKS_AT_KEY = 'user_sticker_packs_at';
+            const EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+            const CDN_IMG = /^https:\/\/cdn\.xn--d1ah4a\.com\/images\/([0-9a-f-]{36})\.(\w+)$/i;
+            let packsAt = +(localStorage.getItem(PACKS_AT_KEY) || 0), syncTimer = 0, syncing = false, applyingRemote = false;
+            const hexToBytes = h => Uint8Array.from(h.replace(/-/g, '').match(/../g), x => parseInt(x, 16));
+            const bytesToUuid = b => [...b].map(x => x.toString(16).padStart(2, '0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+            const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            function encodePacks(packs, at) {
+                const out = [1], put = (...b) => out.push(...b), str = t => { const u = new TextEncoder().encode(t).slice(0, 255); put(u.length, ...u); };
+                const sec = Math.floor(at / 1000);
+                put((sec >>> 24) & 255, (sec >>> 16) & 255, (sec >>> 8) & 255, sec & 255, packs.length);
+                for (const pk of packs) {
+                    str(pk.id || ''); str(pk.name || '');
+                    const list = pk.stickers.slice(0, 65535);
+                    put(list.length >> 8, list.length & 255);
+                    for (const st of list) {
+                        const m = String(st.url || '').match(CDN_IMG), ext = m ? EXT.indexOf(m[2].toLowerCase()) : -1;
+                        if (m && ext >= 0 && UUID.test(st.id || '')) { put(ext, ...hexToBytes(st.id), ...hexToBytes(m[1])); }
+                        else { put(255); str(st.id || ''); str(st.url || ''); }
+                    }
+                }
+                out[0] = 2;
+                for (let i = 1; i < out.length; i++) out[i] ^= OBF_KEY[i % OBF_KEY.length];
+                let bin = '';
+                out.forEach(b => { bin += String.fromCharCode(b); });
+                return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            }
+            function decodePacks(b64) {
+                const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
+                const b = Uint8Array.from(bin, c => c.charCodeAt(0));
+                if (b[0] === 2) { for (let i = 1; i < b.length; i++) b[i] ^= OBF_KEY[i % OBF_KEY.length]; b[0] = 1; }
+                let i = 0;
+                const byte = () => { if (i >= b.length) throw new Error('обрыв данных'); return b[i++]; };
+                const str = () => { const n = byte(), t = new TextDecoder().decode(b.slice(i, i + n)); i += n; return t; };
+                if (byte() !== 1) throw new Error('версия паков');
+                const at = ((byte() << 24) >>> 0) + (byte() << 16) + (byte() << 8) + byte();
+                const packs = [];
+                for (let n = byte(); n > 0; n--) {
+                    const pk = { id: str(), name: str(), stickers: [] };
+                    for (let k = (byte() << 8) + byte(); k > 0; k--) {
+                        const ext = byte();
+                        if (ext === 255) { const id = str(), url = str(); pk.stickers.push({ id, url }); continue; }
+                        const id = bytesToUuid(b.slice(i, i + 16)), img = bytesToUuid(b.slice(i + 16, i + 32));
+                        i += 32;
+                        pk.stickers.push({ id, url: `https://cdn.xn--d1ah4a.com/images/${img}.${EXT[ext] || 'png'}` });
+                    }
+                    packs.push(pk);
+                }
+                return { at: at * 1000, packs };
+            }
+            const myAccountId = () => (meData && meData.id) || (verifiedInfo(myUsername || '') || {}).id || null;
+            const partsKey = () => 'vp_sticker_parts_' + myAccountId();
+            const remotePacksAt = () => { const f = String((verifiedInfo(myUsername || '') || {}).flags || ''); return f.length > 1 ? +f.slice(1) * 1000 : 0; };
+            async function packParts(scan) {
+                if (!scan) { const saved = GM_getValue(partsKey(), null); if (saved) return saved; }
+                const me = myAccountId();
+                const list = (await allComments(STICKER_POST_ID)).filter(c => c.author && c.author.id === me && /^ITDXS \d+\/\d+ /.test(c.content || ''))
+                    .map(c => { const m = c.content.match(/^ITDXS (\d+)\/(\d+) (\S*)/); return { id: c.id, i: +m[1], n: +m[2], d: m[3] }; });
+                GM_setValue(partsKey(), list.map(({ id, i, n }) => ({ id, i, n })));
+                return list;
+            }
+            function applyRemotePacks(remote) {
+                applyingRemote = true;
+                K.userPacks = remote.packs;
+                writeList(STORAGE_KEY, K.userPacks);
+                packsAt = remote.at;
+                localStorage.setItem(PACKS_AT_KEY, String(packsAt));
+                applyingRemote = false;
+                if (K.scrollContainer) { updateTabButtons(); K.refreshAllPackGrids(); }
+            }
+            const patchComment = (id, content) => editComment(id, content);
+            async function pullPacks() {
+                const at = remotePacksAt();
+                if (!at || at <= packsAt + 999) return;
+                const parts = (await packParts(true)).filter(p => p.n).sort((a, b) => a.i - b.i);
+                const n = parts.length && parts[0].n;
+                if (!n || parts.length < n || !parts.slice(0, n).every((p, k) => p.i === k + 1 && p.n === n)) return;
+                const remote = decodePacks(parts.slice(0, n).map(p => p.d).join(''));
+                if (remote.at <= packsAt + 999) return;
+                const legacy = !packsAt && K.userPacks.length ? K.userPacks.filter(pk => !remote.packs.some(r => r.id === pk.id)) : [];
+                applyRemotePacks({ at: remote.at, packs: [...remote.packs, ...legacy] });
+                if (legacy.length) { packsAt = Date.now(); localStorage.setItem(PACKS_AT_KEY, String(packsAt)); return 'push'; }
+            }
+            async function pushPacks() {
+                const mine = verifiedInfo(myUsername || '');
+                if (!mine || !mine.commentId) return;
+                let parts = await packParts(false);
+                if (!parts.length) parts = await packParts(true);
+                if (!packsAt) { packsAt = Date.now(); localStorage.setItem(PACKS_AT_KEY, String(packsAt)); }
+                const data = encodePacks(K.userPacks, packsAt), CH = 1900, chunks = [];
+                for (let k = 0; k < data.length || !chunks.length; k += CH) chunks.push(data.slice(k, k + CH));
+                const slots = parts.map(p => p.id), saved = [];
+                for (let k = 0; k < Math.max(chunks.length, slots.length); k++) {
+                    const content = k < chunks.length ? `${SYNC_TAG} ${k + 1}/${chunks.length} ${chunks[k]}` : `${SYNC_TAG} 0/0 -`;
+                    if (slots[k]) {
+                        const res = await patchComment(slots[k], content);
+                        if (!res.ok) throw new Error('паки: правка ' + res.status);
+                        saved.push({ id: slots[k], i: k < chunks.length ? k + 1 : 0, n: k < chunks.length ? chunks.length : 0 });
+                    } else {
+                        const res = await sendComment(STICKER_POST_ID, content);
+                        if (!res.ok) throw new Error('паки: запись ' + res.status);
+                        const j = await res.json();
+                        saved.push({ id: (j.data || j).id, i: k + 1, n: chunks.length });
+                    }
+                }
+                GM_setValue(partsKey(), saved);
+                const code = String(mine.code) + '1' + Math.floor(packsAt / 1000);
+                const res = await patchComment(mine.commentId, code);
+                if (res.ok) await checkAllComments(true);
+            }
+            async function syncPacks(up) {
+                if (!STICKER_POST_ID || syncing || !myUsername || !myAccountId()) return;
+                syncing = true;
+                try {
+                    if (up) await pushPacks();
+                    else {
+                        const merged = await pullPacks();
+                        const at = remotePacksAt();
+                        if (merged === 'push' || (K.userPacks.length && (!packsAt || packsAt > at + 999))) await pushPacks();
+                    }
+                } catch (e) {
+                    logErr('паки: синхронизация', e);
+                } finally {
+                    syncing = false;
+                }
+            }
+            function packsChanged() {
+                if (applyingRemote) return;
+                packsAt = Date.now();
+                localStorage.setItem(PACKS_AT_KEY, String(packsAt));
+                clearTimeout(syncTimer);
+                syncTimer = setTimeout(() => syncPacks(true), 4000);
+            }
+            (function syncLoop() {
+                if (!STICKER_POST_ID) return;
+                const tick = () => myUsername && myAccountId() && verifiedInfo(myUsername) ? syncPacks(false) : setTimeout(tick, 3000);
+                setTimeout(tick, 6000);
+                sched.add('packs', () => syncPacks(false), { every: 10 * 60 * 1000, net: true, visible: true });
+            })();
+
+        }
+        // Стикеры: импорт и экспорт паков из ZIP
+        function stickerPartZip(K) {
+            const { DEFAULT_PACK_NAME, MAX_NAME_LENGTH, rebuildPanel, saveRecent, saveUserPacks, showPanel, uploadImageToServer } = K;
+            K.openZipImport = openZipImport; K.addToRecent = addToRecent;
+            const ZIP_IMG = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+            const ZIP_LIMITS = { packs: 20, perPack: 120, total: 300, bytes: 5 * 1024 * 1024 };
+            async function readZip(file) {
+                const buf = new Uint8Array(await file.arrayBuffer()), dv = new DataView(buf.buffer);
+                let eocd = -1;
+                for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+                if (eocd < 0) throw new Error('это не zip-архив');
+                const count = dv.getUint16(eocd + 10, true);
+                let at = dv.getUint32(eocd + 16, true);
+                const utf8 = new TextDecoder('utf-8', { fatal: true }), dos = new TextDecoder('ibm866');
+                const entries = [];
+                for (let k = 0; k < count; k++) {
+                    if (dv.getUint32(at, true) !== 0x02014b50) throw new Error('архив повреждён');
+                    const flags = dv.getUint16(at + 8, true), method = dv.getUint16(at + 10, true);
+                    const csize = dv.getUint32(at + 20, true), size = dv.getUint32(at + 24, true);
+                    const nlen = dv.getUint16(at + 28, true), xlen = dv.getUint16(at + 30, true), clen = dv.getUint16(at + 32, true);
+                    const local = dv.getUint32(at + 42, true), raw = buf.subarray(at + 46, at + 46 + nlen);
+                    let name;
+                    try { name = flags & 0x800 ? new TextDecoder().decode(raw) : utf8.decode(raw); } catch (e) { name = dos.decode(raw); }
+                    entries.push({ name: name.replace(/\\/g, '/'), method, csize, size, local });
+                    at += 46 + nlen + xlen + clen;
+                }
+                entries.data = async e => {
+                    const start = e.local + 30 + dv.getUint16(e.local + 26, true) + dv.getUint16(e.local + 28, true);
+                    const bytes = buf.slice(start, start + e.csize);
+                    if (e.method === 0) return bytes;
+                    if (e.method !== 8) throw new Error('неизвестное сжатие');
+                    return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+                };
+                return entries;
+            }
+            function zipPacks(entries, zipName) {
+                const imgs = entries.filter(e => {
+                    const parts = e.name.split('/');
+                    return !e.name.endsWith('/') && !parts.some(p => p.startsWith('.') || p === '__MACOSX') && ZIP_IMG[(parts.pop().split('.').pop() || '').toLowerCase()];
+                });
+                let paths = imgs.map(e => e.name.split('/'));
+                while (paths.length && paths.every(p => p.length > 2 && p[0] === paths[0][0])) paths = paths.map(p => p.slice(1));
+                const groups = new Map();
+                imgs.forEach((e, i) => {
+                    const p = paths[i], pack = p.length > 1 ? p[0] : zipName.replace(/\.zip$/i, '');
+                    if (!groups.has(pack)) groups.set(pack, []);
+                    groups.get(pack).push(e);
+                });
+                return [...groups].map(([name, files]) => ({ name: name.trim().slice(0, MAX_NAME_LENGTH) || DEFAULT_PACK_NAME, files: files.sort((a, b) => a.name.localeCompare(b.name, 'ru', { numeric: true })) }));
+            }
+            function openZipImport() {
+                if (!K.stickerPanel || K.stickerPanel.querySelector('.vp-sp-import')) return;
+                K.exitEditMode();
+                const card = K.el('div', 'vp-sp-import', `<b>Паки из архива</b>
+                <ul>
+                    <li>Архив <b style="font-size:inherit">.zip</b></li>
+                    <li>Папка в архиве = пак, имя папки = название пака</li>
+                    <li>В папке — картинки png, jpg, gif, webp (до 5 МБ); встают как есть, без обрезки</li>
+                    <li>Картинки прямо в архиве, без папки, — пак с именем архива</li>
+                </ul>
+                <pre>стикеры.zip
+├ Коты/
+│  ├ 1.png
+│  └ 2.gif
+└ Мемы/
+   └ шрек.jpg</pre>
+                <div class="vp-imp-status"></div>
+                <div class="vp-imp-btns"><button type="button" class="vp-imp-cancel">Отмена</button><button type="button" class="vp-imp-go">Выбрать архив</button></div>`);
+                K.stickerPanel.appendChild(card);
+                const status = card.querySelector('.vp-imp-status'), go = card.querySelector('.vp-imp-go'), cancel = card.querySelector('.vp-imp-cancel');
+                let busy = false, stop = false;
+                cancel.onclick = () => { if (busy) { stop = true; cancel.disabled = true; status.textContent = 'Останавливаю…'; } else card.remove(); };
+                go.onclick = () => {
+                    const input = K.el('input');
+                    input.type = 'file';
+                    input.accept = '.zip,application/zip';
+                    input.onchange = async () => {
+                        const file = input.files[0];
+                        if (!file) return;
+                        busy = true; go.disabled = true;
+                        try {
+                            status.textContent = 'Читаю архив…';
+                            const entries = await readZip(file);
+                            const packs = zipPacks(entries, file.name).slice(0, ZIP_LIMITS.packs);
+                            const total = Math.min(ZIP_LIMITS.total, packs.reduce((n, pk) => n + Math.min(pk.files.length, ZIP_LIMITS.perPack), 0));
+                            if (!total) throw new Error('в архиве нет картинок по правилам');
+                            let done = 0, skipped = 0;
+                            for (const pk of packs) {
+                                if (stop || done >= total) break;
+                                const pack = { id: 'user_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), name: pk.name, stickers: [] };
+                                for (const e of pk.files.slice(0, ZIP_LIMITS.perPack)) {
+                                    if (stop || done >= total) break;
+                                    status.textContent = `Загружаю «${pk.name}»: ${done + 1} из ${total}…`;
+                                    try {
+                                        if (e.size > ZIP_LIMITS.bytes) throw new Error('больше 5 МБ');
+                                        const base = e.name.split('/').pop(), type = ZIP_IMG[base.split('.').pop().toLowerCase()];
+                                        const data = await uploadImageToServer(new File([await entries.data(e)], base, { type }));
+                                        pack.stickers.push(data);
+                                    } catch (err) { skipped++; }
+                                    done++;
+                                }
+                                if (pack.stickers.length) { K.userPacks.push(pack); saveUserPacks(); }
+                            }
+                            rebuildPanel();
+                            const left = K.stickerPanel.querySelector('.vp-sp-import');
+                            if (left) left.remove();
+                            showPanel();
+                            if (skipped) alert(`Готово. Не загрузились: ${skipped} (слишком большие или битые картинки)`);
+                        } catch (err) {
+                            status.textContent = 'Не вышло: ' + (err && err.message || err);
+                            logErr('паки из архива', err);
+                            busy = false; go.disabled = false;
+                        }
+                    };
+                    input.click();
+                };
+            }
+
+            function addToRecent(sticker) {
+                K.recentStickers = [sticker, ...K.recentStickers.filter(s => s.id !== sticker.id)].slice(0, 30);
+                saveRecent();
+            }
+        }
+        // Стикеры: режим правки паков, перетаскивание, добавление и удаление стикеров
+        function stickerPartEdit(K) {
+            const { allPackKeys, createStickerButton, el, packStickers, rebuildPanel, savePack, saveRecent, saveUserPacks, showPanel, updateTabButtons, uploadImageToServer } = K;
+            K.markEditing = markEditing; K.enterEditMode = enterEditMode; K.exitEditMode = exitEditMode; K.deleteStickerPack = deleteStickerPack; K.deleteSticker = deleteSticker; K.startStickerDrag = startStickerDrag; K.refreshPackGrid = refreshPackGrid; K.refreshAllPackGrids = refreshAllPackGrids;
             function markEditing() {
-                if (!scrollContainer) return;
-                scrollContainer.classList.toggle('vp-editing', !!editPack);
-                for (const e of scrollContainer.children) e.classList.toggle('vp-cur', e.dataset.pack === editPack);
+                if (!K.scrollContainer) return;
+                K.scrollContainer.classList.toggle('vp-editing', !!K.editPack);
+                for (const e of K.scrollContainer.children) e.classList.toggle('vp-cur', e.dataset.pack === K.editPack);
             }
             function enterEditMode(key) {
                 if (key === 'recent') return;
-                editPack = key;
+                K.editPack = key;
                 markEditing();
                 refreshAllPackGrids();
-                const header = scrollContainer.querySelector(`.pack-header[data-pack="${key}"]`);
+                const header = K.scrollContainer.querySelector(`.pack-header[data-pack="${key}"]`);
                 if (header) header.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
             function exitEditMode() {
-                editPack = null;
-                if (!scrollContainer) return;
+                K.editPack = null;
+                if (!K.scrollContainer) return;
                 markEditing();
                 refreshAllPackGrids();
             }
 
             function deleteStickerPack(key) {
-                userPacks = userPacks.filter(p => p.id !== key);
+                K.userPacks = K.userPacks.filter(p => p.id !== key);
                 saveUserPacks();
-                if (stickerPanel) {
-                    const open = stickerPanel.classList.contains('vp-open');
+                if (K.stickerPanel) {
+                    const open = K.stickerPanel.classList.contains('vp-open');
                     rebuildPanel();
                     if (open) showPanel();
                 }
@@ -11143,7 +11265,7 @@ var __vpBannerAuto = (() => {
                         const left = gr.left + grid.clientLeft + el.offsetLeft, top = gr.top + grid.clientTop + el.offsetTop;
                         return { el, r: { left, top, right: left + el.offsetWidth, bottom: top + el.offsetHeight } };
                     });
-                    box = scrollContainer.getBoundingClientRect();
+                    box = K.scrollContainer.getBoundingClientRect();
                 };
                 const frame = () => {
                     raf = 0;
@@ -11156,7 +11278,7 @@ var __vpBannerAuto = (() => {
                         measure();
                     }
                     if (py < box.top + 36 || py > box.bottom - 36) {
-                        scrollContainer.scrollTop += py < box.top + 36 ? -10 : 10;
+                        K.scrollContainer.scrollTop += py < box.top + 36 ? -10 : 10;
                         measure();
                         raf = raf || requestAnimationFrame(frame);
                     }
@@ -11175,7 +11297,7 @@ var __vpBannerAuto = (() => {
                         document.body.appendChild(ghost);
                         btn.classList.add('vp-hole');
                         btn._vpDragged = true;
-                        stickerPanel.classList.add('vp-drag');
+                        K.stickerPanel.classList.add('vp-drag');
                         measure();
                     }
                     ev.preventDefault();
@@ -11199,7 +11321,7 @@ var __vpBannerAuto = (() => {
                     const finish = () => {
                         ghost.remove();
                         btn.classList.remove('vp-hole');
-                        stickerPanel.classList.remove('vp-drag');
+                        K.stickerPanel.classList.remove('vp-drag');
                         const list = packStickers(key);
                         const order = [...grid.querySelectorAll('.vp-sticker-item')].map(b => list[+b.dataset.stickerIndex]);
                         list.splice(0, list.length, ...order);
@@ -11222,18 +11344,18 @@ var __vpBannerAuto = (() => {
                 input.onchange = async () => {
                     const file = input.files[0];
                     if (!file) return;
-                    const addBtn = scrollContainer && scrollContainer.querySelector(`.pack-grid[data-pack="${key}"] .add-item-btn`);
+                    const addBtn = K.scrollContainer && K.scrollContainer.querySelector(`.pack-grid[data-pack="${key}"] .add-item-btn`);
                     const busy = on => { if (addBtn) { addBtn.innerHTML = on ? ICONS.LOADING : ICONS.ADD; addBtn.classList.toggle('vp-busy', on); } };
                     busy(true);
                     try {
-                        const cropped = await showCropEditor(URL.createObjectURL(file));
+                        const cropped = await K.showCropEditor(URL.createObjectURL(file));
                         if (!cropped) { busy(false); return; }
                         const data = await uploadImageToServer(cropped);
                         if (key === 'recent') {
-                            recentStickers = [data, ...recentStickers].slice(0, 20);
+                            K.recentStickers = [data, ...K.recentStickers].slice(0, 20);
                             saveRecent();
                         } else {
-                            const pack = userPacks.find(p => p.id === key);
+                            const pack = K.userPacks.find(p => p.id === key);
                             if (pack) { pack.stickers.push(data); saveUserPacks(); }
                         }
                         refreshAllPackGrids();
@@ -11247,9 +11369,9 @@ var __vpBannerAuto = (() => {
             }
 
             function refreshPackGrid(key) {
-                const grid = scrollContainer && scrollContainer.querySelector(`.pack-grid[data-pack="${key}"]`);
+                const grid = K.scrollContainer && K.scrollContainer.querySelector(`.pack-grid[data-pack="${key}"]`);
                 if (!grid) return;
-                const editing = editPack === key;
+                const editing = K.editPack === key;
                 grid.replaceChildren(...packStickers(key).map((s, i) => createStickerButton(s, key, i, editing)));
                 if (editing) {
                     const addBtn = el('button', 'add-item-btn', ICONS.ADD);
@@ -11259,94 +11381,14 @@ var __vpBannerAuto = (() => {
                 }
             }
             function refreshAllPackGrids() {
-                if (scrollContainer) allPackKeys().forEach(refreshPackGrid);
+                if (K.scrollContainer) allPackKeys().forEach(refreshPackGrid);
             }
 
-            async function attachAsSiteFile(sticker) {
-                const row = stickerBtn && stickerBtn.closest('.' + SELECTORS.stickerContainer);
-                let input = null;
-                for (let e = row, i = 0; e && !input && i < 5; e = e.parentElement, i++) input = e.querySelector('input[type="file"]');
-                if (!input) return false;
-                const file = await stickerFile(sticker);
-                const dt = new DataTransfer();
-                dt.items.add(file);
-                input.files = dt.files;
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-                return true;
-            }
-            function pickSticker(sticker) {
-                if (sticker && sticker.id && sticker.url) {
-                    addToRecent(sticker);
-                    const fallback = e => {
-                        if (e) { console.warn('[ITD VP] стикер через сайт', e); logErr('стикер через сайт', e); }
-                        try { insertStickerToComment(sticker); } catch (err) { console.warn('[ITD VP] стикер', err); logErr('стикер', err); }
-                    };
-                    if (stickerBtn) stickerBtn.innerHTML = ICONS.LOADING;
-                    attachAsSiteFile(sticker).then(ok => { if (!ok) fallback(); }, fallback)
-                        .finally(() => { if (stickerBtn) stickerBtn.innerHTML = ICONS.STICKER_BUTTON; });
-                }
-                stickerPanel.classList.remove('vp-open');
-                exitEditMode();
-                enablePageScroll();
-            }
-            function createStickerButton(sticker, key, index, editing) {
-                const btn = el('button', 'vp-sticker-item');
-                btn.dataset.packKey = key;
-                btn.dataset.stickerIndex = index;
-                if (sticker && sticker.url) { const img = el('img'); img.src = sticker.url; btn.appendChild(img); }
-                else btn.appendChild(el('div', 'vp-sticker-empty'));
-                btn.onclick = () => { if (btn._vpDragged) { btn._vpDragged = false; return; } pickSticker(sticker); };
-                if (!editing) return btn;
-
-                btn.classList.add('sticker-editing', `sticker-shake-${(index % 8) + 1}`);
-                btn.draggable = false;
-                const del = el('div', 'vp-sticker-del', ICONS.DELETE);
-                del.onmousedown = e => { e.stopPropagation(); e.preventDefault(); };
-                del.onclick = e => { e.stopPropagation(); e.preventDefault(); deleteSticker(key, index); };
-                btn.appendChild(del);
-                btn.addEventListener('pointerdown', e => startStickerDrag(e, btn, key));
-                return btn;
-            }
-
-            function scrollToPack(key) {
-                const header = scrollContainer && scrollContainer.querySelector(`.pack-header[data-pack="${key}"]`);
-                if (header) header.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-            function updateActiveTabFromScroll() {
-                if (editPack || !scrollContainer) return;
-                const top = scrollContainer.getBoundingClientRect().top + 50;
-                let active = 'recent', min = Infinity;
-                for (const h of scrollContainer.querySelectorAll(':scope > .pack-header')) {
-                    const d = h.getBoundingClientRect().top - top;
-                    if (d <= 0 && -d < min) { min = -d; active = h.dataset.pack; }
-                }
-                recentBtn.classList.toggle('vp-on', active === 'recent');
-                tabsRow.querySelectorAll('.vp-sp-tab').forEach(t => t.classList.toggle('vp-on', t.dataset.pack === active));
-            }
-
-            function showPanel() {
-                if (!stickerBtn || !stickerBtn.isConnected) return;
-                clearTimeout(hideTimeout);
-                createStickerPanel();
-                if (!scrollContainer.children.length) renderAllContent();
-                const rect = stickerBtn.getBoundingClientRect();
-                stickerPanel.style.bottom = `${window.innerHeight - rect.top + 8}px`;
-                stickerPanel.style.left = `${Math.min(rect.left, window.innerWidth - PANEL_WIDTH - 20)}px`;
-                stickerPanel.classList.add('vp-open');
-                disablePageScroll();
-            }
-            function hidePanel(delay) {
-                clearTimeout(hideTimeout);
-                hideTimeout = setTimeout(() => {
-                    if (!stickerPanel || !stickerPanel.classList.contains('vp-open')) return;
-                    if (stickerPanel.classList.contains('vp-drag')) return hidePanel(delay);
-                    if (stickerPanel.querySelector('.vp-sp-import')) return hidePanel(delay);
-                    stickerPanel.classList.remove('vp-open');
-                    exitEditMode();
-                    enablePageScroll();
-                }, delay);
-            }
-
+        }
+        // Стикеры: окно обрезки новой картинки
+        function stickerPartCrop(K) {
+            const { el } = K;
+            K.showCropEditor = showCropEditor;
             function showCropEditor(imageUrl) {
                 return new Promise(resolve => {
                     const modal = el('div', 'vp-crop-modal');
@@ -11483,19 +11525,7 @@ var __vpBannerAuto = (() => {
                     if (img.complete) fitToImage();
                 });
             }
-
-            onDom(function stickerButton() {
-                const row = siteEl('stickerContainer');
-                if (!row || row.querySelector('.sticker-btn')) return;
-                const before = row.querySelector('.' + SELECTORS.stickerMicBtn) || row.querySelector('.' + SELECTORS.stickerSendBtn);
-                if (!before) return;
-                stickerBtn = el('button', 'sticker-btn', ICONS.STICKER_BUTTON);
-                stickerBtn.onmouseenter = showPanel;
-                stickerBtn.onmouseleave = () => hidePanel(300);
-                row.insertBefore(stickerBtn, before);
-            });
-        })();
-
+        }
         const MSG_MAX = 990, MSG_TEXT_MAX = 500;
         const MSG_IMG_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
         const MSG_IMG_RE = /\/images\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.(\w+)(?:[?#]|$)/i;
@@ -11668,13 +11698,13 @@ var __vpBannerAuto = (() => {
         async function msgLoadMe() {
             const id = msgMyId(), k = id && msgNet.keys.get(id);
             if (!k) return null;
-            try { const s = await msgIdb.get('me:' + id); if (s && s.pub === k.pubText) msgNet.me = { id, priv: s.priv }; } catch (e) { }
+            try { const s = await msgIdb.get('me:' + id); if (s && s.pub === k.pubText) msgNet.me = { id, priv: s.priv }; } catch (e) { logErr('сообщения: ключ в хранилище (чтение)', e); }
             return msgNet.me;
         }
         async function msgRemember(id, pk8, pubText) {
             const priv = await crypto.subtle.importKey('pkcs8', pk8, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
             msgNet.me = { id, priv }; msgNet.pairs.clear();
-            try { await msgIdb.set('me:' + id, { priv, pub: pubText }); } catch (e) { }
+            try { await msgIdb.set('me:' + id, { priv, pub: pubText }); } catch (e) { logErr('сообщения: ключ в хранилище (запись)', e); }
         }
         async function msgCreateKey(pw) {
             const id = msgMyId();
@@ -11825,13 +11855,35 @@ var __vpBannerAuto = (() => {
         }
         function msgSendRead(uid, upTo, sup) { return msgSend(uid, '', false, null, cat(new Uint8Array([2]), be32(upTo), new Uint8Array([sup ? 1 : 0]))); }
         const sameBytes = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
-        let msgWriteQ = Promise.resolve();
-        function msgSend(uid, text, sup, img, svc, fixedTs) {
-            const p = msgWriteQ.then(() => msgSendOne(uid, text, sup, img, svc, fixedTs));
-            msgWriteQ = p.catch(() => { });
-            return p;
+        // Запись в свой том идёт строго по одной. Сигналы звонка (prio) обходят обычные сообщения, а те при повторе уступают им дорогу.
+        const msgWriteJobs = [];
+        let msgWriteRun = false;
+        const msgPrioWaiting = () => msgWriteJobs.some(j => j.prio);
+        const msgBackoff = async ms => { for (const end = Date.now() + ms; Date.now() < end;) { if (msgPrioWaiting()) return false; await new Promise(r => setTimeout(r, 200)); } return true; };
+        async function msgWriteNext() {
+            if (msgWriteRun) return;
+            msgWriteRun = true;
+            try {
+                while (msgWriteJobs.length) {
+                    const j = msgWriteJobs.shift();
+                    try { j.res(await j.fn()); } catch (e) { j.rej(e); }
+                }
+            } finally { msgWriteRun = false; }
         }
-        async function msgSendOne(uid, text, sup, img, svc, fixedTs) {
+        function msgWriteJob(fn, prio) {
+            return new Promise((res, rej) => {
+                const job = { fn, prio: !!prio, res, rej };
+                if (job.prio) {
+                    const i = msgWriteJobs.findIndex(j => !j.prio);
+                    msgWriteJobs.splice(i < 0 ? msgWriteJobs.length : i, 0, job);
+                } else msgWriteJobs.push(job);
+                msgWriteNext();
+            });
+        }
+        function msgSend(uid, text, sup, img, svc, fixedTs, opt) {
+            return msgWriteJob(() => msgSendOne(uid, text, sup, img, svc, fixedTs, opt), opt && opt.prio);
+        }
+        async function msgSendOne(uid, text, sup, img, svc, fixedTs, opt) {
             const me = msgNet.me, key = await msgPair(uid);
             if (!me || !key) throw new Error('нет ключа');
             const ts = fixedTs || Math.floor(srvNow() / 1000), iv = rnd(12);
@@ -11882,9 +11934,10 @@ var __vpBannerAuto = (() => {
             let err = null;
             for (let a = 0; a < 3; a++) {
                 try {
-                    if (a) await new Promise(r => setTimeout(r, a * 2000));
+                    if (a && !(await msgBackoff(a * 2000))) { err = new Error('уступил очередь звонку'); err.yielded = true; break; }
                     await msgSync(a > 0);
                     if (present()) { err = null; break; }
+                    if (a) msgNet.ownVol = null;
                     const mode = GM_getValue('msgMode', 'c');
                     if (!(await write(mode)) && mode === 'c') { GM_setValue('msgMode', 'b'); await write('b'); }
                     await msgSync(true);
@@ -11897,7 +11950,7 @@ var __vpBannerAuto = (() => {
         }
         const msgOutKey = () => acctKey('msgOutbox');
         const msgOutGet = () => { let o; try { o = GM_getValue(msgOutKey(), []); } catch (e) { o = []; } return Array.isArray(o) ? o : []; };
-        const msgOutSet = l => { try { GM_setValue(msgOutKey(), l.slice(-60)); } catch (e) { } };
+        const msgOutSet = l => { try { GM_setValue(msgOutKey(), l.slice(-60)); } catch (e) { logErr('сообщения: очередь отправки не сохранилась', e); } };
         const msgDelivered = e => (msgNet.conv.get(e.uid) || []).some(m => m.dir === 'out' && m.ts === e.ts && !!m.sup === !!e.sup && m.text === e.text);
         function msgEnqueue(uid, text, sup) {
             const list = msgOutGet(), conv = msgNet.conv.get(uid) || [];
@@ -11932,6 +11985,7 @@ var __vpBannerAuto = (() => {
                         upd((x, l) => l.splice(l.indexOf(x), 1));
                     } catch (err) {
                         const why = String(err && err.message || err).slice(0, 80);
+                        if (err && err.yielded) { upd(x => { x.next = Date.now() + 1500; }); continue; }
                         upd(x => {
                             x.tries = (x.tries || 0) + 1;
                             x.err = why;
@@ -12585,6 +12639,210 @@ var __vpBannerAuto = (() => {
 
         let messagesOverlay = null;
 
+        const MSG_CSS = `
+        .vp-msgs { position: fixed; z-index: 5; display: none; flex-direction: column; box-sizing: border-box; overflow: hidden;
+            background: var(--block-bg); color: var(--text-primary, #fff); font-family: inherit;
+            backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none); }
+        .vp-msgs.vp-open { display: flex; animation: vpMsgsIn .22s cubic-bezier(.2, .8, .2, 1); }
+        html.vp-msgs-open .vp-msgs-navwrap { z-index: 10 !important; }
+        html.vp-msgs-open .itd-scroll-top-btn { opacity: 0 !important; visibility: hidden !important; }
+        html.vp-msgs-open .vp-comments-sheet { visibility: hidden !important; }
+        html.vp-msgs-open .vp-nav-link.vp-site-cur { color: var(--vp-off-c) !important; opacity: var(--vp-off-o) !important; background-color: var(--vp-off-b) !important; }
+        html.vp-msgs-open .vp-nav-link[href="#"] { color: var(--vp-on-c) !important; opacity: var(--vp-on-o) !important; background-color: var(--vp-on-b) !important; }
+        .vp-msgs.vp-card { border-radius: 36px; border: 1px solid var(--border-color, rgba(255, 255, 255, .15));
+            box-shadow: 0 16px 48px rgba(0, 0, 0, .45); }
+        html.vp-light .vp-msgs.vp-card { box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
+        .vp-msgs-under { position: fixed; top: 0; bottom: 0; z-index: 4; display: none; background: var(--bg-primary, #000); pointer-events: none; }
+        html.vp-msgs-open .vp-msgs-under.vp-on { display: block; }
+        .vp-msgs-view { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+        .vp-msgs-view[hidden] { display: none; }
+        .vp-msgs-call[hidden], .vp-msgs-more[hidden] { display: none; }
+        .vp-msgs-chead { position: relative; }
+        .vp-msgs-hmenu { position: absolute; top: calc(100% - 4px); right: 12px; z-index: 5; min-width: 190px; padding: 6px; border-radius: 14px;
+            background: #202024; box-shadow: 0 12px 34px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(128, 128, 128, .2); }
+        .vp-msgs-hmenu[hidden] { display: none; }
+        html.vp-light .vp-msgs-hmenu { background: #fff; }
+        .vp-msgs-hmenu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: 10px; background: none;
+            color: var(--text-primary, #fff); font: inherit; font-size: 14px; cursor: pointer; text-align: left; }
+        .vp-msgs-hmenu button:hover { background: rgba(128, 128, 128, .16); }
+        .vp-msgs-hmenu button.vp-danger { color: #f23f43; }
+        .vp-msgs-blocked { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .vp-msgs-blocked button { padding: 6px 14px; border: 0; border-radius: 999px; background: rgba(128, 128, 128, .2); color: var(--text-primary, #fff);
+            font: inherit; font-size: 13px; cursor: pointer; }
+        .vp-msgs-blocked button:hover { background: rgba(128, 128, 128, .3); }
+        .vp-msgs-callrow { align-self: center; display: flex; align-items: center; gap: 7px; width: fit-content; margin: 8px auto; padding: 6px 12px; border-radius: 14px;
+            background: rgba(128, 128, 128, .14); color: var(--text-secondary, #b5bac1); font-size: 13px; cursor: pointer; }
+        .vp-msgs-callrow:hover { background: rgba(128, 128, 128, .22); }
+        .vp-msgs-callrow.vp-miss { color: #f23f43; }
+        .vp-msgs-callrow time { opacity: .65; font-size: 12px; }
+        .vp-msgs-top { display: flex; align-items: center; gap: 10px; padding: 18px 16px 10px; }
+        .vp-msgs-title { font-size: 24px; font-weight: 700; margin-right: auto; }
+        .vp-msgs-ib { width: 40px; height: 40px; border-radius: 50%; border: 0; padding: 0; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; background: var(--block-bg); color: var(--text-primary, #fff); flex-shrink: 0; }
+        .vp-msgs-ib:active { transform: scale(.94); }
+        .vp-msgs-search { margin: 0 16px 10px; display: flex; align-items: center; gap: 8px; padding: 0 14px; height: 42px; border-radius: 999px;
+            background: var(--block-bg); color: var(--text-secondary); }
+        .vp-msgs-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
+        .vp-msgs-sub { padding: 2px 20px 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+        .vp-msgs-ava img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+        .vp-msgs-who, .vp-msgs-chead .vp-msgs-ava { cursor: pointer; }
+        .vp-msgs-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; overscroll-behavior: contain; }
+        .vp-msgs-row { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 18px; cursor: pointer; }
+        .vp-msgs-row:hover, .vp-msgs-row:active { background: var(--block-bg); }
+        .vp-msgs-ava { position: relative; flex: 0 0 50px !important; min-width: 50px !important; min-height: 50px !important; max-width: 50px !important; max-height: 50px !important; box-sizing: border-box !important; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 26px; background: var(--block-bg); }
+        .vp-msgs-ava.vp-sm { flex: 0 0 38px !important; min-width: 38px !important; min-height: 38px !important; max-width: 38px !important; max-height: 38px !important; font-size: 20px; }
+        html.vp-glass .vp-msgs-chead .vp-msgs-ava { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+        .vp-msgs-ava.vp-sup { color: #fff; background: linear-gradient(145deg, #ff5a5f, #d0202a); box-shadow: 0 0 0 2px rgba(255, 90, 95, .28), 0 4px 14px rgba(208, 32, 42, .4); }
+        .vp-msgs-ava.vp-sup svg { width: 58%; height: 58%; stroke-width: 2.1; }
+        .vp-msgs-row.vp-sup { background: linear-gradient(90deg, rgba(255, 70, 76, .2), rgba(255, 70, 76, .06)); box-shadow: inset 0 0 0 1px rgba(255, 90, 95, .32); }
+        .vp-msgs-row.vp-sup:hover, .vp-msgs-row.vp-sup:active { background: linear-gradient(90deg, rgba(255, 70, 76, .3), rgba(255, 70, 76, .1)); }
+        .vp-msgs-row.vp-sup + .vp-msgs-row { margin-top: 6px; }
+        .vp-msgs-ava.vp-online::after { content: ""; position: absolute; right: 1px; bottom: 1px; width: 11px; height: 11px; border-radius: 50%;
+            background: #22c55e; box-shadow: 0 0 0 2.5px var(--bg-primary, #000); }
+        .vp-msgs-mid { flex: 1; min-width: 0; }
+        .vp-msgs-name { display: flex; align-items: center; gap: 5px; font-weight: 600; font-size: 15px; }
+        .vp-msgs-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msgs-last { margin-top: 3px; font-size: 14px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msgs-side > span:first-child { display: inline-flex; align-items: center; gap: 3px; }
+        .vp-msgs-tick { display: inline-flex; font-style: normal; color: var(--text-secondary); }
+        .vp-msgs-tick.vp-read { color: #4aa3ff; }
+        .vp-msgs-lthumb { width: 18px; height: 18px; border-radius: 4px; object-fit: cover; vertical-align: -4px; margin-right: 6px; }
+        .vp-msgs-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; font-size: 12px; color: var(--text-secondary); }
+        .vp-msgs-badge { min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: 700; background: var(--vp-accent); color: var(--vp-on-accent, #fff); }
+        .vp-msgs-pin { display: flex; color: var(--text-secondary); }
+        .vp-msgs-row.vp-pinned { background: color-mix(in srgb, var(--text-primary, #fff) 4%, transparent); }
+        .vp-msgs-row.vp-pinned + .vp-msgs-row:not(.vp-pinned) { margin-top: 6px; }
+        .vp-msgs-row { -webkit-touch-callout: none; user-select: none; transition: transform .15s; }
+        .vp-msgs-row.vp-held { transform: scale(.97); }
+        .vp-msgs-ctx { position: absolute; z-index: 3; display: none; padding: 5px; border-radius: 16px; min-width: 170px;
+            background: var(--block-bg); border: 1px solid var(--border-color, rgba(255, 255, 255, .1)); box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
+        .vp-msgs-ctx.vp-open { display: block; animation: vpMsgsCtx .14s ease-out; }
+        @keyframes vpMsgsCtx { from { opacity: 0; transform: scale(.94); } }
+        .vp-msgs-ctx button { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; color: var(--text-primary, #fff);
+            font: inherit; font-size: 15px; padding: 10px 12px; border-radius: 12px; cursor: pointer; }
+        .vp-msgs-ctx button:hover, .vp-msgs-ctx button:active { background: var(--bg-hover, rgba(255, 255, 255, .08)); }
+        .vp-msgs-ctx svg { width: 16px; height: 16px; }
+        .vp-msgs-empty { padding: 40px 16px; text-align: center; color: var(--text-secondary); font-size: 14px; }
+        .vp-msgs-chead { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px;
+            border-bottom: 1px solid color-mix(in srgb, var(--text-primary, #fff) 8%, transparent); }
+        .vp-msgs-who { display: flex; flex-direction: column; min-width: 0; margin-right: auto; }
+        .vp-msgs-who b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msgs-who small { font-size: 12px; color: var(--text-secondary); }
+        .vp-msgs-chat { position: relative; }
+        .vp-msgs-down { position: absolute; right: 14px; bottom: 78px; z-index: 3; width: 42px; height: 42px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+            display: grid; place-items: center; color: var(--text-primary, #fff); background: var(--block-bg, #1f1f23);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(127, 127, 127, .25); transition: opacity .18s, transform .18s; }
+        .vp-msgs-down[hidden] { display: grid !important; opacity: 0; transform: translateY(10px) scale(.9); pointer-events: none; }
+        .vp-msgs-down span { position: absolute; top: -6px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px;
+            font: 600 11px/18px system-ui, sans-serif; text-align: center; color: var(--vp-on-accent, #fff); background: var(--vp-accent, #3b82f6); }
+        .vp-msgs-down span:empty { display: none; }
+        .vp-msgs-feed { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; overscroll-behavior: contain; }
+        .vp-msgs-note { align-self: center; margin: 2px 0 8px; padding: 6px 12px; border-radius: 999px; font-size: 12px;
+            background: var(--block-bg); color: var(--text-secondary); text-align: center; }
+        .vp-msgs-day { align-self: center; margin: 10px 0 4px; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; line-height: 1.3;
+            background: color-mix(in srgb, var(--block-bg) 88%, transparent); color: var(--text-secondary); text-align: center; user-select: none; -webkit-user-select: none; }
+        .vp-msgs-b { max-width: 78%; padding: 9px 13px 7px; border-radius: 20px; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere;
+            animation: vpMsgsPop .2s ease-out; }
+        .vp-msgs-b.vp-in { align-self: flex-start; background: var(--block-bg); border-bottom-left-radius: 6px; }
+        .vp-msgs-b.vp-out { align-self: flex-end; background: color-mix(in srgb, var(--vp-accent) 26%, var(--block-bg)); color: var(--text-primary, #fff);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent) 45%, transparent); border-bottom-right-radius: 6px; }
+        .vp-msgs-b a.vp-msgs-link { color: #7ab8ff !important; font-weight: inherit; text-decoration: underline !important; text-decoration-thickness: 1px !important; text-underline-offset: 3px; word-break: break-all; }
+        .vp-msgs-b a.vp-msgs-link:hover { text-decoration-thickness: 2px !important; }
+        .vp-msgs-b i { display: block; margin-top: 2px; font-style: normal; font-size: 11px; opacity: .6; text-align: right; white-space: nowrap; }
+        .vp-msgs-b i[data-tick]::after { content: ""; display: inline-block; width: 16px; height: 11px; margin-left: 3px; vertical-align: -1px; background: currentColor;
+            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6 5.6 9.1 12.5 2.2'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6 5.6 9.1 12.5 2.2'/%3E%3C/svg%3E") center / contain no-repeat; }
+        .vp-msgs-b i[data-tick="2"]::after {
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M.8 6 3.9 9.1 10.8 2.2M7.4 8.1l1 1 6.9-6.9'/%3E%3C/svg%3E");
+            mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M.8 6 3.9 9.1 10.8 2.2M7.4 8.1l1 1 6.9-6.9'/%3E%3C/svg%3E"); }
+        .vp-msgs-b.vp-fail i { opacity: .85; }
+        .vp-msgs-b.vp-fail { cursor: pointer; }
+        .vp-msgs-typing { display: flex; gap: 5px; padding: 14px 16px; }
+        .vp-msgs-typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary); animation: vpMsgsDot 1s infinite; }
+        .vp-msgs-typing span:nth-child(2) { animation-delay: .15s; } .vp-msgs-typing span:nth-child(3) { animation-delay: .3s; }
+        .vp-msgs-bar { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px 12px; }
+        .vp-msgs-field { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 14px; min-height: 44px; border-radius: 22px;
+            background: var(--block-bg); }
+        .vp-msgs-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
+        .vp-msgs-b.vp-has-img { width: min-content; max-width: 78%; padding: 4px 4px 6px; }
+        .vp-msgs-imgw { position: relative; display: block; margin: 0 0 6px; cursor: zoom-in; }
+        .vp-msgs-imgw::after, .vp-msgs-lb-body::after { content: ''; position: absolute; inset: 0; }
+        .vp-msgs-img { display: block; width: auto; height: auto; max-width: min(330px, 66vw); max-height: 420px; min-width: 120px; min-height: 60px;
+            border-radius: 16px; background: rgba(127, 127, 127, .15); pointer-events: none; user-select: none; }
+        .vp-msgs-lb { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; background: rgba(0, 0, 0, .92); border-radius: inherit;
+            animation: vp-emoji-in .15s ease-out both; }
+        .vp-msgs-lb-top { display: flex; align-items: center; gap: 8px; padding: 10px; flex-shrink: 0; }
+        .vp-msgs-lb-top .vp-msgs-ib { color: #fff; background: rgba(255, 255, 255, .1); }
+        .vp-msgs-lb-top span { color: rgba(255, 255, 255, .8); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msgs-lb-body { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 10px 14px; }
+        .vp-msgs-lb-body img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; pointer-events: none; user-select: none; }
+        .vp-msgs-lb-top a { margin-left: auto; flex-shrink: 0; padding: 7px 12px; border-radius: 9999px; background: rgba(255, 255, 255, .1); color: #fff; font-size: 13px; text-decoration: none; }
+        .vp-msgs-pend { display: flex; align-items: center; gap: 10px; padding: 6px 8px; margin: 0 0 6px; border-radius: 16px; background: var(--block-bg); }
+        .vp-msgs-pend[hidden] { display: none; }
+        .vp-msgs-pend-list { display: flex; gap: 8px; overflow-x: auto; flex: 0 1 auto; max-width: 62%; padding: 4px 4px 2px; scrollbar-width: thin; }
+        .vp-msgs-pend .vp-msgs-pend-t { position: relative; flex-shrink: 0; }
+        .vp-msgs-pend .vp-msgs-pend-t button { position: absolute; top: -5px; right: -5px; width: 20px; height: 20px; font-size: 10px; line-height: 20px; padding: 0;
+            background: rgba(0, 0, 0, .7); color: #fff; }
+        .vp-msgs-album { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; width: min(330px, 66vw); margin: 0 0 6px; border-radius: 16px; overflow: hidden; }
+        .vp-msgs-album[data-n="2"], .vp-msgs-album[data-n="3"], .vp-msgs-album[data-n="4"] { grid-template-columns: repeat(2, 1fr); }
+        .vp-msgs-album .vp-msgs-imgw { margin: 0; aspect-ratio: 1; }
+        .vp-msgs-album .vp-wide2 { grid-column: span 2; aspect-ratio: 2 / 1; }
+        .vp-msgs-album .vp-wide3 { grid-column: span 3; aspect-ratio: 3 / 1; }
+        .vp-msgs-album[data-n] { grid-template-columns: repeat(6, 1fr); }
+        .vp-msgs-album[data-n="2"], .vp-msgs-album[data-n="3"], .vp-msgs-album[data-n="4"] { grid-template-columns: repeat(2, 1fr); }
+        .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-msgs-imgw { grid-column: span 2; }
+        .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-half { grid-column: span 3; aspect-ratio: 3 / 2; }
+        .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-wide3 { grid-column: span 6; }
+        .vp-msgs-album .vp-msgs-img { width: 100%; height: 100%; max-width: none; max-height: none; min-width: 0; min-height: 0; object-fit: cover; border-radius: 0; }
+        @media (hover: none) { .vp-msgs-feed .vp-msgs-b { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
+        .vp-msgs-reacts { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 0; }
+        .vp-msgs-reacts button { border: 0; border-radius: 9999px; padding: 2px 9px; font-size: 13px; line-height: 20px; cursor: pointer; color: inherit;
+            background: rgba(127, 127, 127, .22); }
+        .vp-msgs-reacts button.vp-mine-r { background: color-mix(in srgb, var(--vp-accent) 24%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent) 70%, transparent); }
+        .vp-msgs-menu { position: fixed; z-index: 2147483600; min-width: 210px; padding: 6px; border-radius: 16px; background: var(--block-bg);
+            color: var(--text-primary, #fff); box-shadow: 0 12px 40px rgba(0, 0, 0, .45), 0 0 0 1px var(--border-color, rgba(255, 255, 255, .08)); animation: vp-emoji-in .12s ease-out both; }
+        .vp-msgs-menu-r { display: flex; gap: 2px; padding: 2px 2px 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, .08)); }
+        .vp-msgs-menu-r button { width: 36px; height: 36px; border: 0; padding: 0; border-radius: 50%; background: transparent; font-size: 21px; cursor: pointer; transition: transform .1s; }
+        .vp-msgs-menu-r button:hover { transform: scale(1.2); background: rgba(127, 127, 127, .15); }
+        .vp-msgs-menu-i { display: block; width: 100%; text-align: left; border: 0; background: transparent; color: inherit; font: inherit; font-size: 14px; padding: 9px 12px; border-radius: 10px; cursor: pointer; }
+        .vp-msgs-menu-i:hover { background: rgba(127, 127, 127, .15); }
+        .vp-msgs-lb-n { color: rgba(255, 255, 255, .8); font-size: 13px; font-weight: 600; margin-left: auto; flex-shrink: 0; }
+        .vp-msgs-lb-n:empty { display: none; }
+        .vp-msgs-lb-n:not(:empty) + a { margin-left: 8px; }
+        .vp-msgs-lb-nav { position: absolute; top: 50%; z-index: 1; width: 44px; height: 44px; margin-top: -22px; border: 0; border-radius: 50%; cursor: pointer;
+            background: rgba(255, 255, 255, .14); color: #fff; font-size: 26px; line-height: 40px; padding: 0; }
+        .vp-msgs-lb-nav[hidden] { display: none; }
+        .vp-msgs-lb-nav.vp-prev { left: 12px; } .vp-msgs-lb-nav.vp-next { right: 12px; }
+        .vp-msgs-lb-nav { top: 0; bottom: 0; width: 20%; max-width: 180px; height: auto; margin: 0; border-radius: 0; background: none; font-size: 0; transition: background .2s; -webkit-tap-highlight-color: transparent; }
+        .vp-msgs-lb-nav.vp-prev { left: 0; }
+        .vp-msgs-lb-nav.vp-next { right: 0; }
+        .vp-msgs-lb-nav.vp-prev:active { background: linear-gradient(90deg, rgba(255, 255, 255, .16), transparent); }
+        .vp-msgs-lb-nav.vp-next:active { background: linear-gradient(270deg, rgba(255, 255, 255, .16), transparent); }
+        @media (hover: hover) and (pointer: fine) {
+            .vp-msgs-lb-nav.vp-prev:hover { background: linear-gradient(90deg, rgba(255, 255, 255, .12), transparent); }
+            .vp-msgs-lb-nav.vp-next:hover { background: linear-gradient(270deg, rgba(255, 255, 255, .12), transparent); }
+        }
+        .vp-msgs-pend img { width: 52px; height: 52px; object-fit: cover; border-radius: 10px; flex-shrink: 0; }
+        .vp-msgs-pend span { flex: 1; min-width: 0; font-size: 13px; color: var(--text-secondary); }
+        .vp-msgs-pend button { width: 30px; height: 30px; border: 0; border-radius: 50%; background: rgba(127, 127, 127, .2); color: var(--text-primary, #fff); cursor: pointer; flex-shrink: 0; }
+        .vp-msgs-b.vp-has-img { overflow-wrap: anywhere; }
+        .vp-msgs-b.vp-has-img > i { margin-right: 6px; }
+        .vp-msgs-cap { display: block; padding: 0 8px; }
+        .vp-msgs-count { font-size: 12px; color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+        .vp-msgs-count.vp-warn { color: #ff5c5c; }
+        .vp-msgs-ghost { width: 36px; height: 36px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            background: transparent; color: var(--text-secondary); cursor: pointer; flex-shrink: 0; }
+        .vp-msgs-send { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;
+            flex-shrink: 0; background: var(--vp-accent); color: var(--vp-on-accent, #fff); transition: opacity .15s, transform .15s; }
+        .vp-msgs-send:disabled { opacity: .4; cursor: default; }
+        .vp-msgs-send:not(:disabled):active { transform: scale(.92); }
+        @keyframes vpMsgsIn { from { opacity: 0; transform: translateY(10px); } }
+        @keyframes vpMsgsPop { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+        @keyframes vpMsgsDot { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
+        @media (prefers-reduced-motion: reduce) { .vp-msgs, .vp-msgs * { animation: none !important; } }
+        html.vp-msgs-open video:not(.vp-screen-video):not(.vp-self-pip-video) { visibility: hidden !important; }`;
         const MSG_SUPPORT = {
             id: 'support', ava: '🛟', name: 'Поддержка ИТД X', login: '', last: 'Нашёл баг или есть идея — пиши сюда', time: '', unread: 0, online: true, support: true,
             msgs: [['in', 'Привет! Это поддержка ИТД X 👋'], ['in', 'Нашёл баг или есть идея — опиши здесь, ответ придёт в этот чат']]
@@ -12734,213 +12992,12 @@ var __vpBannerAuto = (() => {
             return { close };
         }
         function buildMessagesOverlay() {
-            const style = addCss(`
-        .vp-msgs { position: fixed; z-index: 5; display: none; flex-direction: column; box-sizing: border-box; overflow: hidden;
-            background: var(--block-bg); color: var(--text-primary, #fff); font-family: inherit;
-            backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none); }
-        .vp-msgs.vp-open { display: flex; animation: vpMsgsIn .22s cubic-bezier(.2, .8, .2, 1); }
-        html.vp-msgs-open .vp-msgs-navwrap { z-index: 10 !important; }
-        html.vp-msgs-open .itd-scroll-top-btn { opacity: 0 !important; visibility: hidden !important; }
-        html.vp-msgs-open .vp-comments-sheet { visibility: hidden !important; }
-        html.vp-msgs-open .vp-nav-link.vp-site-cur { color: var(--vp-off-c) !important; opacity: var(--vp-off-o) !important; background-color: var(--vp-off-b) !important; }
-        html.vp-msgs-open .vp-nav-link[href="#"] { color: var(--vp-on-c) !important; opacity: var(--vp-on-o) !important; background-color: var(--vp-on-b) !important; }
-        .vp-msgs.vp-card { border-radius: 36px; border: 1px solid var(--border-color, rgba(255, 255, 255, .15));
-            box-shadow: 0 16px 48px rgba(0, 0, 0, .45); }
-        html.vp-light .vp-msgs.vp-card { box-shadow: 0 16px 48px rgba(0, 0, 0, .12); }
-        .vp-msgs-under { position: fixed; top: 0; bottom: 0; z-index: 4; display: none; background: var(--bg-primary, #000); pointer-events: none; }
-        html.vp-msgs-open .vp-msgs-under.vp-on { display: block; }
-        .vp-msgs-view { display: flex; flex-direction: column; min-height: 0; flex: 1; }
-        .vp-msgs-view[hidden] { display: none; }
-        .vp-msgs-call[hidden], .vp-msgs-more[hidden] { display: none; }
-        .vp-msgs-chead { position: relative; }
-        .vp-msgs-hmenu { position: absolute; top: calc(100% - 4px); right: 12px; z-index: 5; min-width: 190px; padding: 6px; border-radius: 14px;
-            background: #202024; box-shadow: 0 12px 34px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(128, 128, 128, .2); }
-        .vp-msgs-hmenu[hidden] { display: none; }
-        html.vp-light .vp-msgs-hmenu { background: #fff; }
-        .vp-msgs-hmenu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: 10px; background: none;
-            color: var(--text-primary, #fff); font: inherit; font-size: 14px; cursor: pointer; text-align: left; }
-        .vp-msgs-hmenu button:hover { background: rgba(128, 128, 128, .16); }
-        .vp-msgs-hmenu button.vp-danger { color: #f23f43; }
-        .vp-msgs-blocked { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-        .vp-msgs-blocked button { padding: 6px 14px; border: 0; border-radius: 999px; background: rgba(128, 128, 128, .2); color: var(--text-primary, #fff);
-            font: inherit; font-size: 13px; cursor: pointer; }
-        .vp-msgs-blocked button:hover { background: rgba(128, 128, 128, .3); }
-        .vp-msgs-callrow { align-self: center; display: flex; align-items: center; gap: 7px; width: fit-content; margin: 8px auto; padding: 6px 12px; border-radius: 14px;
-            background: rgba(128, 128, 128, .14); color: var(--text-secondary, #b5bac1); font-size: 13px; cursor: pointer; }
-        .vp-msgs-callrow:hover { background: rgba(128, 128, 128, .22); }
-        .vp-msgs-callrow.vp-miss { color: #f23f43; }
-        .vp-msgs-callrow time { opacity: .65; font-size: 12px; }
-        .vp-msgs-top { display: flex; align-items: center; gap: 10px; padding: 18px 16px 10px; }
-        .vp-msgs-title { font-size: 24px; font-weight: 700; margin-right: auto; }
-        .vp-msgs-ib { width: 40px; height: 40px; border-radius: 50%; border: 0; padding: 0; display: flex; align-items: center; justify-content: center;
-            cursor: pointer; background: var(--block-bg); color: var(--text-primary, #fff); flex-shrink: 0; }
-        .vp-msgs-ib:active { transform: scale(.94); }
-        .vp-msgs-search { margin: 0 16px 10px; display: flex; align-items: center; gap: 8px; padding: 0 14px; height: 42px; border-radius: 999px;
-            background: var(--block-bg); color: var(--text-secondary); }
-        .vp-msgs-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
-        .vp-msgs-sub { padding: 2px 20px 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
-        .vp-msgs-ava img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-        .vp-msgs-who, .vp-msgs-chead .vp-msgs-ava { cursor: pointer; }
-        .vp-msgs-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; overscroll-behavior: contain; }
-        .vp-msgs-row { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 18px; cursor: pointer; }
-        .vp-msgs-row:hover, .vp-msgs-row:active { background: var(--block-bg); }
-        .vp-msgs-ava { position: relative; flex: 0 0 50px !important; min-width: 50px !important; min-height: 50px !important; max-width: 50px !important; max-height: 50px !important; box-sizing: border-box !important; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-size: 26px; background: var(--block-bg); }
-        .vp-msgs-ava.vp-sm { flex: 0 0 38px !important; min-width: 38px !important; min-height: 38px !important; max-width: 38px !important; max-height: 38px !important; font-size: 20px; }
-        html.vp-glass .vp-msgs-chead .vp-msgs-ava { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
-        .vp-msgs-ava.vp-sup { color: #fff; background: linear-gradient(145deg, #ff5a5f, #d0202a); box-shadow: 0 0 0 2px rgba(255, 90, 95, .28), 0 4px 14px rgba(208, 32, 42, .4); }
-        .vp-msgs-ava.vp-sup svg { width: 58%; height: 58%; stroke-width: 2.1; }
-        .vp-msgs-row.vp-sup { background: linear-gradient(90deg, rgba(255, 70, 76, .2), rgba(255, 70, 76, .06)); box-shadow: inset 0 0 0 1px rgba(255, 90, 95, .32); }
-        .vp-msgs-row.vp-sup:hover, .vp-msgs-row.vp-sup:active { background: linear-gradient(90deg, rgba(255, 70, 76, .3), rgba(255, 70, 76, .1)); }
-        .vp-msgs-row.vp-sup + .vp-msgs-row { margin-top: 6px; }
-        .vp-msgs-ava.vp-online::after { content: ""; position: absolute; right: 1px; bottom: 1px; width: 11px; height: 11px; border-radius: 50%;
-            background: #22c55e; box-shadow: 0 0 0 2.5px var(--bg-primary, #000); }
-        .vp-msgs-mid { flex: 1; min-width: 0; }
-        .vp-msgs-name { display: flex; align-items: center; gap: 5px; font-weight: 600; font-size: 15px; }
-        .vp-msgs-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .vp-msgs-last { margin-top: 3px; font-size: 14px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .vp-msgs-side > span:first-child { display: inline-flex; align-items: center; gap: 3px; }
-        .vp-msgs-tick { display: inline-flex; font-style: normal; color: var(--text-secondary); }
-        .vp-msgs-tick.vp-read { color: #4aa3ff; }
-        .vp-msgs-lthumb { width: 18px; height: 18px; border-radius: 4px; object-fit: cover; vertical-align: -4px; margin-right: 6px; }
-        .vp-msgs-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; font-size: 12px; color: var(--text-secondary); }
-        .vp-msgs-badge { min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; display: flex; align-items: center; justify-content: center;
-            font-size: 12px; font-weight: 700; background: var(--vp-accent); color: var(--vp-on-accent, #fff); }
-        .vp-msgs-pin { display: flex; color: var(--text-secondary); }
-        .vp-msgs-row.vp-pinned { background: color-mix(in srgb, var(--text-primary, #fff) 4%, transparent); }
-        .vp-msgs-row.vp-pinned + .vp-msgs-row:not(.vp-pinned) { margin-top: 6px; }
-        .vp-msgs-row { -webkit-touch-callout: none; user-select: none; transition: transform .15s; }
-        .vp-msgs-row.vp-held { transform: scale(.97); }
-        .vp-msgs-ctx { position: absolute; z-index: 3; display: none; padding: 5px; border-radius: 16px; min-width: 170px;
-            background: var(--block-bg); border: 1px solid var(--border-color, rgba(255, 255, 255, .1)); box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
-        .vp-msgs-ctx.vp-open { display: block; animation: vpMsgsCtx .14s ease-out; }
-        @keyframes vpMsgsCtx { from { opacity: 0; transform: scale(.94); } }
-        .vp-msgs-ctx button { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; color: var(--text-primary, #fff);
-            font: inherit; font-size: 15px; padding: 10px 12px; border-radius: 12px; cursor: pointer; }
-        .vp-msgs-ctx button:hover, .vp-msgs-ctx button:active { background: var(--bg-hover, rgba(255, 255, 255, .08)); }
-        .vp-msgs-ctx svg { width: 16px; height: 16px; }
-        .vp-msgs-empty { padding: 40px 16px; text-align: center; color: var(--text-secondary); font-size: 14px; }
-        .vp-msgs-chead { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px;
-            border-bottom: 1px solid color-mix(in srgb, var(--text-primary, #fff) 8%, transparent); }
-        .vp-msgs-who { display: flex; flex-direction: column; min-width: 0; margin-right: auto; }
-        .vp-msgs-who b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .vp-msgs-who small { font-size: 12px; color: var(--text-secondary); }
-        .vp-msgs-chat { position: relative; }
-        .vp-msgs-down { position: absolute; right: 14px; bottom: 78px; z-index: 3; width: 42px; height: 42px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
-            display: grid; place-items: center; color: var(--text-primary, #fff); background: var(--block-bg, #1f1f23);
-            box-shadow: 0 6px 18px rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(127, 127, 127, .25); transition: opacity .18s, transform .18s; }
-        .vp-msgs-down[hidden] { display: grid !important; opacity: 0; transform: translateY(10px) scale(.9); pointer-events: none; }
-        .vp-msgs-down span { position: absolute; top: -6px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px;
-            font: 600 11px/18px system-ui, sans-serif; text-align: center; color: var(--vp-on-accent, #fff); background: var(--vp-accent, #3b82f6); }
-        .vp-msgs-down span:empty { display: none; }
-        .vp-msgs-feed { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; overscroll-behavior: contain; }
-        .vp-msgs-note { align-self: center; margin: 2px 0 8px; padding: 6px 12px; border-radius: 999px; font-size: 12px;
-            background: var(--block-bg); color: var(--text-secondary); text-align: center; }
-        .vp-msgs-day { align-self: center; margin: 10px 0 4px; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; line-height: 1.3;
-            background: color-mix(in srgb, var(--block-bg) 88%, transparent); color: var(--text-secondary); text-align: center; user-select: none; -webkit-user-select: none; }
-        .vp-msgs-b { max-width: 78%; padding: 9px 13px 7px; border-radius: 20px; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere;
-            animation: vpMsgsPop .2s ease-out; }
-        .vp-msgs-b.vp-in { align-self: flex-start; background: var(--block-bg); border-bottom-left-radius: 6px; }
-        .vp-msgs-b.vp-out { align-self: flex-end; background: color-mix(in srgb, var(--vp-accent) 26%, var(--block-bg)); color: var(--text-primary, #fff);
-            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent) 45%, transparent); border-bottom-right-radius: 6px; }
-        .vp-msgs-b a.vp-msgs-link { color: inherit; font-weight: inherit; text-decoration: underline !important; text-decoration-thickness: 1px !important; text-underline-offset: 3px; word-break: break-all; }
-        .vp-msgs-b a.vp-msgs-link:hover { text-decoration-thickness: 2px !important; }
-        .vp-msgs-b i { display: block; margin-top: 2px; font-style: normal; font-size: 11px; opacity: .6; text-align: right; white-space: nowrap; }
-        .vp-msgs-b i[data-tick]::after { content: ""; display: inline-block; width: 16px; height: 11px; margin-left: 3px; vertical-align: -1px; background: currentColor;
-            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6 5.6 9.1 12.5 2.2'/%3E%3C/svg%3E") center / contain no-repeat;
-            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6 5.6 9.1 12.5 2.2'/%3E%3C/svg%3E") center / contain no-repeat; }
-        .vp-msgs-b i[data-tick="2"]::after {
-            -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M.8 6 3.9 9.1 10.8 2.2M7.4 8.1l1 1 6.9-6.9'/%3E%3C/svg%3E");
-            mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M.8 6 3.9 9.1 10.8 2.2M7.4 8.1l1 1 6.9-6.9'/%3E%3C/svg%3E"); }
-        .vp-msgs-b.vp-fail i { opacity: .85; }
-        .vp-msgs-b.vp-fail { cursor: pointer; }
-        .vp-msgs-typing { display: flex; gap: 5px; padding: 14px 16px; }
-        .vp-msgs-typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary); animation: vpMsgsDot 1s infinite; }
-        .vp-msgs-typing span:nth-child(2) { animation-delay: .15s; } .vp-msgs-typing span:nth-child(3) { animation-delay: .3s; }
-        .vp-msgs-bar { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px 12px; }
-        .vp-msgs-field { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 14px; min-height: 44px; border-radius: 22px;
-            background: var(--block-bg); }
-        .vp-msgs-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
-        .vp-msgs-b.vp-has-img { width: min-content; max-width: 78%; padding: 4px 4px 6px; }
-        .vp-msgs-imgw { position: relative; display: block; margin: 0 0 6px; cursor: zoom-in; }
-        .vp-msgs-imgw::after, .vp-msgs-lb-body::after { content: ''; position: absolute; inset: 0; }
-        .vp-msgs-img { display: block; width: auto; height: auto; max-width: min(330px, 66vw); max-height: 420px; min-width: 120px; min-height: 60px;
-            border-radius: 16px; background: rgba(127, 127, 127, .15); pointer-events: none; user-select: none; }
-        .vp-msgs-lb { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; background: rgba(0, 0, 0, .92); border-radius: inherit;
-            animation: vp-emoji-in .15s ease-out both; }
-        .vp-msgs-lb-top { display: flex; align-items: center; gap: 8px; padding: 10px; flex-shrink: 0; }
-        .vp-msgs-lb-top .vp-msgs-ib { color: #fff; background: rgba(255, 255, 255, .1); }
-        .vp-msgs-lb-top span { color: rgba(255, 255, 255, .8); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .vp-msgs-lb-body { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 10px 14px; }
-        .vp-msgs-lb-body img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; pointer-events: none; user-select: none; }
-        .vp-msgs-lb-top a { margin-left: auto; flex-shrink: 0; padding: 7px 12px; border-radius: 9999px; background: rgba(255, 255, 255, .1); color: #fff; font-size: 13px; text-decoration: none; }
-        .vp-msgs-pend { display: flex; align-items: center; gap: 10px; padding: 6px 8px; margin: 0 0 6px; border-radius: 16px; background: var(--block-bg); }
-        .vp-msgs-pend[hidden] { display: none; }
-        .vp-msgs-pend-list { display: flex; gap: 8px; overflow-x: auto; flex: 0 1 auto; max-width: 62%; padding: 4px 4px 2px; scrollbar-width: thin; }
-        .vp-msgs-pend .vp-msgs-pend-t { position: relative; flex-shrink: 0; }
-        .vp-msgs-pend .vp-msgs-pend-t button { position: absolute; top: -5px; right: -5px; width: 20px; height: 20px; font-size: 10px; line-height: 20px; padding: 0;
-            background: rgba(0, 0, 0, .7); color: #fff; }
-        .vp-msgs-album { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; width: min(330px, 66vw); margin: 0 0 6px; border-radius: 16px; overflow: hidden; }
-        .vp-msgs-album[data-n="2"], .vp-msgs-album[data-n="3"], .vp-msgs-album[data-n="4"] { grid-template-columns: repeat(2, 1fr); }
-        .vp-msgs-album .vp-msgs-imgw { margin: 0; aspect-ratio: 1; }
-        .vp-msgs-album .vp-wide2 { grid-column: span 2; aspect-ratio: 2 / 1; }
-        .vp-msgs-album .vp-wide3 { grid-column: span 3; aspect-ratio: 3 / 1; }
-        .vp-msgs-album[data-n] { grid-template-columns: repeat(6, 1fr); }
-        .vp-msgs-album[data-n="2"], .vp-msgs-album[data-n="3"], .vp-msgs-album[data-n="4"] { grid-template-columns: repeat(2, 1fr); }
-        .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-msgs-imgw { grid-column: span 2; }
-        .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-half { grid-column: span 3; aspect-ratio: 3 / 2; }
-        .vp-msgs-album:not([data-n="2"]):not([data-n="3"]):not([data-n="4"]) > .vp-wide3 { grid-column: span 6; }
-        .vp-msgs-album .vp-msgs-img { width: 100%; height: 100%; max-width: none; max-height: none; min-width: 0; min-height: 0; object-fit: cover; border-radius: 0; }
-        @media (hover: none) { .vp-msgs-feed .vp-msgs-b { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
-        .vp-msgs-reacts { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 0; }
-        .vp-msgs-reacts button { border: 0; border-radius: 9999px; padding: 2px 9px; font-size: 13px; line-height: 20px; cursor: pointer; color: inherit;
-            background: rgba(127, 127, 127, .22); }
-        .vp-msgs-reacts button.vp-mine-r { background: color-mix(in srgb, var(--vp-accent) 24%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent) 70%, transparent); }
-        .vp-msgs-menu { position: fixed; z-index: 2147483600; min-width: 210px; padding: 6px; border-radius: 16px; background: var(--block-bg);
-            color: var(--text-primary, #fff); box-shadow: 0 12px 40px rgba(0, 0, 0, .45), 0 0 0 1px var(--border-color, rgba(255, 255, 255, .08)); animation: vp-emoji-in .12s ease-out both; }
-        .vp-msgs-menu-r { display: flex; gap: 2px; padding: 2px 2px 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, .08)); }
-        .vp-msgs-menu-r button { width: 36px; height: 36px; border: 0; padding: 0; border-radius: 50%; background: transparent; font-size: 21px; cursor: pointer; transition: transform .1s; }
-        .vp-msgs-menu-r button:hover { transform: scale(1.2); background: rgba(127, 127, 127, .15); }
-        .vp-msgs-menu-i { display: block; width: 100%; text-align: left; border: 0; background: transparent; color: inherit; font: inherit; font-size: 14px; padding: 9px 12px; border-radius: 10px; cursor: pointer; }
-        .vp-msgs-menu-i:hover { background: rgba(127, 127, 127, .15); }
-        .vp-msgs-lb-n { color: rgba(255, 255, 255, .8); font-size: 13px; font-weight: 600; margin-left: auto; flex-shrink: 0; }
-        .vp-msgs-lb-n:empty { display: none; }
-        .vp-msgs-lb-n:not(:empty) + a { margin-left: 8px; }
-        .vp-msgs-lb-nav { position: absolute; top: 50%; z-index: 1; width: 44px; height: 44px; margin-top: -22px; border: 0; border-radius: 50%; cursor: pointer;
-            background: rgba(255, 255, 255, .14); color: #fff; font-size: 26px; line-height: 40px; padding: 0; }
-        .vp-msgs-lb-nav[hidden] { display: none; }
-        .vp-msgs-lb-nav.vp-prev { left: 12px; } .vp-msgs-lb-nav.vp-next { right: 12px; }
-        .vp-msgs-lb-nav { top: 0; bottom: 0; width: 20%; max-width: 180px; height: auto; margin: 0; border-radius: 0; background: none; font-size: 0; transition: background .2s; -webkit-tap-highlight-color: transparent; }
-        .vp-msgs-lb-nav.vp-prev { left: 0; }
-        .vp-msgs-lb-nav.vp-next { right: 0; }
-        .vp-msgs-lb-nav.vp-prev:active { background: linear-gradient(90deg, rgba(255, 255, 255, .16), transparent); }
-        .vp-msgs-lb-nav.vp-next:active { background: linear-gradient(270deg, rgba(255, 255, 255, .16), transparent); }
-        @media (hover: hover) and (pointer: fine) {
-            .vp-msgs-lb-nav.vp-prev:hover { background: linear-gradient(90deg, rgba(255, 255, 255, .12), transparent); }
-            .vp-msgs-lb-nav.vp-next:hover { background: linear-gradient(270deg, rgba(255, 255, 255, .12), transparent); }
-        }
-        .vp-msgs-pend img { width: 52px; height: 52px; object-fit: cover; border-radius: 10px; flex-shrink: 0; }
-        .vp-msgs-pend span { flex: 1; min-width: 0; font-size: 13px; color: var(--text-secondary); }
-        .vp-msgs-pend button { width: 30px; height: 30px; border: 0; border-radius: 50%; background: rgba(127, 127, 127, .2); color: var(--text-primary, #fff); cursor: pointer; flex-shrink: 0; }
-        .vp-msgs-b.vp-has-img { overflow-wrap: anywhere; }
-        .vp-msgs-b.vp-has-img > i { margin-right: 6px; }
-        .vp-msgs-cap { display: block; padding: 0 8px; }
-        .vp-msgs-count { font-size: 12px; color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; flex-shrink: 0; }
-        .vp-msgs-count.vp-warn { color: #ff5c5c; }
-        .vp-msgs-ghost { width: 36px; height: 36px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            background: transparent; color: var(--text-secondary); cursor: pointer; flex-shrink: 0; }
-        .vp-msgs-send { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;
-            flex-shrink: 0; background: var(--vp-accent); color: var(--vp-on-accent, #fff); transition: opacity .15s, transform .15s; }
-        .vp-msgs-send:disabled { opacity: .4; cursor: default; }
-        .vp-msgs-send:not(:disabled):active { transform: scale(.92); }
-        @keyframes vpMsgsIn { from { opacity: 0; transform: translateY(10px); } }
-        @keyframes vpMsgsPop { from { opacity: 0; transform: translateY(6px) scale(.98); } }
-        @keyframes vpMsgsDot { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
-        @media (prefers-reduced-motion: reduce) { .vp-msgs, .vp-msgs * { animation: none !important; } }
-        html.vp-msgs-open video:not(.vp-screen-video):not(.vp-self-pip-video) { visibility: hidden !important; }`);
+            const M = {};
+            M.close = close;
+            addCss(MSG_CSS);
 
-            const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-            const root = document.createElement('div');
+            const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); M.esc = esc;
+            const root = document.createElement('div'); M.root = root;
             root.className = 'vp-msgs';
             const blockOuterScroll = e => {
                 const area = e.target.closest && e.target.closest('.vp-msgs-list, .vp-msgs-feed, textarea');
@@ -12975,28 +13032,131 @@ var __vpBannerAuto = (() => {
             under.className = 'vp-msgs-under';
             document.body.appendChild(under);
 
-            const $ = s => root.querySelector(s);
+            const $ = s => root.querySelector(s); M.$ = $;
             const downBtn = root.querySelector('.vp-msgs-down'), downNum = downBtn.lastElementChild;
-            let downNew = 0;
+            M.downNew = 0;
             const feedEl = root.querySelector('.vp-msgs-feed');
             const downSync = () => {
                 const far = feedEl.scrollHeight - feedEl.scrollTop - feedEl.clientHeight > 320;
-                if (!far) downNew = 0;
+                if (!far) M.downNew = 0;
                 downBtn.hidden = !far;
-                downNum.textContent = downNew ? (downNew > 99 ? '99+' : String(downNew)) : '';
-            };
+                downNum.textContent = M.downNew ? (M.downNew > 99 ? '99+' : String(M.downNew)) : '';
+            }; M.downSync = downSync;
             feedEl.addEventListener('scroll', downSync, { passive: true });
-            downBtn.addEventListener('click', () => { downNew = 0; feedEl.scrollTo({ top: feedEl.scrollHeight, behavior: 'smooth' }); });
-            const list = $('.vp-msgs-list'), home = $('.vp-msgs-home'), chat = $('.vp-msgs-chat'), feed = $('.vp-msgs-feed');
-            const input = $('.vp-msgs-bar input'), send = $('.vp-msgs-send'), search = $('.vp-msgs-search input');
+            downBtn.addEventListener('click', () => { M.downNew = 0; feedEl.scrollTo({ top: feedEl.scrollHeight, behavior: 'smooth' }); });
+            const list = $('.vp-msgs-list'), home = $('.vp-msgs-home'), chat = $('.vp-msgs-chat'), feed = $('.vp-msgs-feed'); M.list = list; M.home = home; M.chat = chat; M.feed = feed;
+            const input = $('.vp-msgs-bar input'), send = $('.vp-msgs-send'), search = $('.vp-msgs-search input'); M.input = input; M.send = send; M.search = search;
             const countEl = $('.vp-msgs-count');
             const msgCount = () => {
                 const n = input.value.length, max = input.maxLength > 0 ? input.maxLength : MSG_TEXT_MAX;
                 countEl.hidden = !n;
                 countEl.textContent = `${n} / ${max}`;
                 countEl.classList.toggle('vp-warn', n >= max * 0.9);
+            }; M.msgCount = msgCount;
+            msgPartChat(M);
+            msgPartMenus(M);
+            msgPartSelect(M);
+            msgPartImages(M);
+            function place() {
+                const nav = siteEl('nav');
+                const row = nav && navIsRow(nav) && nav.getBoundingClientRect().top > innerHeight / 2;
+                document.querySelectorAll('.vp-msgs-navwrap').forEach(w => w.classList.remove('vp-msgs-navwrap'));
+                if (row) {
+                    if (nav.parentElement) nav.parentElement.classList.add('vp-msgs-navwrap');
+                    const bottom = innerHeight - nav.getBoundingClientRect().top + BUMP_H + 8;
+                    Object.assign(root.style, { left: '0px', right: '0px', top: '0px', bottom: '0px', width: '', borderRadius: '', paddingBottom: bottom + 'px' });
+                } else {
+                    let cb = contentBox() || lastCb;
+                    if (!cb || cb.right - cb.left < 300) {
+                        const side = siteEl('sidebar'), sr = side && side.getBoundingClientRect();
+                        const w = Math.min(650, innerWidth - 32), l = Math.max(sr ? sr.right + 24 : 16, Math.round(innerWidth / 2 - w / 2));
+                        cb = { left: l, right: Math.min(innerWidth - 16, l + w) };
+                    }
+                    const left = cb ? cb.left : Math.max(0, innerWidth / 2 - 300), width = cb ? cb.right - cb.left : Math.min(600, innerWidth);
+                    Object.assign(root.style, { left: left + 'px', width: width + 'px', right: '', top: '12px', bottom: '12px', borderRadius: '', paddingBottom: '0px' });
+                }
+                root.classList.toggle('vp-card', !row);
+                under.classList.remove('vp-on');
+                if (!row) Object.assign(under.style, { left: root.style.left, width: root.style.width });
+            }
+            let openPath = '';
+            function onKey(e) { if (e.key === 'Escape' && root.classList.contains('vp-open')) { e.stopPropagation(); M.lb ? M.closeImg() : M.menu ? M.closeMenu() : M.fwdEl ? M.closeFwd() : M.sel ? M.selEnd() : M.reply ? M.clearReply() : M.current ? M.closeChat() : close(); } }
+            function close(fromHistory) {
+                if (!root.classList.contains('vp-open')) return;
+                clearTimeout(M.botTimer);
+                root.classList.remove('vp-open');
+                document.documentElement.classList.remove('vp-msgs-open');
+                document.querySelectorAll('.vp-msgs-navwrap').forEach(w => w.classList.remove('vp-msgs-navwrap'));
+                document.removeEventListener('keydown', onKey, true);
+                removeEventListener('resize', place);
+                msgsOpen = false;
+                avatarRefresh();
+                placeSidebar(); placeRail();
+                if (!galOpen) galHideFeed(false);
+                markActiveNav(); moveNavBlob();
+                if (M.lb) { M.lb.remove(); M.lb = null; if (!fromHistory && overlayAt('vpImg')) { history.go(overlayAt('vpChat') ? -3 : -2); return; } }
+                if (!fromHistory) {
+                    if (overlayAt('vpChat')) history.go(-2);
+                    else if (overlayAt('vpMsgs')) history.back();
+                }
+            }
+            addEventListener('popstate', () => {
+                const open = root.classList.contains('vp-open');
+                if (M.lb && !overlayAt('vpImg')) { M.closeImg(true); return; }
+                if (M.chatBackPending) {
+                    M.chatBackPending = false;
+                    if (M.current && overlayAt('vpMsgs') && !overlayAt('vpChat')) history.pushState(Object.assign({}, history.state, { vpChat: M.current.id }), '', location.href);
+                    return;
+                }
+                if (overlayAt('vpMsgs')) {
+                    if (!open) root.open(true);
+                    const cid = history.state && history.state.vpChat;
+                    if (!cid && M.current) M.closeChat(true);
+                    else if (cid && (!M.current || M.current.id !== cid)) root.openDialog(cid, true);
+                }
+                else if (open) close(true);
+            });
+            document.addEventListener('click', e => {
+                if (!root.classList.contains('vp-open')) return;
+                const a = e.target.closest && e.target.closest('a.' + SELECTORS.navLink);
+                if (a && a.getAttribute('href') !== '#' && a.getAttribute('href') === location.pathname) { e.preventDefault(); e.stopPropagation(); close(); }
+            }, true);
+            const msgsLeft = () => { if (root.classList.contains('vp-open') && location.pathname !== openPath) close(true); };
+            onDom(msgsLeft);
+            document.addEventListener('vp-loc', msgsLeft);
+            root.open = fromHistory => {
+                if (root.classList.contains('vp-open')) { if (M.current) M.closeChat(); return; }
+                const lead = fromHistory === true ? null : tabSlide.lead('msg');
+                openNow(fromHistory);
+                tabSlide.arrive(lead, root);
             };
-            let current = null, botTimer = 0;
+            const openNow = fromHistory => {
+                if (galOpen) closeGallery(true);
+                openPath = location.pathname;
+                msgsOpen = true;
+                M.closeChat();
+                loadMsgPeople(() => { if (!M.current) M.renderList(); else M.headAva(); });
+                msgSync().then(() => { msgFillDialogs(); if (!M.current) M.renderList(); }).catch(() => { });
+                place();
+                placeSidebar(); placeRail();
+                root.classList.add('vp-open');
+                document.documentElement.classList.add('vp-msgs-open');
+                avatarRefresh();
+                document.addEventListener('keydown', onKey, true);
+                addEventListener('resize', place);
+                if (fromHistory !== true) overlayEnter('vpMsgs');
+                galHideFeed(true);
+                markActiveNav(); moveNavBlob();
+            };
+            root.close = close;
+            return root;
+        }
+
+        // Окно «Сообщения»: список диалогов, чат, отправка, обновление (часть buildMessagesOverlay, общее состояние — объект M)
+        function msgPartChat(M) {
+            const { $, chat, close, downSync, esc, feed, home, input, list, msgCount, root, search, send } = M;
+            M.renderList = renderList; M.setMeta = setMeta; M.bubble = bubble; M.openChat = openChat; M.msgOpenPerson = msgOpenPerson; M.msgRefreshChat = msgRefreshChat; M.closeChat = closeChat; M.supportReply = supportReply;
+            M.current = null, M.botTimer = 0;
             const SUP_AVA = svgIcon('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.6"/><path d="m5.6 5.6 3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>', 28);
             const avaHtml = (a, size) => {
                 const s = size || 50;
@@ -13004,12 +13164,12 @@ var __vpBannerAuto = (() => {
                 if (!isUrl(a)) return esc(a);
                 const bg = String(a).replace(/[\\"\'()\r\n]/g, c => encodeURIComponent(c));
                 return '<div class="vp-ava-pic" style="width:' + s + 'px;height:' + s + 'px;min-width:' + s + 'px;min-height:' + s + 'px;max-width:' + s + 'px;max-height:' + s + 'px;flex:0 0 ' + s + 'px;background-image:url(' + bg + ');background-size:cover;background-position:center;background-repeat:no-repeat;border-radius:50%;"></div>';
-            };
-            const msgAva = d => { const a = d.login && d.ava !== '🛟' && !d.support ? clubAvaOf(d.login, d.ava) : d.ava; return a || '👤'; };
-            const headAva = () => { const h = current && $('.vp-msgs-chead .vp-msgs-ava'); if (h) h.innerHTML = avaHtml(msgAva(current), 38); };
+            }; M.avaHtml = avaHtml;
+            const msgAva = d => { const a = d.login && d.ava !== '🛟' && !d.support ? clubAvaOf(d.login, d.ava) : d.ava; return a || '👤'; }; M.msgAva = msgAva;
+            const headAva = () => { const h = M.current && $('.vp-msgs-chead .vp-msgs-ava'); if (h) h.innerHTML = avaHtml(msgAva(M.current), 38); }; M.headAva = headAva;
             root.addEventListener('error', e => { const im = e.target; if (im && im.tagName === 'IMG' && im.closest('.vp-msgs-ava')) im.replaceWith(document.createTextNode('👤')); }, true);
 
-            let supDir = false;
+            M.supDir = false;
             const msgLazyTried = new Set();
             let msgLazyObserver = null;
             function msgLazyLoad(d, rowEl) {
@@ -13052,7 +13212,7 @@ var __vpBannerAuto = (() => {
                 const people = MSG_DIALOGS.filter(d => d.login).length;
                 const sups = msgIsSupport() ? sortDialogs(MSG_DIALOGS.filter(d => d.supUid)) : [];
                 if (sups.length && !q) {
-                    if (supDir) rows = [{ id: '@back', ava: '←', name: 'Все чаты', last: `Обращения в поддержку: ${sups.length}`, time: '', unread: 0 }, ...sups.map(d => Object.assign({}, d, { name: d.name.replace(/^🛟\s*/, '') }))];
+                    if (M.supDir) rows = [{ id: '@back', ava: '←', name: 'Все чаты', last: `Обращения в поддержку: ${sups.length}`, time: '', unread: 0 }, ...sups.map(d => Object.assign({}, d, { name: d.name.replace(/^🛟\s*/, '') }))];
                     else {
                         const top = sups.reduce((a, d) => (d.lastTs || 0) > (a.lastTs || 0) ? d : a, sups[0]);
                         const opened = msgOpened(), act = d => Math.max(d.lastTs || 0, opened[d.id] || 0), fAct = Math.max(...sups.map(act));
@@ -13063,8 +13223,8 @@ var __vpBannerAuto = (() => {
                         rows.splice(at < 0 ? rows.length : at, 0, folder);
                     }
                 }
-                if (!sups.length) supDir = false;
-                $('.vp-msgs-sub').textContent = supDir && sups.length && !q ? 'Все, кто писал в поддержку' : people ? `Поддержка и ${people} ${plural(people, 'человек', 'человека', 'человек')} с ИТД X` : 'Пока никого с ИТД X — список обновится сам';
+                if (!sups.length) M.supDir = false;
+                $('.vp-msgs-sub').textContent = M.supDir && sups.length && !q ? 'Все, кто писал в поддержку' : people ? `Поддержка и ${people} ${plural(people, 'человек', 'человека', 'человек')} с ИТД X` : 'Пока никого с ИТД X — список обновится сам';
                 list.innerHTML = rows.length ? rows.map(d => `
                 <div class="vp-msgs-row${pins.includes(d.id) ? ' vp-pinned' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}" data-id="${d.id}">
                     <div class="vp-msgs-ava${d.online ? ' vp-online' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}">${avaHtml(msgAva(d))}</div>
@@ -13075,7 +13235,7 @@ var __vpBannerAuto = (() => {
                 </div>`).join('') : '<div class="vp-msgs-empty">Ничего не нашлось</div>';
                 msgLazyObserve();
             }
-            const now = () => new Date().toTimeString().slice(0, 5);
+            const now = () => new Date().toTimeString().slice(0, 5); M.now = now;
             function setMeta(i, str) {
                 const m = String(str).match(/^(.*?)\s*(✓✓|✓)$/), txt = m ? m[1] : String(str);
                 if (i.textContent !== txt) i.textContent = txt;
@@ -13136,7 +13296,7 @@ var __vpBannerAuto = (() => {
                         im.src = u; im.alt = ''; im.loading = 'lazy'; im.decoding = 'async'; im.draggable = false;
                         im.addEventListener('load', () => { if (feed.scrollHeight - feed.scrollTop - feed.clientHeight < 400) feed.scrollTop = feed.scrollHeight; }, { once: true });
                         wrap.appendChild(im);
-                        wrap.addEventListener('click', () => openImg(urls, i, text, [...wrap.closest('.vp-msgs-b').querySelectorAll('.vp-msgs-img')]));
+                        wrap.addEventListener('click', () => M.openImg(urls, i, text, [...wrap.closest('.vp-msgs-b').querySelectorAll('.vp-msgs-img')]));
                         return wrap;
                     };
                     let box;
@@ -13162,19 +13322,19 @@ var __vpBannerAuto = (() => {
                 scheduleDays();
                 return b;
             }
-            let chatBackPending = false;
+            M.chatBackPending = false;
             function openChat(d, fromHistory) {
-                if (fromHistory !== true && !chatBackPending && root.classList.contains('vp-open')) {
+                if (fromHistory !== true && !M.chatBackPending && root.classList.contains('vp-open')) {
                     const st = Object.assign({}, history.state, { vpChat: d.id });
                     history[overlayAt('vpChat') ? 'replaceState' : 'pushState'](st, '', location.href);
                 }
-                if (current !== d) clearPending();
-                blockUi(null);
+                if (M.current !== d) M.clearPending();
+                M.blockUi(null);
                 $('.vp-msgs-hmenu').hidden = true;
                 $('.vp-msgs-more').hidden = !d.login || !!d.support || !!d.supUid;
-                current = d;
-                downNew = 0;
-                selEnd(); clearReply(); closeFwd(); pinEl.hidden = true; pinIdx = 0;
+                M.current = d;
+                M.downNew = 0;
+                M.selEnd(); M.clearReply(); M.closeFwd(); M.pinEl.hidden = true; M.pinIdx = 0;
                 d.unread = 0;
                 msgMarkOpened(d.id);
                 $('.vp-msgs-chead .vp-msgs-ava').innerHTML = avaHtml(msgAva(d), 38);
@@ -13194,18 +13354,18 @@ var __vpBannerAuto = (() => {
                 home.hidden = true; chat.hidden = false;
                 input.value = ''; send.disabled = true; msgCount();
             }
-            const note = (t, ico) => { const n = document.createElement('div'); n.className = 'vp-msgs-note'; if (ico) n.insertAdjacentHTML('afterbegin', uiIcon(ico, 14)); n.appendChild(document.createTextNode(t)); feed.appendChild(n); return n; };
+            const note = (t, ico) => { const n = document.createElement('div'); n.className = 'vp-msgs-note'; if (ico) n.insertAdjacentHTML('afterbegin', uiIcon(ico, 14)); n.appendChild(document.createTextNode(t)); feed.appendChild(n); return n; }; M.note = note;
             let stickUntil = 0;
             const stickEnd = () => {
                 stickUntil = Date.now() + 2500;
                 feed.scrollTop = feed.scrollHeight;
                 requestAnimationFrame(() => { if (Date.now() < stickUntil) feed.scrollTop = feed.scrollHeight; });
-            };
+            }; M.stickEnd = stickEnd;
             feed.addEventListener('load', () => { if (Date.now() < stickUntil) feed.scrollTop = feed.scrollHeight; }, true);
             feed.addEventListener('click', e => {
                 const fb = e.target.closest && e.target.closest('.vp-msgs-b.vp-fail');
-                if (!fb || !fb._m || fb._m.pending !== 'fail' || !current) return;
-                const tt = msgTarget(current);
+                if (!fb || !fb._m || fb._m.pending !== 'fail' || !M.current) return;
+                const tt = msgTarget(M.current);
                 if (tt.uid) msgRetry(tt.uid, fb._m.ts);
             });
             ['wheel', 'touchstart', 'keydown'].forEach(t => feed.addEventListener(t, () => { stickUntil = 0; }, { passive: true }));
@@ -13216,7 +13376,7 @@ var __vpBannerAuto = (() => {
                 feed.textContent = ''; input.disabled = true; input.maxLength = MSG_TEXT_MAX;
                 const wait = note('Загрузка переписки…', 'lock');
                 try { await msgSync(); } catch (e) { if (my === renderN) wait.textContent = 'Не загрузилось — открой чат ещё раз'; logErr('сообщения', e); return; }
-                if (current !== d || my !== renderN) return;
+                if (M.current !== d || my !== renderN) return;
                 if (d.login && !d.support && !isApprovedId(msgMyId())) {
                     feed.textContent = '';
                     note('Переписка с людьми откроется, когда разработчик подтвердит твою галочку ИТД X. Поддержка работает уже сейчас.', 'lock');
@@ -13233,16 +13393,16 @@ var __vpBannerAuto = (() => {
                     const b = bubble(m.dir, m.text, msgMetaText(t, m), (m.imgs || (m.img ? [m.img] : [])).map(msgImgUrl));
                     b._m = m; b.dataset.ts = m.ts; b.dataset.dir = m.dir;
                     b.classList.toggle('vp-fail', m.pending === 'fail');
-                    paintReacts(b, t.uid);
+                    M.paintReacts(b, t.uid);
                 });
-                paintCalls(t);
-                paintPin(t);
+                M.paintCalls(t);
+                M.paintPin(t);
                 paintDays(true);
-                d.shown = list.length; d.sig = chatSig(t.uid);
+                d.shown = list.length; d.sig = M.chatSig(t.uid);
                 input.disabled = false; input.focus();
                 stickEnd();
                 msgReadNow(d, t, list);
-                blockUi(d, t);
+                M.blockUi(d, t);
             }
             const dayLabel = ts => {
                 const d = new Date(ts * 1000), now = new Date(), yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
@@ -13267,7 +13427,7 @@ var __vpBannerAuto = (() => {
             }
             let daysRaf = 0;
             const scheduleDays = () => { if (!daysRaf) daysRaf = requestAnimationFrame(() => { daysRaf = 0; paintDays(); }); };
-            const msgClock = ts => new Date(ts * 1000).toTimeString().slice(0, 5);
+            const msgClock = ts => new Date(ts * 1000).toTimeString().slice(0, 5); M.msgClock = msgClock;
             const msgMetaText = (t, m) => m.pending ? msgClock(m.ts) + (m.pending === 'fail' ? ' · не отправлено — нажми, чтобы повторить' : ' · отправка…') : msgClock(m.at || m.ts) + (m.dir === 'out' ? (readUpTo(t.uid, t.sup, 'them') >= m.ts ? ' ✓✓' : ' ✓') : '');
             function viewMark() {
                 const top = feed.getBoundingClientRect().top;
@@ -13283,9 +13443,9 @@ var __vpBannerAuto = (() => {
             }
             function msgRefreshChat(d) {
                 const t = msgTarget(d);
-                if (input.dataset.vpBlocked && t.uid) blockUi(d, t);
+                if (input.dataset.vpBlocked && t.uid) M.blockUi(d, t);
                 if (!t.uid || !msgNet.me || input.disabled) return;
-                blockUi(d, t);
+                M.blockUi(d, t);
                 if (input.disabled) return;
                 const list = msgThread(t), have = new Map();
                 feed.querySelectorAll(':scope > .vp-msgs-b[data-ts]').forEach(b => { const k = b.dataset.dir + '|' + b.dataset.ts; if (!have.has(k)) have.set(k, []); have.get(k).push(b); });
@@ -13302,7 +13462,7 @@ var __vpBannerAuto = (() => {
                     b._m = m;
                     b.classList.toggle('vp-fail', m.pending === 'fail');
                     const sig = JSON.stringify(msgNet.reacts && msgNet.reacts.get(reactKey(t.uid, m.dir, m.ts)) || null);
-                    if (b._rs !== sig) { b._rs = sig; paintReacts(b, t.uid); }
+                    if (b._rs !== sig) { b._rs = sig; M.paintReacts(b, t.uid); }
                     const want = prev ? prev.nextElementSibling : feed.querySelector(':scope > .vp-msgs-b');
                     if (want !== b) { if (prev) prev.after(b); else feed.insertBefore(b, want); }
                     prev = b;
@@ -13310,13 +13470,13 @@ var __vpBannerAuto = (() => {
                 have.forEach(arr => arr.forEach(x => x.remove()));
                 if (added) feed.querySelectorAll(':scope > .vp-msgs-note.vp-msgs-first').forEach(n => n.remove());
                 if (nearEnd) feed.scrollTop = feed.scrollHeight; else restore();
-                if (added && !nearEnd && d.shown) downNew += list.slice(-added).filter(m => m.dir === 'in').length;
+                if (added && !nearEnd && d.shown) M.downNew += list.slice(-added).filter(m => m.dir === 'in').length;
                 downSync();
-                paintCalls(t);
-                paintPin(t);
+                M.paintCalls(t);
+                M.paintPin(t);
                 paintDays(true);
                 if (nearEnd) feed.scrollTop = feed.scrollHeight; else restore();
-                d.shown = list.length; d.sig = chatSig(t.uid);
+                d.shown = list.length; d.sig = M.chatSig(t.uid);
                 msgReadNow(d, t, list);
             }
             function msgReadNow(d, t, list) {
@@ -13352,46 +13512,46 @@ var __vpBannerAuto = (() => {
             const msgPoll = sched.add('msgPoll', async () => {
                 if (!root.isConnected) return msgPoll.remove();
                 if ((!msgsOpen && !(callNet.cur && callNet.cur.state === 'talk')) || !msgNet.me || apiPaused()) return;
-                if (current) msgNet.hotUntil = Date.now() + 120000;
+                if (M.current) msgNet.hotUntil = Date.now() + 120000;
                 if (Date.now() - callNet.lastSync > 12000) { callNet.lastSync = Date.now(); try { await msgSync(); } catch (e) { return; } }
                 msgFillDialogs();
-                if (!current) return renderList();
-                const tt = msgTarget(current), list = msgThread(tt);
-                if (list.length !== current.shown || chatSig(tt.uid) !== current.sig) msgRefreshChat(current);
+                if (!M.current) return renderList();
+                const tt = msgTarget(M.current), list = msgThread(tt);
+                if (list.length !== M.current.shown || M.chatSig(tt.uid) !== M.current.sig) msgRefreshChat(M.current);
             }, { every: 20000, net: true });
-            root.refreshList = () => { if (!current) { msgFillDialogs(); renderList(); } };
+            root.refreshList = () => { if (!M.current) { msgFillDialogs(); renderList(); } };
             document.addEventListener('vp-looks-ready', () => {
                 if (!root.isConnected) return;
-                if (current) headAva(); else renderList();
+                if (M.current) headAva(); else renderList();
             });
             document.addEventListener('vp-msg-outbox', () => {
                 if (!root.isConnected) return;
-                if (current && msgNet.me) msgRefreshChat(current);
+                if (M.current && msgNet.me) msgRefreshChat(M.current);
                 msgFillDialogs();
             });
             const onSynced = () => {
                 if (!root.isConnected) return document.removeEventListener('vp-msg-synced', onSynced);
-                if (!msgsOpen || !current || !msgNet.me) return;
+                if (!msgsOpen || !M.current || !msgNet.me) return;
                 msgFillDialogs();
-                const tt = msgTarget(current);
+                const tt = msgTarget(M.current);
                 if (!tt.uid) return;
-                if (msgThread(tt).length !== current.shown || chatSig(tt.uid) !== current.sig) msgRefreshChat(current);
+                if (msgThread(tt).length !== M.current.shown || M.chatSig(tt.uid) !== M.current.sig) msgRefreshChat(M.current);
             };
             document.addEventListener('vp-msg-synced', onSynced);
             document.addEventListener('visibilitychange', () => {
-                if (document.hidden || !root.isConnected || !msgsOpen || !current || !msgNet.me) return;
-                const tt = msgTarget(current);
-                if (tt.uid) msgReadNow(current, tt, msgThread(tt));
+                if (document.hidden || !root.isConnected || !msgsOpen || !M.current || !msgNet.me) return;
+                const tt = msgTarget(M.current);
+                if (tt.uid) msgReadNow(M.current, tt, msgThread(tt));
             });
             root.refreshCalls = () => {
-                if (!current || current.support || current.supUid || !msgNet.me) return;
-                const t = msgTarget(current);
+                if (!M.current || M.current.support || M.current.supUid || !msgNet.me) return;
+                const t = msgTarget(M.current);
                 if (!t.uid) return;
-                blockUi(current, t);
+                M.blockUi(M.current, t);
                 if (input.disabled) return;
                 const near = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
                 const n = feed.querySelectorAll(':scope > .vp-msgs-callrow').length, restore = near ? null : viewMark();
-                paintCalls(t);
+                M.paintCalls(t);
                 if (near && feed.querySelectorAll(':scope > .vp-msgs-callrow').length !== n) feed.scrollTop = feed.scrollHeight;
                 else if (restore) restore();
             };
@@ -13400,16 +13560,16 @@ var __vpBannerAuto = (() => {
                 const d = MSG_DIALOGS.find(x => x.id === id) || (id.startsWith('u:') && msgPeople.get(id.slice(2)));
                 if (d) openChat(d, fromHistory);
             };
-            root.currentTarget = () => current ? msgTarget(current) : null;
+            root.currentTarget = () => M.current ? msgTarget(M.current) : null;
             function closeChat(fromHistory) {
-                clearPending();
-                closeImg(true, true);
-                closeMenu();
-                selEnd(); clearReply(); closeFwd(); pinEl.hidden = true;
-                if (fromHistory !== true && current && overlayAt('vpChat')) { chatBackPending = true; history.back(); }
-                clearTimeout(botTimer);
-                if (current && msgNet.me) msgSync().then(() => { msgFillDialogs(); msgBadge(); if (!current) renderList(); }).catch(() => { });
-                current = null;
+                M.clearPending();
+                M.closeImg(true, true);
+                M.closeMenu();
+                M.selEnd(); M.clearReply(); M.closeFwd(); M.pinEl.hidden = true;
+                if (fromHistory !== true && M.current && overlayAt('vpChat')) { M.chatBackPending = true; history.back(); }
+                clearTimeout(M.botTimer);
+                if (M.current && msgNet.me) msgSync().then(() => { msgFillDialogs(); msgBadge(); if (!M.current) renderList(); }).catch(() => { });
+                M.current = null;
                 chat.hidden = true; home.hidden = false;
                 renderList();
             }
@@ -13419,13 +13579,18 @@ var __vpBannerAuto = (() => {
                 typing.innerHTML = '<span></span><span></span><span></span>';
                 feed.appendChild(typing);
                 feed.scrollTop = feed.scrollHeight;
-                botTimer = setTimeout(() => {
+                M.botTimer = setTimeout(() => {
                     typing.remove();
                     supportTicket = supportTicket || 1000 + (Math.random() * 9000 | 0);
                     bubble('in', `Приняли, обращение №${supportTicket++}. Ответим, как только личка заработает — а по-настоящему сейчас быстрее в тг @NeuroSFW`);
                 }, 900 + Math.random() * 700);
             }
 
+        }
+        // Окно «Сообщения»: меню диалога, блокировка, плашки звонков, реакции
+        function msgPartMenus(M) {
+            const { $, close, closeChat, feed, input, list, msgAva, msgClock, msgCount, msgOpenPerson, msgRefreshChat, note, openChat, renderList, root, search, send } = M;
+            M.blockUi = blockUi; M.paintCalls = paintCalls; M.paintReacts = paintReacts; M.toggleReact = toggleReact;
             const ctx = document.createElement('div');
             ctx.className = 'vp-msgs-ctx';
             root.appendChild(ctx);
@@ -13472,12 +13637,12 @@ var __vpBannerAuto = (() => {
             list.addEventListener('click', e => {
                 const r = e.target.closest('.vp-msgs-row');
                 if (held) { held = false; return; }
-                if (r && r.dataset.id[0] === '@') { supDir = r.dataset.id === '@sup'; list.scrollTop = 0; renderList(); return; }
+                if (r && r.dataset.id[0] === '@') { M.supDir = r.dataset.id === '@sup'; list.scrollTop = 0; renderList(); return; }
                 if (r) openChat(MSG_DIALOGS.find(d => d.id === r.dataset.id));
             });
             root.querySelectorAll('.vp-msgs-who, .vp-msgs-chead .vp-msgs-ava').forEach(el => el.onclick = () => {
-                if (!current || !current.login) return;
-                const login = current.login;
+                if (!M.current || !M.current.login) return;
+                const login = M.current.login;
                 close(true);
                 openProfile(login);
             });
@@ -13515,7 +13680,7 @@ var __vpBannerAuto = (() => {
                 await msgDecryptAll();
                 msgFillDialogs();
                 msgBadge();
-                if (current === d) msgOpenPerson(d);
+                if (M.current === d) msgOpenPerson(d);
                 try { await msgSend(t.uid, '', false, null, new Uint8Array([5, on ? 1 : 0])); }
                 catch (e) { logErr('блокировка', e); }
             }
@@ -13523,8 +13688,8 @@ var __vpBannerAuto = (() => {
             $('.vp-msgs-more').onclick = e => {
                 e.stopPropagation();
                 if (!blockMenu.hidden) { blockMenu.hidden = true; return; }
-                if (!current || !current.login || current.support || current.supUid) return;
-                const t = msgTarget(current), d = current;
+                if (!M.current || !M.current.login || M.current.support || M.current.supUid) return;
+                const t = msgTarget(M.current), d = M.current;
                 if (!t.uid) return note(t.missing);
                 const on = msgIsBlocked(t.uid);
                 blockMenu.innerHTML = '<button type="button"></button>';
@@ -13537,15 +13702,15 @@ var __vpBannerAuto = (() => {
             };
             root.addEventListener('click', e => { if (!blockMenu.hidden && !e.target.closest('.vp-msgs-hmenu, .vp-msgs-more')) blockMenu.hidden = true; });
             $('.vp-msgs-call').onclick = () => {
-                if (!current || !current.login || current.support) return;
-                const t = msgTarget(current);
+                if (!M.current || !M.current.login || M.current.support) return;
+                const t = msgTarget(M.current);
                 if (!msgNet.me || !isApprovedId(msgMyId())) return note('Звонки откроются вместе с перепиской', 'phone');
                 if (!t.uid) return note(t.missing);
-                callStart(t.uid, current.name, msgAva(current));
+                callStart(t.uid, M.current.name, msgAva(M.current));
             };
             search.addEventListener('input', renderList);
             $('.vp-msgs-back').onclick = closeChat;
-            input.addEventListener('input', () => { send.disabled = !input.value.trim() && !pendingImg; msgCount(); });
+            input.addEventListener('input', () => { send.disabled = !input.value.trim() && !M.pendingImg; msgCount(); });
             attachEmojiPicker($('.vp-msgs-emoji'), em => {
                 if (input.disabled) return false;
                 const max = input.maxLength > 0 ? input.maxLength : MSG_TEXT_MAX;
@@ -13554,13 +13719,13 @@ var __vpBannerAuto = (() => {
                 input.setRangeText(em, a, z, 'end');
                 input.dispatchEvent(new Event('input', { bubbles: true }));
             });
-            let lb = null;
+            M.lb = null;
             const chatSig = uid => {
                 let sg = '';
                 if (msgNet.reacts) msgNet.reacts.forEach((v, k) => { if (k.startsWith(uid + '|')) sg += k + (v.me ? v.me.emoji : '') + '/' + (v.them ? v.them.emoji : '') + ';'; });
                 const r = msgNet.reads && msgNet.reads.get(uid);
                 return sg + ((msgNet.pins && msgNet.pins.get(uid)) || []).join(',') + '|' + (r ? (r.them0 || 0) + '/' + (r.them1 || 0) : 0) + '|' + (msgNet.sigs || []).filter(x => x.uid === uid).length + '|' + (msgIsBlocked(uid) ? 1 : 0) + (msgBlockedMe(uid) ? 1 : 0) + '|' + msgOutGet().filter(e => e.uid === uid).map(e => e.ts + e.st).join(',');
-            };
+            }; M.chatSig = chatSig;
             function paintCalls(t) {
                 feed.querySelectorAll(':scope > .vp-msgs-callrow').forEach(x => x.remove());
                 if (!t.uid || t.sup) return;
@@ -13573,7 +13738,7 @@ var __vpBannerAuto = (() => {
                     row.querySelector('span').textContent = text;
                     row.querySelector('time').textContent = msgClock(e.ts);
                     row.dataset.cts = e.ts;
-                    row.onclick = () => { if (current) callStart(t.uid, current.name, msgAva(current)); };
+                    row.onclick = () => { if (M.current) callStart(t.uid, M.current.name, msgAva(M.current)); };
                     const next = bs.find(b => +b.dataset.ts > e.ts);
                     if (next) feed.insertBefore(row, next); else feed.appendChild(row);
                 }
@@ -13600,7 +13765,7 @@ var __vpBannerAuto = (() => {
                 b.insertBefore(box, b.lastChild);
             }
             function toggleReact(b, emoji) {
-                const m = b._m, t = current && msgTarget(current);
+                const m = b._m, t = M.current && msgTarget(M.current);
                 if (!m || !t || !t.uid) return;
                 const key = reactKey(t.uid, m.dir, m.ts), e = msgNet.reacts.get(key) || {};
                 const next = e.me && e.me.emoji === emoji ? '' : emoji;
@@ -13611,11 +13776,16 @@ var __vpBannerAuto = (() => {
                 const nearEnd = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
                 paintReacts(b, t.uid);
                 if (nearEnd) feed.scrollTop = feed.scrollHeight;
-                current.sig = chatSig(t.uid);
-                const d = current;
-                msgReact(t.uid, m, next).then(() => { if (current === d) msgRefreshChat(d); })
-                    .catch(err => { pend.delete(key); logErr('реакция', err); if (current === d) msgRefreshChat(d); note('Реакция не сохранилась — попробуй ещё раз'); });
+                M.current.sig = chatSig(t.uid);
+                const d = M.current;
+                msgReact(t.uid, m, next).then(() => { if (M.current === d) msgRefreshChat(d); })
+                    .catch(err => { pend.delete(key); logErr('реакция', err); if (M.current === d) msgRefreshChat(d); note('Реакция не сохранилась — попробуй ещё раз'); });
             }
+        }
+        // Окно «Сообщения»: ответ, закреплённые, выделение, удаление, пересылка, меню пузыря
+        function msgPartSelect(M) {
+            const { $, avaHtml, chat, feed, input, msgAva, msgRefreshChat, toggleReact } = M;
+            M.clearReply = clearReply; M.takeReply = takeReply; M.paintPin = paintPin; M.selEnd = selEnd; M.closeFwd = closeFwd; M.closeMenu = closeMenu;
             const plainText = t => String(t || '').replace(/^> [^\n]*\n?/, '');
             const flashNote = text => {
                 chat.querySelectorAll(':scope > .vp-msgs-flash').forEach(x => x.remove());
@@ -13626,82 +13796,82 @@ var __vpBannerAuto = (() => {
                 setTimeout(() => n.remove(), 2400);
             };
             const copyText = t => { if (t && navigator.clipboard) navigator.clipboard.writeText(t).catch(() => { }); flashNote('Скопировано'); };
-            let reply = null;
+            M.reply = null;
             const replyEl = document.createElement('div');
             replyEl.className = 'vp-msgs-reply';
             replyEl.hidden = true;
             replyEl.innerHTML = uiIcon('reply', 18) + '<span class="vp-msgs-reply-t"><b></b><span></span></span><button type="button" class="vp-msgs-ib" title="Отмена">' + uiIcon('close', 16) + '</button>';
             $('.vp-msgs-bar').before(replyEl);
-            function clearReply() { reply = null; replyEl.hidden = true; }
+            function clearReply() { M.reply = null; replyEl.hidden = true; }
             function setReply(b) {
                 const m = b._m;
                 if (!m) return;
                 const body = plainText(m.text).replace(/\s+/g, ' ').trim();
-                reply = { name: m.dir === 'out' ? 'Ты' : current.name, text: body ? body.slice(0, 70) : 'Картинка' };
-                replyEl.querySelector('b').textContent = reply.name;
-                replyEl.querySelector('.vp-msgs-reply-t span').textContent = reply.text;
+                M.reply = { name: m.dir === 'out' ? 'Ты' : M.current.name, text: body ? body.slice(0, 70) : 'Картинка' };
+                replyEl.querySelector('b').textContent = M.reply.name;
+                replyEl.querySelector('.vp-msgs-reply-t span').textContent = M.reply.text;
                 replyEl.hidden = false;
                 input.focus();
             }
             replyEl.querySelector('button').addEventListener('click', clearReply);
             function takeReply(text) {
-                if (!reply) return text;
-                const q = '> ' + reply.name + ': ' + reply.text;
+                if (!M.reply) return text;
+                const q = '> ' + M.reply.name + ': ' + M.reply.text;
                 clearReply();
                 return text ? q + '\n' + text : q;
             }
-            const pinEl = document.createElement('div');
+            const pinEl = document.createElement('div'); M.pinEl = pinEl;
             pinEl.className = 'vp-msgs-pinbar';
             pinEl.hidden = true;
             pinEl.innerHTML = uiIcon('pin', 18) + '<span class="vp-msgs-pin-t"><b>Закреплённое сообщение</b><span></span></span><button type="button" class="vp-msgs-ib" title="Открепить">' + uiIcon('close', 16) + '</button>';
             $('.vp-msgs-chead').after(pinEl);
-            let pinIdx = 0, pinCur = null, pinCount = 0;
+            M.pinIdx = 0, M.pinCur = null, M.pinCount = 0;
             function paintPin(t) {
                 const keys = (msgNet.pins && t && t.uid && msgNet.pins.get(t.uid)) || [], list = t && t.uid ? msgThread(t) : [];
                 const items = keys.map(k => list.find(m => reactKey(t.uid, m.dir, m.ts) === k)).filter(Boolean);
-                pinCount = items.length;
-                if (!items.length) { pinEl.hidden = true; pinCur = null; return; }
-                pinIdx = pinIdx % items.length;
-                pinCur = items[items.length - 1 - pinIdx];
-                pinEl.querySelector('b').textContent = items.length > 1 ? `Закреплённое сообщение ${items.length - pinIdx} из ${items.length}` : 'Закреплённое сообщение';
-                pinEl.querySelector('.vp-msgs-pin-t span').textContent = plainText(pinCur.text).replace(/\s+/g, ' ').trim().slice(0, 90) || 'Картинка';
+                M.pinCount = items.length;
+                if (!items.length) { pinEl.hidden = true; M.pinCur = null; return; }
+                M.pinIdx = M.pinIdx % items.length;
+                M.pinCur = items[items.length - 1 - M.pinIdx];
+                pinEl.querySelector('b').textContent = items.length > 1 ? `Закреплённое сообщение ${items.length - M.pinIdx} из ${items.length}` : 'Закреплённое сообщение';
+                pinEl.querySelector('.vp-msgs-pin-t span').textContent = plainText(M.pinCur.text).replace(/\s+/g, ' ').trim().slice(0, 90) || 'Картинка';
                 pinEl.hidden = false;
             }
             const bubbleOf = m => feed.querySelector(`:scope > .vp-msgs-b[data-dir="${m.dir}"][data-ts="${m.ts}"]`);
             pinEl.addEventListener('click', e => {
-                if (!pinCur || e.target.closest('button')) return;
-                const b = bubbleOf(pinCur);
+                if (!M.pinCur || e.target.closest('button')) return;
+                const b = bubbleOf(M.pinCur);
                 if (b) { b.scrollIntoView({ block: 'center', behavior: 'smooth' }); b.classList.remove('vp-flash'); void b.offsetWidth; b.classList.add('vp-flash'); setTimeout(() => b.classList.remove('vp-flash'), 1500); }
-                if (pinCount > 1) { pinIdx++; paintPin(msgTarget(current)); }
+                if (M.pinCount > 1) { M.pinIdx++; paintPin(msgTarget(M.current)); }
             });
-            pinEl.querySelector('button').addEventListener('click', () => { if (pinCur) togglePin(pinCur, false); });
+            pinEl.querySelector('button').addEventListener('click', () => { if (M.pinCur) togglePin(M.pinCur, false); });
             async function togglePin(m, on) {
-                const t = current && msgTarget(current);
+                const t = M.current && msgTarget(M.current);
                 if (!t || !t.uid) return;
-                const d = current;
+                const d = M.current;
                 try { await msgSend(t.uid, '', false, null, cat(new Uint8Array([6]), be32(m.ts), new Uint8Array([m.dir === 'out' ? 1 : 0, on ? 1 : 0]))); }
                 catch (e) { logErr('закрепление', e); flashNote('Не получилось — попробуй ещё раз'); return; }
                 await msgSync().catch(() => { });
-                if (current === d) { msgRefreshChat(d); flashNote(on ? 'Сообщение закреплено' : 'Сообщение откреплено'); }
+                if (M.current === d) { msgRefreshChat(d); flashNote(on ? 'Сообщение закреплено' : 'Сообщение откреплено'); }
             }
-            let sel = null;
+            M.sel = null;
             const selEl = document.createElement('div');
             selEl.className = 'vp-msgs-sel';
             selEl.hidden = true;
             selEl.innerHTML = '<button type="button" class="vp-msgs-ib" title="Отмена">' + uiIcon('close', 18) + '</button><b></b><span class="vp-msgs-sel-gap"></span>'
                 + '<button type="button" data-a="copy">' + uiIcon('copy', 16) + 'Копировать</button><button type="button" data-a="fwd">' + uiIcon('fwd', 16) + 'Переслать</button><button type="button" data-a="del" class="vp-danger">' + uiIcon('trash', 16) + 'Удалить</button>';
             $('.vp-msgs-chead').appendChild(selEl);
-            function selEnd() { if (sel) sel.forEach(b => b.classList.remove('vp-sel')); sel = null; chat.classList.remove('vp-selecting'); selEl.hidden = true; }
+            function selEnd() { if (M.sel) M.sel.forEach(b => b.classList.remove('vp-sel')); M.sel = null; chat.classList.remove('vp-selecting'); selEl.hidden = true; }
             function selSet(b, on) {
-                if (!sel || !b._m) return;
-                const has = sel.has(b);
-                if (on && !has) { sel.add(b); b.classList.add('vp-sel'); }
-                else if (!on && has) { sel.delete(b); b.classList.remove('vp-sel'); }
-                if (!sel.size) selEnd(); else selEl.querySelector('b').textContent = sel.size + ' выбрано';
+                if (!M.sel || !b._m) return;
+                const has = M.sel.has(b);
+                if (on && !has) { M.sel.add(b); b.classList.add('vp-sel'); }
+                else if (!on && has) { M.sel.delete(b); b.classList.remove('vp-sel'); }
+                if (!M.sel.size) selEnd(); else selEl.querySelector('b').textContent = M.sel.size + ' выбрано';
             }
-            const selToggle = b => { if (sel && b._m) selSet(b, !sel.has(b)); };
-            function selStart(b) { selEnd(); sel = new Set(); chat.classList.add('vp-selecting'); selEl.hidden = false; selToggle(b); }
-            const selList = () => sel ? [...feed.querySelectorAll(':scope > .vp-msgs-b')].filter(b => sel.has(b)) : [];
+            const selToggle = b => { if (M.sel && b._m) selSet(b, !M.sel.has(b)); };
+            function selStart(b) { selEnd(); M.sel = new Set(); chat.classList.add('vp-selecting'); selEl.hidden = false; selToggle(b); }
+            const selList = () => M.sel ? [...feed.querySelectorAll(':scope > .vp-msgs-b')].filter(b => M.sel.has(b)) : [];
             selEl.addEventListener('click', e => {
                 const btn = e.target.closest('button');
                 if (!btn) return;
@@ -13731,17 +13901,17 @@ var __vpBannerAuto = (() => {
                 dsel.raf = requestAnimationFrame(selScroll);
             }
             feed.addEventListener('pointerdown', e => {
-                if (!sel || e.button) return;
+                if (!M.sel || e.button) return;
                 const b = hitBubble(e);
                 if (!b || !b._m) return;
-                dsel = { was: sel.has(b), b, before: new Set(sel), moved: false, x0: e.clientX, y0: e.clientY, id: e.pointerId, v: 0, x: e.clientX, y: e.clientY, raf: 0 };
+                dsel = { was: M.sel.has(b), b, before: new Set(M.sel), moved: false, x0: e.clientX, y0: e.clientY, id: e.pointerId, v: 0, x: e.clientX, y: e.clientY, raf: 0 };
                 selRange(b);
                 try { feed.setPointerCapture(e.pointerId); } catch (x) { }
                 e.preventDefault();
             }, true);
             let selHoldT = 0;
             feed.addEventListener('pointerdown', e => {
-                if (sel || e.pointerType !== 'mouse' || e.button) return;
+                if (M.sel || e.pointerType !== 'mouse' || e.button) return;
                 const b = hitBubble(e);
                 if (!b || !b._m || e.target.closest('a, button')) return;
                 const id = e.pointerId, x0 = e.clientX, y0 = e.clientY;
@@ -13750,10 +13920,10 @@ var __vpBannerAuto = (() => {
                 const mv = ev => { if (Math.hypot(ev.clientX - x0, ev.clientY - y0) > 5) cancel(); };
                 selHoldT = setTimeout(() => {
                     cancel();
-                    if (!b.isConnected || sel) return;
+                    if (!b.isConnected || M.sel) return;
                     if (window.getSelection) window.getSelection().removeAllRanges();
                     selStart(b);
-                    dsel = { was: false, b, before: new Set(sel), moved: false, x0, y0, id, v: 0, x: x0, y: y0, raf: 0 };
+                    dsel = { was: false, b, before: new Set(M.sel), moved: false, x0, y0, id, v: 0, x: x0, y: y0, raf: 0 };
                     try { feed.setPointerCapture(id); } catch (x) { }
                 }, 450);
                 feed.addEventListener('pointermove', mv);
@@ -13779,14 +13949,14 @@ var __vpBannerAuto = (() => {
             feed.addEventListener('pointerup', selDragEnd);
             feed.addEventListener('pointercancel', selDragEnd);
             feed.addEventListener('click', e => {
-                if (!sel && Date.now() > selMute) return;
+                if (!M.sel && Date.now() > selMute) return;
                 if (Date.now() < selMute) { e.preventDefault(); e.stopPropagation(); return; }
                 const b = hitBubble(e);
                 e.preventDefault(); e.stopPropagation();
                 if (b) selToggle(b);
             }, true);
             async function msgDelete(bs) {
-                const t = current && msgTarget(current);
+                const t = M.current && msgTarget(M.current);
                 bs = bs.filter(b => b._m);
                 if (!t || !t.uid || !bs.length) return;
                 const own = bs.filter(b => b._m.dir === 'out'), theirs = bs.filter(b => b._m.dir === 'in');
@@ -13794,7 +13964,7 @@ var __vpBannerAuto = (() => {
                     : !own.length ? (theirs.length === 1 ? 'Удалить сообщение у себя? У собеседника оно останется.' : `Удалить ${theirs.length} сообщ. у себя? У собеседника они останутся.`)
                         : `Удалить ${bs.length} сообщ.? Свои пропадут у обоих, чужие только у тебя.`;
                 if (!confirm(ask)) return;
-                const d = current;
+                const d = M.current;
                 theirs.forEach(b => { msgHide(t.uid, b._m); b.remove(); });
                 for (const b of own) {
                     b.classList.add('vp-gone');
@@ -13802,18 +13972,18 @@ var __vpBannerAuto = (() => {
                     catch (e) { b.classList.remove('vp-gone'); logErr('удаление', e); flashNote('Не удалилось — попробуй ещё раз'); break; }
                 }
                 await msgSync().catch(() => { });
-                if (current === d) msgRefreshChat(d);
+                if (M.current === d) msgRefreshChat(d);
             }
-            let fwdEl = null;
-            function closeFwd() { if (fwdEl) { fwdEl.remove(); fwdEl = null; } }
+            M.fwdEl = null;
+            function closeFwd() { if (M.fwdEl) { M.fwdEl.remove(); M.fwdEl = null; } }
             function openFwd(ms) {
                 closeFwd();
                 msgFillDialogs();
                 const targets = sortDialogs(MSG_DIALOGS.filter(x => !x.supUid && (x.login || x.support)));
-                fwdEl = document.createElement('div');
-                fwdEl.className = 'vp-msgs-fwd';
-                fwdEl.innerHTML = '<div class="vp-msgs-fwd-card"><div class="vp-msgs-fwd-h"><b>Переслать</b><button type="button" class="vp-msgs-ib" title="Закрыть">' + uiIcon('close', 18) + '</button></div><div class="vp-msgs-fwd-l"></div></div>';
-                const box = fwdEl.querySelector('.vp-msgs-fwd-l');
+                M.fwdEl = document.createElement('div');
+                M.fwdEl.className = 'vp-msgs-fwd';
+                M.fwdEl.innerHTML = '<div class="vp-msgs-fwd-card"><div class="vp-msgs-fwd-h"><b>Переслать</b><button type="button" class="vp-msgs-ib" title="Закрыть">' + uiIcon('close', 18) + '</button></div><div class="vp-msgs-fwd-l"></div></div>';
+                const box = M.fwdEl.querySelector('.vp-msgs-fwd-l');
                 targets.forEach(x => {
                     const row = document.createElement('button');
                     row.type = 'button';
@@ -13823,11 +13993,11 @@ var __vpBannerAuto = (() => {
                     row.addEventListener('click', () => forwardTo(x, ms));
                     box.appendChild(row);
                 });
-                fwdEl.addEventListener('click', e => { if (e.target === fwdEl || e.target.closest('.vp-msgs-fwd-h button')) closeFwd(); });
-                chat.appendChild(fwdEl);
+                M.fwdEl.addEventListener('click', e => { if (e.target === M.fwdEl || e.target.closest('.vp-msgs-fwd-h button')) closeFwd(); });
+                chat.appendChild(M.fwdEl);
             }
             async function forwardTo(x, ms) {
-                const t = msgTarget(x), me = current;
+                const t = msgTarget(x), me = M.current;
                 if (!t.uid) { flashNote('Этому человеку пока нельзя написать'); return; }
                 closeFwd(); selEnd();
                 try {
@@ -13840,7 +14010,7 @@ var __vpBannerAuto = (() => {
                 } catch (e) { logErr('пересылка', e); flashNote('Не отправилось — попробуй ещё раз'); }
                 await msgSync().catch(() => { });
                 msgFillDialogs();
-                if (current) { const c = msgTarget(current); if (c.uid === t.uid && c.sup === t.sup) msgRefreshChat(current); }
+                if (M.current) { const c = msgTarget(M.current); if (c.uid === t.uid && c.sup === t.sup) msgRefreshChat(M.current); }
             }
             async function saveImage(url) {
                 const name = decodeURIComponent(url.split('?')[0].split('/').pop() || 'image');
@@ -13854,46 +14024,46 @@ var __vpBannerAuto = (() => {
                     setTimeout(() => URL.revokeObjectURL(href), 4000);
                 } catch (e) { logErr('сохранение картинки', e); window.open(url, '_blank', 'noopener'); }
             }
-            let menu = null, pressT = 0;
+            M.menu = null, M.pressT = 0;
             function closeMenu() {
-                if (!menu) return;
-                menu.remove(); menu = null;
+                if (!M.menu) return;
+                M.menu.remove(); M.menu = null;
                 document.removeEventListener('pointerdown', menuOutside, true);
             }
-            const menuOutside = e => { if (menu && !menu.contains(e.target)) closeMenu(); };
+            const menuOutside = e => { if (M.menu && !M.menu.contains(e.target)) closeMenu(); };
             function openSelMenu(x, y) {
                 closeMenu();
-                menu = document.createElement('div');
-                menu.className = 'vp-msgs-menu';
+                M.menu = document.createElement('div');
+                M.menu.className = 'vp-msgs-menu';
                 const item = (label, fn, ico, cls) => {
                     const btn = document.createElement('button');
                     btn.type = 'button'; btn.className = 'vp-msgs-menu-i' + (cls ? ' ' + cls : '');
                     btn.insertAdjacentHTML('afterbegin', uiIcon(ico, 18));
                     btn.appendChild(document.createTextNode(label));
                     btn.addEventListener('click', () => { closeMenu(); fn(); });
-                    menu.appendChild(btn);
+                    M.menu.appendChild(btn);
                 };
                 item('Удалить выбранное', () => msgDelete(selList()).then(selEnd), 'trash', 'vp-danger');
                 item('Отменить выбор', selEnd, 'close');
                 const sp = document.createElement('div');
                 sp.className = 'vp-msgs-menu-sep';
-                menu.appendChild(sp);
+                M.menu.appendChild(sp);
                 item('Копировать выбранное как текст', () => { copyText(selList().map(b => plainText(b._m.text)).filter(Boolean).join('\n')); selEnd(); }, 'copy');
-                document.body.appendChild(menu);
-                const w = menu.offsetWidth, h = menu.offsetHeight;
-                menu.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px';
-                menu.style.top = Math.max(8, Math.min(y, innerHeight - h - 8)) + 'px';
+                document.body.appendChild(M.menu);
+                const w = M.menu.offsetWidth, h = M.menu.offsetHeight;
+                M.menu.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px';
+                M.menu.style.top = Math.max(8, Math.min(y, innerHeight - h - 8)) + 'px';
                 setTimeout(() => document.addEventListener('pointerdown', menuOutside, true), 0);
             }
             function openMenu(b, x, y) {
-                if (sel) { openSelMenu(x, y); return; }
+                if (M.sel) { openSelMenu(x, y); return; }
                 closeMenu();
-                const m = b._m, real = m && current && msgNet.me && msgTarget(current).uid;
+                const m = b._m, real = m && M.current && msgNet.me && msgTarget(M.current).uid;
                 const text = m ? plainText(m.text) : (b.querySelector('.vp-msgs-cap') || b.firstChild || {}).textContent || '';
                 const imgs = [...b.querySelectorAll('.vp-msgs-img')].map(i => i.src);
                 const under = document.elementFromPoint(x, y), hit = under && under.closest ? under.closest('.vp-msgs-img') : null;
-                menu = document.createElement('div');
-                menu.className = 'vp-msgs-menu';
+                M.menu = document.createElement('div');
+                M.menu.className = 'vp-msgs-menu';
                 if (real) {
                     const row = document.createElement('div');
                     row.className = 'vp-msgs-menu-r';
@@ -13903,7 +14073,7 @@ var __vpBannerAuto = (() => {
                         btn.addEventListener('click', () => { closeMenu(); toggleReact(b, em); });
                         row.appendChild(btn);
                     });
-                    menu.appendChild(row);
+                    M.menu.appendChild(row);
                 }
                 const item = (label, fn, ico, cls) => {
                     const btn = document.createElement('button');
@@ -13911,11 +14081,11 @@ var __vpBannerAuto = (() => {
                     if (ico) btn.insertAdjacentHTML('afterbegin', uiIcon(ico, 18));
                     btn.appendChild(document.createTextNode(label));
                     btn.addEventListener('click', () => { closeMenu(); fn(); });
-                    menu.appendChild(btn);
+                    M.menu.appendChild(btn);
                 };
-                const sep = () => { const s = document.createElement('div'); s.className = 'vp-msgs-menu-sep'; menu.appendChild(s); };
+                const sep = () => { const s = document.createElement('div'); s.className = 'vp-msgs-menu-sep'; M.menu.appendChild(s); };
                 if (real) {
-                    const t = msgTarget(current), pinned = ((msgNet.pins && msgNet.pins.get(t.uid)) || []).includes(reactKey(t.uid, m.dir, m.ts));
+                    const t = msgTarget(M.current), pinned = ((msgNet.pins && msgNet.pins.get(t.uid)) || []).includes(reactKey(t.uid, m.dir, m.ts));
                     item('Ответить', () => setReply(b), 'reply');
                     item(pinned ? 'Открепить' : 'Закрепить', () => togglePin(m, !pinned), 'pin');
                     item('Переслать', () => openFwd([m]), 'fwd');
@@ -13926,14 +14096,14 @@ var __vpBannerAuto = (() => {
                 if (text) item('Копировать текст', () => copyText(text), 'copy');
                 if (imgs.length) {
                     item('Сохранить', () => saveImage(hit ? hit.src : imgs[0]), 'save');
-                    item(imgs.length > 1 ? 'Открыть альбом' : 'Открыть картинку', () => openImg(imgs, 0, text, [...b.querySelectorAll('.vp-msgs-img')]), 'image');
+                    item(imgs.length > 1 ? 'Открыть альбом' : 'Открыть картинку', () => M.openImg(imgs, 0, text, [...b.querySelectorAll('.vp-msgs-img')]), 'image');
                 }
-                if (menu.lastChild && menu.lastChild.classList.contains('vp-msgs-menu-sep')) menu.lastChild.remove();
-                if (!menu.querySelector('.vp-msgs-menu-i')) { menu = null; return; }
-                document.body.appendChild(menu);
-                const w = menu.offsetWidth, h = menu.offsetHeight;
-                menu.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px';
-                menu.style.top = Math.max(8, Math.min(y, innerHeight - h - 8)) + 'px';
+                if (M.menu.lastChild && M.menu.lastChild.classList.contains('vp-msgs-menu-sep')) M.menu.lastChild.remove();
+                if (!M.menu.querySelector('.vp-msgs-menu-i')) { M.menu = null; return; }
+                document.body.appendChild(M.menu);
+                const w = M.menu.offsetWidth, h = M.menu.offsetHeight;
+                M.menu.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px';
+                M.menu.style.top = Math.max(8, Math.min(y, innerHeight - h - 8)) + 'px';
                 setTimeout(() => document.addEventListener('pointerdown', menuOutside, true), 0);
             }
             const bubbleAt = y => [...feed.querySelectorAll('.vp-msgs-b:not(.vp-msgs-typing)')].find(x => { const r = x.getBoundingClientRect(); return y >= r.top - 3 && y <= r.bottom + 3; });
@@ -13941,62 +14111,67 @@ var __vpBannerAuto = (() => {
                 const b = bubbleAt(e.clientY);
                 if (!b) return;
                 e.preventDefault();
-                if (sel) { openSelMenu(e.clientX, e.clientY); return; }
+                if (M.sel) { openSelMenu(e.clientX, e.clientY); return; }
                 openMenu(b, e.clientX, e.clientY);
             });
             feed.addEventListener('pointerdown', e => {
-                if (e.pointerType === 'mouse' || sel) return;
+                if (e.pointerType === 'mouse' || M.sel) return;
                 const b = bubbleAt(e.clientY), x = e.clientX, y = e.clientY;
                 if (!b) return;
-                clearTimeout(pressT);
-                pressT = setTimeout(() => { pressT = 0; openMenu(b, x, y); }, 480);
+                clearTimeout(M.pressT);
+                M.pressT = setTimeout(() => { M.pressT = 0; openMenu(b, x, y); }, 480);
             });
-            ['pointerup', 'pointercancel'].forEach(t => feed.addEventListener(t, () => clearTimeout(pressT)));
-            feed.addEventListener('pointermove', e => { if (pressT && e.pointerType !== 'mouse') clearTimeout(pressT); });
+            ['pointerup', 'pointercancel'].forEach(t => feed.addEventListener(t, () => clearTimeout(M.pressT)));
+            feed.addEventListener('pointermove', e => { if (M.pressT && e.pointerType !== 'mouse') clearTimeout(M.pressT); });
             feed.addEventListener('scroll', () => closeMenu(), { passive: true });
+        }
+        // Окно «Сообщения»: просмотр картинок, вложения, отправка картинок
+        function msgPartImages(M) {
+            const { $, bubble, feed, input, msgCount, msgRefreshChat, note, now, root, send, setMeta, stickEnd, supportReply, takeReply } = M;
+            M.openImg = openImg; M.closeImg = closeImg; M.clearPending = clearPending;
             let lbKey = null;
             function openImg(list, idx, cap, thumbs) {
                 if (typeof list === 'string') list = [list];
                 idx = idx || 0;
-                if (lb) closeImg(true, true);
-                lb = document.createElement('div');
-                lb.className = 'vp-msgs-lb';
-                lb._thumbs = thumbs || [];
-                lb._idx = () => idx;
-                lb.innerHTML = `<div class="vp-msgs-lb-top"><button type="button" class="vp-msgs-ib" title="Назад">${MSG_ICON.back}</button><span class="vp-msgs-lb-cap"></span>`
+                if (M.lb) closeImg(true, true);
+                M.lb = document.createElement('div');
+                M.lb.className = 'vp-msgs-lb';
+                M.lb._thumbs = thumbs || [];
+                M.lb._idx = () => idx;
+                M.lb.innerHTML = `<div class="vp-msgs-lb-top"><button type="button" class="vp-msgs-ib" title="Назад">${MSG_ICON.back}</button><span class="vp-msgs-lb-cap"></span>`
                     + `<b class="vp-msgs-lb-n"></b><a target="_blank" rel="noopener">Открыть оригинал ${uiIcon('out', 14, 'vp-solo')}</a></div>`
                     + `<div class="vp-msgs-lb-body"><button type="button" class="vp-msgs-lb-nav vp-prev" title="Назад">‹</button><img alt="" draggable="false"><button type="button" class="vp-msgs-lb-nav vp-next" title="Дальше">›</button></div>`;
-                const orig = lb.querySelector('a'), img = lb.querySelector('img'), num = lb.querySelector('.vp-msgs-lb-n');
-                const prev = lb.querySelector('.vp-prev'), next = lb.querySelector('.vp-next');
+                const orig = M.lb.querySelector('a'), img = M.lb.querySelector('img'), num = M.lb.querySelector('.vp-msgs-lb-n');
+                const prev = M.lb.querySelector('.vp-prev'), next = M.lb.querySelector('.vp-next');
                 const show = i => {
                     idx = (i + list.length) % list.length;
                     img.src = list[idx];
                     if (/^https:\/\/cdn\./.test(list[idx])) { orig.href = list[idx]; orig.hidden = false; } else orig.hidden = true;
                     num.textContent = list.length > 1 ? `${idx + 1} / ${list.length}` : '';
-                    if (lb && lb._flown) lb._thumbs.forEach((t, k) => { if (t) t.style.visibility = k === idx ? 'hidden' : ''; });
+                    if (M.lb && M.lb._flown) M.lb._thumbs.forEach((t, k) => { if (t) t.style.visibility = k === idx ? 'hidden' : ''; });
                 };
                 prev.hidden = next.hidden = list.length < 2;
                 prev.addEventListener('click', e => { if (downX != null && Math.abs(e.clientX - downX) > 40) return; e.stopPropagation(); show(idx - 1); });
                 next.addEventListener('click', e => { if (downX != null && Math.abs(e.clientX - downX) > 40) return; e.stopPropagation(); show(idx + 1); });
-                lb.querySelector('.vp-msgs-lb-cap').textContent = cap || '';
+                M.lb.querySelector('.vp-msgs-lb-cap').textContent = cap || '';
                 show(idx);
-                lb.querySelector('.vp-msgs-ib').addEventListener('click', () => closeImg());
+                M.lb.querySelector('.vp-msgs-ib').addEventListener('click', () => closeImg());
                 let downX = null;
-                lb.addEventListener('pointerdown', e => { downX = e.clientX; });
-                lb.addEventListener('click', e => {
+                M.lb.addEventListener('pointerdown', e => { downX = e.clientX; });
+                M.lb.addEventListener('click', e => {
                     const dx = downX == null ? 0 : e.clientX - downX;
                     downX = null;
                     if (list.length > 1 && Math.abs(dx) > 40) { show(idx + (dx < 0 ? 1 : -1)); return; }
-                    if (e.target === lb || e.target.classList.contains('vp-msgs-lb-body')) closeImg();
+                    if (e.target === M.lb || e.target.classList.contains('vp-msgs-lb-body')) closeImg();
                 });
                 lbKey = e => {
                     if (e.key === 'ArrowLeft' && list.length > 1) { e.preventDefault(); e.stopPropagation(); show(idx - 1); }
                     else if (e.key === 'ArrowRight' && list.length > 1) { e.preventDefault(); e.stopPropagation(); show(idx + 1); }
                 };
                 document.addEventListener('keydown', lbKey, true);
-                root.appendChild(lb);
+                root.appendChild(M.lb);
                 history.pushState(Object.assign({}, history.state, { vpImg: 1 }), '', location.href);
-                const el = lb, from = lb._thumbs[idx];
+                const el = M.lb, from = M.lb._thumbs[idx];
                 if (from && from.isConnected) {
                     el.style.animation = 'none';
                     el.animate([{ backgroundColor: 'rgba(0, 0, 0, 0)' }, { backgroundColor: 'rgba(0, 0, 0, .92)' }], { duration: 260, easing: 'ease-out' });
@@ -14016,9 +14191,9 @@ var __vpBannerAuto = (() => {
                 }
             }
             function closeImg(fromHistory, instant) {
-                if (!lb) return;
-                const el = lb, thumbs = el._thumbs || [], src = thumbs[el._idx()], img = el.querySelector('.vp-msgs-lb-body img');
-                lb = null;
+                if (!M.lb) return;
+                const el = M.lb, thumbs = el._thumbs || [], src = thumbs[el._idx()], img = el.querySelector('.vp-msgs-lb-body img');
+                M.lb = null;
                 if (lbKey) { document.removeEventListener('keydown', lbKey, true); lbKey = null; }
                 const done = () => { thumbs.forEach(t => { if (t) t.style.visibility = ''; }); el.remove(); };
                 let fly = false;
@@ -14038,8 +14213,8 @@ var __vpBannerAuto = (() => {
                 if (!fly) done();
                 if (fromHistory !== true && overlayAt('vpImg')) history.back();
             }
-            root.imgOpen = () => !!lb;
-            let pendingImg = null;
+            root.imgOpen = () => !!M.lb;
+            M.pendingImg = null;
             const pendEl = document.createElement('div');
             pendEl.className = 'vp-msgs-pend';
             pendEl.hidden = true;
@@ -14047,7 +14222,7 @@ var __vpBannerAuto = (() => {
             const pendList = pendEl.querySelector('.vp-msgs-pend-list');
             function renderPending() {
                 pendList.textContent = '';
-                (pendingImg || []).forEach((p, i) => {
+                (M.pendingImg || []).forEach((p, i) => {
                     const t = document.createElement('span');
                     t.className = 'vp-msgs-pend-t';
                     t.innerHTML = '<img alt=""><button type="button" title="Убрать">' + uiIcon('close', 12, 'vp-solo') + '</button>';
@@ -14055,7 +14230,7 @@ var __vpBannerAuto = (() => {
                     t.lastChild.addEventListener('click', () => removePending(i));
                     pendList.appendChild(t);
                 });
-                const n = pendingImg ? pendingImg.length : 0;
+                const n = M.pendingImg ? M.pendingImg.length : 0;
                 pendEl.querySelector('span:not(.vp-msgs-pend-t)').textContent = n > 1 ? `${n} ${plural(n, 'картинка', 'картинки', 'картинок')} из ${MSG_ALBUM_MAX} · можно добавить подпись` : 'Картинка · можно добавить подпись';
                 pendEl.hidden = !n;
                 send.disabled = !n && !input.value.trim();
@@ -14063,25 +14238,25 @@ var __vpBannerAuto = (() => {
             function setPending(files) {
                 files = (Array.isArray(files) ? files : [files]).filter(f => f && /^image\//.test(f.type));
                 if (!files.length) return;
-                const t = current && msgNet.me ? msgTarget(current) : null;
+                const t = M.current && msgNet.me ? msgTarget(M.current) : null;
                 if (!t || !t.uid) { note('Картинки можно отправлять в переписке с людьми и поддержкой'); return; }
-                pendingImg = pendingImg || [];
-                const room = MSG_ALBUM_MAX - pendingImg.length;
+                M.pendingImg = M.pendingImg || [];
+                const room = MSG_ALBUM_MAX - M.pendingImg.length;
                 if (files.length > room) note(`В одном сообщении — не больше ${MSG_ALBUM_MAX} картинок`);
-                files.slice(0, Math.max(0, room)).forEach(file => pendingImg.push({ file, url: URL.createObjectURL(file) }));
+                files.slice(0, Math.max(0, room)).forEach(file => M.pendingImg.push({ file, url: URL.createObjectURL(file) }));
                 renderPending();
                 input.focus();
             }
             function removePending(i) {
-                if (!pendingImg) return;
-                const [p] = pendingImg.splice(i, 1);
+                if (!M.pendingImg) return;
+                const [p] = M.pendingImg.splice(i, 1);
                 if (p) URL.revokeObjectURL(p.url);
-                if (!pendingImg.length) pendingImg = null;
+                if (!M.pendingImg.length) M.pendingImg = null;
                 renderPending();
             }
             function clearPending() {
-                (pendingImg || []).forEach(p => URL.revokeObjectURL(p.url));
-                pendingImg = null;
+                (M.pendingImg || []).forEach(p => URL.revokeObjectURL(p.url));
+                M.pendingImg = null;
                 renderPending();
             }
             pendEl.querySelector('.vp-msgs-pend-all').addEventListener('click', clearPending);
@@ -14090,13 +14265,13 @@ var __vpBannerAuto = (() => {
                 if (ts && feed.querySelector(`:scope > .vp-msgs-b[data-dir="out"][data-ts="${ts}"]`)) b.remove();
                 else if (ts) { b.dataset.ts = ts; b.dataset.dir = 'out'; }
                 msgFillDialogs();
-                if (current === d) msgRefreshChat(d);
+                if (M.current === d) msgRefreshChat(d);
             }
             function sendImages(files) {
-                if (!files.length || !current) return;
-                const t = msgNet.me ? msgTarget(current) : null;
+                if (!files.length || !M.current) return;
+                const t = msgNet.me ? msgTarget(M.current) : null;
                 if (!t || !t.uid) { note('Картинки можно отправлять в переписке с людьми и поддержкой'); return; }
-                const caption = takeReply(input.value.trim()), d = current, locals = files.map(f => URL.createObjectURL(f));
+                const caption = takeReply(input.value.trim()), d = M.current, locals = files.map(f => URL.createObjectURL(f));
                 input.value = ''; send.disabled = true; msgCount();
                 const b = bubble('out', caption, now() + ' · загрузка…', locals);
                 (async () => {
@@ -14121,15 +14296,15 @@ var __vpBannerAuto = (() => {
             $('.vp-msgs-bar').before(pendEl);
             $('.vp-msgs-bar').addEventListener('submit', e => {
                 e.preventDefault();
-                if (pendingImg && current) { const f = pendingImg.map(p => p.file); clearPending(); sendImages(f); return; }
+                if (M.pendingImg && M.current) { const f = M.pendingImg.map(p => p.file); clearPending(); sendImages(f); return; }
                 const text = input.value.trim();
-                if (!text || !current) return;
+                if (!text || !M.current) return;
                 input.value = ''; send.disabled = true; msgCount();
-                current.msgs.push(['out', text]);
-                current.last = 'Ты: ' + text; current.time = now();
-                if (current.support && !(msgNet.me && msgTarget(current).uid)) { bubble('out', text, now() + ' ✓'); supportReply(); }
-                else if (msgNet.me && msgTarget(current).uid) {
-                    const full = takeReply(text), d = current, t = msgTarget(d);
+                M.current.msgs.push(['out', text]);
+                M.current.last = 'Ты: ' + text; M.current.time = now();
+                if (M.current.support && !(msgNet.me && msgTarget(M.current).uid)) { bubble('out', text, now() + ' ✓'); supportReply(); }
+                else if (msgNet.me && msgTarget(M.current).uid) {
+                    const full = takeReply(text), d = M.current, t = msgTarget(d);
                     msgEnqueue(t.uid, full, t.sup);
                     msgRefreshChat(d);
                     stickEnd();
@@ -14137,101 +14312,7 @@ var __vpBannerAuto = (() => {
                 else bubble('out', text, now() + ' · не отправлено').classList.add('vp-fail');
             });
 
-            function place() {
-                const nav = siteEl('nav');
-                const row = nav && navIsRow(nav) && nav.getBoundingClientRect().top > innerHeight / 2;
-                document.querySelectorAll('.vp-msgs-navwrap').forEach(w => w.classList.remove('vp-msgs-navwrap'));
-                if (row) {
-                    if (nav.parentElement) nav.parentElement.classList.add('vp-msgs-navwrap');
-                    const bottom = innerHeight - nav.getBoundingClientRect().top + BUMP_H + 8;
-                    Object.assign(root.style, { left: '0px', right: '0px', top: '0px', bottom: '0px', width: '', borderRadius: '', paddingBottom: bottom + 'px' });
-                } else {
-                    let cb = contentBox() || lastCb;
-                    if (!cb || cb.right - cb.left < 300) {
-                        const side = siteEl('sidebar'), sr = side && side.getBoundingClientRect();
-                        const w = Math.min(650, innerWidth - 32), l = Math.max(sr ? sr.right + 24 : 16, Math.round(innerWidth / 2 - w / 2));
-                        cb = { left: l, right: Math.min(innerWidth - 16, l + w) };
-                    }
-                    const left = cb ? cb.left : Math.max(0, innerWidth / 2 - 300), width = cb ? cb.right - cb.left : Math.min(600, innerWidth);
-                    Object.assign(root.style, { left: left + 'px', width: width + 'px', right: '', top: '12px', bottom: '12px', borderRadius: '', paddingBottom: '0px' });
-                }
-                root.classList.toggle('vp-card', !row);
-                under.classList.remove('vp-on');
-                if (!row) Object.assign(under.style, { left: root.style.left, width: root.style.width });
-            }
-            let openPath = '';
-            function onKey(e) { if (e.key === 'Escape' && root.classList.contains('vp-open')) { e.stopPropagation(); lb ? closeImg() : menu ? closeMenu() : fwdEl ? closeFwd() : sel ? selEnd() : reply ? clearReply() : current ? closeChat() : close(); } }
-            function close(fromHistory) {
-                if (!root.classList.contains('vp-open')) return;
-                clearTimeout(botTimer);
-                root.classList.remove('vp-open');
-                document.documentElement.classList.remove('vp-msgs-open');
-                document.querySelectorAll('.vp-msgs-navwrap').forEach(w => w.classList.remove('vp-msgs-navwrap'));
-                document.removeEventListener('keydown', onKey, true);
-                removeEventListener('resize', place);
-                msgsOpen = false;
-                avatarRefresh();
-                placeSidebar(); placeRail();
-                if (!galOpen) galHideFeed(false);
-                markActiveNav(); moveNavBlob();
-                if (lb) { lb.remove(); lb = null; if (!fromHistory && overlayAt('vpImg')) { history.go(overlayAt('vpChat') ? -3 : -2); return; } }
-                if (!fromHistory) {
-                    if (overlayAt('vpChat')) history.go(-2);
-                    else if (overlayAt('vpMsgs')) history.back();
-                }
-            }
-            addEventListener('popstate', () => {
-                const open = root.classList.contains('vp-open');
-                if (lb && !overlayAt('vpImg')) { closeImg(true); return; }
-                if (chatBackPending) {
-                    chatBackPending = false;
-                    if (current && overlayAt('vpMsgs') && !overlayAt('vpChat')) history.pushState(Object.assign({}, history.state, { vpChat: current.id }), '', location.href);
-                    return;
-                }
-                if (overlayAt('vpMsgs')) {
-                    if (!open) root.open(true);
-                    const cid = history.state && history.state.vpChat;
-                    if (!cid && current) closeChat(true);
-                    else if (cid && (!current || current.id !== cid)) root.openDialog(cid, true);
-                }
-                else if (open) close(true);
-            });
-            document.addEventListener('click', e => {
-                if (!root.classList.contains('vp-open')) return;
-                const a = e.target.closest && e.target.closest('a.' + SELECTORS.navLink);
-                if (a && a.getAttribute('href') !== '#' && a.getAttribute('href') === location.pathname) { e.preventDefault(); e.stopPropagation(); close(); }
-            }, true);
-            const msgsLeft = () => { if (root.classList.contains('vp-open') && location.pathname !== openPath) close(true); };
-            onDom(msgsLeft);
-            document.addEventListener('vp-loc', msgsLeft);
-            root.open = fromHistory => {
-                if (root.classList.contains('vp-open')) { if (current) closeChat(); return; }
-                const lead = fromHistory === true ? null : tabSlide.lead('msg');
-                openNow(fromHistory);
-                tabSlide.arrive(lead, root);
-            };
-            const openNow = fromHistory => {
-                if (galOpen) closeGallery(true);
-                openPath = location.pathname;
-                msgsOpen = true;
-                closeChat();
-                loadMsgPeople(() => { if (!current) renderList(); else headAva(); });
-                msgSync().then(() => { msgFillDialogs(); if (!current) renderList(); }).catch(() => { });
-                place();
-                placeSidebar(); placeRail();
-                root.classList.add('vp-open');
-                document.documentElement.classList.add('vp-msgs-open');
-                avatarRefresh();
-                document.addEventListener('keydown', onKey, true);
-                addEventListener('resize', place);
-                if (fromHistory !== true) overlayEnter('vpMsgs');
-                galHideFeed(true);
-                markActiveNav(); moveNavBlob();
-            };
-            root.close = close;
-            return root;
         }
-
         function messagesLabel(notificationsLink) {
             return /уведомления/i.test(notificationsLink.textContent) ? 'Сообщения' : 'Личка';
         }
@@ -14384,7 +14465,8 @@ var __vpBannerAuto = (() => {
         article.vp-post {
             background: var(--block-bg);
             backdrop-filter: var(--vp-glass-filter, blur(4px)) !important;
-            border-radius: 24px !important;
+            --vp-card-r: 24px;
+            border-radius: var(--vp-card-r) !important;
             margin-bottom: 16px !important;
             transition: all 0.25s ease !important;
             position: relative;
@@ -14448,7 +14530,7 @@ var __vpBannerAuto = (() => {
         a[href^="/@"], a[href*="/@"] { text-decoration: none !important; }
         a[href^="/@"] .vp-nick-text { font-weight: 600 !important; }
         a[href^="/@"]:hover .vp-nick-text { filter: brightness(0.85) !important; }
-        a[href^="/@"] svg:not([data-halloween-pumpkin] svg), a[href*="/@"] svg:not([data-halloween-pumpkin] svg), a[href^="/@"] img, a[href*="/@"] img,
+        a[href^="/@"] svg, a[href*="/@"] svg, a[href^="/@"] img, a[href*="/@"] img,
         a[href^="/@"] .mod-badge-voronoi, a[href*="/@"] .mod-badge-voronoi,
         a[href^="/@"] .vp-nick-badges {
             filter: none !important;
@@ -14621,9 +14703,21 @@ var __vpBannerAuto = (() => {
             const todo = new Set(entries.map(e => blurCards.has(e.target) ? e.target : e.target._vpBlurCard));
             todo.forEach(card => card && placeBlur(card));
         });
+        // Обрезка размытого фона берёт углы самой карточки; перечитывается, когда углы меняются (сайт и мод ставят их в разное время, плюс transition)
+        function blurClip(card) {
+            const box = card.querySelector(':scope > .itd-blur-container');
+            if (!box) return;
+            const cs = getComputedStyle(card);
+            const v = `inset(0 round ${cs.borderTopLeftRadius} ${cs.borderTopRightRadius} ${cs.borderBottomRightRadius} ${cs.borderBottomLeftRadius})`;
+            if (box.style.clipPath !== v) box.style.clipPath = v;
+        }
+        document.addEventListener('transitionend', e => {
+            if (/radius/.test(e.propertyName) && e.target.classList && e.target.classList.contains('itd-blur-active')) blurClip(e.target);
+        }, true);
         function placeBlur(card) {
             const b = blurCards.get(card);
             if (!b) return;
+            blurClip(card);
             if (!b.img.isConnected || !card.isConnected) { b.img._vpBlurDone = null; dropBlur(card); return; }
             const ar = card.getBoundingClientRect(), ir = b.img.getBoundingClientRect();
             if (!ar.width || !ir.width) return;
@@ -14654,8 +14748,8 @@ var __vpBannerAuto = (() => {
                 box.innerHTML = '<div class="vp-blur-img"></div><div class="vp-blur-dim"></div>';
                 card.insertBefore(box, card.firstChild);
             }
-            const cs = getComputedStyle(card);
-            box.style.clipPath = `inset(0 round ${cs.borderTopLeftRadius} ${cs.borderTopRightRadius} ${cs.borderBottomRightRadius} ${cs.borderBottomLeftRadius})`;
+            blurClip(card);
+            setTimeout(() => blurClip(card), 400);
             const layer = box.firstChild;
             layer.style.backgroundImage = `url("${img.src}")`;
             blurCards.set(card, { img, layer });
@@ -14691,6 +14785,7 @@ var __vpBannerAuto = (() => {
             backdrop-filter: none !important;
         }
         .vp-blur-rel { position: relative; }
+        article.vp-post > .itd-blur-container { clip-path: inset(0 round var(--vp-card-r, 24px)) !important; }
         .itd-blur-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: inherit; overflow: hidden;
             z-index: -1; pointer-events: none; background: var(--block-bg);
@@ -15394,7 +15489,6 @@ var __vpBannerAuto = (() => {
         .vp-nav-has-blob .vp-nav-link { position: relative; z-index: 1; transition: background-color .2s ease, opacity .2s ease !important; }
         .vp-nav-has-blob .vp-nav-link .vp-nav-icon { transition: none; }
         .vp-nav-has-blob .vp-nav-link:not(.vp-active):not(:hover) { background-color: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
-        html.vp-ev-scene .vp-sidebar, html.vp-ev-scene .vp-rail { z-index: 30 !important; }
         .vp-nav-has-blob .vp-nav-link.vp-active { background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
         .vp-nav-has-blob > div:not(.vp-nav-blob):not(:has(a)) { opacity: 0 !important; }
         .vp-post-slot { border-bottom: none !important; }
@@ -17458,12 +17552,6 @@ var __vpBannerAuto = (() => {
             if (row.style.paddingRight !== need) row.style.paddingRight = need;
         }
         addEventListener('resize', () => document.querySelectorAll('.vp-post-tools').forEach(placeRefresh));
-        function postShownImage(card) {
-            const cr = card.getBoundingClientRect();
-            const imgs = [...card.querySelectorAll('.' + SELECTORS.postMedia + ' img, img[data-post-media-image]')]
-                .filter(i => !i.closest('header') && (i.currentSrc || i.src));
-            return imgs.find(i => { const r = i.getBoundingClientRect(), cx = r.left + r.width / 2; return r.width > 0 && cx > cr.left && cx < cr.right; }) || imgs[0] || null;
-        }
         const postHeadRow = h => [...h.children].find(c => c.querySelector(PROFILE_LINK)) || h.firstElementChild;
         onDom(function postToolButtons() {
             if (!myUsername) return;
@@ -17518,7 +17606,6 @@ var __vpBannerAuto = (() => {
                         });
                     });
                 };
-                if (postShownImage(card)) copyTool('copy', 'Скопировать картинку', () => { const img = postShownImage(card); return img ? galCopyImage(img.currentSrc || img.src) : false; });
                 copyTool('link', 'Скопировать ссылку', () => copyText(`${location.origin}/@${user}/post/${id}`));
                 if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
                 box._vpMenu = menu;
@@ -17811,62 +17898,22 @@ var __vpBannerAuto = (() => {
             const r = banner.getBoundingClientRect();
             if (r.bottom < -40 || r.top > innerHeight) return;
             const past = Math.max(0, -r.top);
-            const glassEl = bannerGlassEl(banner), glass = !bannerNoGlass && glassEl;
             const tf = '', op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
-            for (const el of [img, banner.querySelector(':scope > .vp-banner-video'), glass].filter(Boolean)) {
+            for (const el of [img, banner.querySelector(':scope > .vp-banner-video')].filter(Boolean)) {
                 if (el.style.transform !== tf) el.style.transform = tf;
                 if (el.style.opacity !== op) el.style.opacity = op;
             }
             const bar = banner.querySelector(':scope > .' + SELECTORS.bannerButtons);
             if (bar) {
-                const pane = glass ? [glass, glass.firstElementChild].filter(e => e && e.offsetWidth > banner.offsetWidth / 2) : [];
-                const top = Math.max(img.getBoundingClientRect().top, ...pane.map(e => e.getBoundingClientRect().top));
-                const off = Math.max(0, Math.round(top - r.top)) + 'px';
+                const off = Math.max(0, Math.round(img.getBoundingClientRect().top - r.top)) + 'px';
                 if (bar.style.getPropertyValue('--vp-bar-top') !== off) bar.style.setProperty('--vp-bar-top', off);
             }
         }
         addEventListener('scroll', () => { if (!bannerQueued) { bannerQueued = true; requestAnimationFrame(bannerDepth); } }, { capture: true, passive: true });
         onDom(function bannerDepthDom() { bannerDepth(); });
 
-        const BANNER_GLASS_SEL = ':scope > [aria-label="Стекло"], :scope > [aria-label="Разбитое стекло"]';
-        const bannerGlassEls = b => [...b.querySelectorAll(BANNER_GLASS_SEL)];
-        const bannerGlassEl = b => bannerGlassEls(b).find(e => e.getBoundingClientRect().width > 0) || bannerGlassEls(b)[0] || null;
-        let bannerNoGlass = GM_getValue('bannerGlassOff', false), bannerNoStickers = GM_getValue('bannerStickersOff', false);
-        document.documentElement.classList.toggle('vp-no-glass', bannerNoGlass);
-        document.documentElement.classList.toggle('vp-no-banner-stickers', bannerNoStickers);
-        const BANNER_FX = [
-            { cls: 'vp-banner-glass', find: b => bannerGlassEls(b).length > 0, key: 'bannerGlassOff', html: 'vp-no-glass',
-                get: () => bannerNoGlass, set: v => { bannerNoGlass = v; }, titles: ['Убрать стекло с баннера', 'Вернуть стекло на баннер'],
-                icon: svgIcon('<rect x="3" y="5" width="18" height="14" rx="4"/><path d="M7.5 12.5l4-4M7.5 16l7.5-7.5"/>', 20) },
-            { cls: 'vp-banner-stickers', find: b => { const d = b.querySelector(':scope > [aria-label^="Оформление профиля"]'); return d && (d.firstElementChild || bannerNoStickers) ? d : null; },
-                key: 'bannerStickersOff', html: 'vp-no-banner-stickers', get: () => bannerNoStickers, set: v => { bannerNoStickers = v; },
-                titles: ['Скрыть стикеры на баннере', 'Показать стикеры на баннере'],
-                icon: svgIcon('<path d="M15 3H7a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h6l8-8V7a4 4 0 0 0-4-4z"/><path d="M13 21v-4a4 4 0 0 1 4-4h4"/>', 20) }
-        ];
         function bannerFx() {
             const banner = siteEl('banner'), row = siteEl('bannerButtons');
-            for (const fx of BANNER_FX) {
-                let btn = document.querySelector('.' + fx.cls);
-                const want = row && banner && bannerBtns.draw && fx.find(banner);
-                if (!want) { if (btn) btn.remove(); continue; }
-                if (!btn || btn.parentElement !== row) {
-                    if (btn) btn.remove();
-                    btn = bannerButton('vp-banner-fx ' + fx.cls, '', fx.icon);
-                    btn.onclick = e => {
-                        e.stopPropagation();
-                        const v = !fx.get();
-                        fx.set(v);
-                        GM_setValue(fx.key, v);
-                        document.documentElement.classList.toggle(fx.html, v);
-                        bannerFx();
-                        bannerDepth();
-                    };
-                    row.insertBefore(btn, row.querySelector('.' + SELECTORS.bannerDelete));
-                }
-                const off = fx.get();
-                btn.classList.toggle('vp-off', off);
-                if (btn.title !== fx.titles[+off]) btn.title = fx.titles[+off];
-            }
             let vb = document.querySelector('.vp-banner-vid');
             const mine = myUsername && (location.pathname.match(/^\/@([\w.]+)\/?$/) || [])[1];
             if (!(row && banner && bannerBtns.draw && mine && mine.toLowerCase() === myUsername.toLowerCase())) { if (vb) vb.remove(); return; }
@@ -17947,8 +17994,6 @@ var __vpBannerAuto = (() => {
             input.click();
         }
         addCss(`
-        html.vp-no-glass .vp-banner > [aria-label="Стекло"], html.vp-no-glass .vp-banner > [aria-label="Разбитое стекло"] { display: none !important; }
-        html.vp-no-banner-stickers .vp-banner > [aria-label^="Оформление профиля"] { display: none !important; }
         .vp-banner-fx { position: relative; }
         .vp-banner-vid.vp-on { color: var(--vp-accent); }
         .vp-banner-vid.vp-busy { opacity: .5; pointer-events: none; animation: vpBvPulse 1s ease-in-out infinite alternate; }
@@ -17956,9 +18001,6 @@ var __vpBannerAuto = (() => {
         .vp-banner-video { position: absolute; object-fit: cover; pointer-events: none; opacity: 0; transition: opacity .4s; }
         .vp-banner-video.vp-live { opacity: 1; }
         .vp-banner-video.vp-fail { display: none; }
-        .vp-banner-fx.vp-off { opacity: .55; }
-        .vp-banner-fx.vp-off::after { content: ''; position: absolute; left: 50%; top: 50%; width: 22px; height: 2px; border-radius: 2px;
-            background: currentColor; transform: translate(-50%, -50%) rotate(-45deg); pointer-events: none; }
         `);
 
         const COUNT_LABEL = /подпис|пост|лайк|друз/i;
@@ -18327,7 +18369,6 @@ var __vpBannerAuto = (() => {
             return cbCached;
         }
         function contentBoxNow() {
-            if (msgsOpen && /^\/event\/[^/]/.test(location.pathname)) return frameColumn();
             const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail';
             let left = Infinity, right = 0;
             const memo = new Map(), tops = new Set();
@@ -18473,7 +18514,7 @@ var __vpBannerAuto = (() => {
             const right = side ? side.getBoundingClientRect().left : innerWidth;
             const gap = right - edge;
             let box = null, adj = false, sideW = 0;
-            const on = railEnabled && !!myUsername && !/^\/(login|register|signup|forgot|reset)/.test(location.pathname) && (!/^\/event\/[^/]/.test(location.pathname) || msgsOpen || galOpen) && !!rail.querySelector(':scope > .vp-rail-card:not([hidden])');
+            const on = railEnabled && !!myUsername && !/^\/(login|register|signup|forgot|reset)/.test(location.pathname) && !!rail.querySelector(':scope > .vp-rail-card:not([hidden])');
             const sideEl = siteEl('sidebar');
             if (on && galOpen && sideEl && innerWidth > PHONE_MAX) {
                 const margin = Math.max(12, Math.round(baseLeft(sideEl))), width = 250;
@@ -18504,8 +18545,7 @@ var __vpBannerAuto = (() => {
         addEventListener('resize', placeRail);
 
         function placeSidebar() {
-            document.documentElement.classList.toggle('vp-ev-scene', /^\/event\/[^/]/.test(location.pathname));
-            if (galOpen || (/^\/event\/[^/]/.test(location.pathname) && !msgsOpen)) { document.documentElement.classList.remove('vp-side-moved'); return; }
+            if (galOpen) { document.documentElement.classList.remove('vp-side-moved'); return; }
             const side = siteEl('sidebar');
             const cb = contentBox() || lastCb;
             if (!side || !cb) return;
@@ -19098,7 +19138,7 @@ var __vpBannerAuto = (() => {
             if (!finished && incr) return profOldLoad(login, btn, true);
             if (!finished) { profOldWhy = 'Слишком много постов для такой сортировки'; return null; }
             profOldPosts = { u: login, at: Date.now(), full: incr ? base.full : Date.now(), posts: [...byId.values()].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)) };
-            try { GM_setValue('vp_old_cache', profOldPosts); GM_setValue(PART, null); } catch (e) { }
+            try { GM_setValue('vp_old_cache', profOldPosts); GM_setValue(PART, null); } catch (e) { logErr('старые посты: кэш не сохранился', e); }
             return 'client';
         }
         const PSORT_TRY = { old: ['old', 'oldest', 'asc'], popular: ['popular'] };
@@ -19873,7 +19913,7 @@ var __vpBannerAuto = (() => {
                 if (mine) lbMergeIntoLocal(remote);
                 if (mine && (hit || !String(mine.content).trim().startsWith('ITDXG2 ') || ['s', 'm', 't'].some(k => (raw[k] || 0) !== (remote[k] || 0)))) gamesRecord();
                 renderGamesMenu();
-            } catch (e) { }
+            } catch (e) { logErr('рейтинг игр', e); }
         }
         const lbIsMe = a => !!a && ((meData && meData.id && a.id === meData.id) || (!!myUsername && a.username === myUsername));
         let lbLoad = null, lbAt = 0, lbBusy = false, lbT = 0;
