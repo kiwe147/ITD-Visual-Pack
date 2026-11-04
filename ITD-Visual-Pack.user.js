@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.0.3
+// @version      3.9.0.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1357,24 +1357,74 @@
         }
 
         const domHandlers = [];
-        function onDom(fn) { domHandlers.push(fn); }
+        const domState = new Map();
+        function onDom(fn, now) { domState.set(fn, { ema: 0, last: 0, runs: 0, now: !!now, idx: domHandlers.length, pending: false }); domHandlers.push(fn); }
         let domQueued = false;
         const DOM_WATCH = { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true };
-        let lastTick = 0, domProf = null;
+        const DOM_BUSY_GAP = 100, DOM_LIGHT_MS = 0.3, DOM_BUDGET_BUSY = 5, DOM_BUDGET_CALM = 12, DOM_PHONE_GAP = 50;
+        let lastTick = 0, lastTickStart = 0, lastFreshAt = 0, domProf = null;
+        let domMut = false, domSettle = false;
+        const domHeavy = st => !st.now && st.runs > 2 && st.ema > DOM_LIGHT_MS;
+        function domRun(fn, st) {
+            const t0 = performance.now();
+            st.pending = false;
+            try { fn(); } catch (e) { console.warn('[ITD VP]', fn.name || 'обработчик', e); logErr(fn.name || 'обработчик', e); }
+            const d = performance.now() - t0;
+            st.ema = st.runs ? st.ema * 0.7 + d * 0.3 : d;
+            st.runs++;
+            st.last = t0;
+            if (domProf) { const k = fn.name || ('#' + domHandlers.indexOf(fn)), o = domProf[k] || (domProf[k] = { мс: 0, вызовов: 0, максимум: 0 }); o.мс += d; o.вызовов++; if (d > o.максимум) o.максимум = d; }
+        }
         function domTick() {
             domQueued = false;
-            lastTick = performance.now();
-            domRecords(domObserver.takeRecords());
+            const tickAt = performance.now();
+            const busy = tickAt - lastTickStart < DOM_BUSY_GAP;
+            lastTickStart = tickAt;
+            lastTick = tickAt;
+            if (domRecords(domObserver.takeRecords())) domMut = true;
+            let fresh = false;
+            if (domMut && !(IS_PHONE && tickAt - lastFreshAt < DOM_PHONE_GAP)) { fresh = true; domMut = false; lastFreshAt = tickAt; }
             domObserver.disconnect();
+            let deferred = false;
             try {
-                tagAll(false);
-                for (const fn of domHandlers) {
-                    const t0 = domProf ? performance.now() : 0;
-                    try { fn(); } catch (e) { console.warn('[ITD VP]', fn.name || 'обработчик', e); logErr(fn.name || 'обработчик', e); }
-                    if (domProf) { const k = fn.name || ('#' + domHandlers.indexOf(fn)), o = domProf[k] || (domProf[k] = { мс: 0, вызовов: 0, максимум: 0 }), d = performance.now() - t0; o.мс += d; o.вызовов++; if (d > o.максимум) o.максимум = d; }
+                const anyPending = domHandlers.some(fn => domState.get(fn).pending);
+                if (fresh) {
+                    domSettle = false;
+                    tagAll(false);
+                    for (const fn of domHandlers) {
+                        const st = domState.get(fn);
+                        if (domHeavy(st)) st.pending = true; else domRun(fn, st);
+                    }
+                } else if (domSettle && !anyPending) {
+                    domSettle = false;
+                    for (const fn of domHandlers) {
+                        const st = domState.get(fn);
+                        if (!domHeavy(st)) domRun(fn, st);
+                    }
+                }
+                const order = domHandlers.filter(fn => domState.get(fn).pending);
+                if (order.length) {
+                    order.sort((a, b) => domState.get(a).last - domState.get(b).last);
+                    const budget = busy ? DOM_BUDGET_BUSY : DOM_BUDGET_CALM, chosen = [];
+                    let est = 0;
+                    for (const fn of order) {
+                        const e = domState.get(fn).ema;
+                        if (chosen.length && est + e > budget) { deferred = true; continue; }
+                        chosen.push(fn);
+                        est += e;
+                    }
+                    chosen.sort((a, b) => domState.get(a).idx - domState.get(b).idx);
+                    for (const fn of chosen) domRun(fn, domState.get(fn));
                 }
             } finally {
                 domObserver.observe(document.body, DOM_WATCH);
+            }
+            if (deferred) domSettle = true;
+            if ((deferred || domSettle) && !domQueued) { domQueued = true; requestAnimationFrame(domTick); }
+            else if (domMut && !domQueued) {
+                domQueued = true;
+                const w = Math.max(0, lastFreshAt + DOM_PHONE_GAP - performance.now());
+                if (w) setTimeout(() => requestAnimationFrame(domTick), w); else requestAnimationFrame(domTick);
             }
         }
         const lostVp = m => {
@@ -1383,12 +1433,21 @@
             const cl = m.target.classList;
             return old.split(/\s+/).some(c => c.startsWith('vp-') && !cl.contains(c));
         };
+        const domNew = new Set();
+        let domNewOver = false;
+        function takeNewNodes() {
+            const nodes = [...domNew].filter(n => n.isConnected), over = domNewOver;
+            domNew.clear();
+            domNewOver = false;
+            return { nodes, over };
+        }
         function domRecords(muts) {
             let any = false;
             for (const m of muts) {
                 if (m.type === 'childList' && ![...m.addedNodes, ...m.removedNodes].some(n => !(n.classList && n.classList.contains('vp-sw-stage')))) continue;
-                if (m.type === 'attributes' && !lostVp(m)) continue;
+                if (m.type === 'attributes' && !lostVp(m)) { if (m.target.nodeType === 1 && domNew.size < 600) domNew.add(m.target); continue; }
                 if (m.type === 'characterData' && !/\p{Extended_Pictographic}/u.test(m.target.nodeValue || '')) continue;
+                if (m.type === 'childList') for (const n of m.addedNodes) if (n.nodeType === 1) { if (domNew.size < 600) domNew.add(n); else domNewOver = true; }
                 any = true;
                 const el = m.target.nodeType === 1 ? m.target : m.target.parentElement;
                 const p = el && el.closest('.' + SELECTORS.post);
@@ -1397,10 +1456,13 @@
             return any;
         }
         const domObserver = new MutationObserver(muts => {
-            if (domRecords(muts) && !domQueued) {
-                domQueued = true;
-                const wait = IS_PHONE ? Math.max(0, lastTick + 50 - performance.now()) : 0;
-                if (wait) setTimeout(() => requestAnimationFrame(domTick), wait); else requestAnimationFrame(domTick);
+            if (domRecords(muts)) {
+                domMut = true;
+                if (!domQueued) {
+                    domQueued = true;
+                    const wait = IS_PHONE ? Math.max(0, lastTick + 50 - performance.now()) : 0;
+                    if (wait) setTimeout(() => requestAnimationFrame(domTick), wait); else requestAnimationFrame(domTick);
+                }
             }
         });
         tagAll();
@@ -5751,7 +5813,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             try { if (navigator.wakeLock) navigator.wakeLock.request('screen').then(w => { if (c.state === 'end') w.release().catch(() => { }); else c.wake = w; }, () => { }); } catch (e) { }
             callSub(c, '00:00');
             c.tick = setInterval(() => { callSub(c, callMmss(Math.floor((Date.now() - t0) / 1000))); callVideoAlive(c); }, 1000);
-            c.syncT = setInterval(function () { msgSync().catch(e => logErr('звонок: синхронизация', e)) }, 3000);
+            c.syncT = setInterval(function () { if (apiPaused()) return; callNet.lastSync = Date.now(); msgSync().catch(e => logErr('звонок: синхронизация', e)) }, 3000);
             callPlay(c);
             c.timers.push(setTimeout(() => callMicCheck(c), 1000));
             callVoiceWatch(c);
@@ -8951,6 +9013,11 @@ var __vpBannerAuto = (() => {
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.9.0.4', '4 ноября 2026', [
+                'Оптимизация: лента, меню и стекло меньше нагружают процессор при прокрутке, на слабых устройствах заметно меньше тормозов'
+                ,'Стекло подстраивается под устройство: слабое сразу получает облегчённое, а сильное с видеокартой остаётся с полным и возвращается к нему после временных тормозов'
+                ,'Звонки и сообщения: меньше лишних запросов, пока вкладка скрыта или сайт просит подождать'
+            ]],
             ['3.9.0.3', '4 ноября 2026', [
                 'Змейка на телефоне: свайп теперь как джойстик — не отрывая палец, можно вести змейку и поворачивать сколько угодно раз'
                 ,'Сапёр на телефоне: долгое нажатие ставит флажок и он больше не пропадает сразу; в режиме «флажки» нажатие на цифру открывает соседние клетки'
@@ -10434,10 +10501,34 @@ var __vpBannerAuto = (() => {
             } catch (e) { console.warn('[ITD VP] запуск мода', e); logErr('запуск мода', e); }
         }
 
-        let lastFrame = 0, bestGap = 1000, slow = 0, halfRate = false, odd = false, halfSince = 0, retryMs = 15000;
+        let perfLow = false, perfHigh = false;
+        (function perfProbe() {
+            if (navigator.webdriver) return;
+            const cores = navigator.hardwareConcurrency || 4, mem = navigator.deviceMemory || 4;
+            if (cores <= 2 || mem <= 2) { perfLow = true; document.documentElement.classList.add('vp-glass-lite'); return; }
+            setTimeout(() => {
+                let soft = false;
+                try {
+                    const c = document.createElement('canvas'), gl = c.getContext('webgl', { failIfMajorPerformanceCaveat: true, depth: false, stencil: false, antialias: false });
+                    if (!gl) soft = true;
+                    else {
+                        const di = gl.getExtension('WEBGL_debug_renderer_info'), rn = di ? String(gl.getParameter(di.UNMASKED_RENDERER_WEBGL)) : '';
+                        soft = /swiftshader|llvmpipe|software|basic render/i.test(rn);
+                        const lose = gl.getExtension('WEBGL_lose_context');
+                        if (lose) lose.loseContext();
+                    }
+                } catch (e) { soft = true; }
+                if (soft) { perfLow = true; document.documentElement.classList.add('vp-glass-lite'); }
+                else perfHigh = cores >= 8 && !IS_PHONE;
+            }, 1200);
+        })();
+        let lastFrame = 0, bestGap = 1000, slow = 0, halfRate = false, odd = false, halfSince = 0, retryMs = 15000, liftTries = 0;
         function frame(t) {
             requestAnimationFrame(frame);
-            if (halfRate && t - halfSince > retryMs) { halfRate = false; slow = 0; retryMs = Math.min(retryMs * 2, 240000); }
+            if (halfRate && t - halfSince > retryMs) {
+                halfRate = false; slow = 0; retryMs = Math.min(retryMs * 2, 240000);
+                if (perfHigh && !perfLow && liftTries < 2) { liftTries++; bestGap = 1000; document.documentElement.classList.remove('vp-glass-lite'); }
+            }
             if (halfRate && (odd = !odd)) return;
             const gap = lastFrame ? t - lastFrame : 16.7;
             lastFrame = t;
@@ -10461,7 +10552,7 @@ var __vpBannerAuto = (() => {
         canvasRO.observe(canvas);
         resizeCanvas();
         initVisuals();
-        sched.add('look', publishLook, { every: 60000, net: true });
+        sched.add('look', publishLook, { every: 60000, net: true, visible: true });
         initBanner();
 
         const stickerCss = panelWidth => `
@@ -13565,7 +13656,8 @@ var __vpBannerAuto = (() => {
             }
             const msgPoll = sched.add('msgPoll', async () => {
                 if (!root.isConnected) return msgPoll.remove();
-                if ((!msgsOpen && !(callNet.cur && callNet.cur.state === 'talk')) || !msgNet.me || apiPaused()) return;
+                const talking = callNet.cur && callNet.cur.state === 'talk';
+                if ((!msgsOpen && !talking) || !msgNet.me || apiPaused() || (document.hidden && !talking)) return;
                 if (M.current) msgNet.hotUntil = Date.now() + 120000;
                 if (Date.now() - callNet.lastSync > 12000) { callNet.lastSync = Date.now(); try { await msgSync(); } catch (e) { return; } }
                 msgFillDialogs();
@@ -14439,16 +14531,47 @@ var __vpBannerAuto = (() => {
                 + `C${n(cx + half * .42)} ${peak} ${n(cx + half * .45)} ${top} ${n(cx + half)} ${top}`
                 + `H${w - r}A${r} ${r} 0 0 1 ${w - r} ${top + h}H${r}A${r} ${r} 0 0 1 ${r} ${top}Z`;
         }
-        let bumpPlus = null;
+        let bumpPlus = null, bumpNav = null, bumpDirty = true, bumpRow = false, bumpLookAt = 0, bumpTimer = 0;
+        const bumpRO = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { bumpDirty = true; }) : null;
+        addEventListener('resize', () => { bumpDirty = true; });
         onDom(function newPostBump() {
             const nav = siteEl('nav');
-            if (!bumpPlus || !bumpPlus.isConnected) bumpPlus = document.querySelector('button[aria-label="Создать пост"]');
-            const plus = bumpPlus, up = scrollTopButton;
+            if (nav !== bumpNav) {
+                if (bumpRO) { if (bumpNav) bumpRO.unobserve(bumpNav); if (nav) bumpRO.observe(nav); }
+                bumpNav = nav;
+                bumpDirty = true;
+            }
+            if (!bumpPlus || !bumpPlus.isConnected) {
+                const nowAt = performance.now();
+                if (bumpPlus || nowAt - bumpLookAt > 800) {
+                    bumpLookAt = nowAt;
+                    bumpPlus = document.querySelector('button[aria-label="Создать пост"]');
+                    bumpDirty = true;
+                } else if (!bumpTimer) bumpTimer = setTimeout(() => { bumpTimer = 0; newPostBump(); }, 820 - (nowAt - bumpLookAt));
+            }
+            const plus = bumpPlus && bumpPlus.isConnected ? bumpPlus : null, up = scrollTopButton;
+            if (!plus) {
+                if (nav && nav.classList.contains('vp-has-bump')) {
+                    nav.classList.remove('vp-has-bump');
+                    const bg0 = nav.querySelector(':scope > svg.vp-bump-bg');
+                    if (bg0) bg0.remove();
+                }
+                bumpRow = false;
+                return;
+            }
             if (plus && up) {
                 const cls = siteClasses(plus);
                 if (cls && !cls.split(' ').every(c => up.classList.contains(c))) cls.split(' ').forEach(c => up.classList.add(c));
             }
+            if (!bumpDirty && bumpRO) {
+                const intact = bumpRow
+                    ? !!(plus && nav && plus.classList.contains('vp-new-post') && nav.classList.contains('vp-has-bump') && plus.style.top && plus.style.left && nav.querySelector(':scope > svg.vp-bump-bg'))
+                    : !!(!(nav && nav.classList.contains('vp-has-bump')) && !(plus && plus.classList.contains('vp-new-post')));
+                if (intact) return;
+            }
+            bumpDirty = false;
             const row = !!(nav && navIsRow(nav) && plus && plus.parentElement === nav.parentElement);
+            bumpRow = row;
             if (nav) nav.classList.toggle('vp-has-bump', row);
             let bg = nav && nav.querySelector(':scope > svg.vp-bump-bg');
             if (!row) {
@@ -14936,7 +15059,7 @@ var __vpBannerAuto = (() => {
             });
         }
 
-        onDom(replaceNotificationTexts);
+        onDom(replaceNotificationTexts, true);
 
         const emojiTints = new Map();
         let emojiCanvas = null;
@@ -15666,7 +15789,7 @@ var __vpBannerAuto = (() => {
         let glassEnabled = GM_getValue('glassEnabled', true);
         const glassCss = document.createElement('style');
         document.head.appendChild(glassCss);
-        let glassSheets = -1, glassSel = '';
+        let glassSheets = -1, glassSel = '', glassFullAt = 0;
         function collectGlass() {
             if (document.styleSheets.length === glassSheets) return;
             glassSheets = document.styleSheets.length;
@@ -15683,6 +15806,7 @@ var __vpBannerAuto = (() => {
                 try { walk(sh.cssRules); } catch (e) { }
             }
             glassSel = [...sels].join(', ');
+            glassFullAt = 0;
             glassCss.textContent = [...sels].map(sel => `html.vp-glass :is(${sel}) { backdrop-filter: var(--vp-glass-filter); -webkit-backdrop-filter: var(--vp-glass-filter); }`).join('\n');
         }
         function applyGlass() {
@@ -15703,9 +15827,22 @@ var __vpBannerAuto = (() => {
         let floatTimer = 0;
         function glassFloatingRun() {
             floatTimer = 0;
+            const fresh = takeNewNodes();
             if (!glassEnabled || !glassSel) return;
             floatAt = performance.now();
-            document.querySelectorAll(`:is(${glassSel}), [style*="--block-bg"], [style*="--modal-bg"], [style*="--glass-bg"]`).forEach(el => {
+            const sel = `:is(${glassSel}), [style*="--block-bg"], [style*="--modal-bg"], [style*="--glass-bg"]`;
+            let found;
+            if (fresh.over || floatAt - glassFullAt > 8000) {
+                glassFullAt = floatAt;
+                found = document.querySelectorAll(sel);
+            } else {
+                found = new Set();
+                for (const n of fresh.nodes) {
+                    if (n.matches(sel)) found.add(n);
+                    n.querySelectorAll(sel).forEach(e => found.add(e));
+                }
+            }
+            found.forEach(el => {
                 const was = floatSeen.get(el);
                 if (was !== undefined) { if (was && !el.classList.contains(was)) el.classList.add(was); return; }
                 floatSeen.set(el, '');
@@ -15732,7 +15869,7 @@ var __vpBannerAuto = (() => {
                 }
                 if (sheet && !sheet.classList.contains('vp-comments-sheet')) sheet.classList.add('vp-comments-sheet');
             }
-        });
+        }, true);
 
         onDom(function clampFade() {
             document.querySelectorAll('.vp-clamp').forEach(el => {
@@ -15847,7 +15984,7 @@ var __vpBannerAuto = (() => {
                 { opacity: 0, transform: 'translateY(14px)', filter: lite ? 'none' : 'blur(5px)' },
                 { opacity: 1, transform: 'none', filter: 'none' }
             ], { duration: 340, easing: 'cubic-bezier(.2, .8, .2, 1)' });
-        });
+        }, true);
 
         function navIsRow(nav) {
             const links = nav.querySelectorAll(':scope > .' + SELECTORS.navLink);
@@ -15964,9 +16101,10 @@ var __vpBannerAuto = (() => {
             if (!nav) return;
             let moving = false, activeK = 0;
             const rows = [];
-            nav.querySelectorAll(':scope > .' + SELECTORS.navLink).forEach(a => {
-                const r = a.getBoundingClientRect();
-                const d = proxY === null ? Infinity : proxY - (r.top + r.height / 2);
+            const links = [...nav.querySelectorAll(':scope > .' + SELECTORS.navLink)];
+            const geo = links.map(a => { const r = a.getBoundingClientRect(); return [r.top + r.height / 2, a.offsetTop + a.offsetHeight / 2]; });
+            links.forEach((a, gi) => {
+                const d = proxY === null ? Infinity : proxY - geo[gi][0];
                 const want = proxY === null ? 0 : Math.exp(-(d * d) / (2 * PROX_SIGMA * PROX_SIGMA));
                 const was = proxNow.get(a) || 0;
                 const k = Math.abs(want - was) < 0.004 ? want : was + (want - was) * 0.22;
@@ -15980,7 +16118,7 @@ var __vpBannerAuto = (() => {
                 if (icon) icon.style.transform = k ? `scale(${(1 + 0.12 * k).toFixed(3)})` : '';
                 if (portal) a.style.setProperty('--vp-k', k && a.matches(':hover') ? k.toFixed(3) : '0');
                 if (a.classList.contains('vp-active')) activeK = k;
-                rows.push([a.offsetTop + a.offsetHeight / 2, k]);
+                rows.push([geo[gi][1], k]);
             });
             if (blob && blobAnim) {
                 const { g, done } = blobGeom(blobAnim, performance.now());
@@ -16077,8 +16215,6 @@ var __vpBannerAuto = (() => {
                 if (!a._vpScene) {
                     a._vpScene = true;
                     sceneIO.observe(a);
-                    const r = a.getBoundingClientRect();
-                    if (r.bottom > -150 && r.top < innerHeight + 150) sceneLive(a);
                 }
                 const slot = a.parentElement;
                 if (slot && !slot.classList.contains('vp-post-slot')) slot.classList.add('vp-post-slot');
@@ -17681,12 +17817,14 @@ var __vpBannerAuto = (() => {
         .vp-toast-old { display: none !important; }
         @media (max-width: ${PHONE_MAX}px) { .vp-toasts { top: calc(env(safe-area-inset-top, 0px) + 10px) !important; } }
     `);
+        const toastNot = new WeakMap();
         function toastBox() {
             const root = document.getElementById('root');
             if (!root) return null;
             for (const el of root.children) {
                 if (el.classList.contains('vp-toasts')) return el;
-                if (el.childElementCount > 3 || !el.querySelector(':scope > div') || getComputedStyle(el).position !== 'fixed') continue;
+                if (el.childElementCount > 3 || toastNot.get(el) === el.className || !el.querySelector(':scope > div')) continue;
+                if (getComputedStyle(el).position !== 'fixed') { toastNot.set(el, el.className); continue; }
                 if (!el.querySelector('p') && !el.querySelector(':scope > button')) continue;
                 el.classList.add('vp-toasts');
                 return el;
@@ -17761,7 +17899,8 @@ var __vpBannerAuto = (() => {
         const linkHl = window.Highlight && CSS.highlights ? new Highlight() : null;
         if (linkHl) CSS.highlights.set('vp-link', linkHl);
         const styleLinks = addCss(`::highlight(vp-link) { color: var(--accent-primary); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }`);
-        let linksAt = 0;
+        let linksAt = 0, linksDirty = true, linksIdle = 0;
+        onDom(function linksDirtyMark() { linksDirty = true; });
         function scanLinks() {
             const root = document.getElementById('root');
             if (!root) return;
@@ -17917,12 +18056,21 @@ var __vpBannerAuto = (() => {
         }
         const _origScanLinks = scanLinks;
         scanLinks = function () {
-            const r = _origScanLinks.apply(this, arguments);
-            joinProfilePostLinks();
-            linkifyProfilePosts();
-            return r;
+            linksDirty = false;
+            try {
+                const r = _origScanLinks.apply(this, arguments);
+                joinProfilePostLinks();
+                linkifyProfilePosts();
+                return r;
+            } catch (e) { linksDirty = true; throw e; }
         };
-        setInterval(() => { try { joinProfilePostLinks(); linkifyProfilePosts(); } catch (e) { } }, 1500);
+        setInterval(() => {
+            if (document.hidden) return;
+            if (!linksDirty && ++linksIdle < 10) return;
+            linksIdle = 0;
+            linksDirty = false;
+            try { joinProfilePostLinks(); linkifyProfilePosts(); } catch (e) { linksDirty = true; }
+        }, 1500);
 
         document.addEventListener('click', e => {
             if (e.button || !linkNodes.size || e.target.closest('a, button, input, textarea')) return;
@@ -17932,13 +18080,22 @@ var __vpBannerAuto = (() => {
             window.open(l.url, '_blank', 'noopener');
         }, true);
         let linkHover = null;
-        document.addEventListener('mousemove', e => {
-            if (!linkNodes.size) return;
-            const el = linkAt(e.clientX, e.clientY) ? e.target : null;
+        let linkMoveQ = false, linkMoveE = null;
+        function linkMoveFrame() {
+            linkMoveQ = false;
+            const e = linkMoveE;
+            linkMoveE = null;
+            if (!e || !linkNodes.size) return;
+            const el = linkAt(e.x, e.y) ? e.t : null;
             if (el === linkHover) return;
             if (linkHover) linkHover.style.cursor = '';
             linkHover = el;
             if (el) el.style.cursor = 'pointer';
+        }
+        document.addEventListener('mousemove', e => {
+            if (!linkNodes.size) return;
+            linkMoveE = { x: e.clientX, y: e.clientY, t: e.target };
+            if (!linkMoveQ) { linkMoveQ = true; requestAnimationFrame(linkMoveFrame); }
         }, { passive: true });
 
         let bannerQueued = false;
@@ -17953,15 +18110,13 @@ var __vpBannerAuto = (() => {
             if (r.bottom < -40 || r.top > innerHeight) return;
             const past = Math.max(0, -r.top);
             const tf = '', op = String(Math.max(.25, 1 - past / (r.height * 1.4)).toFixed(2));
+            const bar = banner.querySelector(':scope > .' + SELECTORS.bannerButtons);
+            const off = bar ? Math.max(0, Math.round(img.getBoundingClientRect().top - r.top)) + 'px' : '';
             for (const el of [img, banner.querySelector(':scope > .vp-banner-video')].filter(Boolean)) {
                 if (el.style.transform !== tf) el.style.transform = tf;
                 if (el.style.opacity !== op) el.style.opacity = op;
             }
-            const bar = banner.querySelector(':scope > .' + SELECTORS.bannerButtons);
-            if (bar) {
-                const off = Math.max(0, Math.round(img.getBoundingClientRect().top - r.top)) + 'px';
-                if (bar.style.getPropertyValue('--vp-bar-top') !== off) bar.style.setProperty('--vp-bar-top', off);
-            }
+            if (bar && bar.style.getPropertyValue('--vp-bar-top') !== off) bar.style.setProperty('--vp-bar-top', off);
         }
         addEventListener('scroll', () => { if (!bannerQueued) { bannerQueued = true; requestAnimationFrame(bannerDepth); } }, { capture: true, passive: true });
         onDom(function bannerDepthDom() { bannerDepth(); });
@@ -18060,8 +18215,13 @@ var __vpBannerAuto = (() => {
         const COUNT_LABEL = /подпис|пост|лайк|друз/i;
         const counted = new Set();
         const countKey = () => loginOf(location.pathname) || location.pathname;
+        let countSeenKey = '', countSeenAt = 0;
         function countUp() {
-            if (counted.has(countKey())) return;
+            const key = countKey();
+            if (counted.has(key)) return;
+            const nowAt = performance.now();
+            if (key !== countSeenKey) { countSeenKey = key; countSeenAt = nowAt; }
+            else if (nowAt - countSeenAt > 15000) return;
             const spans = [...document.querySelectorAll('span')].filter(sp => {
                 const next = sp.nextElementSibling;
                 return next && !sp.children.length && /^\d{1,7}$/.test(sp.textContent.trim()) && COUNT_LABEL.test(next.textContent)
@@ -18078,7 +18238,7 @@ var __vpBannerAuto = (() => {
                 setTimeout(() => sp.classList.remove('vp-count'), 1400);
             });
         }
-        onDom(countUp);
+        onDom(countUp, true);
 
         const plural = (n, one, few, many) => n % 10 === 1 && n % 100 !== 11 ? one
             : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? few : many;
@@ -18178,7 +18338,7 @@ var __vpBannerAuto = (() => {
                 if (n.dataset.vpSvc || !/(^|[^A-Za-z0-9])ITDX[A-Z0-9-]*(?: \S{1,12}){0,3} [\w\-/+=]{8,}/.test(n.textContent)) return;
                 n.dataset.vpSvc = '1'; n.style.display = 'none';
             });
-        });
+        }, true);
 
         let uiSoundEnabled = GM_getValue('uiSoundEnabled', false);
         let uiCtx = null;
