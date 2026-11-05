@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.1
+// @version      3.9.1.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -9099,6 +9099,12 @@ var __vpBannerAuto = (() => {
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.9.1.1', '5 ноября 2026', [
+                'Песочница: новые материалы — бензин, порох, дерево, земля, семена и лёд'
+                ,'Песочница: семена рядом с водой вырастают в цветы, дерево горит долго, лёд тает от огня'
+                ,'Песочница: у материалов настоящие картинки вместо кружков'
+                ,'Песочница: панель материалов в два ряда, листается вбок пальцем или колесом мыши'
+            ]],
             ['3.9.1', '5 ноября 2026', [
                 'Клуб: «в сети» теперь обновляется быстрее и не зависит от числа людей — мод сам сообщает, что ты в сети, а остальные читают это одним запросом'
                 ,'Настройки: переключатель «Показывать, что я в сети» (Настройки → Вид) — выключи, и другие не увидят тебя в сети'
@@ -20348,33 +20354,63 @@ var __vpBannerAuto = (() => {
             { id: 7, name: 'Лава', rgb: [242, 72, 20], hot: '7' },
             { id: 8, name: 'Кислота', rgb: [150, 240, 62], hot: '8' },
             { id: 16, name: 'Яд', rgb: [160, 70, 210], hot: '9' },
-            { id: 15, name: 'Пропан', rgb: [110, 190, 175], hot: '' },
+            { id: 23, name: 'Бензин', rgb: [236, 228, 120], hot: '' },
+            { id: 26, name: 'Порох', rgb: [74, 74, 82], hot: '' },
+            { id: 15, name: 'Пропан', rgb: [84, 150, 138], hot: '' },
             { id: 17, name: 'Динамит', rgb: [196, 44, 44], hot: '' },
             { id: 18, name: 'Фитиль', rgb: [168, 138, 92], hot: '' },
+            { id: 27, name: 'Дерево', rgb: [138, 84, 38], hot: '' },
+            { id: 28, name: 'Земля', rgb: [92, 60, 42], hot: '' },
+            { id: 24, name: 'Семена', rgb: [214, 196, 128], hot: '' },
+            { id: 25, name: 'Лёд', rgb: [204, 236, 250], hot: '' },
             { id: 11, name: 'Металл', rgb: [150, 162, 178], hot: '' },
             { id: 19, name: 'Стекло', rgb: [150, 215, 238], hot: '' },
             { id: 21, name: 'Атом-бомба', rgb: [150, 162, 44], hot: '' },
             { id: 22, name: 'Чёрн. дыра', rgb: [38, 18, 78], hot: '' },
             { id: 0, name: 'Ластик', rgb: [30, 30, 36], hot: '0' }
         ];
-        // 9 пар, 10 дым, 12 горящий фитиль, 13 жидкий металл, 14 жидкое стекло — их нельзя нарисовать, они получаются сами
+        const SAND_ICONS = {
+            1: '<path d="M2 27C8 27 11 13 16 13S24 27 30 27Z" fill="#e2be60"/><path d="M16 13C21 13 24 27 30 27H19C20 20 18.5 14 16 13Z" fill="#b98f38"/><path d="M12.5 18.5C13.4 16 14.6 14.5 16 13.8" stroke="#f6e19a" stroke-width="1.7" fill="none" stroke-linecap="round"/><circle cx="16" cy="5" r="1.6" fill="#e2be60"/><circle cx="13.6" cy="8.6" r="1.3" fill="#e2be60"/><circle cx="18.4" cy="9" r="1.2" fill="#f0d27a"/>',
+            2: '<path d="M16 3C16 3 6.5 14 6.5 20.2A9.5 9.5 0 0 0 25.5 20.2C25.5 14 16 3 16 3Z" fill="#3070e8"/><path d="M16 3C16 3 25.5 14 25.5 20.2A9.5 9.5 0 0 1 16 29.7C21.5 27.5 23.5 21 21.5 14.5C19.5 8.5 16 3 16 3Z" fill="#1f4fb8" opacity=".5"/><path d="M11.4 19.5A5 5 0 0 0 16.4 25" stroke="#aaceff" stroke-width="2.2" fill="none" stroke-linecap="round"/><circle cx="12" cy="14.4" r="1.5" fill="#d2e4ff"/>',
+            3: '<path d="M4 24L6.5 13 13 7 22 8 28 15 27 24Q16 27.5 4 24Z" fill="#7a7a84"/><path d="M6.5 13L13 7 22 8 17 14 10 17Z" fill="#a8a8b4"/><path d="M17 14L22 8 28 15 27 24 20 25.4 18 19Z" fill="#585862"/><path d="M10 17L14 22 13 25.4" stroke="#45454d" stroke-width="1.2" fill="none" stroke-linecap="round"/>',
+            4: '<path d="M8 5H24Q27.4 16 24 27H8Q4.6 16 8 5Z" fill="#8a5a26"/><path d="M7 9.5H25M6.4 16H25.6M7 22.5H25" stroke="#3a230f" stroke-width="2.3"/><rect x="7.5" y="3" width="17" height="3" rx="1.4" fill="#4a2e14"/><rect x="7.5" y="26" width="17" height="3" rx="1.4" fill="#4a2e14"/><path d="M10.4 7Q9 16 10.4 25" stroke="#c28a46" stroke-width="1.8" fill="none" stroke-linecap="round" opacity=".8"/>',
+            5: '<path d="M16 2C17.2 8 25.5 11 25.5 20A9.5 9.5 0 0 1 6.5 20C6.5 15 10 13 11 8.5C13 10.5 13.6 12.5 14.6 13C15.6 9.5 14.4 6 16 2Z" fill="#f4741a"/><path d="M16 13.5C17 18 21.5 19 21.5 23.5A5.5 5.5 0 0 1 10.5 23.5C10.5 20.5 14.6 19 16 13.5Z" fill="#ffc83a"/><ellipse cx="16" cy="25.6" rx="2.4" ry="2.2" fill="#fff4c2"/>',
+            6: '<path d="M16 29V16" stroke="#2a8a3c" stroke-width="2.6" stroke-linecap="round"/><path d="M16 18C8 18 4.5 12.5 4.5 6.5 11.5 6.5 16 10 16 18Z" fill="#34ac48"/><path d="M16 15C16 9 20 4.5 27.5 4.5 27.5 11.5 23 15.5 16 15Z" fill="#58d46e"/><path d="M15 17C12 13.5 9 10.5 7 8M17 14C19.5 11.5 22 8.5 25 6.5" stroke="#1d7a30" stroke-width="1.1" fill="none" stroke-linecap="round" opacity=".7"/>',
+            7: '<path d="M3 28L12 11H20L29 28Z" fill="#5d4848"/><path d="M20 11L29 28H21.5Z" fill="#3c2e2e"/><path d="M11.5 11Q16 8 20.5 11Q16 13.8 11.5 11Z" fill="#ffa42a"/><path d="M14.6 12.2L13.4 19 16.2 22.4 15 28H19L18.2 20.5 17.4 13.2Z" fill="#f24814"/><circle cx="13.5" cy="6.2" r="1.7" fill="#ff7a22"/><circle cx="18.6" cy="4.4" r="1.4" fill="#ffc02a"/><circle cx="23" cy="7.6" r="1.1" fill="#ff7a22"/>',
+            8: '<path d="M8.3 20H23.7L27 25.5A2.6 2.6 0 0 1 24.8 29H7.2A2.6 2.6 0 0 1 5 25.5Z" fill="#96f03e"/><path d="M12 3.5H20V5H19V12.2L26.9 25.4A3 3 0 0 1 24.3 29.8H7.7A3 3 0 0 1 5.1 25.4L13 12.2V5H12Z" fill="#cfe3e6" fill-opacity=".22" stroke="#d6ecef" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12.6" cy="24.4" r="1.7" fill="#dcffa6"/><circle cx="18.8" cy="23" r="1.3" fill="#dcffa6"/><circle cx="21" cy="26.4" r="1" fill="#dcffa6"/><circle cx="16.4" cy="16.4" r="1.2" fill="#b8f070" opacity=".8"/>',
+            16: '<path d="M16 3.5C9.4 3.5 5 8 5 14C5 17.6 6.8 20 9 21.2V26H13V23.6H15V26H17V23.6H19V26H23V21.2C25.2 20 27 17.6 27 14C27 8 22.6 3.5 16 3.5Z" fill="#b672e8"/><path d="M16 3.5C22.6 3.5 27 8 27 14C27 17.6 25.2 20 23 21.2V26H19V23.6H17V14.5Z" fill="#8a3fc0" opacity=".45"/><ellipse cx="11.4" cy="14" rx="3.1" ry="3.5" fill="#1f0f2e"/><ellipse cx="20.6" cy="14" rx="3.1" ry="3.5" fill="#1f0f2e"/><path d="M16 17.2L14.4 20.6H17.6Z" fill="#1f0f2e"/>',
+            23: '<path d="M8 4.5V9M8 5.5H15V9" stroke="#b8941a" stroke-width="2.4" fill="none" stroke-linejoin="round" stroke-linecap="round"/><rect x="5" y="9" width="22" height="20" rx="3" fill="#f2cf3c"/><path d="M22 9H24A3 3 0 0 1 27 12V26A3 3 0 0 1 24 29H22Z" fill="#cfa81c"/><rect x="20" y="3.6" width="5.6" height="5.6" rx="1" fill="#8a8a92"/><rect x="19.4" y="2.4" width="6.8" height="2.4" rx="1.1" fill="#e0402a"/><path d="M14 14.2C14 14.2 9.6 19 9.6 22A4.4 4.4 0 0 0 18.4 22C18.4 19 14 14.2 14 14.2Z" fill="#7a5a00" opacity=".8"/>',
+            26: '<path d="M16 9.5C11 9.5 5.5 14.5 5.5 21.2 5.5 26.6 10 29 16 29S26.5 26.6 26.5 21.2C26.5 14.5 21 9.5 16 9.5Z" fill="#5a5a68"/><path d="M16 9.5C21 9.5 26.5 14.5 26.5 21.2 26.5 26.6 22 29 16 29 20 26 21 17 16 9.5Z" fill="#3e3e4a" opacity=".6"/><path d="M12.4 9.4C13 7.4 14.5 6.6 16 6.6S19 7.4 19.6 9.4Z" fill="#4a4a58"/><rect x="11" y="8.6" width="10" height="2.5" rx="1.2" fill="#d0a85e"/><path d="M9.4 19C9.8 16.4 11.4 14.4 13.4 13.3" stroke="#9696a8" stroke-width="1.8" fill="none" stroke-linecap="round"/><circle cx="14" cy="24" r="1" fill="#9a9aac"/><circle cx="19.5" cy="21.5" r="1.1" fill="#9a9aac"/><circle cx="17" cy="26" r=".9" fill="#9a9aac"/><path d="M24 1.2L25.2 4.6 28.6 5.8 25.2 7 24 10.4 22.8 7 19.4 5.8 22.8 4.6Z" fill="#ffb02e"/>',
+            15: '<rect x="9" y="9" width="14" height="19" rx="6" fill="#6ebeaf"/><rect x="18.4" y="10" width="4.6" height="17" rx="2.3" fill="#3f8d7c" opacity=".55"/><rect x="9" y="15.6" width="14" height="3.4" fill="#e8f6f2" opacity=".75"/><rect x="12.2" y="5" width="7.6" height="5" rx="1.2" fill="#4a5a60"/><rect x="14.6" y="2.6" width="2.8" height="3.2" fill="#8a9aa0"/><rect x="10.6" y="1.6" width="10.8" height="2.2" rx="1.1" fill="#b4c0c4"/><rect x="10" y="26.4" width="12" height="2.8" rx="1.2" fill="#3a6a60"/>',
+            17: '<rect x="4.5" y="9" width="7.4" height="19" rx="2.2" fill="#c42c2c"/><rect x="12.3" y="9" width="7.4" height="19" rx="2.2" fill="#d83a3a"/><rect x="20.1" y="9" width="7.4" height="19" rx="2.2" fill="#b02424"/><path d="M6.4 11.5V25.5M14.2 11.5V25.5M22 11.5V25.5" stroke="#f08a8a" stroke-width="1.5" stroke-linecap="round" opacity=".7"/><rect x="3.4" y="16" width="25.2" height="4.4" rx="1.2" fill="#e6d39a"/><path d="M16 9Q16 5.4 19.6 4.4 22.6 3.6 23.4 2" stroke="#2c2c2c" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M24 .6L25 2.4 27 3 25 3.8 24 5.6 23 3.8 21 3 23 2.4Z" fill="#ffd23c"/>',
+            18: '<path d="M3.5 26C10 26 9.5 19.5 16 19.5S22 12.5 26 12" stroke="#a88a5c" stroke-width="4.2" fill="none" stroke-linecap="round"/><path d="M3.5 26C10 26 9.5 19.5 16 19.5S22 12.5 26 12" stroke="#5e4a28" stroke-width="4.2" fill="none" stroke-linecap="round" stroke-dasharray="1.2 3.2" opacity=".65"/><path d="M25 3L26.4 8 31.4 9.4 26.4 10.8 25 15.8 23.6 10.8 18.6 9.4 23.6 8Z" fill="#ffd23c"/><circle cx="25" cy="9.4" r="1.7" fill="#ff7a22"/>',
+            27: '<rect x="3" y="9" width="21" height="14" rx="2.4" fill="#8a5426"/><path d="M7 11V21M12.2 10.5V21.5M17.4 11V21" stroke="#5e3515" stroke-width="1.3" stroke-linecap="round"/><ellipse cx="24" cy="16" rx="5" ry="7" fill="#d4a366"/><ellipse cx="24" cy="16" rx="3.1" ry="4.7" fill="none" stroke="#a06f3a" stroke-width="1.2"/><ellipse cx="24" cy="16" rx="1.1" ry="1.9" fill="#a06f3a"/><path d="M5 9.8H20" stroke="#b27a3c" stroke-width="1.5" stroke-linecap="round" opacity=".7"/>',
+            28: '<path d="M4 11H28V26Q28 28.5 25.5 28.5H6.5Q4 28.5 4 26Z" fill="#6a4228"/><circle cx="9.4" cy="20" r="1.5" fill="#8d5c39"/><circle cx="17" cy="23.4" r="1.7" fill="#8d5c39"/><circle cx="23.4" cy="19" r="1.3" fill="#8d5c39"/><circle cx="12.6" cy="25" r="1" fill="#4a2c18"/><circle cx="21" cy="25.4" r="1.1" fill="#4a2c18"/><path d="M4 8.5H28V12C26 12 26.4 15 24.4 15 22.6 15 23 12.6 21 12.6 18.6 12.6 19 16.2 16.6 16.2 14.4 16.2 14.6 12.6 12.2 12.6 9.8 12.6 10 15 8 15 6 15 6 12 4 12Z" fill="#40b04e"/><path d="M6 9.5H26" stroke="#7ce08a" stroke-width="1.4" stroke-linecap="round" opacity=".7"/>',
+            24: '<g transform="translate(10.5 20) rotate(-28)"><path d="M0-7C4.6-3.6 4.6 3.6 0 7-4.6 3.6-4.6-3.6 0-7Z" fill="#eadca0"/><path d="M0-4.2V4.2" stroke="#9a7a30" stroke-width="1.1" stroke-linecap="round"/></g><g transform="translate(21.5 19.5) rotate(32)"><path d="M0-7C4.6-3.6 4.6 3.6 0 7-4.6 3.6-4.6-3.6 0-7Z" fill="#eadca0"/><path d="M0-4.2V4.2" stroke="#9a7a30" stroke-width="1.1" stroke-linecap="round"/></g><g transform="translate(16 10) rotate(6)"><path d="M0-7C4.6-3.6 4.6 3.6 0 7-4.6 3.6-4.6-3.6 0-7Z" fill="#eadca0"/><path d="M0-4.2V4.2" stroke="#9a7a30" stroke-width="1.1" stroke-linecap="round"/></g>',
+            25: '<path d="M16 3.5L27 9.6 16 15.7 5 9.6Z" fill="#e6f8ff"/><path d="M5 9.6L16 15.7V28.6L5 22.4Z" fill="#9fd6ee"/><path d="M27 9.6L16 15.7V28.6L27 22.4Z" fill="#6cb0d8"/><path d="M8.4 13.6V19" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".85"/><path d="M11 7.6L15 5.6" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".9"/>',
+            11: '<path d="M10 7H24L28 13H6Z" fill="#d4dbe6"/><path d="M6 13H28L31 25H3Z" fill="#97a3b3"/><path d="M28 13L31 25H25.8L24.4 13Z" fill="#78849a"/><path d="M8.4 17.6H21" stroke="#d6dde8" stroke-width="2" stroke-linecap="round" opacity=".8"/><path d="M13 9.6H21" stroke="#f2f5fa" stroke-width="1.6" stroke-linecap="round" opacity=".9"/>',
+            19: '<rect x="5.5" y="4" width="21" height="24" rx="3" fill="#96d7ee" fill-opacity=".42" stroke="#c4ecf8" stroke-width="2"/><path d="M10 22.5L18.6 8.5" stroke="#fff" stroke-width="2.3" stroke-linecap="round" opacity=".9"/><path d="M14.4 25L20.6 15.4" stroke="#fff" stroke-width="1.5" stroke-linecap="round" opacity=".65"/>',
+            21: '<circle cx="10" cy="12.4" r="6" fill="#a8b432"/><circle cx="22" cy="12.4" r="6" fill="#a8b432"/><circle cx="16" cy="9" r="7.4" fill="#c4d242"/><ellipse cx="16" cy="15.8" rx="10" ry="3.2" fill="#7b8624"/><path d="M13 15.5C13.4 19.4 12.2 22.4 10.4 26.4H21.6C19.8 22.4 18.6 19.4 19 15.5Z" fill="#96a22c"/><ellipse cx="16" cy="27.2" rx="9.4" ry="2.4" fill="#6b7520"/><circle cx="13.6" cy="6.8" r="2.2" fill="#e8f2a4" opacity=".85"/>',
+            22: '<g transform="rotate(-20 16 16)"><ellipse cx="16" cy="16" rx="15" ry="5.4" fill="none" stroke="#ff9a3c" stroke-width="2.6"/><circle cx="16" cy="16" r="8.2" fill="#0a0414" stroke="#7a44ff" stroke-width="1.6"/><path d="M1 16A15 5.4 0 0 0 31 16" fill="none" stroke="#ffb45c" stroke-width="2.8"/></g>',
+            0: '<g transform="rotate(-35 16 16)"><rect x="2.5" y="9.5" width="27" height="13" rx="3.2" fill="#f27c9a"/><path d="M2.5 12.7A3.2 3.2 0 0 1 5.7 9.5H12V22.5H5.7A3.2 3.2 0 0 1 2.5 19.3Z" fill="#d2d7df"/><path d="M12 9.5V22.5" stroke="#8a909c" stroke-width="1.4" opacity=".7"/><path d="M15 12.5H27" stroke="#ffb4c6" stroke-width="1.6" stroke-linecap="round" opacity=".8"/></g><path d="M6 28.5H26" stroke="#9aa0ac" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>'
+        };
         const SAND_STEAM = 9, SAND_SMOKE = 10, SAND_FUSE_LIT = 12, SAND_MELT_METAL = 13, SAND_MELT_GLASS = 14, SAND_PROPANE = 15, SAND_POISON = 16, SAND_DYNAMITE = 17, SAND_FUSE = 18, SAND_METAL = 11, SAND_GLASS = 19, SAND_SICK = 20, SAND_NUKE = 21, SAND_HOLE = 22;
-        const SAND_RGB = { 9: [196, 208, 226], 10: [88, 88, 96], 12: [255, 200, 90], 13: [255, 175, 80], 14: [255, 205, 130] };
+        const SAND_GAS = 23, SAND_SEED = 24, SAND_ICE = 25, SAND_GUNPOW = 26, SAND_WOOD = 27, SAND_SOIL = 28, SAND_SPROUT = 29, SAND_FLOWER = 30, SAND_BURN = 31;
+        const SAND_RGB = { 9: [196, 208, 226], 10: [88, 88, 96], 12: [255, 200, 90], 13: [255, 175, 80], 14: [255, 205, 130], 20: [60, 170, 70], 29: [150, 236, 110], 30: [255, 110, 170], 31: [255, 120, 40] };
         SAND_MATS.forEach(m => { SAND_RGB[m.id] = m.rgb; });
-        SAND_RGB[15] = [84, 150, 138];
-SAND_RGB[20] = [60, 170, 70];
-        const SAND_DENS = { 1: 5, 2: 3, 4: 2, 7: 4, 8: 3, 13: 6, 14: 5, 16: 3 };
-        const SAND_SPREAD = { 2: 4, 4: 3, 7: 1, 8: 3, 13: 1, 14: 1, 16: 3 };
-        const SAND_IGN = { 4: .5, 6: .12, 15: 1, 17: .35, 18: .4, 20: .12, 21: .35 };
-        const SAND_SOLID = [3, 6, 11, 17, 18, 19, 21];
-const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
+        const SAND_DENS = { 1: 5, 2: 3, 4: 2, 7: 4, 8: 3, 13: 6, 14: 5, 16: 3, 23: 1, 24: 4, 26: 5, 28: 5 };
+        const SAND_SPREAD = { 2: 4, 4: 3, 7: 1, 8: 3, 13: 1, 14: 1, 16: 3, 23: 4 };
+        const SAND_IGN = { 4: .5, 6: .12, 15: 1, 17: .35, 18: .4, 20: .12, 21: .35, 23: .9, 24: .2, 26: .7, 27: .07, 29: .12, 30: .15 };
+        const SAND_ACID = { 1: .08, 3: .08, 6: .08, 11: .02, 24: .08, 25: .05, 26: .08, 27: .08, 28: .08, 29: .08, 30: .08 };
+        const SAND_SOLID = [3, 6, 11, 17, 18, 19, 21, 25, 27];
+        const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16, 23, 24, 26, 28];
         const SAND_TONES = 32;
         let sandCols = null, sandCssDone = false;
         function sandColors() {
             if (sandCols) return sandCols;
             const pack = (r, g, b) => ((255 << 24) | (Math.min(255, b) << 16) | (Math.min(255, g) << 8) | Math.min(255, r)) >>> 0;
             sandCols = [];
-            for (let k = 0; k <= 22; k++) {
+            for (let k = 0; k <= 31; k++) {
                 const c = SAND_RGB[k] || [0, 0, 0], a = new Uint32Array(SAND_TONES);
                 for (let q = 0; q < SAND_TONES; q++) {
                     const f = 0.82 + q / SAND_TONES * 0.36;
@@ -20392,15 +20428,18 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
                 .vp-sand { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; min-width: 0; }
                 .vp-sand-cv { display: block; border-radius: 22px; background: #05060a; touch-action: none; outline: none; cursor: crosshair; image-rendering: pixelated;
                     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06), 0 8px 26px rgba(0, 0, 0, .35); }
-                .vp-sand-pal { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 6px; width: 100%; max-width: 720px; }
-                .vp-sand-mat { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 10px 3px 8px; border: 0; border-radius: 16px; cursor: pointer;
+                .vp-sand-pal { display: grid; grid-template-rows: repeat(2, auto); grid-auto-flow: column; grid-auto-columns: 82px; gap: 6px; width: 100%; max-width: 720px; padding: 0 0 7px;
+                    overflow-x: auto; overflow-y: hidden; overscroll-behavior: contain; touch-action: pan-x; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .28) transparent; }
+                .vp-sand-pal::-webkit-scrollbar { height: 5px; }
+                .vp-sand-pal::-webkit-scrollbar-thumb { border-radius: 3px; background: rgba(255, 255, 255, .28); }
+                .vp-sand-mat { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; padding: 7px 3px 6px; border: 0; border-radius: 16px; cursor: pointer;
                     font: inherit; font-size: 12px; font-weight: 600; color: var(--text-primary, #fff); background: var(--bg-hover, rgba(255, 255, 255, .07));
                     transition: background-color .15s, transform .12s, box-shadow .15s; -webkit-tap-highlight-color: transparent; }
                 .vp-sand-mat:hover { background: rgba(255, 255, 255, .12); }
                 .vp-sand-mat:active { transform: scale(.95); }
                 .vp-sand-mat.vp-on { background: rgba(255, 255, 255, .14); box-shadow: inset 0 0 0 2px var(--vp-accent); }
-                .vp-sand-mat i { display: block; width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto;
-                    box-shadow: inset 0 -4px 6px rgba(0, 0, 0, .35), inset 0 2px 3px rgba(255, 255, 255, .4), 0 2px 6px rgba(0, 0, 0, .3); }
+                .vp-sand-mat i { display: block; width: 32px; height: 32px; flex: 0 0 auto; }
+                .vp-sand-mat svg { display: block; width: 100%; height: 100%; }
                 .vp-sand-mat span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
                 .vp-sand-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; max-width: 720px; }
                 .vp-sand-size { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
@@ -20415,8 +20454,10 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
                 .vp-sand-btn:active { transform: scale(.96); }
                 @media (max-width: 700px) {
                     .vp-sand { gap: 10px; }
-                    .vp-sand-pal { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
-                    .vp-sand-mat { padding: 9px 2px 7px; font-size: 11.5px; }
+                    .vp-sand-pal { grid-auto-columns: 70px; gap: 5px; padding-bottom: 3px; scrollbar-width: none; }
+                    .vp-sand-pal::-webkit-scrollbar { display: none; }
+                    .vp-sand-mat { padding: 6px 0 5px; gap: 3px; font-size: 10.5px; }
+                    .vp-sand-mat i { width: 30px; height: 30px; }
                     .vp-sand-row { flex-wrap: wrap; }
                     .vp-sand-size { flex: 1 0 100%; }
                     .vp-sand-acts { flex: 1 0 100%; }
@@ -20437,11 +20478,13 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
             pal.className = 'vp-sand-pal';
             let mat = +GM_getValue('vp_sand_mat', 1), radius = Math.max(1, Math.min(10, +GM_getValue('vp_sand_r', 3) || 3)), paused = false;
             if (!SAND_MATS.some(m => m.id === mat)) mat = 1;
-            const matBtns = SAND_MATS.map(m => {
+            const half = Math.ceil(SAND_MATS.length / 2), matOrder = [];
+            for (let q = 0; q < half; q++) { matOrder.push(SAND_MATS[q]); if (SAND_MATS[q + half]) matOrder.push(SAND_MATS[q + half]); }
+            const matBtns = matOrder.map(m => {
                 const b = document.createElement('button');
                 b.type = 'button'; b.className = 'vp-sand-mat'; b.dataset.m = m.id;
                 const dot = document.createElement('i');
-                dot.style.background = `radial-gradient(circle at 35% 30%, rgb(${m.rgb.map(c => Math.min(255, c + 45)).join(',')}), rgb(${m.rgb.join(',')}))`;
+                dot.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true">' + SAND_ICONS[m.id] + '</svg>';
                 const nm = document.createElement('span');
                 nm.textContent = m.name;
                 b.append(dot, nm);
@@ -20475,13 +20518,26 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
             row.append(size, acts);
             const hint = document.createElement('div');
             hint.className = 'vp-games-hint';
-            hint.textContent = portrait ? 'Рисуй пальцем · выбери материал выше' : 'Рисуй мышкой · цифры — материал · пробел — пауза · C — очистить';
+            hint.textContent = portrait ? 'Рисуй пальцем · материалы листай вбок' : 'Рисуй мышкой · цифры — материал · пробел — пауза · C — очистить';
             el.append(cv, pal, row, hint);
+            function reveal() {
+                const b = matBtns.find(x => x.classList.contains('vp-on'));
+                if (!b || !pal.clientWidth) return;
+                const l = b.offsetLeft - pal.offsetLeft;
+                if (l < pal.scrollLeft) pal.scrollLeft = l - 6;
+                else if (l + b.offsetWidth > pal.scrollLeft + pal.clientWidth) pal.scrollLeft = l + b.offsetWidth - pal.clientWidth + 6;
+            }
             function pick(id) {
                 mat = id; GM_setValue('vp_sand_mat', id);
                 matBtns.forEach(b => b.classList.toggle('vp-on', +b.dataset.m === id));
+                reveal();
             }
             pick(mat);
+            pal.addEventListener('wheel', e => {
+                if (pal.scrollWidth <= pal.clientWidth) return;
+                pal.scrollLeft += e.deltaX || e.deltaY;
+                e.preventDefault();
+            }, { passive: false });
             function setPause(v) {
                 paused = v;
                 pauseBtn.innerHTML = svgIcon(v ? '<path d="m8 5 11 7-11 7z"/>' : '<path d="M8 5v14M16 5v14"/>', 18) + '<span>' + (v ? 'Дальше' : 'Пауза') + '</span>';
@@ -20495,6 +20551,8 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
             const px = new Uint32Array(img.data.buffer);
             const COL = sandColors(), pack = COL.pack;
             const BG = pack(5, 6, 10);
+            const SEED_A = pack(238, 226, 168), SEED_B = pack(126, 92, 44), POW_A = pack(98, 98, 110), POW_B = pack(52, 52, 60);
+            const FLOWERS = [pack(255, 110, 170), pack(255, 214, 70), pack(190, 150, 255)];
             function draw() {
                 for (let i = 0; i < N; i++) {
                     const k = t[i];
@@ -20502,6 +20560,10 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
                     else if (k === 5) { const l = life[i] / 40; px[i] = pack(255, 70 + 150 * l, 10 + 40 * l); }
                     else if (k === SAND_SICK) { const l = Math.min(1, life[i] / 100); px[i] = pack(150 - 90 * l, 110 + 60 * l, 40 + 30 * l); }
                     else if (k === SAND_FUSE_LIT) { const l = life[i] / 24; px[i] = pack(255, 120 + 120 * l, 40 + 60 * l); }
+                    else if (k === SAND_BURN) { const l = life[i] / 255, f = .8 + (tn[i] >> 3) / 32 * .4; px[i] = pack((190 + 65 * l) * f, (40 + 80 * l) * f, 14 * f); }
+                    else if (k === SAND_SEED) px[i] = tn[i] & 4 ? SEED_A : SEED_B;
+                    else if (k === SAND_GUNPOW) px[i] = tn[i] & 4 ? POW_A : POW_B;
+                    else if (k === SAND_FLOWER) px[i] = FLOWERS[tn[i] % 3];
                     else if (k === SAND_METAL || k === SAND_GLASS) {
                         const c = SAND_RGB[k], f = 0.82 + (tn[i] >> 3) / 32 * 0.36, h = life[i] * (k === SAND_METAL ? .45 : .9);
                         px[i] = pack(c[0] * f + h, c[1] * f - h * .45, c[2] * f - h * .75);
@@ -20521,7 +20583,6 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
                 if (flash > 0) { g.fillStyle = 'rgba(255, 255, 240, ' + Math.min(1, flash * .9) + ')'; g.fillRect(0, 0, W, H); }
             }
 
-            // Куски поля 12x12: тот, где ничего не двигалось, спит. Спящий кусок не считается, поэтому полное поле застывшего песка почти ничего не стоит.
             let fr = 1;
             const rnd = Math.random;
             const chunkOf = new Uint16Array(N);
@@ -20573,7 +20634,6 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
                 return slide(i, x, y, me, d) || slide(i, x, y, me, -d);
             }
             const FIRE_L = () => 25 + rnd() * 20 | 0;
-            // огонь/лава/расплав поджигают соседа: масло, растение, пропан, фитиль, динамит
             function lightUp(x, y, mult) {
                 const k = kind(x, y), c = SAND_IGN[k];
                 if (!c || rnd() >= c * (mult || 1)) return;
@@ -20582,9 +20642,11 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
                 else if (k === SAND_DYNAMITE) explode(x, y, 7);
                 else if (k === SAND_NUKE) nuke(x, y);
                 else if (k === SAND_PROPANE) put(j, 5, 8 + rnd() * 10 | 0);
+                else if (k === SAND_GAS) put(j, 5, 10 + rnd() * 14 | 0);
+                else if (k === SAND_GUNPOW) { if (rnd() < .25) explode(x, y, 2); else put(j, 5, 5 + rnd() * 8 | 0); }
+                else if (k === SAND_WOOD) put(j, SAND_BURN, 140 + rnd() * 80 | 0);
                 else put(j, 5, FIRE_L());
             }
-            // взрыв: камень, металл и стекло держатся дальше от центра, горючее загорается, остальное сметает
             function explode(x, y, r) {
                 put(y * W + x, 5, 40);
                 for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
@@ -20593,13 +20655,12 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
                     const nx = x + dx, ny = y + dy;
                     if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
                     const j = ny * W + nx, kk = t[j], d = Math.sqrt(d2) / r;
-                    if (kk === 3 || kk === SAND_METAL || kk === SAND_GLASS) { if (d > .5 || rnd() < .5) continue; }
+                    if (kk === 3 || kk === SAND_METAL || kk === SAND_GLASS || kk === SAND_WOOD) { if (d > .5 || rnd() < .5) continue; }
                     if (kk === 0) { if (rnd() < .45 * (1 - d * .5)) put(j, 5, 8 + rnd() * 18 | 0); }
-                    else if (kk === SAND_DYNAMITE || kk === SAND_NUKE || kk === 4 || kk === 6 || kk === SAND_SICK || kk === SAND_PROPANE || kk === SAND_FUSE || kk === SAND_FUSE_LIT) put(j, 5, 10 + rnd() * 20 | 0);
+                    else if (SAND_IGN[kk] || kk === SAND_FUSE_LIT) put(j, 5, 10 + rnd() * 20 | 0);
                     else if (rnd() < .75) { put(j, rnd() < .5 ? 0 : SAND_SMOKE, 20 + rnd() * 30 | 0); if (t[j] === 0) life[j] = 0; }
                 }
             }
-            // атомный взрыв: ударная волна расходится кольцом и сметает всё, даже камень и металл; вспышка и тряска
             const blasts = [], holes = [];
             let flash = 0;
             function nuke(x, y) {
@@ -20631,7 +20692,6 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
                 put(y * W + x, SAND_HOLE, 0);
                 dirty = true;
             }
-            // дыра втягивает всё подвижное в радиусе и съедает то, что дошло до её края; растёт от съеденного
             function holesStep() {
                 for (let h = holes.length - 1; h >= 0; h--) {
                     const ho = holes[h];
@@ -20662,13 +20722,13 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
             }
             const HOT_SRC = nk => nk === 7 || nk === SAND_MELT_METAL || nk === SAND_MELT_GLASS;
             function cell(i, x, y, k) {
-                if (k === 1) { fall(i, x, y, 1); }
+                if (k === 1 || k === SAND_SOIL || k === SAND_GUNPOW) { fall(i, x, y, k); }
                 else if (k === 2) {
                     for (const [dx, dy] of NB) { if (kind(x + dx, y + dy) === 5) { put(i, SAND_STEAM, 60 + rnd() * 60 | 0); break; } }
                     if (t[i] === 2 && !fall(i, x, y, 2)) spread(i, x, y, 2);
                 }
-                else if (k === 4) {
-                    if (!fall(i, x, y, 4)) spread(i, x, y, 4);
+                else if (k === 4 || k === SAND_GAS) {
+                    if (!fall(i, x, y, k)) spread(i, x, y, k);
                 }
                 else if (k === 5) {
                     wake(i);
@@ -20705,7 +20765,7 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
                     wake(i);
                     for (const [dx, dy] of NB) {
                         const nk = kind(x + dx, y + dy);
-                        const p = nk === 1 || nk === 3 || nk === 6 ? .08 : nk === SAND_METAL ? .02 : 0;
+                        const p = SAND_ACID[nk];
                         if (p && rnd() < p) { gone((y + dy) * W + x + dx); if (rnd() < .5) { gone(i); break; } }
                     }
                     if (t[i] === 8 && !fall(i, x, y, 8)) spread(i, x, y, 8);
@@ -20718,7 +20778,6 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
                     if (t[i] === SAND_POISON && !fall(i, x, y, SAND_POISON)) spread(i, x, y, SAND_POISON);
                 }
                 else if (k === SAND_SICK) {
-                    // больное растение заражает соседние живые клетки и умирает само
                     wake(i);
                     if (life[i] <= 1) { if (rnd() < .3) put(i, SAND_SMOKE, 15 + rnd() * 20 | 0); else gone(i); return; }
                     life[i]--;
@@ -20733,11 +20792,10 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
                     }
                 }
                 else if (k === SAND_METAL || k === SAND_GLASS) {
-                    // нагрев копится в life: лава и расплав греют быстро, огонь медленно; убрали источник — остывает
                     let hot = 0;
                     for (const [dx, dy] of NB) {
                         const nk = kind(x + dx, y + dy);
-                        if (HOT_SRC(nk)) hot += 2; else if (nk === 5 && rnd() < .5) hot += 1;
+                        if (HOT_SRC(nk)) hot += 2; else if ((nk === 5 || nk === SAND_BURN) && rnd() < .5) hot += 1;
                     }
                     if (hot) {
                         life[i] = Math.min(255, life[i] + hot);
@@ -20795,6 +20853,55 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
                     const q = rnd(), nx = x + (rnd() * 3 | 0) - 1, ny = y + (q < .55 ? 1 : q < .75 ? -1 : 0);
                     if (nx >= 0 && nx < W && ny >= 0 && ny < H && t[ny * W + nx] === 0) sw(i, ny * W + nx);
                 }
+                else if (k === SAND_SEED) {
+                    if (fall(i, x, y, k)) return;
+                    for (const [dx, dy] of NB) {
+                        if (kind(x + dx, y + dy) === 2) {
+                            gone((y + dy) * W + x + dx);
+                            put(i, SAND_SPROUT, 7 + rnd() * 7 + (kind(x, y + 1) === SAND_SOIL ? 8 : 0) | 0);
+                            return;
+                        }
+                    }
+                }
+                else if (k === SAND_SPROUT) {
+                    wake(i);
+                    if (rnd() > .1) return;
+                    const l = life[i];
+                    const side = rnd() < .3, nx = side ? x + (rnd() < .5 ? -1 : 1) : x, ny = side ? y : y - 1;
+                    if (l > 1 && ny >= 0 && nx >= 0 && nx < W && (t[ny * W + nx] === 0 || t[ny * W + nx] === 2)) {
+                        put(i, 6, 0);
+                        put(ny * W + nx, SAND_SPROUT, l - 1);
+                        if (!side && rnd() < .3) {
+                            const sx = x + (rnd() < .5 ? -1 : 1);
+                            if (sx >= 0 && sx < W && t[y * W + sx] === 0) put(y * W + sx, 6, 0);
+                        }
+                    } else if (!side) put(i, SAND_FLOWER, 0);
+                }
+                else if (k === SAND_FLOWER) {
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy);
+                        if (nk === 6 || nk === SAND_SICK || nk === SAND_SPROUT) return;
+                    }
+                    put(i, SAND_SEED, 0);
+                }
+                else if (k === SAND_ICE) {
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy);
+                        if (nk === 7) { put(i, SAND_STEAM, 60 + rnd() * 60 | 0); put((y + dy) * W + x + dx, 3); return; }
+                        if (((nk === 5 || nk === SAND_BURN || nk === SAND_FUSE_LIT) && rnd() < .2) || ((nk === SAND_MELT_METAL || nk === SAND_MELT_GLASS) && rnd() < .5)) { put(i, 2, 0); return; }
+                    }
+                }
+                else if (k === SAND_BURN) {
+                    wake(i);
+                    if (life[i] <= 1) { if (rnd() < .5) put(i, SAND_SMOKE, 25 + rnd() * 30 | 0); else gone(i); return; }
+                    if (rnd() < .35) life[i]--;
+                    for (const [dx, dy] of NB) {
+                        const nk = kind(x + dx, y + dy);
+                        if (nk === 2) { put(i, SAND_SMOKE, 30 + rnd() * 30 | 0); put((y + dy) * W + x + dx, SAND_STEAM, 60 + rnd() * 60 | 0); return; }
+                        if (SAND_IGN[nk]) lightUp(x + dx, y + dy, 1);
+                    }
+                    if (y > 0 && rnd() < .06 && t[(y - 1) * W + x] === 0) put((y - 1) * W + x, 5, 10 + rnd() * 14 | 0);
+                }
                 else if (k === SAND_STEAM || k === SAND_SMOKE) {
                     wake(i);
                     if (life[i] <= 1) { if (k === SAND_STEAM && rnd() < .3) put(i, 2); else gone(i); return; }
@@ -20837,7 +20944,10 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
                     const i = y * W + x;
                     if (mat === 0) { if (t[i]) { gone(i); } continue; }
                     if (mat === SAND_HOLE) return;
-                    if (t[i] !== 0) { if (!(mat === 5 && SAND_IGN[t[i]] && t[i] !== SAND_DYNAMITE)) continue; }
+                    if (t[i] !== 0) {
+                        if (!(mat === 5 && SAND_IGN[t[i]] && t[i] !== SAND_DYNAMITE)) continue;
+                        if (t[i] === SAND_WOOD) { put(i, SAND_BURN, 140 + rnd() * 80 | 0); continue; }
+                    }
                     else if (!solid && rnd() > .55) continue;
                     put(i, mat, mat === 5 ? 25 + rnd() * 20 | 0 : 0);
                 }
@@ -20865,7 +20975,7 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
             cv.addEventListener('pointerup', up);
             cv.addEventListener('pointercancel', up);
 
-            let on = true, raf = 0, lastScore = 0;
+            let on = true, raf = 0, lastScore = 0, fitted = false;
             function frame(now) {
                 if (!on) return;
                 raf = requestAnimationFrame(frame);
@@ -20885,11 +20995,13 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
                     let n = 0;
                     for (let i = 0; i < N; i++) if (t[i]) n++;
                     setScore(`частиц ${n}`);
+                    if (!fitted) { fitted = true; resize(); }
                 }
             }
             raf = requestAnimationFrame(frame);
 
             function resize() {
+                reveal();
                 const body = gw.el && gw.el.querySelector('.vp-games-body');
                 const availW = body ? body.clientWidth : Math.min(760, innerWidth - 24) - 32;
                 const availH = (body ? body.clientHeight : innerHeight - 140) - pal.offsetHeight - row.offsetHeight - hint.offsetHeight - 48;
@@ -21173,8 +21285,8 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
             <span class="vp-games-score"></span><button type="button" class="vp-games-x" aria-label="Закрыть">${svgIcon('<path d="M6 6l12 12M18 6 6 18"/>', 18)}</button></div><div class="vp-games-body"></div></div>`;
             el.addEventListener('click', e => { if (e.target === el) closeGames(); });
             const still = e => {
-                const area = e.target.closest && e.target.closest('.vp-games-lead-list, .vp-games-leads');
-                if (!area || area.scrollHeight <= area.clientHeight) e.preventDefault();
+                const area = e.target.closest && e.target.closest('.vp-games-lead-list, .vp-games-leads, .vp-sand-pal');
+                if (!area || (area.classList.contains('vp-sand-pal') ? area.scrollWidth <= area.clientWidth : area.scrollHeight <= area.clientHeight)) e.preventDefault();
             };
             el.addEventListener('wheel', still, { passive: false });
             el.addEventListener('touchmove', still, { passive: false });
