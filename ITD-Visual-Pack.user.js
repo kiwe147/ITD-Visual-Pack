@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.1.1
+// @version      3.9.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -9099,6 +9099,10 @@ var __vpBannerAuto = (() => {
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.9.2', '6 ноября 2026', [
+                'Сообщения: нажми на цитату в ответе — лента прокрутится к исходному сообщению и подсветит его, а если оно уже на экране, просто подсветит'
+                ,'Сообщения: текст, который начинается с «> » (например, вставленный из ChatGPT), показывается как обычный текст, а не как ответ'
+            ]],
             ['3.9.1.1', '5 ноября 2026', [
                 'Песочница: новые материалы — бензин, порох, дерево, земля, семена и лёд'
                 ,'Песочница: семена рядом с водой вырастают в цветы, дерево горит долго, лёд тает от огня'
@@ -11822,8 +11826,20 @@ var __vpBannerAuto = (() => {
         const msgUuidBytes = u => Uint8Array.from(u.replace(/-/g, '').match(/../g), h => parseInt(h, 16));
         const msgBytesUuid = b => [...b].map(x => x.toString(16).padStart(2, '0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
         const MSG_ALBUM_MAX = 10;
-        const msgBodyText = t => { const x = String(t || ''); return /^> /.test(x) ? x.replace(/^> [^\n]*\n?/, '') ||(/^> Переслано/.test(x) ? 'Пересланное сообщение' : 'Ответ') : x; };
-        const msgPreview = m => { const t = msgBodyText(m.text); return m.imgs && m.imgs.length > 1 ? `${m.imgs.length} фото` + (t ? ' · ' + t : '') : m.img ? (t || 'Фото') : t; };
+        const msgQuoteOf = (t, img) => {
+            const m = String(t || '').match(/^> ([^\n]*)(?:\n([\s\S]*))?$/);
+            if (!m) return null;
+            const fwd = /^Переслано от/.test(m[1]);
+            if (!fwd && m[1].indexOf(': ') < 1) return null;
+            if (m[2] === undefined && !img) return null;
+            return { line: m[1], rest: m[2] || '', fwd };
+        };
+        const msgMark = t => /^> /.test(t) ? '\u200B' + t : t;
+        const msgUnmark = t => String(t || '').replace(/^\u200B(?=> )/, '');
+        const msgHasImg = m => !!(m && (m.img || (m.imgs && m.imgs.length)));
+        const msgPlainOf = m => { const x = String(m && m.text || ''), q = msgQuoteOf(x, msgHasImg(m)); return msgUnmark(q ? q.rest : x); };
+        const msgBodyText = m => { const x = String(m && m.text || ''), q = msgQuoteOf(x, msgHasImg(m)); return q ? q.rest || (q.fwd ? 'Пересланное сообщение' : 'Ответ') : msgUnmark(x); };
+        const msgPreview = m => { const t = msgBodyText(m); return m.imgs && m.imgs.length > 1 ? `${m.imgs.length} фото` + (t ? ' · ' + t : '') : m.img ? (t || 'Фото') : t; };
         const msgNet = { keys: new Map(), vols: [], me: null, pairs: new Map(), conv: new Map(), syncing: null, blocks: {} };
         const MSG_SHARE_MS = 2000, MSG_DONE_MS = 700, MSG_WARM_MS = 5 * 60e3, MSG_STAMP_KEY = 'vp_msg_sync';
         const MSG_READ_KEY = netKey('/api/posts/' + MSG_POST_ID + '/comments', 'GET');
@@ -12367,6 +12383,8 @@ var __vpBannerAuto = (() => {
         .vp-msgs-menu-sep { height: 1px; margin: 5px 6px; background: var(--border-color, rgba(255, 255, 255, .1)); }
         .vp-msgs-quote { display: block; margin: 0 0 5px; padding: 3px 9px; border-left: 3px solid var(--vp-accent, #f91880); border-radius: 4px 9px 9px 4px; background: rgba(127, 127, 127, .17); font-size: 12.5px; line-height: 1.32; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .vp-msgs-quote b { display: block; font-size: 12px; color: var(--vp-accent, #f91880); }
+        .vp-msgs-quote.vp-msgs-jump { cursor: pointer; transition: background-color .15s; }
+        @media (hover: hover) { .vp-msgs-quote.vp-msgs-jump:hover { background: rgba(127, 127, 127, .28); } }
         .vp-msgs-rest { white-space: pre-wrap; }
         .vp-msgs-reply, .vp-msgs-pinbar { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-left: 3px solid var(--vp-accent, #f91880); margin: 0 12px; background: rgba(127, 127, 127, .12); border-radius: 4px 12px 12px 4px; color: var(--text-primary, #fff); }
         .vp-msgs-pinbar { margin: 4px 12px 0; cursor: pointer; }
@@ -12387,6 +12405,13 @@ var __vpBannerAuto = (() => {
         .vp-msgs-b.vp-gone { opacity: .35; }
         .vp-msgs-b.vp-flash { animation: vpMsgFlash 1.4s ease; }
         @keyframes vpMsgFlash { 0%, 40% { box-shadow: 0 0 0 3px var(--vp-accent, #f91880); } 100% { box-shadow: 0 0 0 3px transparent; } }
+        .vp-msgs-b.vp-jump { --vp-jr: transparent; animation: vpMsgsPop .2s ease-out, vpMsgJump 1.2s ease; }
+        .vp-msgs-b.vp-out.vp-jump { --vp-jr: color-mix(in srgb, var(--vp-accent, #f91880) 45%, transparent); }
+        @keyframes vpMsgJump {
+            0%, 100% { box-shadow: 0 0 0 2px transparent, inset 0 0 0 1px var(--vp-jr), inset 0 0 0 999px transparent; }
+            20%, 55% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--vp-accent, #f91880) 85%, transparent), inset 0 0 0 1px var(--vp-jr), inset 0 0 0 999px color-mix(in srgb, var(--vp-accent, #f91880) 30%, transparent); }
+        }
+        @media (prefers-reduced-motion: reduce) { .vp-msgs-b.vp-jump { animation: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--vp-accent, #f91880) 85%, transparent), inset 0 0 0 1px var(--vp-jr), inset 0 0 0 999px color-mix(in srgb, var(--vp-accent, #f91880) 30%, transparent); } }
         .vp-msgs-fwd { position: absolute; left: 0; right: 0; top: 0; bottom: 0; z-index: 6; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .5); border-radius: inherit; }
         .vp-msgs-fwd-card { width: min(380px, calc(100% - 28px)); max-height: 70%; display: flex; flex-direction: column; border-radius: 20px; background: var(--block-bg); box-shadow: 0 16px 48px rgba(0, 0, 0, .55), 0 0 0 1px var(--border-color, rgba(255, 255, 255, .1)); overflow: hidden; }
         .vp-msgs-fwd-h { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 8px 18px; font-size: 16px; }
@@ -13623,21 +13648,27 @@ var __vpBannerAuto = (() => {
                 if (at < str.length) box.append(str.slice(at));
                 el.appendChild(box);
             }
-            function msgBody(el, text) {
-                const m = String(text || '').match(/^> ([^\n]*)(?:\n([\s\S]*))?$/);
-                if (!m) { msgText(el, text); return; }
+            function msgBody(el, text, img) {
+                const p = msgQuoteOf(text, img);
+                if (!p) { msgText(el, msgUnmark(text)); return; }
                 const q = document.createElement('span');
                 q.className = 'vp-msgs-quote';
-                const i = m[1].indexOf(': ');
-                if (i > 0 && i < 40) { const n = document.createElement('b'); n.textContent = m[1].slice(0, i); q.append(n, m[1].slice(i + 2)); } else q.textContent = m[1];
+                const i = p.line.indexOf(': ');
+                if (!p.fwd && i > 0 && i < 40) {
+                    const n = document.createElement('b');
+                    n.textContent = p.line.slice(0, i);
+                    q.append(n, p.line.slice(i + 2));
+                    q.classList.add('vp-msgs-jump');
+                    q._q = { me: n.textContent === 'Ты', text: p.line.slice(i + 2) };
+                } else q.textContent = p.line;
                 el.appendChild(q);
-                if (m[2]) { const r = document.createElement('span'); r.className = 'vp-msgs-rest'; msgText(r, m[2]); el.appendChild(r); }
+                if (p.rest) { const r = document.createElement('span'); r.className = 'vp-msgs-rest'; msgText(r, p.rest); el.appendChild(r); }
             }
             function bubble(dir, text, meta, imgUrl) {
                 const urls = !imgUrl ? [] : Array.isArray(imgUrl) ? imgUrl : [imgUrl];
                 const b = document.createElement('div');
                 b.className = 'vp-msgs-b vp-' + dir + (urls.length ? ' vp-has-img' : '');
-                if (!urls.length) msgBody(b, text);
+                if (!urls.length) msgBody(b, text, false);
                 if (urls.length) {
                     const cell = (u, i) => {
                         const wrap = document.createElement('span');
@@ -13663,7 +13694,7 @@ var __vpBannerAuto = (() => {
                         else if (cols === 3 && n % 3 === 2) { box.lastChild.classList.add('vp-half'); box.lastChild.previousSibling.classList.add('vp-half'); }
                     }
                     b.prepend(box);
-                    if (text) { const cap = document.createElement('span'); cap.className = 'vp-msgs-cap'; msgBody(cap, text); box.after(cap); }
+                    if (text) { const cap = document.createElement('span'); cap.className = 'vp-msgs-cap'; msgBody(cap, text, true); box.after(cap); }
                 }
                 const i = document.createElement('i');
                 setMeta(i, meta || now());
@@ -13713,7 +13744,68 @@ var __vpBannerAuto = (() => {
                 requestAnimationFrame(() => { if (Date.now() < stickUntil) feed.scrollTop = feed.scrollHeight; });
             }; M.stickEnd = stickEnd;
             feed.addEventListener('load', () => { if (Date.now() < stickUntil) feed.scrollTop = feed.scrollHeight; }, true);
+            const quoteTrim = t => String(t || '').replace(/[\uD800-\uDBFF\uFFFD]$/, '').trim();
+            const bubbleDir = b => b.classList.contains('vp-out') ? 'out' : 'in';
+            function quoteSource(q) {
+                const rb = q.closest('.vp-msgs-b'), all = [...feed.querySelectorAll(':scope > .vp-msgs-b')], at = all.indexOf(rb);
+                if (!rb || at < 0) return null;
+                const dir = (bubbleDir(rb) === 'out') === q._q.me ? 'out' : 'in', want = quoteTrim(q._q.text);
+                const fits = x => x._m && bubbleDir(x) === dir && quoteTrim(M.replyQuote(x._m)) === want;
+                for (let i = at - 1; i >= 0; i--) if (fits(all[i])) return all[i];
+                for (let i = at + 1; i < all.length; i++) if (fits(all[i])) return all[i];
+                return null;
+            }
+            let jumpRun = 0, jumpEl = null;
+            function flashBubble(b) {
+                if (jumpEl && jumpEl !== b) jumpEl.classList.remove('vp-jump');
+                jumpEl = b;
+                b.classList.remove('vp-jump');
+                void b.offsetWidth;
+                b.classList.add('vp-jump');
+                clearTimeout(b._jumpT);
+                b._jumpT = setTimeout(() => b.classList.remove('vp-jump'), 1300);
+            }
+            function jumpToBubble(b) {
+                const my = ++jumpRun;
+                stickUntil = 0;
+                const room = () => ({ f: feed.getBoundingClientRect(), r: b.getBoundingClientRect() });
+                const shown = () => { const { f, r } = room(); return r.top >= f.top && r.bottom <= f.bottom; };
+                const shift = () => { const { f, r } = room(); return r.height > f.height - 24 ? r.top - f.top - 12 : r.top - f.top - (f.height - r.height) / 2; };
+                if (shown()) { flashBubble(b); return; }
+                const to = Math.max(0, Math.min(feed.scrollHeight - feed.clientHeight, feed.scrollTop + shift()));
+                if (Math.abs(to - feed.scrollTop) < 2) { flashBubble(b); return; }
+                const calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+                feed.scrollTo({ top: to, behavior: calm ? 'auto' : 'smooth' });
+                if (calm) { flashBubble(b); return; }
+                let touched = false, last = -1, still = 0, moved = false;
+                const t0 = performance.now(), hands = ['wheel', 'touchstart', 'keydown', 'pointerdown'], stop = () => { touched = true; };
+                hands.forEach(t => feed.addEventListener(t, stop, { passive: true }));
+                const end = () => {
+                    hands.forEach(t => feed.removeEventListener(t, stop));
+                    if (my !== jumpRun || touched || !b.isConnected) return;
+                    if (!shown()) feed.scrollTop += shift();
+                    flashBubble(b);
+                };
+                const tick = () => {
+                    if (my !== jumpRun) { end(); return; }
+                    const y = feed.scrollTop;
+                    if (Math.abs(y - last) >= .5) { if (last >= 0) moved = true; still = 0; } else still++;
+                    last = y;
+                    if ((moved && still >= 4) || performance.now() - t0 > 1600) { end(); return; }
+                    requestAnimationFrame(tick);
+                };
+                requestAnimationFrame(tick);
+            }
             feed.addEventListener('click', e => {
+                const q = e.target.closest && e.target.closest('.vp-msgs-jump');
+                if (!q || !q._q || e.button || e.detail > 1) return;
+                const sel = window.getSelection && getSelection();
+                if (sel && !sel.isCollapsed && q.contains(sel.anchorNode)) return;
+                const src = quoteSource(q);
+                if (src) jumpToBubble(src); else M.flashNote('Сообщение не найдено');
+            });
+            feed.addEventListener('click', e => {
+                if (e.target.closest && e.target.closest('.vp-msgs-jump')) return;
                 const fb = e.target.closest && e.target.closest('.vp-msgs-b.vp-fail');
                 if (!fb || !fb._m || fb._m.pending !== 'fail' || !M.current) return;
                 const tt = msgTarget(M.current);
@@ -14141,7 +14233,6 @@ var __vpBannerAuto = (() => {
         function msgPartSelect(M) {
             const { $, avaHtml, chat, feed, input, msgAva, msgRefreshChat, toggleReact } = M;
             M.clearReply = clearReply; M.takeReply = takeReply; M.paintPin = paintPin; M.selEnd = selEnd; M.closeFwd = closeFwd; M.closeMenu = closeMenu;
-            const plainText = t => String(t || '').replace(/^> [^\n]*\n?/, '');
             const flashNote = text => {
                 chat.querySelectorAll(':scope > .vp-msgs-flash').forEach(x => x.remove());
                 const n = document.createElement('div');
@@ -14151,6 +14242,8 @@ var __vpBannerAuto = (() => {
                 setTimeout(() => n.remove(), 2400);
             };
             const copyText = t => { if (t && navigator.clipboard) navigator.clipboard.writeText(t).catch(() => { }); flashNote('Скопировано'); };
+            const replyQuote = m => { const body = msgPlainOf(m).replace(/\s+/g, ' ').trim(); return body ? body.slice(0, 70) : 'Картинка'; };
+            M.replyQuote = replyQuote; M.flashNote = flashNote;
             M.reply = null;
             const replyEl = document.createElement('div');
             replyEl.className = 'vp-msgs-reply';
@@ -14161,8 +14254,7 @@ var __vpBannerAuto = (() => {
             function setReply(b) {
                 const m = b._m;
                 if (!m) return;
-                const body = plainText(m.text).replace(/\s+/g, ' ').trim();
-                M.reply = { name: m.dir === 'out' ? 'Ты' : M.current.name, text: body ? body.slice(0, 70) : 'Картинка' };
+                M.reply = { name: m.dir === 'out' ? 'Ты' : M.current.name, text: replyQuote(m) };
                 replyEl.querySelector('b').textContent = M.reply.name;
                 replyEl.querySelector('.vp-msgs-reply-t span').textContent = M.reply.text;
                 replyEl.hidden = false;
@@ -14170,7 +14262,7 @@ var __vpBannerAuto = (() => {
             }
             replyEl.querySelector('button').addEventListener('click', clearReply);
             function takeReply(text) {
-                if (!M.reply) return text;
+                if (!M.reply) return msgMark(text);
                 const q = '> ' + M.reply.name + ': ' + M.reply.text;
                 clearReply();
                 return text ? q + '\n' + text : q;
@@ -14189,7 +14281,7 @@ var __vpBannerAuto = (() => {
                 M.pinIdx = M.pinIdx % items.length;
                 M.pinCur = items[items.length - 1 - M.pinIdx];
                 pinEl.querySelector('b').textContent = items.length > 1 ? `Закреплённое сообщение ${items.length - M.pinIdx} из ${items.length}` : 'Закреплённое сообщение';
-                pinEl.querySelector('.vp-msgs-pin-t span').textContent = plainText(M.pinCur.text).replace(/\s+/g, ' ').trim().slice(0, 90) || 'Картинка';
+                pinEl.querySelector('.vp-msgs-pin-t span').textContent = msgPlainOf(M.pinCur).replace(/\s+/g, ' ').trim().slice(0, 90) || 'Картинка';
                 pinEl.hidden = false;
             }
             const bubbleOf = m => feed.querySelector(`:scope > .vp-msgs-b[data-dir="${m.dir}"][data-ts="${m.ts}"]`);
@@ -14232,7 +14324,7 @@ var __vpBannerAuto = (() => {
                 if (!btn) return;
                 const bs = selList(), a = btn.dataset.a;
                 if (!a) selEnd();
-                else if (a === 'copy') { copyText(bs.map(b => plainText(b._m.text)).filter(Boolean).join('\n')); selEnd(); }
+                else if (a === 'copy') { copyText(bs.map(b => msgPlainOf(b._m)).filter(Boolean).join('\n')); selEnd(); }
                 else if (a === 'fwd') openFwd(bs.map(b => b._m));
                 else if (a === 'del') msgDelete(bs).then(selEnd);
             });
@@ -14358,7 +14450,7 @@ var __vpBannerAuto = (() => {
                 try {
                     for (const m of ms) {
                         const who = m.dir === 'out' ? (myDisplayName || myUsername || 'меня') : (me && me.name) || '';
-                        const imgs = m.imgs || (m.img ? [m.img] : []), body = plainText(m.text);
+                        const imgs = m.imgs || (m.img ? [m.img] : []), body = msgPlainOf(m);
                         await msgSend(t.uid, '> Переслано от ' + who + (body ? '\n' + body : ''), t.sup, imgs.length ? imgs : null);
                     }
                     flashNote('Переслано: ' + x.name);
@@ -14403,7 +14495,7 @@ var __vpBannerAuto = (() => {
                 const sp = document.createElement('div');
                 sp.className = 'vp-msgs-menu-sep';
                 M.menu.appendChild(sp);
-                item('Копировать выбранное как текст', () => { copyText(selList().map(b => plainText(b._m.text)).filter(Boolean).join('\n')); selEnd(); }, 'copy');
+                item('Копировать выбранное как текст', () => { copyText(selList().map(b => msgPlainOf(b._m)).filter(Boolean).join('\n')); selEnd(); }, 'copy');
                 document.body.appendChild(M.menu);
                 const w = M.menu.offsetWidth, h = M.menu.offsetHeight;
                 M.menu.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px';
@@ -14414,7 +14506,7 @@ var __vpBannerAuto = (() => {
                 if (M.sel) { openSelMenu(x, y); return; }
                 closeMenu();
                 const m = b._m, real = m && M.current && msgNet.me && msgTarget(M.current).uid;
-                const text = m ? plainText(m.text) : (b.querySelector('.vp-msgs-cap') || b.firstChild || {}).textContent || '';
+                const text = m ? msgPlainOf(m) : (b.querySelector('.vp-msgs-cap') || b.firstChild || {}).textContent || '';
                 const imgs = [...b.querySelectorAll('.vp-msgs-img')].map(i => i.src);
                 const under = document.elementFromPoint(x, y), hit = under && under.closest ? under.closest('.vp-msgs-img') : null;
                 M.menu = document.createElement('div');
