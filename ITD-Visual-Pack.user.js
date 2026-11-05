@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.0.4
+// @version      3.9.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -29,6 +29,7 @@
     const STICKER_POST_ID = '92f2913c-18be-499a-bc03-97aed0947b34';
     const MSG_POST_ID = 'a53b53e0-9950-4f62-83f4-91e5985ef6c5';
     const GAMES_POST_ID = 'd5f8b7c0-b97d-40cd-bdd4-3c07b3ea0611';
+    const PRESENCE_POST_ID = '8a1bf39d-980c-43a2-8e66-25df487ebbae';
     const OWNER_ID = '5e064703-104d-4794-bc28-9ed6f5847cca';
     const OWNER_PUB = 'BLrLT8O1H3uwudBCiyDf7xEWqFo-5AQCAInPIe_rP3Jn-Ws1gjwZJ5RvN0nNWNMY9cfHt2w32qVTBc3HwtwJ-tc';
     const TG_URL = 'https://t.me/NeuroSFW';
@@ -36,7 +37,7 @@
     const AUTO_LIKE_KEY = 'itd_auto_like_ids';
     const isUrl = a => /^https?:|^\//.test(a);
     const ACCT_DEVICE = new Set(['vp_ver_at', 'vp_upd_ask', 'vp_latest', 'vp_vx', 'vp_learned', 'vp_old_cache', 'vp_old_part', 'vp_posts_list', 'vp_posts_lock', 'vp_api_pause',
-        'vp_club_online', 'vp_club_ava', 'vp_club_next', 'changelogSeen', 'bgGlForce', 'tabletDesktop', 'junkOk', 'adminFabPos', 'fabFace']);
+        'vp_api_pause_paths', 'vp_club_online', 'vp_club_ava', 'vp_club_next', 'changelogSeen', 'bgGlForce', 'tabletDesktop', 'junkOk', 'adminFabPos', 'fabFace']);
     const ACCT = { id: String(GM_get0('vp_last_acct', '') || '') };
     ACCT.boot = ACCT.id;
     const acctScoped = k => {
@@ -120,16 +121,33 @@
 
     const netLog = [];
     const netMod = { skip: false };
-    function netNote(url, method, mod) {
+    function netKey(url, method) {
         try {
             const u = new URL(String(url), location.origin);
-            if (!/\/api\//.test(u.pathname)) return;
+            if (!/\/api\//.test(u.pathname)) return '';
             const p = u.pathname.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ':id')
                 .replace(/\/users\/(?!me\b)[^/]+/, '/users/:name').replace(/\/posts\/user\/[^/]+/, '/posts/user/:name').replace(/\/\d{4,}/g, '/:n');
-            netLog.push([Date.now(), String(method || 'GET').toUpperCase() + ' ' + p, mod ? 1 : 0]);
-            if (netLog.length > 3000) netLog.splice(0, 500);
-        } catch (e) { }
+            return String(method || 'GET').toUpperCase() + ' ' + p;
+        } catch (e) { return ''; }
     }
+    function netNote(url, method, mod) {
+        const k = netKey(url, method);
+        if (!k) return;
+        netLog.push([Date.now(), k, mod ? 1 : 0]);
+        if (netLog.length > 3000) netLog.splice(0, 500);
+    }
+    function netSiteRate(sec) {
+        const from = Date.now() - sec * 1000;
+        let n = 0;
+        for (let i = netLog.length - 1; i >= 0; i--) {
+            const e = netLog[i];
+            if (e[0] < from) break;
+            if (!e[2]) n++;
+        }
+        return n * 60 / sec;
+    }
+    const NET_BUSY_RATE = 40;
+    const netBusy = () => netSiteRate(20) > NET_BUSY_RATE;
     function netTable(minutes = 5) {
         const from = Date.now() - minutes * 60000, by = new Map(), perMin = {};
         for (const [t, k, m] of netLog) {
@@ -269,7 +287,7 @@
             setTimeout(() => res(siteUsers.get(key) || null), ms);
         });
     }
-    const SERVICE_POSTS = [VERIFICATION_POST_ID, STICKER_POST_ID, MSG_POST_ID, GAMES_POST_ID];
+    const SERVICE_POSTS = [VERIFICATION_POST_ID, STICKER_POST_ID, MSG_POST_ID, GAMES_POST_ID, PRESENCE_POST_ID];
     const isServiceEvent = text => SERVICE_POSTS.some(id => text.includes(id));
     function hideServicePosts(res) {
         return res.then(async r => {
@@ -325,8 +343,8 @@
                     const url = typeof input === 'string' ? input : input && input.url;
                     if (!netMod.skip) netNote(url, (init && init.method) || (input && input.method), false);
                     if (url && /\/notifications\/stream(?:[?#]|$)/.test(url)) res = quietServiceStream(res);
-                    if (url && /\/api\//.test(url)) res.then(apiPause).catch(() => { });
                     const method = (init && init.method) || (input && input.method) || 'GET';
+                    if (url && /\/api\//.test(url)) res.then(r => apiPause(r, netKey(url, method))).catch(() => { });
                     if (url && /^get$/i.test(method) && USER_URL.test(url)) {
                         res.then(r => r.ok && r.clone().text().then(t => keepSiteUser(url, t))).catch(() => { });
                     }
@@ -379,11 +397,23 @@
     })();
 
     const TAB_ID = Math.random().toString(36).slice(2);
-    const apiPaused = () => Date.now() < (+GM_getValue('vp_api_pause', 0) || 0);
-    function apiPause(res) {
+    const pathPauses = () => {
+        const m = GM_getValue('vp_api_pause_paths', null) || {}, now = Date.now(), o = {};
+        for (const k in m) if (m[k] > now) o[k] = m[k];
+        return o;
+    };
+    const pathPaused = key => !!key && (pathPauses()[key] || 0) > Date.now();
+    const apiPaused = key => Date.now() < (+GM_getValue('vp_api_pause', 0) || 0) || pathPaused(key);
+    function apiPause(res, key) {
         if (!res || res.status !== 429) return;
-        const s = Math.max(60, +(res.headers && res.headers.get('Retry-After')) || 0);
-        GM_setValue('vp_api_pause', Math.max(+GM_getValue('vp_api_pause', 0) || 0, Date.now() + s * 1000));
+        const ra = Math.max(0, +(res.headers && res.headers.get('Retry-After')) || 0);
+        const scope = String((res.headers && res.headers.get('X-RateLimit-Scope')) || '').toLowerCase();
+        const globalPause = s => GM_setValue('vp_api_pause', Math.max(+GM_getValue('vp_api_pause', 0) || 0, Date.now() + s * 1000));
+        if (scope === 'ip_flood' || scope === 'global_flood' || !key) { globalPause(Math.max(60, ra)); return; }
+        const m = pathPauses();
+        m[key] = Math.max(m[key] || 0, Date.now() + Math.max(30, ra) * 1000);
+        GM_setValue('vp_api_pause_paths', m);
+        if (Object.keys(m).length >= 3) globalPause(Math.max(60, ra));
     }
     function leadTab() {
         const l = GM_getValue('vp_lead_tab', null), now = Date.now();
@@ -424,6 +454,7 @@
                 if (k.visible && document.hidden) { wait = Math.min(wait, 1000); continue; }
                 if (k.net) {
                     if (apiPaused()) { wait = Math.min(wait, 1000); continue; }
+                    if (k.prio !== 'high' && t - due < 90000 && netBusy()) { wait = Math.min(wait, 2000); continue; }
                     if (t - lastNet < NET_GAP) { wait = Math.min(wait, NET_GAP - (t - lastNet)); continue; }
                     lastNet = t;
                 }
@@ -435,7 +466,7 @@
         }
         return {
             add(id, fn, o = {}) {
-                const k = { id, fn, every: o.every, net: !!o.net, visible: !!o.visible, last: performance.now(), busy: false, runs: 0, errors: 0, ms: 0 };
+                const k = { id, fn, every: o.every, net: !!o.net, visible: !!o.visible, prio: o.prio || 'normal', last: performance.now(), busy: false, runs: 0, errors: 0, ms: 0 };
                 if (o.first !== undefined) k.last += o.first - period(k);
                 tasks.set(id, k);
                 arm(250);
@@ -1857,7 +1888,7 @@
             return link.firstElementChild || link.querySelector('span');
         }
         const AUTO_LIKE_CACHE_KEY = 'itd_auto_like_full_cache';
-        const AUTO_LIKE_CACHE_TTL = 10 * 60 * 1000;
+        const AUTO_LIKE_CACHE_TTL = 10 * 60 * 1000, AUTO_LIKE_LIST_TTL = 2 * 60 * 1000;
         const LIKE_INTERVAL_MIN = 15 * 60 * 1000;
         const LIKE_INTERVAL_MAX = 30 * 60 * 1000;
         const LIKE_DELAY_MIN = 3 * 60 * 1000;
@@ -1946,7 +1977,7 @@
         async function fetchAutoLikeUsers() {
             try {
                 const c = JSON.parse(localStorage.getItem(AUTO_LIKE_CACHE_KEY) || 'null');
-                if (c && Date.now() - c.timestamp <= AUTO_LIKE_CACHE_TTL) return c.usersData;
+                if (c && Date.now() - c.timestamp <= AUTO_LIKE_LIST_TTL) return c.usersData;
             } catch (e) { }
 
             const usernames = verifiedNames();
@@ -1957,8 +1988,8 @@
                 const v = verifiedInfo(username);
                 if (v && (v.displayName || v.avatar)) { usersData[username] = { username, displayName: v.displayName, avatar: v.avatar }; return; }
                 try {
-                    const res = await api(`/api/users/${username}`);
-                    if (res.ok) usersData[username] = await res.json();
+                    const d = await userInfoCached(username, AUTO_LIKE_CACHE_TTL);
+                    if (d) usersData[username] = d;
                 } catch (e) { }
             }));
             if (Object.keys(usersData).length) {
@@ -4114,7 +4145,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (!m || !BANNER_VIDEO_RE.test(m[1])) throw new Error('сайт вернул не видео: ' + String(d && d.url || '—').slice(0, 90));
             return m[1];
         }
-        let lookBusy = false, lookSent = '', lookRetryAt = 0, lookFails = 0;
+        let lookBusy = false, lookSent = '', lookRetryAt = 0, lookFails = 0, lookMissAt = 0;
         const LOOK_RETRY = [60000, 120000, 300000, 600000];
         const lookLater = () => { lookRetryAt = Date.now() + LOOK_RETRY[Math.min(lookFails++, LOOK_RETRY.length - 1)]; };
         async function lookVer() {
@@ -4130,7 +4161,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             lookBusy = true;
             try {
                 try {
-                    const all0 = await loadVerificationComments();
+                    const all0 = await loadVerificationComments(VERIFY_USE_AGE);
                     const m0 = all0.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
                     if (m0) avaReconcile(parseLook(m0.content));
                 } catch (e) { logErr('аватарка: сверка с сервером', e); }
@@ -4142,16 +4173,23 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 let text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (img && bv ? ' bv=' + bv : '') + (bannerVideoOwn() ? ' v=' + bannerVideoOwn() : '') + (ownAva ? ' a=' + ownAva : '') + (ownVid ? ' va=' + ownVid : '') + await lookVer().then(x => x ? ' vx=' + x : '') + ' t=' + day;
                 for (const k of ['va', 'bv', 'v', 'a']) { if (sealText(text).length <= 990) break; text = text.split(' ').filter(t => !t.startsWith(k + '=')).join(' '); }
                 if (text === lookSent) return;
-                const all = await loadVerificationComments();
-                const mine = all.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
+                const findMine = list => list.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
+                let mine = findMine(await loadVerificationComments(VERIFY_USE_AGE));
+                if (!mine && Date.now() - lookMissAt > 5 * 60 * 1000) { lookMissAt = Date.now(); mine = findMine(await loadVerificationComments(20000)); }
                 const markSeen = () => GM_setValue(acctKey('vp_ava_seen'), { a: (text.match(/ a=([0-4][0-9a-f]{32})/) || [])[1] || '', v: (text.match(/ va=(\S+)/) || [])[1] || '' });
                 if (mine && openText(mine.content) === text && String(mine.content).startsWith('ITDXE ')) { lookSent = text; markSeen(); GM_setValue(acctKey('vp_look_day'), day); return; }
                 const content = sealText(text);
                 const res = mine
                     ? await editComment(mine.id, content)
                     : await sendComment(VERIFICATION_POST_ID, content);
-                if (res.ok) { lookSent = text; markSeen(); lookFails = 0; GM_setValue(acctKey('vp_look_day'), day); if (day !== was) checkAllComments(true); }
-                else lookLater();
+                if (res.ok) {
+                    lookSent = text; markSeen(); lookFails = 0; GM_setValue(acctKey('vp_look_day'), day);
+                    await serviceCommentsWrote(VERIFICATION_POST_ID, res, content, mine && mine.id);
+                    await verifyApplyLocal();
+                } else {
+                    if (mine && (res.status === 404 || res.status === 403)) serviceCommentsDrop(VERIFICATION_POST_ID);
+                    lookLater();
+                }
             } catch (e) { lookLater(); logErr('стиль', e); } finally { lookBusy = false; }
         }
         let accentProbe = null;
@@ -4558,6 +4596,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             { label: 'Сцена ленты', get: () => sceneEnabled, set: v => { sceneEnabled = v; sceneAutoOff = false; document.documentElement.classList.toggle('vp-scene', v); sceneKick(); }, key: 'sceneEnabled' },
             { label: 'Свечение видео', get: () => ambientEnabled, set: v => { ambientEnabled = v; applyAmbient(); }, key: 'ambientEnabled' },
             { label: 'Боковая панель', get: () => railEnabled, set: v => { railEnabled = v; placeRail(); }, key: 'railEnabled' },
+            { label: 'Показывать, что я в сети', get: () => GM_getValue('pulseOn', true), set: v => { pulseShare = v; if (v) pulseBeat(true); else pulseHide(); }, key: 'pulseOn' },
             { label: 'Вкладка «Магазин»', get: () => GM_getValue('shopTab', true), set: () => applyShopTab(), key: 'shopTab' },
             { label: 'Версия для ПК на планшете', get: () => GM_getValue('tabletDesktop', true), set: () => tabletViewport(), key: 'tabletDesktop' },
             { label: 'Мику и Тето', get: () => palsOn, set: v => { palsOn = v; palsApply(); }, key: 'palsEnabled' },
@@ -4567,7 +4606,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         const SETTINGS_TABS = [
             { id: 'nick', name: 'Ник', items: ['Неоновая подсветка', 'Подсветка ника', 'Подсветка аватарок', 'Подсветка постов', 'Аватарки мода'] },
             { id: 'bg', name: 'Фон', items: ['Фон'] },
-            { id: 'look', name: 'Вид', items: ['Стекло', 'Листание вкладок', 'Карточка профиля при наведении', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Вкладка «Магазин»', 'Карточки панели', 'Версия для ПК на планшете'] },
+            { id: 'look', name: 'Вид', items: ['Стекло', 'Листание вкладок', 'Карточка профиля при наведении', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Показывать, что я в сети', 'Вкладка «Магазин»', 'Карточки панели', 'Версия для ПК на планшете'] },
             { id: 'likes', name: 'Лайки', items: ['Автолайки'] },
             { id: 'pals', name: 'Мику', items: ['Мику и Тето', 'Мику справа', 'Тето слева', 'Размер персонажей'] },
             { id: 'misc', name: 'Ещё', items: ['Анти цензура', 'Звуки интерфейса', 'Громкость', 'Заставка при входе'] },
@@ -4755,6 +4794,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             'Сцена ленты': 'Посты в ленте чуть уменьшаются и тают у края экрана',
             'Свечение видео': 'Мягкое цветное свечение вокруг видео',
             'Боковая панель': 'Правая панель с карточками',
+            'Показывать, что я в сети': 'Другие пользователи мода видят, что ты сейчас в сети',
             'Вкладка «Магазин»': 'Пункт «Магазин» в меню слева (на телефоне — в нижнем меню). Выключишь — его не будет',
             'Версия для ПК на планшете': 'На планшете открывается компьютерная вёрстка',
             'Мику и Тето': 'Персонажи по краям экрана',
@@ -5234,6 +5274,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         const CALL_ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }, { urls: 'stun:stun.cloudflare.com:3478' }];
         const CALL_RING_S = 60;
+        const CALL_ANSWER_WAIT_MS = 30000;
         const CALL_MIC = '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>';
         const callNet = { cur: null, done: null, lastSync: 0, title: null };
         function callDone() { if (!callNet.done) callNet.done = new Set(GM_getValue(acctKey('callDone'), [])); return callNet.done; }
@@ -5473,6 +5514,12 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             a.setAttribute('playsinline', '');
             document.body.appendChild(a);
             c.audio = a;
+            a.addEventListener('pause', () => {
+                const l = c.pauses || (c.pauses = []);
+                l.push(Date.now());
+                if (l.length > 10) l.shift();
+                if (c.state === 'talk' && (c.audioPauseLogged = (c.audioPauseLogged || 0) + 1) <= 3) logErr('звонок: звук поставлен на паузу', new Error('pause'));
+            });
             try { c.ac = new (window.AudioContext || window.webkitAudioContext)(); if (c.ac.state === 'suspended') c.ac.resume().catch(() => { }); } catch (e) { c.ac = null; }
         }
         function callScreenAudioPrep(c) {
@@ -5542,6 +5589,35 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             out.push('журнал: ' + vpErrors.filter(x => /звон/.test(x)).slice(-6).join(' | '));
             return out.join('\n');
         }
+        async function callDiag() {
+            const c = callNet.cur, r = {};
+            let info = '';
+            try {
+                r['звонок'] = c ? (c.dir === 'out' ? 'исходящий' : 'входящий') + ', ' + c.state : 'нет активного звонка';
+                const el = x => x ? JSON.stringify({ paused: x.paused, muted: x.muted, volume: x.volume, поток: !!x.srcObject, готовность: x.readyState }) : null;
+                const trk = t => t ? t.readyState + (t.muted ? '/muted' : '') : '-';
+                if (c) {
+                    const pc = c.pc;
+                    r['signaling'] = pc ? pc.signalingState : '-';
+                    r['connection'] = pc ? pc.connectionState : '-';
+                    r['ice'] = pc ? pc.iceConnectionState : '-';
+                    r['ждём ответ, с'] = c.offerAt ? Math.round((Date.now() - c.offerAt) / 1000) : null;
+                    r['перезапусков ICE'] = c.iceRestartTries || 0;
+                    r['AudioContext'] = c.ac ? c.ac.state : null;
+                    r['звук звонка'] = el(c.audio);
+                    r['звук экрана'] = el(c.screenAudio);
+                    r['пауз звука'] = (c.pauses || []).length;
+                    r['возобновлений звука'] = c.audioResumes || 0;
+                    if (pc) console.table(pc.getTransceivers().map(t => ({ mid: t.mid, direction: t.direction, currentDirection: t.currentDirection, отправка: trk(t.sender.track), приём: trk(t.receiver.track) })));
+                    info = await callInfo(c);
+                }
+                r['журнал'] = vpErrors.filter(x => /звон/.test(x)).slice(-10).join(' | ');
+            } catch (e) { r['ошибка диагностики'] = String(e && e.message || e); }
+            console.table(r);
+            if (info) console.log(info);
+            return r;
+        }
+        pageWindow.itdvp.call = callDiag;
         function callPeer(c) {
             const pc = new RTCPeerConnection({ iceServers: CALL_ICE });
             const myCallId = String((typeof msgMyId === 'function' && msgMyId()) || (msgNet && msgNet.me && msgNet.me.id) || '');
@@ -5610,10 +5686,13 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         }
         async function callUnstick(c) {
             const pc = c.pc;
-            if (!pc || pc.signalingState !== 'have-local-offer' || !c.offerAt || Date.now() - c.offerAt < 8000) return false;
+            if (!pc || pc.signalingState !== 'have-local-offer' || !c.offerAt || Date.now() - c.offerAt < CALL_ANSWER_WAIT_MS) return false;
             try { await pc.setLocalDescription({ type: 'rollback' }); } catch (e) { return false; }
             c.offerAt = 0;
             return true;
+        }
+        function callOfferLost(c) {
+            if (c.pc && c.pc.signalingState === 'have-local-offer') c.offerAt = Date.now() - CALL_ANSWER_WAIT_MS;
         }
         function callOps(c, fn) {
             const run = async () => { try { await fn(); } catch (e) { logErr('звонок: операция', e); } };
@@ -5634,16 +5713,17 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                         c.iceRetryT = setTimeout(() => { if (c.state === 'talk') callIceRestart(c, reason); }, 1200);
                         return;
                     }
-                    c.iceRestartTries = (c.iceRestartTries || 0) + 1;
+                    c.iceRestartTries = pc.connectionState === 'connected' ? 0 : (c.iceRestartTries || 0) + 1;
                     if (c.iceRestartTries > 3) return callEnd(c, 'Связь потеряна', 0, 'ice-restart-max');
+                    c.offerAt = 0;
                     await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
-                    c.offerAt = Date.now();
                     await callGather(pc);
                     if (c.state === 'end') return;
                     await callSig(c.uid, 4, c.id, await callPackFit(pc.localDescription.sdp));
+                    c.offerAt = Date.now();
                     callPoke(c);
                     setTimeout(function () { msgSync().catch(e => logErr('звонок: синхронизация', e)) }, 300);
-                } catch (e) { logErr('звонок: ICE restart не удался', e); }
+                } catch (e) { callOfferLost(c); logErr('звонок: ICE restart не удался', e); }
                 finally { c.iceRestarting = false; }
             });
         }
@@ -5660,14 +5740,15 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 }
                 try {
                     c.makingOffer = true;
+                    c.offerAt = 0;
                     await pc.setLocalDescription();
-                    c.offerAt = Date.now();
                     await callGather(pc);
                     if (c.state === 'end') return;
                     await callSig(c.uid, 4, c.id, await callPackFit(pc.localDescription.sdp));
+                    c.offerAt = Date.now();
                     callPoke(c);
                     setTimeout(function () { msgSync().catch(e => logErr('звонок: синхронизация', e)) }, 300);
-                } catch (e) { logErr('звонок: ре-негоциация', e); }
+                } catch (e) { callOfferLost(c); logErr('звонок: ре-негоциация', e); }
                 finally { c.makingOffer = false; }
             });
         }
@@ -5685,9 +5766,9 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             dc.onmessage = e => {
                 if (e.data === 'bye') callEnd(c, 'Собеседник положил трубку', null, 'peer-bye');
                 else if (/^mute:[01]$/.test(e.data)) { c.peerMuted = e.data === 'mute:1'; callSub(c); }
-                else if (e.data === 'poke') { msgSync().catch(e => logErr('звонок: синхронизация', e)) }
-                else if (e.data === 'screen:0') { callScreenDrop(c); msgSync().catch(e => logErr('звонок: синхронизация', e)) }
-                else if (e.data === 'screen:1') { c.remoteScreenOn = true; callSharePaint(c); msgSync().catch(e => logErr('звонок: синхронизация', e)) }
+                else if (e.data === 'poke') { msgSync(false, 0).catch(e => logErr('звонок: синхронизация', e)) }
+                else if (e.data === 'screen:0') { callScreenDrop(c); msgSync(false, 0).catch(e => logErr('звонок: синхронизация', e)) }
+                else if (e.data === 'screen:1') { c.remoteScreenOn = true; callSharePaint(c); msgSync(false, 0).catch(e => logErr('звонок: синхронизация', e)) }
             };
             dc.onopen = () => { if (c.muted) try { dc.send('mute:1'); } catch (e) { } };
         }
@@ -5788,7 +5869,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             const m = c.warns || (c.warns = {});
             if ((m[key] || '') === (text || '')) return;
             m[key] = text || '';
-            c.warn = m.net || m.out || m.in || '';
+            c.warn = m.net || m.share || m.out || m.in || '';
             callSub(c);
         }
         function callSub(c, text) {
@@ -5813,7 +5894,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             try { if (navigator.wakeLock) navigator.wakeLock.request('screen').then(w => { if (c.state === 'end') w.release().catch(() => { }); else c.wake = w; }, () => { }); } catch (e) { }
             callSub(c, '00:00');
             c.tick = setInterval(() => { callSub(c, callMmss(Math.floor((Date.now() - t0) / 1000))); callVideoAlive(c); }, 1000);
-            c.syncT = setInterval(function () { if (apiPaused()) return; callNet.lastSync = Date.now(); msgSync().catch(e => logErr('звонок: синхронизация', e)) }, 3000);
             callPlay(c);
             c.timers.push(setTimeout(() => callMicCheck(c), 1000));
             callVoiceWatch(c);
@@ -5866,7 +5946,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (reason !== null) callSig(c.uid, 3, c.id, dur ? cat(new Uint8Array([reason]), be32(dur)) : new Uint8Array([reason])).catch(e => logErr('звонок: отбой', e));
             c.stops.splice(0).forEach(f => f());
             c.timers.forEach(clearTimeout);
-            clearInterval(c.tick); clearInterval(c.syncT); clearInterval(c.voiceT); clearInterval(c.audioWT); clearTimeout(c.lostT); clearTimeout(c.connT);
+            clearInterval(c.tick); clearInterval(c.voiceT); clearInterval(c.audioWT); clearTimeout(c.lostT); clearTimeout(c.connT);
             if (c.el) c.el.classList.remove('vp-voice');
             if (c.noiseT) { clearInterval(c.noiseT); c.noiseT = null; }
             if (c.rawStream) { c.rawStream.getTracks().forEach(t => t.stop()); c.rawStream = null; }
@@ -6046,7 +6126,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             noiseGate: 0.012
         };
         function callShareSupported() {
-            return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) && !matchMedia('(pointer: coarse)').matches;
+            return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) && !(matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches);
         }
         async function callShareTune(sender, mode) {
             const m = mode || CALL_SHARE_MODES[callShareModeKey()];
@@ -6078,19 +6158,24 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 try { vt.contentHint = mode.hint; } catch (e) { }
                 if (at) { try { at.contentHint = 'music'; } catch (e) { } }
                 const vs = c.pc.addTrack(vt, stream);
-                await callShareTune(vs, mode);
                 const as = at ? c.pc.addTrack(at, stream) : null;
                 c.screen = { stream, vt, at, vs, as };
                 vt.addEventListener('ended', () => { if (c.screen) callUnshare(c); });
                 if (c.dc && c.dc.readyState === 'open') try { c.dc.send('screen:1'); } catch (e) { }
                 callSharePaint(c);
                 callPaint(c);
-                callNegotiate(c);
+                await callShareTune(vs, mode);
             } catch (e) {
-                if (e && e.name === 'NotAllowedError') return;
+                const sys = e && e.name === 'NotAllowedError' && /system/i.test(String(e.message || ''));
+                if (e && e.name === 'NotAllowedError' && !sys) return;
                 logErr('звонок: экран', e);
-                callSub(c, 'Не удалось показать экран');
+                callShareFail(c, sys ? 'система не дала показать экран — проверь доступ в настройках' : 'не удалось показать экран');
             }
+        }
+        function callShareFail(c, text) {
+            callWarn(c, 'share', text);
+            clearTimeout(c.shareWarnT);
+            c.shareWarnT = setTimeout(() => callWarn(c, 'share', ''), 7000);
         }
         async function callShareSetMode(c, key) {
             GM_setValue('callShareMode', key);
@@ -6115,9 +6200,10 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             if (c.dc && c.dc.readyState === 'open') try { c.dc.send('screen:0'); } catch (e) { }
             callSharePaint(c);
             callPaint(c);
-            callNegotiate(c);
         }
         function callVideoAlive(c) {
+            const au = c.audio, sa = c.screenAudio;
+            if (c.state === 'talk' && !c.blocked && ((au && au.srcObject && au.paused) || (sa && sa.srcObject && sa.paused))) { c.audioResumes = (c.audioResumes || 0) + 1; callPlay(c); }
             if (!c.el) return;
             c.el.querySelectorAll('video').forEach(v => {
                 if (v.srcObject && v.paused && v.offsetWidth) { const p = v.play(); if (p && p.catch) p.catch(() => { }); }
@@ -9013,8 +9099,17 @@ var __vpBannerAuto = (() => {
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
-            ['3.9.0.4', '4 ноября 2026', [
-                'Оптимизация: лента, меню и стекло меньше нагружают процессор при прокрутке, на слабых устройствах заметно меньше тормозов'
+            ['3.9.1', '5 ноября 2026', [
+                'Клуб: «в сети» теперь обновляется быстрее и не зависит от числа людей — мод сам сообщает, что ты в сети, а остальные читают это одним запросом'
+                ,'Настройки: переключатель «Показывать, что я в сети» (Настройки → Вид) — выключи, и другие не увидят тебя в сети'
+                ,'Галочки и стили других людей обновляются в среднем за 3 минуты вместо 10'
+                ,'Сообщения и звонки доходят быстрее, пока вкладка открыта'
+                ,'Звонки: показ экрана работает и при медленном соединении'
+                ,'Звонки: звук собеседника сам возвращается, если его поставили на паузу'
+                ,'Звонки: если показ экрана не удался, видно причину'
+                ,'Звонки: кнопка показа экрана больше не пропадает на ноутбуках с сенсорным экраном'
+                ,'Мод меньше мешает сайту: пока сайт сам загружает много данных, фоновые запросы мода ждут, а пауза при слишком частых запросах теперь точечная'
+                ,'Оптимизация: лента, меню и стекло меньше нагружают процессор при прокрутке, на слабых устройствах заметно меньше тормозов'
                 ,'Стекло подстраивается под устройство: слабое сразу получает облегчённое, а сильное с видеокартой остаётся с полным и возвращается к нему после временных тормозов'
                 ,'Звонки и сообщения: меньше лишних запросов, пока вкладка скрыта или сайт просит подождать'
             ]],
@@ -9637,6 +9732,8 @@ var __vpBannerAuto = (() => {
         function sendComment(postId, content) { return api(`/api/posts/${postId}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }); }
         function editComment(id, content) { return api(`/api/comments/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }); }
         async function api(path, opts = {}) {
+            const pkey = netKey(path, opts.method);
+            if (pkey && pathPaused(pkey)) return new Response('{}', { status: 429, headers: { 'Retry-After': '30', 'X-VP-Local': '1' } });
             const call = async t => {
                 const t0 = Date.now();
                 netNote(path, opts.method, true);
@@ -9649,8 +9746,8 @@ var __vpBannerAuto = (() => {
             };
             let res = await call(await getAccessToken());
             if (res.status === 401) res = await call(await getAccessToken(true));
-            apiPause(res);
-            if (opts.method && opts.method !== 'GET' && opts.method !== 'POST' && /\/comments/.test(path)) try { if (msgNet.cache) msgNet.cache.dirty = true; } catch (e) { }
+            apiPause(res, pkey);
+            if (opts.method && opts.method !== 'GET' && opts.method !== 'POST' && /\/comments/.test(path)) try { if (msgNet.cache && !pulseOwn(path)) msgNet.cache.dirty = true; } catch (e) { }
             return res;
         }
 
@@ -9761,7 +9858,7 @@ var __vpBannerAuto = (() => {
         }
 
 
-        let verifyLoad = null, verifyLoadAt = 0;
+        const VERIFY_GATE_MS = 150 * 1000, VERIFY_READ_AGE = 120 * 1000, VERIFY_USE_AGE = 10 * 60 * 1000, SERVICE_READ_AGE = 90 * 1000;
         async function allComments(postId, maxPages = 30, opts = {}) {
             const all = [];
             let cursor = null;
@@ -9778,12 +9875,45 @@ var __vpBannerAuto = (() => {
             }
             return all;
         }
-        function loadVerificationComments(fresh) {
-            if (!fresh && verifyLoad && Date.now() - verifyLoadAt < 90000) return verifyLoad;
-            verifyLoadAt = Date.now();
-            verifyLoad = allComments(VERIFICATION_POST_ID);
-            verifyLoad.catch(() => { verifyLoad = null; });
-            return verifyLoad;
+        const svcCache = new Map();
+        function serviceComments(postId, o = {}) {
+            const pages = o.pages || 30, sort = o.sort || '', key = postId + '|' + pages + '|' + sort;
+            const maxAge = o.maxAge === undefined ? SERVICE_READ_AGE : o.maxAge, e = svcCache.get(key), now = Date.now();
+            if (e && maxAge >= 0 && now - e.at <= maxAge && !(o.newerThan && e.at < o.newerThan)) return e.p;
+            const ne = { at: now, p: allComments(postId, pages, sort ? { sort } : {}) };
+            ne.p.catch(() => { if (svcCache.get(key) === ne) svcCache.delete(key); });
+            svcCache.set(key, ne);
+            return ne.p;
+        }
+        function serviceCommentsDrop(postId) {
+            for (const k of [...svcCache.keys()]) if (k.startsWith(postId + '|')) svcCache.delete(k);
+        }
+        function serviceCommentsPut(postId, c) {
+            if (!c || !c.id) return;
+            for (const [k, e] of svcCache) {
+                if (!k.startsWith(postId + '|')) continue;
+                const p = e.p.then(list => {
+                    const i = list.findIndex(x => x.id === c.id), out = list.slice();
+                    if (i >= 0) { out[i] = { ...list[i], ...c, author: c.author || list[i].author }; return out; }
+                    const known = c.author && list.find(x => x.author && x.author.id === c.author.id);
+                    return [{ createdAt: new Date().toISOString(), ...c, author: known ? known.author : c.author }, ...out];
+                });
+                p.catch(() => { });
+                e.p = p;
+            }
+        }
+        async function serviceCommentsWrote(postId, res, content, id) {
+            try {
+                if (!res || !res.ok) return;
+                if (id) { serviceCommentsPut(postId, { id, content }); return; }
+                const j = await res.clone().json().catch(() => null), d = j && (j.data || j), c = d && (d.comment || d);
+                if (!c || !c.id) { serviceCommentsDrop(postId); return; }
+                const me = { id: meData && meData.id, username: myUsername, displayName: myDisplayName };
+                serviceCommentsPut(postId, { id: c.id, content, author: c.author && c.author.id ? c.author : me, createdAt: c.createdAt || new Date().toISOString() });
+            } catch (e) { serviceCommentsDrop(postId); }
+        }
+        function loadVerificationComments(maxAge) {
+            return serviceComments(VERIFICATION_POST_ID, { maxAge: maxAge === true ? -1 : typeof maxAge === 'number' ? maxAge : VERIFY_READ_AGE });
         }
         function verifiedInfo(name) {
             try {
@@ -9796,44 +9926,50 @@ var __vpBannerAuto = (() => {
             } catch (e) { return null; }
         }
 
+        function verifyStore(comments) {
+            const lists = parseAllOwnerLists(comments);
+            const now = Date.now();
+            const verifiedUsers = {}, looks = new Map(), lookAt = new Map(), myId = (meData && meData.id) || (siteAuth.me && siteAuth.me.id) || '';
+            for (const c of comments) {
+                const a = c.author;
+                if (!a || !a.id || looks.has(a.id)) continue;
+                const l = parseLook(c.content);
+                if (l) { looks.set(a.id, l); if (l.t) lookAt.set(a.id, l.t * 864e5); }
+            }
+            for (const c of comments) {
+                const name = c.author?.username;
+                const parsed = parseCode(c.content);
+                if (!name || verifiedUsers[name] || !isAuthorCode(c.author, parsed)) continue;
+                const a = c.author, ava = a.avatar && (a.avatar.url || a.avatar) || a.avatarUrl || a.emoji;
+                const seen = Math.max(lookAt.get(a.id) || 0, GONE_FROM);
+                const revokedAt = ((lists.revoked && lists.revoked.get(String(a.id).toLowerCase())) || 0) * 1000;
+                const isRevoked = revokedAt > 0 && seen <= revokedAt;
+                const gone = !isRevoked && a.id !== OWNER_ID && a.id !== myId && !(myUsername && name === myUsername) && now - seen > GONE_MS;
+                verifiedUsers[name] = {
+                    code: parsed.code, commentId: c.id, hasMod: true, flags: parsed.flags,
+                    id: a.id || undefined,
+                    displayName: a.displayName || a.display_name || undefined,
+                    avatar: typeof ava === 'string' ? ava : undefined,
+                    state: a.id === OWNER_ID ? 'approved' : isRevoked ? 'revoked' : gone ? 'gone' : resolveVerifyState(a.id, lists, now),
+                    look: gone ? undefined : looks.get(a.id) || undefined
+                };
+            }
+            if (JSON.stringify(verifiedUsers) !== localStorage.getItem(VERIFICATION_STORAGE_KEY)) {
+                localStorage.setItem(VERIFICATION_STORAGE_KEY, JSON.stringify(verifiedUsers));
+            }
+            return verifiedUsers;
+        }
+        async function verifyApplyLocal() {
+            try { return verifyStore(await loadVerificationComments(Infinity)); } catch (e) { logErr('верификация: пересчёт', e); return null; }
+        }
         async function checkAllComments(fresh) {
             if (isVerifying) return null;
-            if (!fresh && Date.now() - (+GM_getValue('vp_ver_at', 0) || 0) < 4 * 60 * 1000) {
+            if (!fresh && Date.now() - (+GM_getValue('vp_ver_at', 0) || 0) < VERIFY_GATE_MS) {
                 try { const kept = JSON.parse(localStorage.getItem(VERIFICATION_STORAGE_KEY) || 'null'); if (kept) return kept; } catch (e) { }
             }
             isVerifying = true;
             try {
-                const comments = await loadVerificationComments(fresh);
-                const lists = parseAllOwnerLists(comments);
-                const now = Date.now();
-                const verifiedUsers = {}, looks = new Map(), lookAt = new Map(), myId = (meData && meData.id) || (siteAuth.me && siteAuth.me.id) || '';
-                for (const c of comments) {
-                    const a = c.author;
-                    if (!a || !a.id || looks.has(a.id)) continue;
-                    const l = parseLook(c.content);
-                    if (l) { looks.set(a.id, l); if (l.t) lookAt.set(a.id, l.t * 864e5); }
-                }
-                for (const c of comments) {
-                    const name = c.author?.username;
-                    const parsed = parseCode(c.content);
-                    if (!name || verifiedUsers[name] || !isAuthorCode(c.author, parsed)) continue;
-                    const a = c.author, ava = a.avatar && (a.avatar.url || a.avatar) || a.avatarUrl || a.emoji;
-                    const seen = Math.max(lookAt.get(a.id) || 0, GONE_FROM);
-                    const revokedAt = ((lists.revoked && lists.revoked.get(String(a.id).toLowerCase())) || 0) * 1000;
-                    const isRevoked = revokedAt > 0 && seen <= revokedAt;
-                    const gone = !isRevoked && a.id !== OWNER_ID && a.id !== myId && !(myUsername && name === myUsername) && now - seen > GONE_MS;
-                    verifiedUsers[name] = {
-                        code: parsed.code, commentId: c.id, hasMod: true, flags: parsed.flags,
-                        id: a.id || undefined,
-                        displayName: a.displayName || a.display_name || undefined,
-                        avatar: typeof ava === 'string' ? ava : undefined,
-                        state: a.id === OWNER_ID ? 'approved' : isRevoked ? 'revoked' : gone ? 'gone' : resolveVerifyState(a.id, lists, now),
-                        look: gone ? undefined : looks.get(a.id) || undefined
-                    };
-                }
-                if (JSON.stringify(verifiedUsers) !== localStorage.getItem(VERIFICATION_STORAGE_KEY)) {
-                    localStorage.setItem(VERIFICATION_STORAGE_KEY, JSON.stringify(verifiedUsers));
-                }
+                const verifiedUsers = verifyStore(await loadVerificationComments(fresh ? true : VERIFY_READ_AGE));
                 GM_setValue('vp_ver_at', Date.now());
                 return verifiedUsers;
             } catch (e) {
@@ -9849,7 +9985,9 @@ var __vpBannerAuto = (() => {
             const myId = meData && meData.id;
             if (!myId || myId === OWNER_ID) return;
             try {
-                const all = await loadVerificationComments();
+                const known = verifiedInfo(myUsername || '');
+                if (known && known.id === myId && known.state === 'approved') return;
+                const all = await loadVerificationComments(VERIFY_USE_AGE);
                 const lists = parseAllOwnerLists(all);
                 const myLookC = all.find(c => c.author && c.author.id === myId && parseLook(c.content));
                 const myLook = myLookC ? parseLook(myLookC.content) : null;
@@ -9862,14 +10000,16 @@ var __vpBannerAuto = (() => {
                 const res = mine
                     ? await editComment(mine.id, content)
                     : await sendComment(VERIFICATION_POST_ID, content);
-                if (res.ok) await checkAllComments(true);
+                if (res.ok) { await serviceCommentsWrote(VERIFICATION_POST_ID, res, content, mine && mine.id); await verifyApplyLocal(); }
             } catch (e) { logErr('запрос галочки', e); }
         }
 
         async function verifyMyself() {
             if (!myUsername) return false;
             try {
-                const all = await loadVerificationComments();
+                const known = verifiedInfo(myUsername);
+                if (known && meData && meData.id && known.id === meData.id && known.code === generateCode(meData.id) && String(known.flags)[0] === '1') return true;
+                const all = await loadVerificationComments(VERIFY_USE_AGE);
                 const myId = (meData && meData.id) || (all.find(c => c.author?.username === myUsername) || {}).author?.id;
                 const mine = all.filter(c => (myId ? c.author?.id === myId : c.author?.username === myUsername) && parseCode(c.content));
                 const byId = c => myId && parseCode(c.content).code === generateCode(myId);
@@ -9885,7 +10025,8 @@ var __vpBannerAuto = (() => {
                         body: JSON.stringify({ content: code })
                     });
                 if (!res.ok) return false;
-                await checkAllComments(true);
+                await serviceCommentsWrote(VERIFICATION_POST_ID, res, code, stale && stale.id);
+                await verifyApplyLocal();
                 return true;
             } catch (e) {
                 console.warn('[ITD VP] верификация себя:', e);
@@ -9989,9 +10130,9 @@ var __vpBannerAuto = (() => {
                 createScrollTopButton();
 
                 checkAllComments().then(() => { markVerifiedUsers(); return verifyMyself(); }).then(verifyRequestAgain).catch(e => logErr('проверка', e)).then(publishLook);
-                sched.add('verify', () => checkAllComments(), { every: 10 * 60 * 1000, net: true, visible: true });
+                sched.add('verify', () => checkAllComments(), { every: 3 * 60 * 1000, net: true, visible: true });
 
-                lbSyncFromServer();
+                setTimeout(() => { if (!apiPaused()) lbSyncFromServer(); }, 25000);
 
                 function findAllMyAvatars() {
                     const primaryAvatar = myAvatarEl();
@@ -11136,10 +11277,10 @@ var __vpBannerAuto = (() => {
             const myAccountId = () => (meData && meData.id) || (verifiedInfo(myUsername || '') || {}).id || null;
             const partsKey = () => 'vp_sticker_parts_' + myAccountId();
             const remotePacksAt = () => { const f = String((verifiedInfo(myUsername || '') || {}).flags || ''); return f.length > 1 ? +f.slice(1) * 1000 : 0; };
-            async function packParts(scan) {
+            async function packParts(scan, newerThan) {
                 if (!scan) { const saved = GM_getValue(partsKey(), null); if (saved) return saved; }
                 const me = myAccountId();
-                const list = (await allComments(STICKER_POST_ID)).filter(c => c.author && c.author.id === me && /^ITDXS \d+\/\d+ /.test(c.content || ''))
+                const list = (await serviceComments(STICKER_POST_ID, { newerThan })).filter(c => c.author && c.author.id === me && /^ITDXS \d+\/\d+ /.test(c.content || ''))
                     .map(c => { const m = c.content.match(/^ITDXS (\d+)\/(\d+) (\S*)/); return { id: c.id, i: +m[1], n: +m[2], d: m[3] }; });
                 GM_setValue(partsKey(), list.map(({ id, i, n }) => ({ id, i, n })));
                 return list;
@@ -11157,7 +11298,7 @@ var __vpBannerAuto = (() => {
             async function pullPacks() {
                 const at = remotePacksAt();
                 if (!at || at <= packsAt + 999) return;
-                const parts = (await packParts(true)).filter(p => p.n).sort((a, b) => a.i - b.i);
+                const parts = (await packParts(true, at)).filter(p => p.n).sort((a, b) => a.i - b.i);
                 const n = parts.length && parts[0].n;
                 if (!n || parts.length < n || !parts.slice(0, n).every((p, k) => p.i === k + 1 && p.n === n)) return;
                 const remote = decodePacks(parts.slice(0, n).map(p => p.d).join(''));
@@ -11180,10 +11321,12 @@ var __vpBannerAuto = (() => {
                     if (slots[k]) {
                         const res = await patchComment(slots[k], content);
                         if (!res.ok) throw new Error('паки: правка ' + res.status);
+                        await serviceCommentsWrote(STICKER_POST_ID, res, content, slots[k]);
                         saved.push({ id: slots[k], i: k < chunks.length ? k + 1 : 0, n: k < chunks.length ? chunks.length : 0 });
                     } else {
                         const res = await sendComment(STICKER_POST_ID, content);
                         if (!res.ok) throw new Error('паки: запись ' + res.status);
+                        await serviceCommentsWrote(STICKER_POST_ID, res, content);
                         const j = await res.json();
                         saved.push({ id: (j.data || j).id, i: k + 1, n: chunks.length });
                     }
@@ -11191,7 +11334,7 @@ var __vpBannerAuto = (() => {
                 GM_setValue(partsKey(), saved);
                 const code = String(mine.code) + '1' + Math.floor(packsAt / 1000);
                 const res = await patchComment(mine.commentId, code);
-                if (res.ok) await checkAllComments(true);
+                if (res.ok) { await serviceCommentsWrote(VERIFICATION_POST_ID, res, code, mine.commentId); await verifyApplyLocal(); }
             }
             async function syncPacks(up) {
                 if (!STICKER_POST_ID || syncing || !myUsername || !myAccountId()) return;
@@ -11676,6 +11819,15 @@ var __vpBannerAuto = (() => {
         const msgBodyText = t => { const x = String(t || ''); return /^> /.test(x) ? x.replace(/^> [^\n]*\n?/, '') ||(/^> Переслано/.test(x) ? 'Пересланное сообщение' : 'Ответ') : x; };
         const msgPreview = m => { const t = msgBodyText(m.text); return m.imgs && m.imgs.length > 1 ? `${m.imgs.length} фото` + (t ? ' · ' + t : '') : m.img ? (t || 'Фото') : t; };
         const msgNet = { keys: new Map(), vols: [], me: null, pairs: new Map(), conv: new Map(), syncing: null, blocks: {} };
+        const MSG_SHARE_MS = 2000, MSG_DONE_MS = 700, MSG_WARM_MS = 5 * 60e3, MSG_STAMP_KEY = 'vp_msg_sync';
+        const MSG_READ_KEY = netKey('/api/posts/' + MSG_POST_ID + '/comments', 'GET');
+        const msgAge = () => Date.now() - (msgNet.stamp || 0);
+        const msgSharedAge = () => { const a = Date.now() - (+GM_getValue(MSG_STAMP_KEY, 0) || 0); return a < 0 ? 1e9 : a; };
+        function msgMarkShared(now) {
+            if (now - (msgNet.stampGm || 0) < 1000) return;
+            msgNet.stampGm = now;
+            try { GM_setValue(MSG_STAMP_KEY, now); } catch (e) { }
+        }
         const msgBlocks = () => GM_getValue(acctKey('msgBlocked'), {});
         function msgIsBlocked(uid) { const p = msgNet.blocks[uid] || msgBlocks()[uid]; return !!(p && p.length && !p[p.length - 1][1]); }
         const msgBlockedMe = uid => !!(msgNet.blockedMe && msgNet.blockedMe.get(uid) && msgNet.blockedMe.get(uid).on);
@@ -11774,15 +11926,18 @@ var __vpBannerAuto = (() => {
             } catch (e) { return null; }
         }
         async function msgComments() {
-            const ca = msgNet.cache || (msgNet.cache = { byId: new Map(), full: 0, dirty: false, light: true });
+            const ca = msgNet.cache || (msgNet.cache = { byId: new Map(), full: 0, dirty: false, light: true, pages: 1 });
             const full = async () => {
                 const list = await allComments(MSG_POST_ID, 30);
                 ca.byId = new Map(list.map(c => [c.id, c]));
                 ca.full = Date.now();
                 ca.dirty = false;
+                ca.pages = Math.max(1, Math.ceil(list.length / 100));
                 return list;
             };
-            if (!ca.full || ca.dirty || !ca.light || Date.now() - ca.full > ((msgNet.hotUntil || 0) > Date.now() ? 10000 : 60000)) return full();
+            const hot = (msgNet.hotUntil || 0) > Date.now(), base = hot ? Math.max(10000, (ca.pages || 1) * 2500) : 60000;
+            const ttl = msgNet.ttlFn ? msgNet.ttlFn(hot, base) : base;
+            if (!ca.full || ca.dirty || !ca.light || Date.now() - ca.full > ttl) return full();
             let newest = 0, first = true, bad = false;
             ca.byId.forEach(c => { const t = Date.parse(c.createdAt || ''); if (t > newest) newest = t; });
             await allComments(MSG_POST_ID, 6, {
@@ -11805,9 +11960,19 @@ var __vpBannerAuto = (() => {
             if (bad) { ca.light = false; return full(); }
             return [...ca.byId.values()];
         }
-        function msgSync(force) {
-            if (force && msgNet.cache) msgNet.cache.dirty = true;
-            if (msgNet.syncing) return msgNet.again || (msgNet.again = msgNet.syncing.catch(() => { }).then(() => { msgNet.again = null; return msgSync(); }));
+        function msgSync(force, shareMs) {
+            const ca = msgNet.cache, sh = msgNet.share;
+            if (force && ca) ca.dirty = true;
+            const need = !!force || !!(ca && ca.dirty && !(msgNet.syncing && sh && sh.dirty));
+            const lim = shareMs === undefined ? MSG_SHARE_MS : shareMs;
+            if (!need && sh && sh.at >= (msgNet.wroteAt || 0) && (msgNet.syncing ? Date.now() - sh.at < lim : Date.now() - (sh.done || 0) < Math.min(lim, MSG_DONE_MS))) return sh.p;
+            if (msgNet.syncing) {
+                if (need) msgNet.againForce = true;
+                return msgNet.again || (msgNet.again = msgNet.syncing.catch(() => { }).then(() => { const f = msgNet.againForce; msgNet.again = null; msgNet.againForce = false; return msgSync(f); }));
+            }
+            msgNet.stamp = Date.now();
+            const mine = msgNet.share = { at: msgNet.stamp, p: null, dirty: !!(ca && ca.dirty), done: 0 };
+            msgMarkShared(msgNet.stamp);
             msgNet.syncing = (async () => {
                 const keys = new Map(), vols = [];
                 let callNote = null;
@@ -11832,8 +11997,19 @@ var __vpBannerAuto = (() => {
                 await msgDecryptAll();
                 try { callCheck(); } catch (e) { logErr('звонок', e); }
                 document.dispatchEvent(new Event('vp-msg-synced'));
-            })().finally(() => { msgNet.syncing = null; });
+            })().finally(() => { msgNet.syncing = null; mine.done = Date.now(); });
+            mine.p = msgNet.syncing;
             return msgNet.syncing;
+        }
+        async function msgSyncPatient() {
+            try { return await msgSync(false, 500); }
+            catch (e) {
+                if (!/429/.test(String(e && e.message))) throw e;
+                const left = (pathPauses()[MSG_READ_KEY] || 0) - Date.now();
+                if (left > 60000) throw e;
+                await new Promise(r => setTimeout(r, Math.max(0, left) + 600));
+                return msgSync(false, 0);
+            }
         }
         async function msgLoadMe() {
             const id = msgMyId(), k = id && msgNet.keys.get(id);
@@ -11857,6 +12033,7 @@ var __vpBannerAuto = (() => {
             const res = old
                 ? await editComment(old.cid, content)
                 : await sendComment(MSG_POST_ID, content);
+            msgNet.wroteAt = Date.now();
             if (!res.ok) throw new Error('Ключ не сохранился: ' + res.status);
             await msgRemember(id, pk8, b64u.enc(pub));
             await msgSync();
@@ -11961,6 +12138,10 @@ var __vpBannerAuto = (() => {
             });
             msgNet.pins = pins; msgNet.reacts = reacts; msgNet.reads = reads; msgNet.calls = calls; msgNet.sigs = sigs;
             msgNet.conv = conv;
+            let act = 0;
+            conv.forEach(list => { const m = list[list.length - 1]; if (m && m.at > act) act = m.at; });
+            const calm = act ? srvNow() - act * 1000 : 1e12;
+            msgNet.warmUntil = calm < MSG_WARM_MS ? Date.now() + MSG_WARM_MS - calm : 0;
         }
         async function msgPrepImage(file) {
             if (file.type === 'image/gif') { if (file.size > 5 * 1024 * 1024) throw new Error('GIF больше 5 МБ'); return file; }
@@ -12057,6 +12238,7 @@ var __vpBannerAuto = (() => {
                 const res = cid
                     ? await editComment(cid, content)
                     : await sendComment(MSG_POST_ID, content);
+                msgNet.wroteAt = Date.now();
                 if (!res.ok) throw new Error('сообщение: ' + res.status);
                 const d = await res.json().then(j => j && (j.data || j.comment || j)).catch(() => null);
                 if (d && d.content != null && d.content !== content) return false;
@@ -12707,11 +12889,31 @@ var __vpBannerAuto = (() => {
             msgToastEl = el;
             setTimeout(() => el.remove(), 7000);
         }
-        async function msgBackground() {
-            if (!myUsername || apiPaused() || (document.hidden && (!msgNet.me || !leadTab()))) return;
-            const idle = Date.now() - msgActive.at, gap = Math.max(idle < 3 * 60e3 ? 20e3 : idle < 15 * 60e3 ? 120e3 : 300e3, !document.hidden && !leadTab() ? 120e3 : 0);
-            if (Date.now() - (msgBackground.at || 0) < gap) return;
-            msgBackground.at = Date.now();
+        const msgGap = () => {
+            const idle = Date.now() - msgActive.at, g = idle < 3 * 60e3 ? 20e3 : idle < 15 * 60e3 ? 120e3 : 300e3;
+            return document.hidden ? Math.max(g, 60e3) : msgNet.me ? g : Math.max(g, 120e3);
+        };
+        msgNet.ttlFn = (hot, base) => {
+            const pages = (msgNet.cache && msgNet.cache.pages) || 1;
+            if (callNet.cur && callNet.cur.state === 'talk') return hot ? Math.max(base, 20e3) : 60e3;
+            if (hot) return base;
+            if (document.hidden) return 60e3;
+            if ((msgNet.warmUntil || 0) > Date.now()) return Math.max(30e3, pages * 5e3);
+            return msgGap() < 60e3 ? Math.max(110e3, pages * 8e3) : 60e3;
+        };
+        async function msgBackground(force) {
+            if (!myUsername || apiPaused()) return;
+            const owed = msgBackground.owed, due = !force && !owed;
+            let gap = 0;
+            if (due) {
+                gap = msgGap();
+                if (msgAge() < gap) return;
+            }
+            const lead = leadTab();
+            if (document.hidden && (!msgNet.me || !lead)) return;
+            if (due && !lead && msgAge() < 120e3 && msgSharedAge() < gap + 5e3) return;
+            if (apiPaused(MSG_READ_KEY)) { msgBackground.owed = true; return; }
+            msgBackground.owed = false;
             try { await msgSync(); } catch (e) { return; }
             const myId = msgMyId(), plainCalls = ((msgNet.callNote && msgNet.callNote.list) || []).filter(x => x.u === myId).map(x => x.ts);
             const callAt = Math.max(0, ...(msgNet.me ? msgNet.calls || [] : []), ...plainCalls), callSeen = +GM_getValue(acctKey('vp_call_seen'), 0) || 0;
@@ -12734,19 +12936,20 @@ var __vpBannerAuto = (() => {
         const msgWake = () => {
             const was = Date.now() - msgActive.at;
             msgActive.at = Date.now();
-            if (was > 3 * 60e3) { msgBackground.at = 0; msgBackground(); }
+            if (was > 3 * 60e3) msgBackground(true);
         };
         ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => document.addEventListener(ev, msgWake, { capture: true, passive: true }));
-        setTimeout(msgBackground, 12000);
-        sched.add('msgBackground', msgBackground, { every: 60000, net: true });
+        sched.add('msgBackground', msgBackground, { every: () => document.hidden ? 15000 : 2500, net: true, prio: 'high', first: 7000 });
         sched.add('callSync', () => {
-            const c = callNet.cur, open = messagesOverlay && messagesOverlay.classList.contains('vp-open');
-            const every = c && /^(calling|ringing|connecting)$/.test(c.state) ? 4000 : document.hidden ? 0 : open ? 15000 : 0;
-            if (!every || Date.now() - callNet.lastSync < every || msgNet.syncing || !msgNet.me || apiPaused()) return;
+            const c = callNet.cur, st = c && c.state, open = messagesOverlay && messagesOverlay.classList.contains('vp-open');
+            const talk = st === 'talk', call = talk || /^(calling|ringing|connecting)$/.test(st);
+            const every = talk ? 3000 : call ? 4000 : document.hidden ? 0 : open ? 15000 : 0;
+            if (!every || !msgNet.me || apiPaused(MSG_READ_KEY) || (!talk && msgNet.syncing)) return;
+            if ((call ? Date.now() - callNet.lastSync : msgAge()) < every - 100) return;
             callNet.lastSync = Date.now();
-            msgSync().catch(() => { });
-        }, { every: 1000, net: true });
-        document.addEventListener('visibilitychange', () => { if (!document.hidden) { msgBackground.at = 0; msgBackground(); } });
+            msgSync(false, 500).catch(e => { if (talk) logErr('звонок: синхронизация', e); });
+        }, { every: () => callNet.cur && callNet.cur.state === 'talk' ? 250 : 1000, prio: 'high' });
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) msgBackground(true); });
         const msgToastCss = addCss(`
         .vp-msg-badge { position: absolute; top: -6px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; font-size: 11px; font-weight: 600;
             line-height: 18px; text-align: center; color: #fff; background-color: var(--accent-like, #f91880); border-radius: 9px; pointer-events: none; }
@@ -13517,7 +13720,7 @@ var __vpBannerAuto = (() => {
                 msgNet.hotUntil = Date.now() + 120000;
                 feed.textContent = ''; input.disabled = true; input.maxLength = MSG_TEXT_MAX;
                 const wait = note('Загрузка переписки…', 'lock');
-                try { await msgSync(); } catch (e) { if (my === renderN) wait.textContent = 'Не загрузилось — открой чат ещё раз'; logErr('сообщения', e); return; }
+                try { await msgSyncPatient(); } catch (e) { if (my === renderN) wait.textContent = 'Не загрузилось — открой чат ещё раз'; logErr('сообщения', e); return; }
                 if (M.current !== d || my !== renderN) return;
                 if (d.login && !d.support && !isApprovedId(msgMyId())) {
                     feed.textContent = '';
@@ -13657,14 +13860,14 @@ var __vpBannerAuto = (() => {
             const msgPoll = sched.add('msgPoll', async () => {
                 if (!root.isConnected) return msgPoll.remove();
                 const talking = callNet.cur && callNet.cur.state === 'talk';
-                if ((!msgsOpen && !talking) || !msgNet.me || apiPaused() || (document.hidden && !talking)) return;
+                if ((!msgsOpen && !talking) || !msgNet.me || apiPaused(MSG_READ_KEY) || (document.hidden && !talking)) return;
                 if (M.current) msgNet.hotUntil = Date.now() + 120000;
-                if (Date.now() - callNet.lastSync > 12000) { callNet.lastSync = Date.now(); try { await msgSync(); } catch (e) { return; } }
+                if (msgAge() > 12000) { try { await msgSync(); } catch (e) { return; } }
                 msgFillDialogs();
                 if (!M.current) return renderList();
                 const tt = msgTarget(M.current), list = msgThread(tt);
                 if (list.length !== M.current.shown || M.chatSig(tt.uid) !== M.current.sig) msgRefreshChat(M.current);
-            }, { every: 20000, net: true });
+            }, { every: 20000, net: true, prio: 'high' });
             root.refreshList = () => { if (!M.current) { msgFillDialogs(); renderList(); } };
             document.addEventListener('vp-looks-ready', () => {
                 if (!root.isConnected) return;
@@ -16452,24 +16655,33 @@ var __vpBannerAuto = (() => {
         let hc = null, hcTimer = 0, hcHide = 0, hcUser = null, hcLink = null;
         const loginOf = href => ((href || '').match(/^\/@([\w.]+)/) || [])[1] || null;
         const HC_TTL = 10 * 60 * 1000;
-        function hcStored(key) {
-            try { const v = JSON.parse(sessionStorage.getItem('vp-hc:' + key) || 'null'); return v && Date.now() - v.at < HC_TTL ? v.d : null; } catch (e) { return null; }
+        function hcStored(key, maxAge = HC_TTL) {
+            try { const v = JSON.parse(sessionStorage.getItem('vp-hc:' + key) || 'null'); return v && v.d && Date.now() - v.at <= Math.min(maxAge, HC_TTL) ? v : null; } catch (e) { return null; }
         }
         function hcStore(key, d) {
             try { if (d) sessionStorage.setItem('vp-hc:' + key, JSON.stringify({ at: Date.now(), d })); } catch (e) { }
             return d;
         }
-        function hcData(user, waitMs = 0) {
-            const key = user.toLowerCase();
-            if (siteUsers.has(key)) return Promise.resolve(siteUsers.get(key));
-            if (!hcCache.has(key)) {
-                const stored = waitMs ? null : hcStored(key);
-                hcCache.set(key, stored ? Promise.resolve(stored) : siteUser(user, waitMs).then(site => site || api('/api/users/' + encodeURIComponent(user))
-                    .then(r => r.ok ? r.json() : null)
-                    .then(j => j && (j.data || j.user || j))).then(d => hcStore(key, d)).catch(() => null));
-            }
-            return hcCache.get(key);
+        const siteUserAt = new Map(), siteUsersPut = siteUsers.set.bind(siteUsers);
+        siteUsers.set = (k, v) => { siteUserAt.set(k, Date.now()); return siteUsersPut(k, v); };
+        const HC_MISS_MS = 60 * 1000;
+        function userInfoCached(user, maxAgeMs = HC_TTL, waitMs = 0) {
+            const key = String(user || '').toLowerCase();
+            if (!key) return Promise.resolve(null);
+            const now = Date.now();
+            if (siteUsers.has(key) && now - (siteUserAt.get(key) || 0) <= maxAgeMs) return Promise.resolve(siteUsers.get(key));
+            const e = hcCache.get(key);
+            if (e && now - e.at <= (e.d === null ? Math.min(maxAgeMs, HC_MISS_MS) : maxAgeMs)) return e.p;
+            const stored = waitMs ? null : hcStored(key, maxAgeMs);
+            if (stored) { hcCache.set(key, { at: stored.at, d: stored.d, p: Promise.resolve(stored.d) }); return hcCache.get(key).p; }
+            const ne = { at: now, d: undefined };
+            ne.p = (siteUsers.has(key) ? Promise.resolve(null) : siteUser(user, waitMs)).then(site => site || api('/api/users/' + encodeURIComponent(user))
+                .then(r => r.ok ? r.json() : null)
+                .then(j => j && (j.data || j.user || j))).then(d => { ne.d = d || null; if (!d) ne.at = Date.now(); return hcStore(key, d); }).catch(() => { ne.d = null; ne.at = Date.now(); return null; });
+            hcCache.set(key, ne);
+            return ne.p;
         }
+        const hcData = (user, waitMs = 0) => userInfoCached(user, HC_TTL, waitMs);
         const pick = (...vals) => vals.find(v => v !== undefined && v !== null && v !== '');
         const siteAva = d => {
             const a = pick(d.avatar && (d.avatar.url || d.avatar), d.avatarUrl);
@@ -18829,7 +19041,7 @@ var __vpBannerAuto = (() => {
             const me = (meData && meData.id) || (siteAuth.me && siteAuth.me.id);
             if (!me || Date.now() - (+GM_getValue(acctKey('vp_stats_sync_at'), 0) || 0) < 30 * 60e3) return hist;
             GM_setValue(acctKey('vp_stats_sync_at'), Date.now());
-            const mine = (await allComments(STICKER_POST_ID)).filter(c => c.author && c.author.id === me && openText(c.content).startsWith(STATS_TAG));
+            const mine = (await serviceComments(STICKER_POST_ID, { maxAge: 120000 })).filter(c => c.author && c.author.id === me && openText(c.content).startsWith(STATS_TAG));
             const cur = mine[0];
             let remote = [];
             if (cur) try { remote = statsUnpack(openText(cur.content).slice(STATS_TAG.length)); } catch (e) { remote = []; }
@@ -18843,6 +19055,7 @@ var __vpBannerAuto = (() => {
                     ? await editComment(cur.id, content)
                     : await sendComment(STICKER_POST_ID, content);
                 if (!res.ok) throw new Error('статистика: запись ' + res.status);
+                await serviceCommentsWrote(STICKER_POST_ID, res, content, cur && cur.id);
             }
             return merged;
         }
@@ -18886,6 +19099,41 @@ var __vpBannerAuto = (() => {
             return postsPending;
         }
         function myLikesTotal() { return myPostsLoad().then(postsLikes); }
+        const STATS_PX_EVERY = 15 * 60e3, STATS_PX_IDS = 20, STATS_PX_KEY = netKey('/api/posts/stats', 'POST');
+        let statsPxBusy = false, statsOnScreen = false;
+        function statsPxAt(c) { const s = GM_getValue('vp_posts_px', null); return Math.max(c ? c.at : 0, s && s.user === myUsername ? +s.at || 0 : 0); }
+        async function statsLikesRefresh() {
+            const c = postsCache();
+            if (statsPxBusy || !c || !statsNow || !myUsername || document.hidden || apiPaused(STATS_PX_KEY) || netBusy()) return false;
+            if (Date.now() - statsPxAt(c) < STATS_PX_EVERY) return false;
+            statsPxBusy = true;
+            try {
+                const ids = c.list.slice().sort((a, b) => b[1] - a[1]).slice(0, STATS_PX_IDS).map(r => r[0]);
+                if (!ids.length) return false;
+                const res = await api('/api/posts/stats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+                if (!res.ok) throw new Error('счётчики постов: ' + res.status);
+                const j = await res.json(), d = j.data || j, posts = Array.isArray(j.posts) ? j.posts : Array.isArray(d.posts) ? d.posts : [];
+                const by = new Map(posts.filter(p => p && p.id).map(p => [p.id, p]));
+                const cur = postsCache() || c;
+                let changed = false;
+                const list = cur.list.map(r => {
+                    const p = by.get(r[0]);
+                    if (!p || typeof p.likesCount !== 'number' || p.likesCount === r[2]) return r;
+                    changed = true;
+                    const n = r.slice();
+                    n[2] = p.likesCount;
+                    return n;
+                });
+                GM_setValue('vp_posts_px', { user: myUsername, at: Date.now() });
+                if (changed) {
+                    GM_setValue('vp_posts_list', Object.assign({}, cur, { list }));
+                    statsList = list;
+                    statsNow = Object.assign({}, statsNow, { likes: postsLikes({ list }) });
+                    renderStats();
+                }
+                return true;
+            } catch (e) { logErr('статистика: счётчики постов', e); return false; } finally { statsPxBusy = false; }
+        }
         async function loadStats() {
             if (!myUsername) return setTimeout(loadStats, 1500);
             const d = meData && typeof meData.followersCount === 'number' ? meData : await hcData(myUsername, 2500);
@@ -19027,10 +19275,99 @@ var __vpBannerAuto = (() => {
             statsPeriod = b.dataset.p;
             GM_setValue('vp_stats_tab', statsPeriod);
             renderStats();
+            statsLikesRefresh();
         });
+        if (typeof IntersectionObserver === 'function') new IntersectionObserver(es => {
+            statsOnScreen = es[es.length - 1].isIntersecting;
+            if (statsOnScreen) statsLikesRefresh();
+        }).observe(statsCard);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden && statsOnScreen) statsLikesRefresh(); });
+        sched.add('statsLikes', () => { if (statsOnScreen) return statsLikesRefresh(); }, { every: 120000, net: true, visible: true, prio: 'low' });
         renderStats();
         loadStats();
 
+        const PULSE_RE = /^ITDXB1 ([0-9a-z]{1,8})$/;
+        const PULSE_BEAT = 4 * 60e3, PULSE_LIVE = 9 * 60e3, PULSE_IDLE = 5 * 60e3, PULSE_PAGES = 15, PULSE_WARM = 30000;
+        let pulseShare = GM_getValue('pulseOn', true);
+        const pulseMap = new Map(), pulseByName = new Map();
+        const pulseSt = { active: Date.now(), sentAt: 0, busy: false, pages: 1, readAt: 0, cid: '', reading: false, fails: 0 };
+        const pulseJit = 1 + Math.random() * 0.2;
+        const pulseNote = () => { pulseSt.active = Date.now(); };
+        for (const ev of ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart']) addEventListener(ev, pulseNote, { passive: true, capture: true });
+        const pulseActive = () => !document.hidden && Date.now() - pulseSt.active < PULSE_IDLE;
+        const pulseCycle = () => Math.min(360000, Math.max(120000, pulseSt.pages * 25000)) * pulseJit;
+        const pulseMinute = () => Math.floor(srvNow() / 60000);
+        function pulseOwn(path) { return !!pulseSt.cid && String(path).endsWith('/' + pulseSt.cid); }
+        function pulseParse(list) {
+            const now = pulseMinute(), map = new Map();
+            for (const c of list) {
+                const a = c.author;
+                if (!a || !a.id) continue;
+                const m = PULSE_RE.exec(openText(c.content));
+                if (!m) continue;
+                const min = parseInt(m[1], 36);
+                if (!(min > now - 86400) || min > now + 5) continue;
+                const o = map.get(a.id);
+                if (!o || min > o.min) map.set(a.id, { min, name: String(a.username || ''), cid: c.id });
+            }
+            return map;
+        }
+        async function pulseRead() {
+            if (pulseSt.reading || !meData || !meData.id || myVerifyState() !== 'approved') return;
+            pulseSt.reading = true;
+            try {
+                const list = await allComments(PRESENCE_POST_ID, PULSE_PAGES, { sort: 'oldest' });
+                const map = pulseParse(list), mine = map.get(meData.id);
+                pulseSt.pages = Math.max(1, Math.ceil(list.length / 100));
+                pulseSt.readAt = Date.now();
+                pulseSt.fails = 0;
+                if (mine) pulseSt.cid = mine.cid;
+                pulseMap.clear();
+                pulseByName.clear();
+                for (const [id, v] of map) { pulseMap.set(id, v); if (v.name) pulseByName.set(v.name.toLowerCase(), v); }
+                document.dispatchEvent(new CustomEvent('vp-pulse'));
+            } catch (e) { pulseSt.fails++; logErr('присутствие: чтение', e); } finally { pulseSt.reading = false; }
+        }
+        async function pulseBeat(force) {
+            if (!pulseShare || pulseSt.busy || !meData || !meData.id || myVerifyState() !== 'approved' || apiPaused() || !pulseActive()) return;
+            const now = srvNow();
+            if (!force && now - pulseSt.sentAt < PULSE_BEAT) return;
+            pulseSt.busy = true;
+            try {
+                if (!pulseSt.cid) await pulseRead();
+                const min = Math.floor(now / 60000), content = sealText('ITDXB1 ' + min.toString(36));
+                let res = pulseSt.cid ? await editComment(pulseSt.cid, content) : await sendComment(PRESENCE_POST_ID, content);
+                if (pulseSt.cid && (res.status === 404 || res.status === 403)) { pulseSt.cid = ''; res = await sendComment(PRESENCE_POST_ID, content); }
+                if (res.ok) {
+                    pulseSt.sentAt = now;
+                    if (!pulseSt.cid) {
+                        const j = await res.json().catch(() => null), d = j && (j.data || j), id = d && (d.id || (d.comment && d.comment.id));
+                        if (id) pulseSt.cid = String(id);
+                    }
+                    const mine = { min, name: String(meData.username || ''), cid: pulseSt.cid };
+                    pulseMap.set(meData.id, mine);
+                    if (mine.name) pulseByName.set(mine.name.toLowerCase(), mine);
+                }
+            } catch (e) { logErr('присутствие: запись', e); } finally { pulseSt.busy = false; }
+        }
+        async function pulseHide() {
+            if (!pulseSt.cid || apiPaused()) return;
+            try { await editComment(pulseSt.cid, sealText('ITDXB1 0')); } catch (e) { logErr('присутствие: скрыть', e); }
+            pulseSt.sentAt = 0;
+        }
+        function pulseOf(name) {
+            const v = pulseByName.get(String(name || '').toLowerCase());
+            return v ? { live: srvNow() - v.min * 60000 < PULSE_LIVE, seen: v.min * 60000 } : null;
+        }
+        const pulseWarm = () => !!pulseSt.readAt || performance.now() > PULSE_WARM;
+        sched.add('pulseRead', () => { if (!leadTab()) return; return pulseRead(); }, { every: pulseCycle, net: true, visible: true, first: 15000 });
+        sched.add('pulseBeat', () => pulseBeat(false), { every: 60000, net: true, visible: true, first: 9000 });
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) pulseBeat(false); });
+        (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window).itdvp.pulse = () => {
+            const r = { делюсь: pulseShare, записей: pulseMap.size, страниц: pulseSt.pages, чтение_назад_с: pulseSt.readAt ? Math.round((Date.now() - pulseSt.readAt) / 1000) : null, запись_назад_с: pulseSt.sentAt ? Math.round((srvNow() - pulseSt.sentAt) / 1000) : null, цикл_с: Math.round(pulseCycle() / 1000), мой_коммент: pulseSt.cid || null, ошибок: pulseSt.fails };
+            console.table(r);
+            return r;
+        };
         const railClub = rail.querySelector('.vp-club');
         let clubShown = '';
         function openProfile(login) {
@@ -19163,13 +19500,13 @@ var __vpBannerAuto = (() => {
         }
         async function clubPollOnline() {
             if (myVerifyState() !== 'approved') return;
-            if (clubPolling || document.hidden || apiPaused() || !railClub.isConnected || !railClub.getClientRects().length) return;
+            if (clubPolling || document.hidden || apiPaused() || !railClub.isConnected || !railClub.getClientRects().length || !pulseWarm()) return;
             clubOnlineLoad();
             const box = railClub.getBoundingClientRect(), now = Date.now();
             const seen = r => { const q = r.getBoundingClientRect(); return q.bottom > box.top && q.top < box.bottom; };
             const age = n => now - ((clubOnline.get(n) || {}).at || 0), late = n => age(n) - ((clubOnline.get(n) || {}).on === false ? CLUB_OFF_TTL : CLUB_TTL);
             const due = [...railClub.querySelectorAll('.vp-club-row')].filter(r => r.dataset.login !== myUsername)
-                .map(r => ({ n: r.dataset.login, v: seen(r) })).filter(x => late(x.n) > 0).sort((a, b) => b.v - a.v || late(b.n) - late(a.n));
+                .map(r => ({ n: r.dataset.login, v: seen(r) })).filter(x => late(x.n) > 0 && !pulseOf(x.n)).sort((a, b) => b.v - a.v || late(b.n) - late(a.n));
             if (!due.length) return;
             const fast = due.filter(x => x.v).slice(0, 8).map(x => x.n);
             if (!fast.length && now < (+GM_getValue('vp_club_next', 0) || 0)) return;
@@ -19189,6 +19526,21 @@ var __vpBannerAuto = (() => {
                 GM_setValue('vp_club_online', keep);
             }
         }
+        function pulseApply() {
+            const rows = [...railClub.querySelectorAll('.vp-club-row')];
+            if (!rows.length || !pulseSt.readAt) return;
+            let any = false;
+            for (const row of rows) {
+                const n = row.dataset.login, p = n === myUsername ? null : pulseOf(n);
+                if (!p) continue;
+                const prev = clubOnline.get(n);
+                if (prev && prev.at > pulseSt.readAt) continue;
+                clubOnline.set(n, { on: p.live, seen: p.live ? (prev && prev.seen) || null : p.seen, at: pulseSt.readAt });
+                any = true;
+            }
+            if (any) paintOnline();
+        }
+        document.addEventListener('vp-pulse', pulseApply);
         const clubTick = () => Promise.resolve(renderClub()).then(() => clubPollOnline()).catch(e => logErr('клуб: в сети', e));
         setTimeout(() => Promise.resolve(renderClub()).catch(e => logErr('клуб', e)), 2500);
         setTimeout(() => clubPollOnline(), 6000);
@@ -20674,6 +21026,7 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
                         if (c && String(c.content).trim() === text) continue;
                         const res = c ? await editComment(c.id, text) : await sendComment(GAMES_POST_ID, text);
                         if (!res.ok) throw new Error('повтор: ' + res.status);
+                        await serviceCommentsWrote(GAMES_POST_ID, res, text, c && c.id);
                     }
                 }
                 r.up = true;
@@ -20708,35 +21061,47 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
         }
         const lbIsMe = a => !!a && ((meData && meData.id && a.id === meData.id) || (!!myUsername && a.username === myUsername));
         let lbLoad = null, lbAt = 0, lbBusy = false, lbT = 0;
+        const LB_OPEN_AGE = 5 * 60 * 1000, LB_SUBMIT_AGE = 30 * 1000;
         function lbComments(fresh) {
-            if (!fresh && lbLoad && Date.now() - lbAt < 60000) return lbLoad;
+            const age = fresh === true || !lbLoad ? -1 : typeof fresh === 'number' ? fresh : LB_OPEN_AGE;
+            if (lbLoad && age >= 0 && Date.now() - lbAt <= age) return lbLoad;
+            if (apiPaused()) return lbLoad && fresh !== true ? lbLoad : Promise.reject(new Error('пауза сайта'));
             lbAt = Date.now();
-            lbLoad = allComments(GAMES_POST_ID, 5);
+            lbLoad = serviceComments(GAMES_POST_ID, { pages: 5, maxAge: age });
             lbLoad.catch(() => { lbLoad = null; });
             return lbLoad;
         }
+        const lbRepoint = () => { if (!lbLoad) return; lbLoad = serviceComments(GAMES_POST_ID, { pages: 5, maxAge: Infinity }); lbLoad.catch(() => { lbLoad = null; }); };
+        const lbRepPending = () => ['s', 'm', 't'].some(g => { const r = GM_getValue(acctKey('vp_rep_' + g), null); return !!r && !r.up && r.score === lbLocal()[g] && Array.isArray(r.ev); });
         async function lbSubmit() {
             if (!myUsername || lbBusy) return;
+            if (apiPaused()) { clearTimeout(lbT); lbT = setTimeout(lbSubmit, 60000); return; }
             lbBusy = true;
             try {
-                const all = await lbComments(true);
-                const voids = lbVoids(all);
-                lbResetVoidLocal(voids);
-                const mine = all.find(c => lbIsMe(c.author) && parseLB(c.content, true));
-                const was = mine ? lbDropVoid(voids, parseLB(mine.content, true), all) : {}, loc = lbLocal(), now = {};
-                for (const k of ['s', 'm', 't']) {
-                    now[k] = lbBetter(k, was[k], loc[k]);
-                    if (now[k] && now[k] !== loc[k]) GM_setValue(acctKey(LB_LOCAL_KEYS[k]), now[k]);
-                }
-                const text = lbText(now);
-                if (text && !(mine && String(mine.content).trim() === text)) {
+                const plan = list => {
+                    const voids = lbVoids(list);
+                    lbResetVoidLocal(voids);
+                    const m = list.find(c => lbIsMe(c.author) && parseLB(c.content, true));
+                    const was = m ? lbDropVoid(voids, parseLB(m.content, true), list) : {}, loc = lbLocal(), now = {};
+                    for (const k of ['s', 'm', 't']) {
+                        now[k] = lbBetter(k, was[k], loc[k]);
+                        if (now[k] && now[k] !== loc[k]) GM_setValue(acctKey(LB_LOCAL_KEYS[k]), now[k]);
+                    }
+                    const t = lbText(now);
+                    return { mine: m, text: t, write: !!t && !(m && String(m.content).trim() === t) };
+                };
+                let all = await lbComments(LB_OPEN_AGE), pl = plan(all);
+                if (pl.write || lbRepPending()) { all = await lbComments(LB_SUBMIT_AGE); pl = plan(all); }
+                const { mine, text } = pl;
+                if (pl.write) {
                     const res = mine
                         ? await api(`/api/comments/${mine.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) })
                         : await api(`/api/posts/${GAMES_POST_ID}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) });
                     if (!res.ok) throw new Error('лидерборд: ' + res.status);
+                    await serviceCommentsWrote(GAMES_POST_ID, res, text, mine && mine.id);
                 }
                 await lbRepUpload(all);
-                lbLoad = null;
+                lbRepoint();
                 if (gw.el) lbRender();
             } catch (e) { logErr('лидерборд', e); } finally { lbBusy = false; }
         }
@@ -20817,6 +21182,7 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
             el.querySelectorAll('.vp-games-tab').forEach(t => t.addEventListener('click', () => showGame(t.dataset.g)));
             document.body.appendChild(el);
             gw.el = el;
+            if (!apiPaused() && (!lbLoad || Date.now() - lbAt > LB_OPEN_AGE)) lbComments().catch(() => { });
             showGame(id || gw.id);
             if (!gw.synced) { gw.synced = true; gamesRecord(); }
             stackEnter('vpGames');
@@ -20848,7 +21214,7 @@ const SAND_PULL = [1, 2, 4, 5, 7, 8, 9, 10, 13, 14, 15, 16];
             admLinked = true;
             const w = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
             w.__itdx = {
-                OWNER_ID, VERIFICATION_POST_ID, MSG_POST_ID, STICKER_POST_ID, GAMES_POST_ID, SERVICE_POSTS, LOOK_RE, REP_RE, LB_VOID, LB_KEYS, GAMES, GAME_MAKERS,
+                OWNER_ID, VERIFICATION_POST_ID, MSG_POST_ID, STICKER_POST_ID, GAMES_POST_ID, PRESENCE_POST_ID, SERVICE_POSTS, LOOK_RE, REP_RE, LB_VOID, LB_KEYS, GAMES, GAME_MAKERS,
                 COOLDOWN_MS, QUARANTINE_MS, MOD_VER, IS_PHONE, GLYPH, ROLE_ORDER, SETTINGS, roleCount, vpErrors, msgNet,
                 svgIcon, addCss, logErr, copyText, openText, sealText, openB64, obfBytes, api, editComment, sendComment, srvNow, allComments,
                 loadVerificationComments, checkAllComments, parseAllOwnerLists, readVerified, verifyTimeline, parseCode, isAuthorCode,
