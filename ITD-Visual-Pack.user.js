@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.3
+// @version      3.9.3.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -1273,9 +1273,9 @@
             banner: () => {
                 const byImg = $$('img[alt="Banner"]').map(i => i.parentElement).filter(Boolean);
                 if (byImg.length) return byImg;
-                const header = document.querySelector('[data-alice-water-anchor-kind="profile_header"]');
-                if (!header) return [];
-                const btn = [...header.querySelectorAll('button')].find(b => /баннер/i.test(b.title || ''));
+                const header = document.querySelector('[data-alice-water-anchor-kind="profile_header"]') || document;
+                const own = [...header.querySelectorAll('button[title]')].filter(b => /баннер/i.test(b.title) && !/удал|видео|custom-|vp-banner-fx/i.test(b.title + ' ' + b.className));
+                const btn = own.find(b => /нарисовать/i.test(b.title)) || own[0];
                 if (!btn) return [];
                 let el = btn.parentElement;
                 for (let i = 0; el && i < 5; i++) {
@@ -7583,7 +7583,8 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
-            ['3.9.3', '10 ноября 2026', [
+            ['3.9.3 – 3.9.3.1', '11 ноября 2026', [
+                'Баннер: если баннера нет, кнопки на нём снова на месте и новую картинку можно поставить',
                 'Баннер: рисунок стал заметно точнее и мягче, мелкие детали и лица не теряются',
                 'Баннер: считается быстрее, а страница при этом не подвисает',
                 'Баннер: вместо крутилки на кнопке «Применить» круг-прогресс',
