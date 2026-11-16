@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.3.2
+// @version      3.9.4
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -477,6 +477,1553 @@
             }
         };
     })();
+    const IntroPack = (function (Math, Date, Number, Object, Array, Map, Set, Promise, Error, JSON, String, Symbol, Infinity, NaN, Float32Array, Float64Array, Int8Array, Int16Array, Int32Array, Uint8Array, Uint8ClampedArray, Uint16Array, Uint32Array, isNaN, parseInt, parseFloat) {
+        'use strict';
+const IntroDesign = (function () {
+    const INTRO = {
+        LOCK: [620, 1020, 1420],
+        FLY: 520,
+        SETTLE: 170,
+        SHAKE: [4, 6, 9],
+        VOLUME: 0.11,
+        FROM: [{ ang: 200, rot: -110, sc: 1.8 }, { ang: 272, rot: 80, sc: 2.4 }, { ang: -12, rot: 130, sc: 1.6 }],
+        X_DRAW: 170,
+        X_GAP: 150,
+        SPLIT: 380,
+        RARE_HOLD: 550
+    };
+    INTRO.X = INTRO.LOCK[2] + 220;
+    INTRO.EXIT = INTRO.X + INTRO.X_GAP + INTRO.X_DRAW + 380;
+
+    function introPlan(rare) {
+        if (rare === 'twist') {
+            const LOCK = [620, 1020, 1760], FLY = [520, 520, 230];
+            const BOUNCE = LOCK[1] + 250, WAVE = LOCK[2] + 330, X = WAVE + 420, STICK = X + 430;
+            return { LOCK, FLY, BOUNCE, WAVE, X, STICK, X_DRAW: 0, X_GAP: 0, EXIT: STICK + 480 };
+        }
+        if (rare === 'assemble') {
+            const LOCK = [1150, 1500, 1850], ASM = 950;
+            const X = LOCK[2] + 280, X_DRAW = INTRO.X_DRAW, X_GAP = INTRO.X_GAP;
+            const TICKS = [];
+            let t = X + X_GAP + X_DRAW + 260, a = 0;
+            [[12, 1], [6, -1], [6, 1]].forEach(([n, dir]) => {
+                for (let k = 0; k < n; k++) {
+                    t += 28 + 40 * Math.pow(k / (n - 1), 2);
+                    a += 30 * dir;
+                    TICKS.push({ t: Math.round(t), a });
+                }
+                t += 150;
+            });
+            const LOCKED = TICKS[TICKS.length - 1].t + 90;
+            return { LOCK, ASM, FLY: LOCK.map(() => ASM), X, X_DRAW, X_GAP, TICKS, LOCKED, EXIT: LOCKED + 560 };
+        }
+        if (!rare) return { LOCK: INTRO.LOCK, FLY: INTRO.LOCK.map(() => INTRO.FLY), X: INTRO.X, X_DRAW: INTRO.X_DRAW, X_GAP: INTRO.X_GAP, EXIT: INTRO.EXIT };
+        const LOCK = [620, 1020, 1960], FLY = [520, 520, 1040];
+        const X = LOCK[2] + 300, X_DRAW = 300, X_GAP = 70;
+        return { LOCK, FLY, X, X_DRAW, X_GAP, EXIT: X + X_GAP + X_DRAW + 380 + INTRO.RARE_HOLD };
+    }
+
+    function introSound(ctx, at, rare) {
+        const out = ctx.createDynamicsCompressor();
+        out.connect(ctx.destination);
+        const master = ctx.createGain();
+        master.gain.value = INTRO.VOLUME * soundVolume();
+        master.connect(out);
+        const noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+        const nd = noise.getChannelData(0);
+        for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+        const env = (param, t, peak, attack, decay) => {
+            param.setValueAtTime(0.0001, t);
+            param.exponentialRampToValueAtTime(peak, t + attack);
+            param.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+        };
+        function whoosh(t, dur, low) {
+            const src = ctx.createBufferSource();
+            src.buffer = noise;
+            const bp = ctx.createBiquadFilter();
+            bp.type = 'bandpass';
+            bp.Q.value = 1.2;
+            bp.frequency.setValueAtTime(low ? 140 : 300, t);
+            bp.frequency.exponentialRampToValueAtTime(low ? 1500 : 3200, t + dur);
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.exponentialRampToValueAtTime(0.45, t + dur * 0.95);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.05);
+            src.connect(bp).connect(g).connect(master);
+            src.start(t);
+            src.stop(t + dur + 0.1);
+        }
+        const TAIL = 1.6;
+        const tailEnv = (param, t, peak, attack) => {
+            param.setValueAtTime(0.0001, t);
+            param.exponentialRampToValueAtTime(peak, t + attack);
+            param.exponentialRampToValueAtTime(peak * 0.5, t + attack + 0.3);
+            param.linearRampToValueAtTime(0, t + attack + 0.3 + TAIL);
+        };
+        const echo = ctx.createConvolver();
+        const ir = ctx.createBuffer(2, ctx.sampleRate * 1.8, ctx.sampleRate);
+        for (let c = 0; c < 2; c++) {
+            const d = ir.getChannelData(c);
+            for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.5);
+        }
+        echo.buffer = ir;
+        const echoGain = ctx.createGain();
+        echoGain.gain.value = 0.35;
+        echo.connect(echoGain).connect(master);
+        function clank(t, heavy) {
+            const end = t + (heavy ? 0.3 + TAIL + 0.1 : 1.2);
+            const thump = ctx.createOscillator();
+            thump.frequency.setValueAtTime(heavy ? 110 : 150, t);
+            thump.frequency.exponentialRampToValueAtTime(heavy ? 45 : 48, t + (heavy ? 0.9 : 0.25));
+            const tg = ctx.createGain();
+            if (heavy) tailEnv(tg.gain, t, 1, 0.004);
+            else env(tg.gain, t, 0.8, 0.004, 0.3);
+            thump.connect(tg).connect(master);
+            if (heavy) tg.connect(echo);
+            thump.start(t);
+            thump.stop(end);
+            if (heavy) {
+                const rumble = ctx.createBufferSource();
+                rumble.buffer = noise;
+                rumble.loop = true;
+                const lp = ctx.createBiquadFilter();
+                lp.type = 'lowpass';
+                lp.frequency.value = 160;
+                const rg = ctx.createGain();
+                tailEnv(rg.gain, t, 0.9, 0.01);
+                rumble.connect(lp).connect(rg).connect(master);
+                rg.connect(echo);
+                rumble.start(t);
+                rumble.stop(end);
+            }
+            [1, 1.47, 2.09, 2.76, 3.9].forEach((k, i) => {
+                const m = ctx.createOscillator();
+                m.type = 'triangle';
+                m.frequency.value = (heavy ? 420 : 560) * k;
+                const mg = ctx.createGain();
+                env(mg.gain, t, 0.16 / (i + 1), 0.002, (heavy ? 0.6 : 0.45) / (1 + i * 0.4));
+                m.connect(mg).connect(master);
+                m.start(t);
+                m.stop(t + 1);
+            });
+            const click = ctx.createBufferSource();
+            click.buffer = noise;
+            const hp = ctx.createBiquadFilter();
+            hp.type = 'highpass';
+            hp.frequency.value = 2000;
+            const cg = ctx.createGain();
+            env(cg.gain, t, 0.6, 0.001, 0.05);
+            click.connect(hp).connect(cg).connect(master);
+            click.start(t, Math.random() * 0.5);
+            click.stop(t + 0.1);
+        }
+        function slash(t, dur) {
+            const src = ctx.createBufferSource();
+            src.buffer = noise;
+            const bp = ctx.createBiquadFilter();
+            bp.type = 'bandpass';
+            bp.Q.value = 2.5;
+            bp.frequency.setValueAtTime(1200, t);
+            bp.frequency.exponentialRampToValueAtTime(7000, t + dur);
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.exponentialRampToValueAtTime(0.55, t + dur * 0.7);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.08);
+            src.connect(bp).connect(g).connect(master);
+            src.start(t, Math.random() * 0.5);
+            src.stop(t + dur + 0.1);
+        }
+        function subDrop(t) {
+            const o = ctx.createOscillator();
+            o.frequency.setValueAtTime(70, t);
+            o.frequency.exponentialRampToValueAtTime(32, t + 1.2);
+            const g = ctx.createGain();
+            tailEnv(g.gain, t, 0.9, 0.01);
+            o.connect(g).connect(master);
+            o.start(t);
+            o.stop(t + 0.3 + TAIL + 0.2);
+        }
+        const P = introPlan(rare);
+        function tick(t, gain, freq) {
+            const src = ctx.createBufferSource();
+            src.buffer = noise;
+            const bp = ctx.createBiquadFilter();
+            bp.type = 'bandpass';
+            bp.Q.value = 6;
+            bp.frequency.value = freq;
+            const g = ctx.createGain();
+            env(g.gain, t, gain, 0.001, 0.02);
+            src.connect(bp).connect(g).connect(master);
+            src.start(t, Math.random() * 0.5);
+            src.stop(t + 0.05);
+        }
+        if (rare === 'twist') {
+            whoosh(at(P.LOCK[0] - P.FLY[0]), P.FLY[0] / 1000); clank(at(P.LOCK[0]), false);
+            whoosh(at(P.LOCK[1] - P.FLY[1]), P.FLY[1] / 1000); clank(at(P.LOCK[1]), false);
+            tick(at(P.BOUNCE), 0.5, 900); clank(at(P.BOUNCE + 10), false);
+            const fall = ctx.createOscillator(), fg = ctx.createGain();
+            fall.type = 'sine';
+            fall.frequency.setValueAtTime(1500, at(P.LOCK[2] - P.FLY[2]));
+            fall.frequency.exponentialRampToValueAtTime(260, at(P.LOCK[2]));
+            fg.gain.setValueAtTime(0.0001, at(P.LOCK[2] - P.FLY[2]));
+            fg.gain.exponentialRampToValueAtTime(0.18, at(P.LOCK[2] - 20));
+            fg.gain.exponentialRampToValueAtTime(0.0001, at(P.LOCK[2] + 10));
+            fall.connect(fg).connect(master);
+            fall.start(at(P.LOCK[2] - P.FLY[2])); fall.stop(at(P.LOCK[2] + 40));
+            clank(at(P.LOCK[2]), true);
+            subDrop(at(P.LOCK[2]));
+            [0, 80, 160].forEach(d => tick(at(P.WAVE + d + 60), 0.25, 1200));
+            const whir = ctx.createBufferSource(), wbp = ctx.createBiquadFilter(), wg = ctx.createGain();
+            whir.buffer = noise; whir.loop = true;
+            wbp.type = 'bandpass'; wbp.Q.value = 2; wbp.frequency.value = 1800;
+            wg.gain.setValueAtTime(0.0001, at(P.X));
+            const dur = (P.STICK - P.X) / 1000;
+            for (let k = 0, n = 26; k < n; k++) {
+                const tt = at(P.X) + dur * Math.pow(k / n, 0.8);
+                wg.gain.setValueAtTime(0.35 * (0.4 + 0.6 * k / n), tt);
+                wg.gain.setValueAtTime(0.02, tt + 0.012);
+            }
+            whir.connect(wbp).connect(wg).connect(master);
+            whir.start(at(P.X)); whir.stop(at(P.STICK));
+            clank(at(P.STICK), false);
+            const tw = ctx.createOscillator(), vib = ctx.createOscillator(), vg = ctx.createGain(), tg = ctx.createGain();
+            tw.type = 'triangle'; tw.frequency.value = 190;
+            vib.frequency.value = 24; vg.gain.value = 14;
+            vib.connect(vg).connect(tw.frequency);
+            env(tg.gain, at(P.STICK), 0.35, 0.005, 0.55);
+            tw.connect(tg).connect(master); tg.connect(echo);
+            tw.start(at(P.STICK)); vib.start(at(P.STICK)); tw.stop(at(P.STICK + 700)); vib.stop(at(P.STICK + 700));
+            whoosh(at(P.EXIT - 200), 0.26);
+            return;
+        }
+        if (rare === 'assemble') {
+            P.LOCK.forEach((lock, i) => {
+                for (let ms = lock - P.ASM + 120, k = 0; ms < lock - 30; k++) {
+                    const q = (ms - (lock - P.ASM)) / P.ASM;
+                    tick(at(ms), 0.08 + 0.22 * q, 2200 + Math.random() * 2600);
+                    ms += 26 - 17 * q + Math.random() * 4;
+                }
+                clank(at(lock), i === 2);
+            });
+            [0, P.X_GAP].forEach(d => slash(at(P.X + d), P.X_DRAW / 1000));
+            P.TICKS.forEach(tk => { tick(at(tk.t), 0.5, 1700); tick(at(tk.t + 6), 0.25, 3400); });
+            clank(at(P.LOCKED), true);
+            whoosh(at(P.EXIT - 200), 0.26);
+            return;
+        }
+        P.LOCK.forEach((lock, i) => {
+            whoosh(at(lock - P.FLY[i]), P.FLY[i] / 1000, rare && i === 2);
+            clank(at(lock), i === 2);
+        });
+        if (rare) {
+            subDrop(at(P.LOCK[2]));
+            whoosh(at(P.X - 140), 0.3, true);
+        }
+        [0, P.X_GAP].forEach(d => slash(at(P.X + d), P.X_DRAW / 1000));
+        whoosh(at(P.EXIT - 200), 0.26);
+    }
+
+    const el = (cls, parent, text) => {
+        const e = document.createElement('div');
+        e.className = cls;
+        if (text) e.textContent = text;
+        parent.appendChild(e);
+        return e;
+    };
+    const rnd = (a, b) => a + Math.random() * (b - a);
+
+    function frame(mount, light, extra) {
+        const ov = el('vpi-overlay' + (light ? ' vpi-light' : '') + (extra ? ' ' + extra : ''), mount);
+        const halves = [0, 1].map(i => el('vpi-half vpi-half-' + i, ov));
+        const worlds = halves.map(h => el('vpi-world', h));
+        const anims = [];
+        const play = (target, frames, opts) => { const a = target.animate(frames, { fill: 'both', ...opts }); a.pause(); anims.push(a); return a; };
+        const playBoth = (targets, frames, opts) => targets.map(t => play(t, frames, opts));
+        function shake(at, amp, steps) {
+            const frames = [];
+            for (let i = 0, n = steps || 8; i <= n; i++) {
+                const k = i === n ? 0 : amp * Math.pow(1 - i / n, 1.5) * (i % 2 ? -1 : 1);
+                frames.push({ transform: `translate(${k * rnd(.6, 1)}px, ${k * rnd(-.8, .8)}px)` });
+            }
+            playBoth(worlds, frames, { delay: at, duration: steps ? 160 : 340, fill: 'none', composite: 'add', easing: steps ? 'steps(' + steps + ', end)' : 'linear' });
+        }
+        return { ov, halves, worlds, anims, play, playBoth, shake, W: mount.clientWidth, H: mount.clientHeight };
+    }
+    function xSvg(w, n, solid) {
+        w.insertAdjacentHTML('beforeend', `<svg class="vpi-x" viewBox="0 0 100 100">
+            <g fill="none" stroke-linecap="${solid ? 'square' : 'round'}">
+                <path class="vpi-x1" d="M14 14L86 86" pathLength="1" stroke="currentColor" stroke-width="${solid ? 10 : 12}"/>
+                ${solid ? '' : '<path class="vpi-x1 vpi-hole" d="M14 14L86 86" pathLength="1" stroke-width="7"/>'}
+                <path class="vpi-x2" d="M86 14L14 86" pathLength="1" stroke="currentColor" stroke-width="${solid ? 10 : 12}"/>
+                ${solid ? '' : '<path class="vpi-x2 vpi-hole" d="M86 14L14 86" pathLength="1" stroke-width="7"/>'}
+            </g></svg>`);
+        return w.lastElementChild;
+    }
+    function splitExit(F, EXIT, seamCls) {
+        const seam = el('vpi-seam ' + (seamCls || ''), F.ov);
+        F.play(seam, [
+            { opacity: 0, transform: 'scaleY(0)' },
+            { opacity: 1, transform: 'scaleY(1)', offset: .55 },
+            { opacity: 0, transform: 'scaleY(1)' }
+        ], { delay: EXIT - 140, duration: 260, easing: 'ease-out', fill: 'none' });
+        [-1, 1].forEach((dir, i) => F.play(F.halves[i], [
+            { transform: 'translateX(0)' },
+            { transform: `translateX(${dir * 52}%)` }
+        ], { delay: EXIT, duration: INTRO.SPLIT, easing: 'cubic-bezier(.7,0,.3,1)', fill: 'forwards' }));
+    }
+
+    function buildMono(mount, variant, light) {
+        const rare = variant === true, asm = variant === 'assemble', twist = variant === 'twist';
+        const F = frame(mount, light, 'vpa');
+        const { ov, worlds, play, playBoth, shake, W, H } = F;
+        const xMarks = worlds.map((w, n) => xSvg(w, n, false));
+        const words = worlds.map(w => el('vpi-word', w));
+        const flash = el('vpi-flash', ov);
+        const { SETTLE, FROM } = INTRO;
+        const PLAN = introPlan(variant);
+        const { LOCK, FLY, X, X_DRAW, X_GAP, EXIT } = PLAN;
+        const SHAKE = rare ? [5, 7, 16] : INTRO.SHAKE;
+        const GLOW = light ? '0,0,0' : '255,255,255';
+        const GA = light ? .45 : 1;
+        const vmax = Math.max(W, H);
+        function burst(at, x, y, size, strong) {
+            const big = rare && strong;
+            for (let i = 0, n = strong ? (big ? 32 : 20) : 10; i < n; i++) {
+                const ang = rnd(0, Math.PI * 2), r0 = size * .22, dist = size * rnd(.3, strong ? .75 : .55) * (big ? 1.35 : 1);
+                const rot = ang * 180 / Math.PI + 90, c = Math.cos(ang), sn = Math.sin(ang);
+                playBoth(worlds.map(w => el('vpi-fx vpi-spark', w)), [
+                    { transform: `translate(${x + c * r0}px, ${y + sn * r0}px) rotate(${rot}deg)`, opacity: 1 },
+                    { transform: `translate(${x + c * (r0 + dist)}px, ${y + sn * (r0 + dist)}px) rotate(${rot}deg) scaleY(.2)`, opacity: 0 }
+                ], { delay: at, duration: rnd(300, 560), easing: 'cubic-bezier(.1,.8,.3,1)', fill: 'forwards' });
+            }
+            play(flash, [{ opacity: 0 }, { opacity: big ? .18 : strong ? .14 : .06, offset: .12 }, { opacity: 0 }],
+                { delay: at, duration: strong ? 380 : 220, fill: 'none' });
+        }
+        const glow = (px, a) => `drop-shadow(0 0 ${px}px rgba(${GLOW},${(a * GA).toFixed(3)}))`;
+        const letters = words.map(w => [...'ИТД'].map(ch => el('vpi-letter', w, ch)));
+        const wr = worlds[0].getBoundingClientRect();
+        if (asm) letters[0].forEach((box, i) => {
+            const lock = LOCK[i], lr = box.getBoundingClientRect();
+            playBoth([letters[0][i], letters[1][i]], [
+                { opacity: 0, transform: 'none', filter: glow(0, 0) },
+                { opacity: 1, transform: 'scale(1.07, .93)', filter: glow(30, .9), offset: .25 },
+                { opacity: 1, transform: 'none', filter: glow(10, .3) }
+            ], { delay: lock - 25, duration: SETTLE + 120, easing: 'cubic-bezier(.2,.9,.3,1)' });
+            shake(lock, SHAKE[i]);
+            burst(lock, lr.left - wr.left + lr.width / 2, lr.top - wr.top + lr.height / 2, lr.height * (i === 2 ? 1.8 : 1.3), i === 2);
+        });
+        if (!asm) letters[0].forEach((box, i) => {
+            if (twist && i === 2) return;
+            const lock = LOCK[i], f = FROM[i], fly = FLY[i];
+            const lr = box.getBoundingClientRect();
+            const cx = lr.left - wr.left + lr.width / 2, cy = lr.top - wr.top + lr.height / 2;
+            const a = f.ang * Math.PI / 180, dist = vmax * .75;
+            const dx = Math.cos(a) * dist, dy = Math.sin(a) * dist;
+            const hit = fly / (fly + SETTLE);
+            const flyEase = 'cubic-bezier(.6,0,.9,.35)';
+            const at = k => `translate(${dx * (1 - k)}px, ${dy * (1 - k)}px) rotate(${f.rot * (1 - k)}deg) scale(${1 + (f.sc - 1) * (1 - k)})`;
+            const from = { transform: at(0), opacity: 0, filter: `blur(10px) ${glow(0, 0)}`, easing: flyEase };
+            const touch = { transform: `translate(${-dx * .012}px, ${-dy * .012}px) scale(1.07, .93)`, opacity: 1, filter: `blur(0px) ${glow(30, .9)}`, offset: hit, easing: 'cubic-bezier(.2,.9,.3,1)' };
+            const flight = rare && i === 2 ? [
+                { ...from, easing: 'cubic-bezier(.15,.7,.35,1)' },
+                { transform: at(.8), opacity: 1, filter: `blur(2px) ${glow(12, .4)}`, offset: hit * .3, easing: 'linear' },
+                { transform: at(.88), opacity: 1, filter: `blur(0px) ${glow(16, .5)}`, offset: hit * .86, easing: 'cubic-bezier(.8,0,1,.5)' },
+                touch
+            ] : [from, { opacity: 1, offset: hit * .25 }, touch];
+            playBoth([letters[0][i], letters[1][i]], [
+                ...flight,
+                { transform: 'none', opacity: 1, filter: `blur(0px) ${glow(10, .3)}` }
+            ], { delay: lock - fly, duration: fly + SETTLE });
+            if (rare) [1, 2].forEach(k => {
+                const ghosts = words.map(w => el('vpi-letter vpi-ghost', w, box.textContent));
+                ghosts.forEach(g => { g.style.left = box.offsetLeft + 'px'; g.style.top = box.offsetTop + 'px'; });
+                const path = flight.slice(0, -1).map(fr => ({ transform: fr.transform, easing: fr.easing, offset: fr.offset === undefined ? undefined : fr.offset / hit }))
+                    .filter(fr => fr.transform);
+                playBoth(ghosts, [
+                    ...path.map((fr, j) => ({ ...fr, opacity: j === 0 ? 0 : .42 / k, filter: 'blur(8px)' })),
+                    { transform: touch.transform, opacity: 0, filter: 'blur(4px)' }
+                ], { delay: lock - fly + 45 * k, duration: fly, fill: 'both' });
+            });
+            shake(lock, SHAKE[i]);
+            burst(lock, cx, cy, lr.height * (i === 2 ? 2.2 : 1.5), i === 2);
+        });
+        if (twist) {
+            const all = i => letters.map(l => l[i]);
+            const hop = (i, at, h, dur) => playBoth(all(i), [
+                { transform: 'translateY(0)' },
+                { transform: `translateY(${-h}px) scale(.96, 1.05)`, offset: .45, easing: 'cubic-bezier(.3,0,.7,1)' },
+                { transform: 'translateY(0) scale(1.05, .95)', offset: .85 },
+                { transform: 'translateY(0)' }
+            ], { delay: at, duration: dur, easing: 'cubic-bezier(.2,.7,.3,1)', composite: 'add', fill: 'none' });
+            const tb = letters[0][1].getBoundingClientRect();
+            playBoth(all(1), [
+                { transform: 'translateY(0) rotate(0deg)' },
+                { transform: `translateY(${-tb.height * .42}px) rotate(-9deg)`, offset: .5, easing: 'cubic-bezier(.3,0,.7,1)' },
+                { transform: 'translateY(0) rotate(0deg) scale(1.06, .92)', offset: .9 },
+                { transform: 'translateY(0) rotate(0deg)' }
+            ], { delay: LOCK[1] + 30, duration: PLAN.BOUNCE - LOCK[1] + 30, easing: 'cubic-bezier(.2,.7,.3,1)', composite: 'add', fill: 'none' });
+            shake(PLAN.BOUNCE, 3);
+            const db = letters[0][2].getBoundingClientRect();
+            const mr = mount.getBoundingClientRect();
+            playBoth(all(2), [
+                { transform: `translateY(${-(db.bottom - mr.top + db.height * 1.5)}px) scale(.94, 1.25)`, opacity: 0, filter: `blur(7px) ${glow(0, 0)}`, easing: 'cubic-bezier(.55,0,1,.45)' },
+                { opacity: 1, offset: .04 },
+                { transform: 'translateY(0) scale(1.18, .78)', opacity: 1, filter: `blur(0px) ${glow(40, 1)}`, offset: .55, easing: 'cubic-bezier(.2,.9,.3,1)' },
+                { transform: 'translateY(-6px) scale(.97, 1.04)', opacity: 1, offset: .78 },
+                { transform: 'none', opacity: 1, filter: `blur(0px) ${glow(10, .3)}` }
+            ], { delay: LOCK[2] - FLY[2], duration: FLY[2] / .55 });
+            shake(LOCK[2], 20);
+            burst(LOCK[2], db.left - wr.left + db.width / 2, db.bottom - wr.top - db.height * .15, db.height * 2.2, true);
+            play(flash, [{ opacity: 0 }, { opacity: .2, offset: .1 }, { opacity: 0 }], { delay: LOCK[2], duration: 380, fill: 'none' });
+            [0, 1].forEach(i => hop(i, LOCK[2] + 20, 30, 300));
+            [0, 1, 2].forEach(i => hop(i, PLAN.WAVE + i * 80, 22, 280));
+            const T = PLAN.STICK - PLAN.X;
+            playBoth(xMarks, [
+                { transform: `translate(calc(-50% + ${W * .75}px), -50%) rotate(1440deg) scale(.5)`, opacity: 0 },
+                { opacity: 1, offset: .12 },
+                { transform: 'translate(-50%, -50%) rotate(0deg) scale(1)', opacity: 1 }
+            ], { delay: PLAN.X, duration: T, easing: 'cubic-bezier(.15,.6,.35,1)' });
+            playBoth(xMarks, [
+                { transform: 'rotate(0deg)' }, { transform: 'rotate(8deg)' }, { transform: 'rotate(-6deg)' },
+                { transform: 'rotate(4deg)' }, { transform: 'rotate(-2deg)' }, { transform: 'rotate(1deg)' }, { transform: 'rotate(0deg)' }
+            ], { delay: PLAN.STICK, duration: 460, easing: 'ease-out', composite: 'add', fill: 'none' });
+            shake(PLAN.STICK, 7);
+            play(flash, [{ opacity: 0 }, { opacity: .06, offset: .3 }, { opacity: 0 }], { delay: PLAN.STICK, duration: 200, fill: 'none' });
+            playBoth(xMarks, [{ filter: glow(6, .5) }, { filter: glow(28, 1), offset: .3 }, { filter: glow(12, .55) }], { delay: PLAN.STICK, duration: 520 });
+        }
+        if (!twist) ['.vpi-x1', '.vpi-x2'].forEach((sel, i) => {
+            xMarks.forEach(xm => xm.querySelectorAll(sel).forEach(path => play(path, [
+                { strokeDasharray: '1 1', strokeDashoffset: 1 },
+                { strokeDasharray: '1 1', strokeDashoffset: 0 }
+            ], { delay: X + i * X_GAP, duration: X_DRAW, easing: 'cubic-bezier(.7,0,.3,1)' })));
+            play(flash, [{ opacity: 0 }, { opacity: .05, offset: .5 }, { opacity: 0 }], { delay: X + i * X_GAP + X_DRAW * .6, duration: 160, fill: 'none' });
+        });
+        if (!twist) shake(X + X_GAP + X_DRAW * .8, rare ? 10 : 3);
+        if (!twist) playBoth(xMarks, [{ filter: glow(0, 0) }, { filter: glow(26, .95), offset: .35 }, { filter: glow(12, .55) }], { delay: X + X_GAP + X_DRAW, duration: 520 });
+        if (rare) {
+            playBoth(worlds, [{ transform: 'scale(1)' }, { transform: 'scale(1.07)' }],
+                { delay: 0, duration: EXIT, easing: 'linear', composite: 'add', fill: 'forwards' });
+            playBoth(worlds, [{ transform: 'scale(1)' }, { transform: 'scale(1.13)', offset: .14 }, { transform: 'scale(1)' }],
+                { delay: X + X_GAP + X_DRAW * .7, duration: 560, easing: 'cubic-bezier(.2,.8,.2,1)', composite: 'add', fill: 'none' });
+            playBoth(xMarks, [
+                { transform: 'translate(-50%, -50%) scale(2.6) rotate(-35deg)', opacity: 0 },
+                { opacity: 1, offset: .2 },
+                { transform: 'translate(-50%, -50%) scale(.94) rotate(3deg)', opacity: 1, offset: .8 },
+                { transform: 'translate(-50%, -50%) scale(1) rotate(0deg)', opacity: 1 }
+            ], { delay: X - 90, duration: X_DRAW + X_GAP + 150, easing: 'cubic-bezier(.3,0,.2,1)' });
+        }
+        let draw = null;
+        if (asm) {
+            const cv = document.createElement('canvas');
+            cv.className = 'vpi-shards';
+            ov.insertBefore(cv, flash);
+            const mr = mount.getBoundingClientRect();
+            const dpr = Math.min(2, devicePixelRatio || 1);
+            cv.width = W * dpr; cv.height = H * dpr;
+            const g = cv.getContext('2d');
+            g.scale(dpr, dpr);
+            const cs = getComputedStyle(letters[0][0]);
+            const ink = cs.color, fontPx = parseFloat(cs.fontSize);
+            const step = Math.max(3, Math.round(fontPx / 52));
+            const off = document.createElement('canvas');
+            off.width = W; off.height = H;
+            const o = off.getContext('2d', { willReadFrequently: true });
+            o.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+            o.textAlign = 'center';
+            o.textBaseline = 'alphabetic';
+            o.fillStyle = '#fff';
+            const pieces = [];
+            letters[0].forEach((box, li) => {
+                const r0 = box.getBoundingClientRect(), m = o.measureText(box.textContent);
+                const r = { left: r0.left - mr.left, top: r0.top - mr.top, width: r0.width, height: r0.height };
+                const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+                o.clearRect(0, 0, W, H);
+                o.fillText(box.textContent, cx, cy + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2);
+                const x0 = Math.max(0, Math.floor(r.left - step)), y0 = Math.max(0, Math.floor(r.top - step));
+                const w = Math.min(W - x0, Math.ceil(r.width + step * 2)), h = Math.min(H - y0, Math.ceil(r.height + step * 2));
+                const px = o.getImageData(x0, y0, w, h).data;
+                const lock = LOCK[li];
+                for (let y = 0; y < h; y += step) for (let x = 0; x < w; x += step) {
+                    if (px[(y * w + x) * 4 + 3] < 128) continue;
+                    const ang = rnd(0, Math.PI * 2), dist = vmax * rnd(.3, .8);
+                    const t0 = lock - PLAN.ASM + rnd(0, PLAN.ASM * .62);
+                    pieces.push({
+                        tx: x0 + x, ty: y0 + y, li, t0, d: Math.min(rnd(230, 430), lock - 20 - t0),
+                        sx: cx + Math.cos(ang) * dist, sy: cy + Math.sin(ang) * dist * .8, spin: rnd(-3, 3)
+                    });
+                }
+            });
+            const clock = play(cv, [{ opacity: 1 }, { opacity: 1 }], { duration: LOCK[2] + 80, fill: 'none' });
+            draw = () => {
+                const t = clock.currentTime;
+                g.clearRect(0, 0, W, H);
+                if (t === null || t > LOCK[2] + 60) return;
+                g.fillStyle = ink;
+                for (const p of pieces) {
+                    if (t < p.t0 || t >= LOCK[p.li] + 20) continue;
+                    const k = Math.min(1, (t - p.t0) / p.d), e = 1 - Math.pow(1 - k, 3);
+                    const x = p.sx + (p.tx - p.sx) * e, y = p.sy + (p.ty - p.sy) * e, sz = step * (.95 + (1 - e) * 1.4);
+                    g.globalAlpha = Math.min(1, k * 3);
+                    if (e < .98) {
+                        g.save(); g.translate(x, y); g.rotate(p.spin * (1 - e)); g.fillRect(-sz / 2, -sz / 2, sz, sz); g.restore();
+                    } else g.fillRect(x - sz / 2, y - sz / 2, sz, sz);
+                }
+                g.globalAlpha = 1;
+            };
+            const T0 = PLAN.TICKS[0].t - 60, D = PLAN.LOCKED + 260 - T0;
+            const rot = (a, sc = 1) => `translate(-50%, -50%) rotate(${a}deg) scale(${sc})`;
+            const frames = [{ offset: 0, transform: rot(0) }];
+            let prev = 0, prevT = T0;
+            PLAN.TICKS.forEach(tk => {
+                const move = Math.min(40, (tk.t - prevT) * .6);
+                frames.push({ offset: (tk.t - move - T0) / D, transform: rot(prev) });
+                frames.push({ offset: (tk.t - T0) / D, transform: rot(tk.a) });
+                prev = tk.a; prevT = tk.t;
+            });
+            frames.push({ offset: (PLAN.LOCKED - T0) / D, transform: rot(prev) });
+            frames.push({ offset: (PLAN.LOCKED + 60 - T0) / D, transform: rot(prev + 4, 1.1) });
+            frames.push({ offset: 1, transform: rot(prev) });
+            playBoth(xMarks, frames, { delay: T0, duration: D, easing: 'linear' });
+            shake(PLAN.LOCKED, 9);
+            play(flash, [{ opacity: 0 }, { opacity: .12, offset: .15 }, { opacity: 0 }], { delay: PLAN.LOCKED, duration: 300, fill: 'none' });
+            playBoth(xMarks, [{ filter: glow(12, .55) }, { filter: glow(30, 1), offset: .3 }, { filter: glow(12, .55) }], { delay: PLAN.LOCKED, duration: 520, fill: 'forwards' });
+        }
+        splitExit(F, EXIT);
+        return { anims: F.anims, total: EXIT + INTRO.SPLIT + 80, still: EXIT - 150, ov, draw, sound: variant };
+    }
+
+    function glyphBox(word) {
+        const cs = getComputedStyle(word);
+        const fs = parseFloat(cs.fontSize);
+        const c = document.createElement('canvas').getContext('2d');
+        c.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+        const m = c.measureText('ИТД');
+        const fa = m.fontBoundingBoxAscent, fd = m.fontBoundingBoxDescent;
+        const base = (fs - (fa + fd)) / 2 + fa;
+        return { base, cap: base - m.actualBoundingBoxAscent, fs };
+    }
+
+    function buildStamp(mount, light) {
+        const F = frame(mount, light, 'vpb');
+        const { ov, worlds, play, playBoth, shake, W, H } = F;
+        const P = introPlan(false);
+        const { LOCK, FLY, X, X_DRAW, X_GAP, EXIT } = P;
+        const SETTLE = INTRO.SETTLE;
+        const rules = worlds.map(w => el('vpb-rules', w));
+        const xMarks = worlds.map((w, n) => xSvg(w, n, true));
+        const words = worlds.map(w => el('vpi-word', w));
+        const inv = el('vpb-inv', ov);
+        const letters = words.map(w => [...'ИТД'].map(ch => el('vpi-letter', w, ch)));
+        const gb = glyphBox(words[0]);
+        const wr = worlds[0].getBoundingClientRect(), wd = words[0].getBoundingClientRect();
+        const topY = wd.top - wr.top + gb.cap, botY = wd.top - wr.top + gb.base;
+        rules.forEach(r => {
+            r.innerHTML = '<i></i><i></i><b></b><b></b>';
+            const [l1, l2, t1, t2] = r.children;
+            l1.style.top = topY + 'px'; l2.style.top = botY + 'px';
+            t1.style.cssText = `top:${topY - 14}px;height:${botY - topY + 28}px;left:${wd.left - wr.left - 18}px`;
+            t2.style.cssText = `top:${topY - 14}px;height:${botY - topY + 28}px;left:${wd.right - wr.left + 18}px`;
+        });
+        const lines = rules.flatMap(r => [...r.querySelectorAll('i')]);
+        lines.forEach((ln, k) => play(ln, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }],
+            { delay: 60 + (k % 2) * 90, duration: 520, easing: 'cubic-bezier(.7,0,.2,1)' }));
+        const ticks = rules.flatMap(r => [...r.querySelectorAll('b')]);
+        ticks.forEach((tk, k) => play(tk, [{ transform: 'scaleY(0)' }, { transform: 'scaleY(1)' }],
+            { delay: 380 + (k % 2) * 60, duration: 240, easing: 'cubic-bezier(.7,0,.2,1)' }));
+        const DIRS = [[-1, 0], [0, -1], [1, 0]];
+        letters[0].forEach((box, i) => {
+            const lock = LOCK[i], fly = FLY[i], [ux, uy] = DIRS[i];
+            const lr = box.getBoundingClientRect();
+            const cx = lr.left - wr.left + lr.width / 2, cy = lr.top - wr.top + lr.height / 2;
+            const dx = ux * (W * .62 + lr.width), dy = uy * (H * .62 + lr.height);
+            const hit = fly / (fly + SETTLE);
+            const stretch = ux ? 'scale(1.55, .86)' : 'scale(.86, 1.55)';
+            const squash = ux ? 'scale(.9, 1.07)' : 'scale(1.08, .9)';
+            playBoth([letters[0][i], letters[1][i]], [
+                { transform: `translate(${dx}px, ${dy}px) ${stretch}`, opacity: 1, easing: 'cubic-bezier(.75,0,1,.6)' },
+                { transform: `translate(${-ux * 4}px, ${-uy * 4}px) ${squash}`, opacity: 1, offset: hit, easing: 'cubic-bezier(.2,.9,.3,1)' },
+                { transform: 'none', opacity: 1 }
+            ], { delay: lock - fly, duration: fly + SETTLE });
+            shake(lock, [4, 6, 10][i], 4);
+            const n = i === 2 ? 12 : 8, size = lr.height * (i === 2 ? 1.25 : 1);
+            for (let k = 0; k < n; k++) {
+                const ang = (k / n) * Math.PI * 2 + (i * .3), r0 = size * .5, dist = size * (i === 2 ? .32 : .22);
+                const rot = ang * 180 / Math.PI + 90, c = Math.cos(ang), s = Math.sin(ang);
+                playBoth(worlds.map(w => el('vpi-fx vpb-tick', w)), [
+                    { transform: `translate(${cx + c * r0}px, ${cy + s * r0}px) rotate(${rot}deg) scaleY(.3)`, opacity: 1 },
+                    { transform: `translate(${cx + c * (r0 + dist)}px, ${cy + s * (r0 + dist)}px) rotate(${rot}deg) scaleY(1)`, opacity: 1, offset: .7 },
+                    { transform: `translate(${cx + c * (r0 + dist * 1.15)}px, ${cy + s * (r0 + dist * 1.15)}px) rotate(${rot}deg) scaleY(.2)`, opacity: 0 }
+                ], { delay: lock, duration: i === 2 ? 240 : 170, easing: 'cubic-bezier(.1,.8,.3,1)', fill: 'none' });
+            }
+        });
+        play(inv, [{ opacity: 1 }, { opacity: 1 }], { delay: LOCK[2], duration: 70, fill: 'none' });
+        ['.vpi-x1', '.vpi-x2'].forEach((sel, i) => {
+            xMarks.forEach(xm => xm.querySelectorAll(sel).forEach(path => play(path, [
+                { strokeDasharray: '1 1', strokeDashoffset: 1 },
+                { strokeDasharray: '1 1', strokeDashoffset: 0 }
+            ], { delay: X + i * X_GAP, duration: X_DRAW, easing: 'cubic-bezier(.8,0,.2,1)' })));
+        });
+        playBoth(xMarks, [
+            { transform: 'translate(-50%, -50%) scale(1)' },
+            { transform: 'translate(-50%, -50%) scale(1.045)', offset: .2 },
+            { transform: 'translate(-50%, -50%) scale(1)' }
+        ], { delay: X + X_GAP + X_DRAW, duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'none' });
+        shake(X + X_GAP + X_DRAW, 3, 4);
+        lines.forEach(ln => play(ln, [{ opacity: .32 }, { opacity: .9, offset: .4 }, { opacity: .32 }], { delay: EXIT - 260, duration: 300, fill: 'none' }));
+        splitExit(F, EXIT, 'vpb-seam');
+        return { anims: F.anims, total: EXIT + INTRO.SPLIT + 80, still: EXIT - 300, ov, draw: null, sound: false };
+    }
+
+    let grainUrl = '';
+    function grain() {
+        if (grainUrl) return grainUrl;
+        const c = document.createElement('canvas');
+        c.width = c.height = 192;
+        const g = c.getContext('2d'), d = g.createImageData(192, 192);
+        for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+        g.putImageData(d, 0, 0);
+        return (grainUrl = c.toDataURL());
+    }
+    function buildFilm(mount, light) {
+        const F = frame(mount, light, 'vpc');
+        const { ov, worlds, halves, play, playBoth, shake } = F;
+        const P = introPlan(false);
+        const { LOCK, FLY, X, X_DRAW, X_GAP, EXIT } = P;
+        const GLOW = light ? '0,0,0' : '255,255,255', GA = light ? .45 : 1;
+        const glow = (px, a) => `drop-shadow(0 0 ${px}px rgba(${GLOW},${(a * GA).toFixed(3)}))`;
+        const xMarks = worlds.map((w, n) => xSvg(w, n, false));
+        const words = worlds.map(w => el('vpi-word', w));
+        const letters = words.map(w => [...'ИТД'].map(ch => el('vpi-letter', w, ch)));
+        const grains = halves.map(h => { const g = el('vpc-grain', h); g.style.backgroundImage = `url(${grain()})`; return g; });
+        halves.forEach(h => el('vpc-vig', h));
+        const flash = el('vpi-flash', ov);
+        const inv = el('vpb-inv', ov);
+        const burn = el('vpc-burn', ov);
+        const END = EXIT + 760;
+        const gf = [];
+        for (let t = 0; t <= END; t += 42) gf.push({ backgroundPosition: `${Math.round(rnd(0, 192))}px ${Math.round(rnd(0, 192))}px`, offset: t / END, easing: 'step-end' });
+        gf[gf.length - 1].offset = 1;
+        playBoth(grains, gf, { duration: END, easing: 'linear' });
+        const wv = [];
+        for (let t = 0; t <= END; t += 84) wv.push({ transform: `translate(${rnd(-.6, .6).toFixed(2)}px, ${rnd(-1.4, 1.4).toFixed(2)}px)`, offset: t / END, easing: 'step-end' });
+        wv[wv.length - 1].offset = 1;
+        playBoth(worlds, wv, { duration: END, composite: 'add', fill: 'none' });
+        letters[0].forEach((box, i) => {
+            const lock = LOCK[i], fly = FLY[i];
+            const hit = fly / (fly + INTRO.SETTLE);
+            const fl = [0, .3, .05, .55, .2, .8, .35];
+            const frames = fl.map((o, k) => ({ opacity: o, offset: hit * (k / fl.length), filter: `blur(${(8 * (1 - k / fl.length)).toFixed(1)}px) ${glow(0, 0)}`, transform: `scale(${(1.22 - .2 * k / fl.length).toFixed(3)})`, easing: 'step-end' }));
+            playBoth([letters[0][i], letters[1][i]], [
+                ...frames,
+                { opacity: 1, offset: hit, filter: `blur(0px) ${glow(34, .95)}`, transform: 'scale(1.04)', easing: 'cubic-bezier(.2,.9,.3,1)' },
+                { opacity: 1, filter: `blur(0px) ${glow(8, .25)}`, transform: 'none' }
+            ], { delay: lock - fly, duration: fly + INTRO.SETTLE });
+            shake(lock, [3, 4, 8][i]);
+            if (i < 2) play(flash, [{ opacity: 0 }, { opacity: .12, offset: .1 }, { opacity: 0 }], { delay: lock, duration: 240, fill: 'none' });
+        });
+        play(inv, [{ opacity: 1 }, { opacity: 1 }], { delay: LOCK[2], duration: 84, fill: 'none' });
+        play(flash, [{ opacity: 0 }, { opacity: .16, offset: .1 }, { opacity: 0 }], { delay: LOCK[2] + 84, duration: 380, fill: 'none' });
+        ['.vpi-x1', '.vpi-x2'].forEach((sel, i) => {
+            xMarks.forEach(xm => xm.querySelectorAll(sel).forEach(path => play(path, [
+                { strokeDasharray: '1 1', strokeDashoffset: 1 },
+                { strokeDasharray: '1 1', strokeDashoffset: 0 }
+            ], { delay: X + i * X_GAP, duration: X_DRAW, easing: 'cubic-bezier(.7,0,.3,1)' })));
+        });
+        playBoth(xMarks, [{ filter: glow(0, 0) }, { filter: glow(30, 1), offset: .3 }, { filter: glow(10, .45) }], { delay: X + X_GAP + X_DRAW, duration: 560 });
+        shake(X + X_GAP + X_DRAW * .8, 3);
+        playBoth(worlds, [{ transform: 'scale(1)' }, { transform: 'scale(1.06)' }], { delay: EXIT - 300, duration: 900, easing: 'cubic-bezier(.5,0,.8,.4)', composite: 'add', fill: 'forwards' });
+        play(burn, [
+            { opacity: 0, transform: 'scale(3)' },
+            { opacity: 1, transform: 'scale(3)', offset: .55 },
+            { opacity: 1, transform: 'scale(3)' }
+        ], { delay: EXIT - 120, duration: 360, easing: 'cubic-bezier(.5,0,.6,1)', fill: 'forwards' });
+        play(ov, [{ opacity: 1 }, { opacity: 0 }], { delay: EXIT + 220, duration: 520, easing: 'cubic-bezier(.3,0,.4,1)', fill: 'forwards' });
+        return { anims: F.anims, total: END, still: EXIT - 330, ov, draw: null, sound: false };
+    }
+
+    return {
+        INTRO, introPlan, introSound,
+        h: { el, rnd, frame, xSvg, splitExit, glyphBox, buildMono },
+        build(dir, mount, variant, light) {
+            mount.replaceChildren();
+            if (dir === 'b') return buildStamp(mount, light);
+            if (dir === 'c') return buildFilm(mount, light);
+            return buildMono(mount, variant, light);
+        }
+    };
+})();
+
+const IntroV2 = (function () {
+    const D = IntroDesign, Hp = D.h, { el, rnd, xSvg } = Hp;
+
+    function synth(ctx, master) {
+        const sr = ctx.sampleRate;
+        const noise = ctx.createBuffer(1, sr, sr);
+        const nd = noise.getChannelData(0);
+        for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+        const env = (param, t, peak, attack, decay) => {
+            param.setValueAtTime(0.0001, t);
+            param.exponentialRampToValueAtTime(peak, t + attack);
+            param.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+        };
+        const TAIL = 1.6;
+        const tailEnv = (param, t, peak, attack) => {
+            param.setValueAtTime(0.0001, t);
+            param.exponentialRampToValueAtTime(peak, t + attack);
+            param.exponentialRampToValueAtTime(peak * 0.5, t + attack + 0.3);
+            param.linearRampToValueAtTime(0, t + attack + 0.3 + TAIL);
+        };
+        const echo = ctx.createConvolver();
+        const ir = ctx.createBuffer(2, sr * 1.8, sr);
+        for (let c = 0; c < 2; c++) {
+            const d = ir.getChannelData(c);
+            for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.5);
+        }
+        echo.buffer = ir;
+        const eg = ctx.createGain();
+        eg.gain.value = 0.35;
+        echo.connect(eg).connect(master);
+        const src = () => { const s = ctx.createBufferSource(); s.buffer = noise; return s; };
+        const S = {
+            whoosh(t, dur, low, k = 1) {
+                const s = src(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+                bp.type = 'bandpass'; bp.Q.value = 1.2;
+                bp.frequency.setValueAtTime((low ? 140 : 300) * k, t);
+                bp.frequency.exponentialRampToValueAtTime((low ? 1500 : 3200) * k, t + dur);
+                g.gain.setValueAtTime(0.0001, t);
+                g.gain.exponentialRampToValueAtTime(0.45, t + dur * 0.95);
+                g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.05);
+                s.connect(bp).connect(g).connect(master);
+                s.start(t); s.stop(t + dur + 0.1);
+            },
+            clank(t, heavy, k = 1) {
+                const end = t + (heavy ? 0.3 + TAIL + 0.1 : 1.2);
+                const th = ctx.createOscillator(), tg = ctx.createGain();
+                th.frequency.setValueAtTime((heavy ? 110 : 150) * k, t);
+                th.frequency.exponentialRampToValueAtTime(heavy ? 45 : 48, t + (heavy ? 0.9 : 0.25));
+                if (heavy) tailEnv(tg.gain, t, 0.7, 0.014); else env(tg.gain, t, 0.55, 0.012, 0.3);
+                th.connect(tg).connect(master);
+                if (heavy) tg.connect(echo);
+                th.start(t); th.stop(end);
+                if (heavy) {
+                    const r = src(), lp = ctx.createBiquadFilter(), rg = ctx.createGain();
+                    r.loop = true; lp.type = 'lowpass'; lp.frequency.value = 160;
+                    tailEnv(rg.gain, t, 0.6, 0.03);
+                    r.connect(lp).connect(rg).connect(master); rg.connect(echo);
+                    r.start(t); r.stop(end);
+                }
+                [1, 1.47, 2.09, 2.76, 3.9].forEach((m, i) => {
+                    const o = ctx.createOscillator(), g = ctx.createGain();
+                    o.type = 'triangle';
+                    o.frequency.value = (heavy ? 420 : 560) * k * m;
+                    env(g.gain, t, 0.12 / (i + 1), 0.004, (heavy ? 0.6 : 0.45) / (1 + i * 0.4));
+                    o.connect(g).connect(master);
+                    o.start(t); o.stop(t + 1);
+                });
+                const c = src(), hp = ctx.createBiquadFilter(), cg = ctx.createGain();
+                hp.type = 'highpass'; hp.frequency.value = 2000;
+                env(cg.gain, t, 0.36, 0.002, 0.05);
+                c.connect(hp).connect(cg).connect(master);
+                c.start(t, Math.random() * 0.5); c.stop(t + 0.1);
+            },
+            slash(t, dur) {
+                const s = src(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+                bp.type = 'bandpass'; bp.Q.value = 2.5;
+                bp.frequency.setValueAtTime(1200, t);
+                bp.frequency.exponentialRampToValueAtTime(7000, t + dur);
+                g.gain.setValueAtTime(0.0001, t);
+                g.gain.exponentialRampToValueAtTime(0.55, t + dur * 0.7);
+                g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.08);
+                s.connect(bp).connect(g).connect(master);
+                s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.1);
+            },
+            sub(t) {
+                const o = ctx.createOscillator(), g = ctx.createGain();
+                o.frequency.setValueAtTime(70, t);
+                o.frequency.exponentialRampToValueAtTime(32, t + 1.2);
+                tailEnv(g.gain, t, 0.6, 0.035);
+                o.connect(g).connect(master);
+                o.start(t); o.stop(t + 0.3 + TAIL + 0.2);
+            },
+            tick(t, gain = 0.3, freq = 2400) {
+                const s = src(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+                bp.type = 'bandpass'; bp.Q.value = 6; bp.frequency.value = freq;
+                env(g.gain, t, gain, 0.001, 0.02);
+                s.connect(bp).connect(g).connect(master);
+                s.start(t, Math.random() * 0.5); s.stop(t + 0.05);
+            },
+            riser(t, dur) {
+                const s = src(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+                bp.type = 'bandpass'; bp.Q.value = 3;
+                bp.frequency.setValueAtTime(400, t);
+                bp.frequency.exponentialRampToValueAtTime(6000, t + dur);
+                g.gain.setValueAtTime(0.0001, t);
+                g.gain.exponentialRampToValueAtTime(0.28, t + dur);
+                g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.03);
+                s.connect(bp).connect(g).connect(master);
+                s.start(t); s.stop(t + dur + 0.05);
+            },
+            key(t, g0 = 1) {
+                S.tick(t, 0.22 * g0, 3300);
+                const o = ctx.createOscillator(), g = ctx.createGain();
+                o.frequency.setValueAtTime(170, t);
+                o.frequency.exponentialRampToValueAtTime(70, t + 0.05);
+                env(g.gain, t, 0.2 * g0, 0.004, 0.06);
+                o.connect(g).connect(master);
+                o.start(t); o.stop(t + 0.1);
+            },
+            thud(t, g0 = 1) {
+                const o = ctx.createOscillator(), g = ctx.createGain();
+                o.frequency.setValueAtTime(95, t);
+                o.frequency.exponentialRampToValueAtTime(46, t + 0.25);
+                env(g.gain, t, 0.52 * g0, 0.01, 0.35);
+                o.connect(g).connect(master);
+                o.start(t); o.stop(t + 0.5);
+                const s = src(), lp = ctx.createBiquadFilter(), ng = ctx.createGain();
+                lp.type = 'lowpass'; lp.frequency.value = 500;
+                env(ng.gain, t, 0.2 * g0, 0.004, 0.08);
+                s.connect(lp).connect(ng).connect(master);
+                s.start(t, Math.random() * 0.5); s.stop(t + 0.15);
+            },
+            paper(t, dur, g0 = 1) {
+                const s = src(), hp = ctx.createBiquadFilter(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+                hp.type = 'highpass'; hp.frequency.value = 1400;
+                bp.type = 'bandpass'; bp.Q.value = 0.7;
+                bp.frequency.setValueAtTime(2500, t);
+                bp.frequency.linearRampToValueAtTime(5200, t + dur);
+                g.gain.setValueAtTime(0.0001, t);
+                g.gain.exponentialRampToValueAtTime(0.32 * g0, t + dur * 0.35);
+                g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+                s.connect(hp).connect(bp).connect(g).connect(master);
+                s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.02);
+            },
+            cut(t, dur) {
+                const s = src(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+                bp.type = 'bandpass'; bp.Q.value = 2;
+                bp.frequency.setValueAtTime(700, t);
+                bp.frequency.exponentialRampToValueAtTime(9000, t + dur);
+                g.gain.setValueAtTime(0.0001, t);
+                g.gain.exponentialRampToValueAtTime(0.5, t + dur * 0.6);
+                g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.12);
+                s.connect(bp).connect(g).connect(master);
+                s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.2);
+            },
+            fall(t0, t1) {
+                const o = ctx.createOscillator(), g = ctx.createGain();
+                o.frequency.setValueAtTime(1500, t0);
+                o.frequency.exponentialRampToValueAtTime(260, t1);
+                g.gain.setValueAtTime(0.0001, t0);
+                g.gain.exponentialRampToValueAtTime(0.18, t1 - 0.02);
+                g.gain.exponentialRampToValueAtTime(0.0001, t1 + 0.01);
+                o.connect(g).connect(master);
+                o.start(t0); o.stop(t1 + 0.04);
+            },
+            whir(t0, t1) {
+                const s = src(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+                s.loop = true; bp.type = 'bandpass'; bp.Q.value = 2; bp.frequency.value = 1800;
+                g.gain.setValueAtTime(0.0001, t0);
+                const dur = t1 - t0;
+                for (let k = 0, n = 22; k < n; k++) {
+                    const tt = t0 + dur * Math.pow(k / n, 0.8);
+                    g.gain.setValueAtTime(0.35 * (0.4 + 0.6 * k / n), tt);
+                    g.gain.setValueAtTime(0.02, tt + 0.012);
+                }
+                s.connect(bp).connect(g).connect(master);
+                s.start(t0); s.stop(t1);
+            },
+            twang(t) {
+                const o = ctx.createOscillator(), v = ctx.createOscillator(), vg = ctx.createGain(), g = ctx.createGain();
+                o.type = 'triangle'; o.frequency.value = 190;
+                v.frequency.value = 24; vg.gain.value = 14;
+                v.connect(vg).connect(o.frequency);
+                env(g.gain, t, 0.35, 0.005, 0.55);
+                o.connect(g).connect(master); g.connect(echo);
+                o.start(t); v.start(t); o.stop(t + 0.7); v.stop(t + 0.7);
+            }
+        };
+        return S;
+    }
+    function playCues(ctx, at, cues) {
+        const out = ctx.createDynamicsCompressor();
+        out.connect(ctx.destination);
+        const master = ctx.createGain();
+        master.gain.value = D.INTRO.VOLUME * soundVolume();
+        master.connect(out);
+        const S = synth(ctx, master);
+        for (const c of cues) {
+            const f = S[c.k];
+            if (!f) continue;
+            if (c.k === 'fall' || c.k === 'whir') f(at(c.t), at(c.t1));
+            else f(at(c.t), ...(c.a || []));
+        }
+    }
+    function mkFrame(mount, light, cls, polys) {
+        if (!polys) return Hp.frame(mount, light, cls);
+        const ov = el('vpi-overlay ' + cls + (light ? ' vpi-light' : ''), mount);
+        const halves = polys.map(() => el('vpi-half', ov));
+        const worlds = halves.map(h => el('vpi-world', h));
+        const anims = [];
+        const play = (target, frames, opts) => { const a = target.animate(frames, { fill: 'both', ...opts }); a.pause(); anims.push(a); return a; };
+        const playBoth = (targets, frames, opts) => targets.map(t => play(t, frames, opts));
+        return { ov, halves, worlds, anims, play, playBoth, W: mount.clientWidth, H: mount.clientHeight };
+    }
+    const poly = pts => 'polygon(' + pts.map(([x, y]) => `${x.toFixed(1)}px ${y.toFixed(1)}px`).join(',') + ')';
+    function geometry(F, words, letters) {
+        const wr = F.worlds[0].getBoundingClientRect(), wd = words[0].getBoundingClientRect();
+        const gb = Hp.glyphBox(words[0]);
+        const base = wd.top - wr.top + gb.base, cap = wd.top - wr.top + gb.cap;
+        const L = letters[0].map(b => { const r = b.getBoundingClientRect(); return { cx: r.left - wr.left + r.width / 2, cy: (cap + base) / 2, w: r.width, h: base - cap, left: b.offsetLeft, top: b.offsetTop, bw: b.offsetWidth, bh: b.offsetHeight }; });
+        return { L, base, cap, fs: gb.fs, W: F.W, H: F.H, cx: F.W / 2, cy: F.H / 2 };
+    }
+    function kick(F, at, a) {
+        F.playBoth(F.worlds, [
+            { transform: 'translate(0px, 0px) scale(1)' },
+            { transform: `translate(0px, ${6 * a}px) scale(${1 + 0.014 * a})`, offset: 0.1 },
+            { transform: `translate(0px, ${-2.5 * a}px) scale(${1 - 0.005 * a})`, offset: 0.32 },
+            { transform: `translate(0px, ${a}px) scale(1)`, offset: 0.58 },
+            { transform: 'translate(0px, 0px) scale(1)' }
+        ], { delay: at, duration: 460, easing: 'ease-out', composite: 'add', fill: 'none' });
+    }
+    function bloom(F, at, x, y, s, a) {
+        const bs = F.worlds.map(wo => { const b = el('vpi-fx vpx-bloom', wo); b.style.width = b.style.height = s + 'px'; b.style.margin = `${-s / 2}px 0 0 ${-s / 2}px`; return b; });
+        F.playBoth(bs, [
+            { transform: `translate(${x}px, ${y}px)`, opacity: 0 },
+            { transform: `translate(${x}px, ${y}px)`, opacity: a, offset: 0.14 },
+            { transform: `translate(${x}px, ${y}px)`, opacity: 0 }
+        ], { delay: at, duration: 460, easing: 'ease-out', fill: 'none' });
+    }
+    function dust(F, at, x, y, size, n) {
+        for (let i = 0; i < n; i++) {
+            const side = i % 2 ? 1 : -1, ang = (side > 0 ? 0 : Math.PI) + rnd(-0.45, 0.12) * side;
+            const r0 = size * 0.35, dist = size * rnd(0.35, 0.7), c = Math.cos(ang), s = Math.sin(ang), rot = ang * 180 / Math.PI + 90;
+            F.playBoth(F.worlds.map(w => el('vpi-fx vpi-spark', w)), [
+                { transform: `translate(${x + c * r0}px, ${y + s * r0 * 0.4}px) rotate(${rot}deg)`, opacity: 0.9 },
+                { transform: `translate(${x + c * (r0 + dist)}px, ${y + s * (r0 + dist) * 0.4}px) rotate(${rot}deg) scaleY(.2)`, opacity: 0 }
+            ], { delay: at, duration: rnd(320, 520), easing: 'cubic-bezier(.1,.8,.3,1)', fill: 'none' });
+        }
+    }
+    function drop(F, pair, at, fly, f, settle = 260) {
+        const hit = fly / (fly + settle);
+        F.playBoth(pair, [
+            { transform: `translate(${f.dx}px, ${f.dy}px) rotate(${f.rot}deg) scale(${f.sc})`, opacity: 0, filter: `blur(${f.blur || 12}px)`, easing: 'cubic-bezier(.5,0,.9,.4)' },
+            { opacity: 1, offset: hit * 0.35 },
+            { transform: 'translate(0px, 0px) rotate(0deg) scale(1.07, .93)', opacity: 1, filter: 'blur(0px)', offset: hit, easing: 'cubic-bezier(.25,.9,.35,1)' },
+            { transform: 'translate(0px, 0px) rotate(0deg) scale(.985, 1.015)', opacity: 1, filter: 'blur(0px)', offset: hit + (1 - hit) * 0.45, easing: 'ease-in-out' },
+            { transform: 'translate(0px, 0px) rotate(0deg) scale(1)', opacity: 1, filter: 'blur(0px)' }
+        ], { delay: at - fly, duration: fly + settle });
+    }
+    function drawX(F, xMarks, G, X, draw, gap) {
+        const S = xMarks[0].getBoundingClientRect().width, k = 0.36 * S;
+        ['.vpi-x1', '.vpi-x2'].forEach((sel, i) => {
+            xMarks.forEach(xm => xm.querySelectorAll(sel).forEach(p => F.play(p, [
+                { strokeDasharray: '1 1', strokeDashoffset: 1, opacity: 0 },
+                { strokeDasharray: '1 1', strokeDashoffset: 0.9, opacity: 1, offset: 0.1 },
+                { strokeDasharray: '1 1', strokeDashoffset: 0, opacity: 1 }
+            ], { delay: X + i * gap, duration: draw, easing: 'cubic-bezier(.7,0,.3,1)' })));
+            const [sx, sy, ex, ey] = i ? [k, -k, -k, k] : [-k, -k, k, k];
+            F.playBoth(F.worlds.map(w => el('vpi-fx vpx-glint', w)), [
+                { transform: `translate(${G.cx + sx}px, ${G.cy + sy}px)`, opacity: 1 },
+                { transform: `translate(${G.cx + ex}px, ${G.cy + ey}px)`, opacity: 1 }
+            ], { delay: X + i * gap, duration: draw, easing: 'cubic-bezier(.7,0,.3,1)', fill: 'none' });
+        });
+        return S;
+    }
+    function sheen(F, words, at, dur = 720) {
+        const sh = words.map(w => { const s = el('vpx-sheen', w); [...'ИТД'].forEach(ch => el('vpx-sheen-l', s, ch)); return s; });
+        F.playBoth(sh, [{ backgroundPosition: '115% 0' }, { backgroundPosition: '-15% 0' }], { delay: at, duration: dur, easing: 'cubic-bezier(.45,0,.25,1)', fill: 'none' });
+    }
+    function push(F, until, amt = 0.035) {
+        F.playBoth(F.worlds, [{ transform: 'scale(1)' }, { transform: `scale(${1 + amt})` }], { delay: 0, duration: until, easing: 'linear', composite: 'add', fill: 'forwards' });
+    }
+    function diagExit(F, at) {
+        const W = F.W, H = F.H, L = W + H, cx = W / 2, cy = H / 2, d = L * 0.5;
+        const o = 0.9, a1 = [cx - L, cy + L], a2 = [cx + L, cy - L];
+        const b1 = [a1[0] + o, a1[1] + o], b2 = [a2[0] + o, a2[1] + o], c1 = [a1[0] - o, a1[1] - o], c2 = [a2[0] - o, a2[1] - o];
+        F.halves[0].style.clipPath = poly([b1, b2, [b2[0] - L, b2[1] - L], [b1[0] - L, b1[1] - L]]);
+        F.halves[1].style.clipPath = poly([c1, c2, [c2[0] + L, c2[1] + L], [c1[0] + L, c1[1] + L]]);
+        const seam = el('vpx-seam', F.ov);
+        const len = Math.hypot(W, H) * 1.05;
+        Object.assign(seam.style, { width: len + 'px', marginLeft: -len / 2 + 'px' });
+        F.play(seam, [
+            { transform: 'rotate(-45deg) scaleX(0)', opacity: 1 },
+            { transform: 'rotate(-45deg) scaleX(1)', opacity: 1, offset: 0.55 },
+            { transform: 'rotate(-45deg) scaleX(1)', opacity: 0 }
+        ], { delay: at, duration: 300, easing: 'cubic-bezier(.6,0,.2,1)', fill: 'none' });
+        F.play(F.halves[0], [{ transform: 'translate(0px, 0px)' }, { transform: `translate(${-d}px, ${-d}px)` }], { delay: at + 150, duration: 520, easing: 'cubic-bezier(.7,0,.25,1)', fill: 'forwards' });
+        F.play(F.halves[1], [{ transform: 'translate(0px, 0px)' }, { transform: `translate(${d}px, ${d}px)` }], { delay: at + 150, duration: 520, easing: 'cubic-bezier(.7,0,.25,1)', fill: 'forwards' });
+        return at + 150 + 520;
+    }
+    function base(mount, light, cls, solid) {
+        const F = mkFrame(mount, light, 'vpx ' + (cls || ''));
+        const xMarks = F.worlds.map((w, n) => xSvg(w, n, !!solid));
+        const words = F.worlds.map(w => el('vpi-word', w));
+        const letters = words.map(w => [...'ИТД'].map(ch => el('vpi-letter', w, ch)));
+        const G = geometry(F, words, letters);
+        return { F, xMarks, words, letters, G };
+    }
+    const pairOf = (letters, i) => letters.map(l => l[i]);
+    const exitCues = EXIT => [{ t: EXIT - 200, k: 'whoosh', a: [0.26, false, 1] }];
+
+    function classic2(mount, light) {
+        const { F, xMarks, words, letters, G } = base(mount, light);
+        const LOCK = [560, 860, 1120], FLY = [460, 400, 340];
+        const vmax = Math.max(G.W, G.H);
+        const FROM = [{ dx: -0.22 * vmax, dy: -0.05 * vmax, sc: 3.2, rot: -9 }, { dx: 0, dy: -0.24 * vmax, sc: 3.6, rot: 6 }, { dx: 0.22 * vmax, dy: -0.04 * vmax, sc: 3.2, rot: 9 }];
+        letters[0].forEach((b, i) => {
+            const g = G.L[i];
+            drop(F, pairOf(letters, i), LOCK[i], FLY[i], FROM[i]);
+            kick(F, LOCK[i], [0.45, 0.6, 0.85][i]);
+            bloom(F, LOCK[i], g.cx, g.cy, g.h * 1.9, [0.45, 0.55, 0.75][i]);
+        });
+        dust(F, LOCK[2], G.L[2].cx, G.base, G.L[2].h, 10);
+        const X = 1460, XD = 140, XG = 90, XL = X + XG + XD;
+        const S = drawX(F, xMarks, G, X, XD, XG);
+        kick(F, XL, 1.25);
+        bloom(F, XL, G.cx, G.cy, S * 1.3, 0.8);
+        sheen(F, words, XL + 280);
+        const EXIT = XL + 760;
+        push(F, EXIT + 200);
+        const END = diagExit(F, EXIT);
+        const cues = [
+            { t: LOCK[0] - FLY[0], k: 'whoosh', a: [FLY[0] / 1000, false, 0.9] }, { t: LOCK[0], k: 'clank', a: [false, 1] },
+            { t: LOCK[1] - FLY[1], k: 'whoosh', a: [FLY[1] / 1000, false, 1.05] }, { t: LOCK[1], k: 'clank', a: [false, 1.12] },
+            { t: LOCK[2] - FLY[2], k: 'whoosh', a: [FLY[2] / 1000, false, 1.2] }, { t: LOCK[2], k: 'clank', a: [false, 1.26] },
+            { t: X - 240, k: 'riser', a: [0.24] },
+            { t: X, k: 'slash', a: [XD / 1000] }, { t: X + XG, k: 'slash', a: [XD / 1000] },
+            { t: XL, k: 'clank', a: [true, 1] }, { t: XL, k: 'sub' },
+            ...exitCues(EXIT)
+        ];
+        return { anims: F.anims, total: END + 60, still: EXIT - 100, ov: F.ov, draw: null, cues };
+    }
+
+    function rare2(mount, light) {
+        const { F, xMarks, words, letters, G } = base(mount, light);
+        const LOCK = [620, 1000, 1900], FLY = [460, 400, 1000];
+        const vmax = Math.max(G.W, G.H);
+        drop(F, pairOf(letters, 0), LOCK[0], FLY[0], { dx: -0.3 * vmax, dy: 0.02 * vmax, sc: 2.6, rot: -12 });
+        drop(F, pairOf(letters, 1), LOCK[1], FLY[1], { dx: 0.04 * vmax, dy: -0.3 * vmax, sc: 2.8, rot: 8 });
+        const g2 = G.L[2], fdx = G.W * 0.95, fdy = -G.H * 0.08;
+        const at = k => `translate(${fdx * (1 - k)}px, ${fdy * (1 - k)}px) rotate(${24 * (1 - k)}deg) scale(${1 + 0.7 * (1 - k)})`;
+        const hit = FLY[2] / (FLY[2] + 260);
+        const flight = [
+            { transform: at(0), opacity: 0, filter: 'blur(10px)', easing: 'cubic-bezier(.15,.7,.35,1)' },
+            { transform: at(0.82), opacity: 1, filter: 'blur(2px)', offset: hit * 0.3, easing: 'linear' },
+            { transform: at(0.9), opacity: 1, filter: 'blur(0px)', offset: hit * 0.86, easing: 'cubic-bezier(.8,0,1,.5)' },
+            { transform: 'translate(0px, 0px) rotate(0deg) scale(1.08, .9)', opacity: 1, filter: 'blur(0px)', offset: hit, easing: 'cubic-bezier(.25,.9,.35,1)' },
+            { transform: 'translate(0px, 0px) rotate(0deg) scale(.985, 1.015)', opacity: 1, filter: 'blur(0px)', offset: hit + (1 - hit) * 0.45 },
+            { transform: 'translate(0px, 0px) rotate(0deg) scale(1)', opacity: 1, filter: 'blur(0px)' }
+        ];
+        F.playBoth(pairOf(letters, 2), flight, { delay: LOCK[2] - FLY[2], duration: FLY[2] + 260 });
+        [1, 2].forEach(k => {
+            const ghosts = words.map(w => el('vpi-letter vpi-ghost', w, 'Д'));
+            ghosts.forEach(gh => { gh.style.left = g2.left + 'px'; gh.style.top = g2.top + 'px'; });
+            F.playBoth(ghosts, [
+                { transform: at(0), opacity: 0, filter: 'blur(8px)', easing: 'cubic-bezier(.15,.7,.35,1)' },
+                { transform: at(0.82), opacity: 0.4 / k, filter: 'blur(8px)', offset: 0.3, easing: 'linear' },
+                { transform: at(0.9), opacity: 0.3 / k, filter: 'blur(6px)', offset: 0.86, easing: 'cubic-bezier(.8,0,1,.5)' },
+                { transform: 'translate(0px, 0px) scale(1.08, .9)', opacity: 0, filter: 'blur(4px)' }
+            ], { delay: LOCK[2] - FLY[2] + 50 * k, duration: FLY[2], fill: 'both' });
+        });
+        const c = i => [-(G.L[i].cx - G.cx), -(G.L[i].cy - G.cy)];
+        const cam = (s, i) => i == null ? `scale(${s}) translate(0px, 0px)` : `scale(${s}) translate(${c(i)[0]}px, ${c(i)[1]}px)`;
+        const CD = 2100, P = t => t / CD;
+        F.playBoth(F.worlds, [
+            { offset: 0, transform: cam(2.3, 0) },
+            { offset: P(LOCK[0] + 120), transform: cam(2.24, 0), easing: 'linear' },
+            { offset: P(LOCK[1] - 170), transform: cam(2.22, 0), easing: 'cubic-bezier(.8,0,.2,1)' },
+            { offset: P(LOCK[1] - 30), transform: cam(2.3, 1) },
+            { offset: P(LOCK[1] + 220), transform: cam(2.22, 1), easing: 'cubic-bezier(.6,0,.2,1)' },
+            { offset: P(1520), transform: cam(1.3, null), easing: 'linear' },
+            { offset: P(LOCK[2] - 30), transform: cam(1.2, null), easing: 'cubic-bezier(.2,.9,.3,1)' },
+            { offset: P(LOCK[2] + 90), transform: cam(1, null) },
+            { offset: 1, transform: cam(1, null) }
+        ], { delay: 0, duration: CD, easing: 'linear' });
+        kick(F, LOCK[0], 0.5); kick(F, LOCK[1], 0.6); kick(F, LOCK[2], 1.1);
+        bloom(F, LOCK[2], g2.cx, g2.cy, g2.h * 2, 0.8);
+        dust(F, LOCK[2], g2.cx, G.base, g2.h, 12);
+        const XIN = 2180, XL = 2400;
+        F.playBoth(xMarks, [
+            { transform: 'translate(-50%, -50%) scale(2.8) rotate(-30deg)', opacity: 0, filter: 'blur(8px)' },
+            { opacity: 1, offset: 0.3 },
+            { transform: 'translate(-50%, -50%) scale(.95) rotate(2deg)', opacity: 1, filter: 'blur(0px)', offset: 0.82 },
+            { transform: 'translate(-50%, -50%) scale(1) rotate(0deg)', opacity: 1, filter: 'blur(0px)' }
+        ], { delay: XIN, duration: (XL - XIN) / 0.82, easing: 'cubic-bezier(.5,0,.3,1)' });
+        const S = xMarks[0].getBoundingClientRect().width;
+        kick(F, XL, 1.4);
+        sheen(F, words, XL + 300);
+        const EXIT = XL + 720;
+        F.playBoth(F.worlds, [{ transform: 'scale(1)' }, { transform: 'scale(1.035)' }], { delay: CD, duration: EXIT + 200 - CD, easing: 'linear', composite: 'add', fill: 'forwards' });
+        const END = diagExit(F, EXIT);
+        const cues = [
+            { t: LOCK[0] - FLY[0], k: 'whoosh', a: [FLY[0] / 1000, false, 0.95] }, { t: LOCK[0], k: 'clank', a: [false, 1] },
+            { t: LOCK[1] - 170, k: 'whoosh', a: [0.16, false, 1.4] },
+            { t: LOCK[1] - FLY[1], k: 'whoosh', a: [FLY[1] / 1000, false, 1.05] }, { t: LOCK[1], k: 'clank', a: [false, 1.1] },
+            { t: LOCK[2] - FLY[2], k: 'whoosh', a: [FLY[2] / 1000, true, 0.8] },
+            { t: LOCK[2] - 380, k: 'riser', a: [0.38] },
+            { t: LOCK[2], k: 'clank', a: [true, 1] }, { t: LOCK[2], k: 'sub' },
+            { t: XIN - 60, k: 'whoosh', a: [0.3, true, 1] },
+            { t: XL, k: 'clank', a: [true, 0.85] }, { t: XL, k: 'sub' },
+            ...exitCues(EXIT)
+        ];
+        return { anims: F.anims, total: END + 60, still: EXIT - 100, ov: F.ov, draw: null, cues };
+    }
+
+    function assemble2(mount, light) {
+        const { F, xMarks, words, letters, G } = base(mount, light);
+        const N = 12, T = [180, 470, 760], STAG = 22, SL = 300;
+        const cues = [];
+        const done = T.map(t => t + (N - 1) * STAG + SL);
+        letters[0].forEach((b, i) => {
+            const g = G.L[i];
+            words.forEach((w, wi) => {
+                for (let k = 0; k < N; k++) {
+                    const s = el('vpi-letter vpx-slice', w, b.textContent);
+                    Object.assign(s.style, { left: g.left + 'px', top: g.top + 'px', clipPath: `inset(${(k * 100 / N).toFixed(2)}% -10% ${(100 - (k + 1) * 100 / N).toFixed(2)}% -10%)` });
+                    const order = N - 1 - k, dir = (k + i) % 2 ? 1 : -1, t0 = T[i] + order * STAG;
+                    const sx = dir < 0 ? -(g.cx + g.w * 1.4) : G.W - g.cx + g.w * 1.4;
+                    F.play(s, [
+                        { transform: `translateX(${sx}px) scaleX(1.6)`, opacity: 1, easing: 'cubic-bezier(.15,.85,.25,1)' },
+                        { transform: 'translateX(0px) scaleX(1)', opacity: 1, offset: 0.98 },
+                        { transform: 'translateX(0px) scaleX(1)', opacity: 0 }
+                    ], { delay: t0, duration: done[i] - t0 + 1, fill: 'both' });
+                    if (wi === 0) cues.push({ t: t0 + SL * 0.8, k: 'tick', a: [0.16 + 0.1 * (order / N), 2600 + 300 * (k % 3)] });
+                }
+            });
+            F.playBoth(pairOf(letters, i), [{ opacity: 0 }, { opacity: 1 }], { delay: done[i], duration: 1, fill: 'both' });
+            F.playBoth(pairOf(letters, i), [
+                { transform: 'scale(1)' }, { transform: 'scale(1.05, .95)', offset: 0.25 }, { transform: 'scale(1)' }
+            ], { delay: done[i], duration: 240, easing: 'ease-out', fill: 'none' });
+            kick(F, done[i], [0.4, 0.5, 0.75][i]);
+            cues.push({ t: done[i], k: 'clank', a: [false, 1 + 0.1 * i] });
+        });
+        const X1 = 1450, X2 = 1560, XS = 260;
+        xMarks.forEach(xm => {
+            F.play(xm.querySelector('g'), [{ opacity: 1 }], { duration: 1 });
+            xm.querySelectorAll('.vpi-x1').forEach(p => F.play(p, [
+                { transform: 'translate(-90px, -90px)', opacity: 0, easing: 'cubic-bezier(.2,.8,.2,1)' }, { opacity: 1, offset: 0.3 }, { transform: 'translate(0px, 0px)', opacity: 1 }
+            ], { delay: X1 - XS, duration: XS }));
+            xm.querySelectorAll('.vpi-x2').forEach(p => F.play(p, [
+                { transform: 'translate(90px, -90px)', opacity: 0, easing: 'cubic-bezier(.2,.8,.2,1)' }, { opacity: 1, offset: 0.3 }, { transform: 'translate(0px, 0px)', opacity: 1 }
+            ], { delay: X2 - XS, duration: XS }));
+        });
+        cues.push({ t: X1 - XS, k: 'whoosh', a: [XS / 1000, false, 1.3] }, { t: X1, k: 'clank', a: [false, 1.4] });
+        cues.push({ t: X2 - XS, k: 'whoosh', a: [XS / 1000, false, 1.4] }, { t: X2, k: 'clank', a: [false, 1.5] });
+        const TK = [{ t: 1780, a: 30 }, { t: 1880, a: 60 }, { t: 1980, a: 90 }, { t: 2120, a: 60 }];
+        const LOCKED = 2280, T0 = 1700, DD = LOCKED + 240 - T0;
+        const rot = (a, sc = 1) => `translate(-50%, -50%) rotate(${a}deg) scale(${sc})`;
+        const fr = [{ offset: 0, transform: rot(0) }];
+        let prev = 0;
+        TK.forEach(tk => { fr.push({ offset: (tk.t - 45 - T0) / DD, transform: rot(prev) }); fr.push({ offset: (tk.t - T0) / DD, transform: rot(tk.a) }); prev = tk.a; cues.push({ t: tk.t, k: 'tick', a: [0.5, 1700] }, { t: tk.t + 6, k: 'tick', a: [0.25, 3400] }); });
+        fr.push({ offset: (LOCKED - 50 - T0) / DD, transform: rot(prev) });
+        fr.push({ offset: (LOCKED - T0) / DD, transform: rot(90) });
+        fr.push({ offset: (LOCKED + 60 - T0) / DD, transform: rot(92, 1.08) });
+        fr.push({ offset: 1, transform: rot(90) });
+        F.playBoth(xMarks, fr, { delay: T0, duration: DD, easing: 'linear' });
+        const S = xMarks[0].getBoundingClientRect().width;
+        kick(F, LOCKED, 1.2);
+        bloom(F, LOCKED, G.cx, G.cy, S * 1.2, 0.7);
+        cues.push({ t: LOCKED, k: 'clank', a: [true, 1] }, { t: LOCKED, k: 'sub' });
+        sheen(F, words, LOCKED + 260);
+        const EXIT = LOCKED + 680;
+        push(F, EXIT + 200, 0.03);
+        const END = diagExit(F, EXIT);
+        cues.push(...exitCues(EXIT));
+        return { anims: F.anims, total: END + 60, still: EXIT - 100, ov: F.ov, draw: null, cues };
+    }
+
+    function twist2(mount, light) {
+        const { F, xMarks, words, letters, G } = base(mount, light);
+        const vmax = Math.max(G.W, G.H);
+        const LOCK = [620, 1000], FLY = [460, 420];
+        drop(F, pairOf(letters, 0), LOCK[0], FLY[0], { dx: -0.24 * vmax, dy: -0.04 * vmax, sc: 3, rot: -9 });
+        drop(F, pairOf(letters, 1), LOCK[1], FLY[1], { dx: 0, dy: -0.26 * vmax, sc: 3.2, rot: 6 });
+        kick(F, LOCK[0], 0.45); kick(F, LOCK[1], 0.55);
+        const BOUNCE = LOCK[1] + 300;
+        F.playBoth(pairOf(letters, 1), [
+            { transform: 'translateY(0px) rotate(0deg)' },
+            { transform: `translateY(${-G.L[1].h * 0.45}px) rotate(-10deg)`, offset: 0.5, easing: 'cubic-bezier(.3,0,.7,1)' },
+            { transform: 'translateY(0px) rotate(0deg) scale(1.06, .92)', offset: 0.88 },
+            { transform: 'translateY(0px) rotate(0deg)' }
+        ], { delay: LOCK[1] + 40, duration: BOUNCE - LOCK[1] - 10, easing: 'cubic-bezier(.2,.7,.3,1)', composite: 'add', fill: 'none' });
+        const g2 = G.L[2];
+        const carets = words.map(w => { const c = el('vpx-caret', w); Object.assign(c.style, { left: g2.left + g2.bw * 0.18 + 'px', top: (G.cap - (G.base - G.cap) * 0.12) - (w.offsetTop || 0) + 'px', height: (G.base - G.cap) * 1.24 + 'px' }); return c; });
+        const C0 = 1380, LOCK2 = 2050, FLY2 = 230;
+        F.playBoth(carets, [
+            { opacity: 1, offset: 0, easing: 'step-end' },
+            { opacity: 0, offset: 250 / 760, easing: 'step-end' },
+            { opacity: 1, offset: 400 / 760, easing: 'step-end' },
+            { opacity: 1, offset: (LOCK2 - 20 - C0) / 760 },
+            { opacity: 0, offset: 1 }
+        ], { delay: C0, duration: 760, fill: 'forwards' });
+        F.playBoth(carets, [{ transform: 'scaleY(1)' }, { transform: 'scaleY(.15)', offset: 0.6 }, { transform: 'scaleY(.1)' }], { delay: LOCK2 - 30, duration: 60, fill: 'forwards' });
+        F.playBoth(F.worlds, [
+            { transform: 'translateX(0px) rotate(0deg)' },
+            { transform: `translateX(${-G.W * 0.012}px) rotate(-1.6deg)`, offset: 0.35, easing: 'ease-in-out' },
+            { transform: `translateX(${-G.W * 0.012}px) rotate(-1.6deg)`, offset: 0.75, easing: 'cubic-bezier(.5,0,.2,1)' },
+            { transform: 'translateX(0px) rotate(0deg)' }
+        ], { delay: 1450, duration: 620, composite: 'add', fill: 'none' });
+        F.playBoth(pairOf(letters, 2), [
+            { transform: `translateY(${-(G.base + G.H * 0.2)}px) scale(.94, 1.25)`, opacity: 0, filter: 'blur(7px)', easing: 'cubic-bezier(.55,0,1,.45)' },
+            { opacity: 1, offset: 0.04 },
+            { transform: 'translateY(0px) scale(1.2, .76)', opacity: 1, filter: 'blur(0px)', offset: 0.55, easing: 'cubic-bezier(.2,.9,.3,1)' },
+            { transform: 'translateY(-6px) scale(.97, 1.04)', opacity: 1, offset: 0.78 },
+            { transform: 'none', opacity: 1, filter: 'blur(0px)' }
+        ], { delay: LOCK2 - FLY2, duration: FLY2 / 0.55 });
+        kick(F, LOCK2, 1.4);
+        dust(F, LOCK2, g2.cx, G.base, g2.h, 12);
+        const hop = (i, at, h, dur) => F.playBoth(pairOf(letters, i), [
+            { transform: 'translateY(0px)' },
+            { transform: `translateY(${-h}px) scale(.96, 1.05)`, offset: 0.45, easing: 'cubic-bezier(.3,0,.7,1)' },
+            { transform: 'translateY(0px) scale(1.05, .95)', offset: 0.85 },
+            { transform: 'translateY(0px)' }
+        ], { delay: at, duration: dur, easing: 'cubic-bezier(.2,.7,.3,1)', composite: 'add', fill: 'none' });
+        [0, 1].forEach(i => hop(i, LOCK2 + 20, G.L[i].h * 0.16, 300));
+        const WAVE = LOCK2 + 260;
+        [0, 1, 2].forEach(i => hop(i, WAVE + i * 80, G.L[i].h * 0.1, 280));
+        const XIN = WAVE + 180, STICK = XIN + 320;
+        F.playBoth(xMarks, [
+            { transform: `translate(calc(-50% + ${G.W * 0.75}px), -50%) rotate(1260deg) scale(.5)`, opacity: 0 },
+            { opacity: 1, offset: 0.12 },
+            { transform: 'translate(-50%, -50%) rotate(0deg) scale(1)', opacity: 1 }
+        ], { delay: XIN, duration: STICK - XIN, easing: 'cubic-bezier(.15,.6,.35,1)' });
+        F.playBoth(xMarks, [
+            { transform: 'rotate(0deg)' }, { transform: 'rotate(8deg)' }, { transform: 'rotate(-6deg)' },
+            { transform: 'rotate(4deg)' }, { transform: 'rotate(-2deg)' }, { transform: 'rotate(1deg)' }, { transform: 'rotate(0deg)' }
+        ], { delay: STICK, duration: 460, easing: 'ease-out', composite: 'add', fill: 'none' });
+        const S = xMarks[0].getBoundingClientRect().width;
+        kick(F, STICK, 0.8);
+        sheen(F, words, STICK + 300, 640);
+        const EXIT = STICK + 480;
+        const END = diagExit(F, EXIT);
+        const cues = [
+            { t: LOCK[0] - FLY[0], k: 'whoosh', a: [FLY[0] / 1000, false, 0.95] }, { t: LOCK[0], k: 'clank', a: [false, 1] },
+            { t: LOCK[1] - FLY[1], k: 'whoosh', a: [FLY[1] / 1000, false, 1.05] }, { t: LOCK[1], k: 'clank', a: [false, 1.1] },
+            { t: BOUNCE, k: 'tick', a: [0.5, 900] }, { t: BOUNCE + 10, k: 'clank', a: [false, 1.25] },
+            { t: C0, k: 'key', a: [0.6] }, { t: C0 + 400, k: 'key', a: [0.6] },
+            { t: LOCK2 - FLY2, k: 'fall', t1: LOCK2 },
+            { t: LOCK2, k: 'clank', a: [true, 1] }, { t: LOCK2, k: 'sub' },
+            { t: WAVE + 60, k: 'tick', a: [0.25, 1200] }, { t: WAVE + 140, k: 'tick', a: [0.25, 1300] }, { t: WAVE + 220, k: 'tick', a: [0.25, 1400] },
+            { t: XIN, k: 'whir', t1: STICK }, { t: STICK, k: 'clank', a: [false, 1.2] }, { t: STICK, k: 'twang' },
+            ...exitCues(EXIT)
+        ];
+        return { anims: F.anims, total: END + 60, still: EXIT - 100, ov: F.ov, draw: null, cues };
+    }
+
+    function cursor(mount, light) {
+        const { F, xMarks, words, letters, G } = base(mount, light, 'vpn-cur', true);
+        const addrs = F.worlds.map(w => { const a = el('vpn-addr', w); [...'итд.com'].forEach(ch => el('vpn-ch', a, ch)); return a; });
+        const wr = F.worlds[0].getBoundingClientRect();
+        const chars = [...addrs[0].children].map(c => { const r = c.getBoundingClientRect(); return { l: r.left - wr.left, r: r.right - wr.left, cx: r.left - wr.left + r.width / 2, cy: r.top - wr.top + r.height / 2, h: r.height }; });
+        const fsS = parseFloat(getComputedStyle(addrs[0]).fontSize);
+        const cw = Math.max(2, fsS * 0.085), chh = fsS * 1.02, cy = chars[0].cy;
+        const carets = F.worlds.map(w => { const c = el('vpi-fx vpn-caret', w); Object.assign(c.style, { width: cw + 'px', height: chh + 'px', margin: `${-chh / 2}px 0 0 ${-cw / 2}px` }); return c; });
+        const xAt = k => k === 0 ? chars[0].l - cw : chars[k - 1].r + cw * 0.6;
+        const TK = [...'итд.com'].map((_, k) => 560 + k * 92 + (k >= 3 ? 50 : 0));
+        const TD = [0, 1, 2, 3].map(j => 1330 + j * 55);
+        const MORPH = 1600, LAND = 2000, CD = LAND;
+        const S = xMarks[0].getBoundingClientRect().width;
+        const pos = k => `translate(${xAt(k)}px, ${cy}px) rotate(0deg) scale(1, 1)`;
+        const fr = [{ offset: 0, transform: pos(0), easing: 'step-end' }];
+        TK.forEach((t, k) => fr.push({ offset: t / CD, transform: pos(k + 1), easing: 'step-end' }));
+        TD.forEach((t, j) => fr.push({ offset: t / CD, transform: pos(6 - j), easing: 'step-end' }));
+        fr.push({ offset: MORPH / CD, transform: pos(3), easing: 'cubic-bezier(.65,0,.25,1)' });
+        fr.push({ offset: 1, transform: `translate(${G.cx}px, ${G.cy}px) rotate(-45deg) scale(${(S * 0.1 / cw).toFixed(3)}, ${(S * 1.118 / chh).toFixed(3)})` });
+        F.playBoth(carets, fr, { delay: 0, duration: CD, fill: 'both' });
+        F.playBoth(carets, [
+            { opacity: 1, offset: 0, easing: 'step-end' }, { opacity: 0, offset: 260 / CD, easing: 'step-end' }, { opacity: 1, offset: 520 / CD, easing: 'step-end' },
+            { opacity: 1, offset: 0.999, easing: 'step-end' }, { opacity: 0, offset: 1 }
+        ], { delay: 0, duration: CD, fill: 'both' });
+        addrs.forEach(a => [...a.children].forEach((ch, k) => {
+            const tOn = TK[k], tOff = k >= 3 ? TD[6 - k] : null;
+            if (tOff) F.play(ch, [
+                { opacity: 0, transform: 'translateY(.12em)', offset: 0 },
+                { opacity: 1, transform: 'translateY(0)', offset: 80 / (tOff - tOn) },
+                { opacity: 1, transform: 'translateY(0)', offset: 0.999, easing: 'step-end' },
+                { opacity: 0, transform: 'translateY(0)', offset: 1 }
+            ], { delay: tOn, duration: tOff - tOn, fill: 'both' });
+            else {
+                const g = G.L[k];
+                F.play(ch, [
+                    { opacity: 0, transform: 'translateY(.12em)' },
+                    { opacity: 1, transform: 'translateY(0)' }
+                ], { delay: tOn, duration: 80, fill: 'both' });
+                const sc = G.fs / fsS, dx = g.cx - chars[k].cx, dy = g.cy - chars[k].cy;
+                F.play(ch, [
+                    { opacity: 1, transform: 'translate(0px, 0px) scale(1)', easing: 'cubic-bezier(.7,0,.2,1)' },
+                    { opacity: 0, transform: `translate(${dx}px, ${dy}px) scale(${sc * 0.85})` }
+                ], { delay: MORPH + k * 40, duration: 300, fill: 'forwards' });
+            }
+        }));
+        letters[0].forEach((b, i) => {
+            const g = G.L[i], sc = fsS / G.fs, dx = chars[i].cx - g.cx, dy = chars[i].cy - g.cy;
+            F.playBoth(pairOf(letters, i), [
+                { transform: `translate(${dx}px, ${dy}px) scale(${sc})`, opacity: 0, easing: 'cubic-bezier(.7,0,.2,1)' },
+                { opacity: 1, offset: 0.4 },
+                { transform: 'translate(0px, 0px) scale(1.05, .95)', opacity: 1, offset: 0.84, easing: 'ease-out' },
+                { transform: 'translate(0px, 0px) scale(1)', opacity: 1 }
+            ], { delay: MORPH + i * 40, duration: LAND - MORPH - 20 });
+        });
+        kick(F, LAND, 0.8);
+        xMarks.forEach(xm => {
+            xm.querySelectorAll('.vpi-x1').forEach(p => F.play(p, [{ opacity: 0 }, { opacity: 1 }], { delay: LAND, duration: 1 }));
+            xm.querySelectorAll('.vpi-x2').forEach(p => F.play(p, [{ strokeDasharray: '1 1', strokeDashoffset: 1 }, { strokeDasharray: '1 1', strokeDashoffset: 0 }], { delay: LAND, duration: 150, easing: 'cubic-bezier(.7,0,.3,1)' }));
+        });
+        const k2 = 0.36 * S;
+        F.playBoth(F.worlds.map(w => el('vpi-fx vpx-glint', w)), [
+            { transform: `translate(${G.cx + k2}px, ${G.cy - k2}px)` }, { transform: `translate(${G.cx - k2}px, ${G.cy + k2}px)` }
+        ], { delay: LAND, duration: 150, easing: 'cubic-bezier(.7,0,.3,1)', fill: 'none' });
+        const XL = LAND + 160;
+        kick(F, XL, 1.25);
+        bloom(F, XL, G.cx, G.cy, S * 1.2, 0.7);
+        sheen(F, words, XL + 260);
+        const EXIT = XL + 680;
+        push(F, EXIT + 200, 0.03);
+        const END = diagExit(F, EXIT);
+        const cues = [
+            ...TK.map((t, k) => ({ t, k: 'key', a: [0.8 + 0.05 * (k % 3)] })),
+            ...TD.map(t => ({ t, k: 'key', a: [0.45] })),
+            { t: MORPH - 20, k: 'whoosh', a: [0.38, false, 1.1] },
+            { t: LAND - 20, k: 'clank', a: [false, 1.15] },
+            { t: LAND, k: 'slash', a: [0.15] },
+            { t: XL, k: 'clank', a: [true, 1] }, { t: XL, k: 'sub' },
+            ...exitCues(EXIT)
+        ];
+        return { anims: F.anims, total: END + 60, still: EXIT - 100, ov: F.ov, draw: null, cues };
+    }
+
+    function fold(mount, light) {
+        const W = mount.clientWidth, H = mount.clientHeight, L = W + H, cx = W / 2, cy = H / 2, C = [cx, cy];
+        const polys = [[C, [cx - L, cy - L], [cx + L, cy - L]], [C, [cx + L, cy - L], [cx + L, cy + L]], [C, [cx + L, cy + L], [cx - L, cy + L]], [C, [cx - L, cy + L], [cx - L, cy - L]]];
+        const F = mkFrame(mount, light, 'vpx vpf', polys);
+        const IN = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+        F.halves.forEach((p, i) => {
+            const pp = polys[i].map((pt, j) => j === 0 ? [pt[0] - IN[i][0] * 2, pt[1] - IN[i][1] * 2] : pt);
+            p.style.clipPath = poly(pp);
+            p.style.transformOrigin = ['50% 0', '100% 50%', '50% 100%', '0 50%'][i];
+        });
+        const creases = F.worlds.map(w => [45, -45].map(a => { const c = el('vpf-crease', w); const len = Math.hypot(W, H) * 1.1; Object.assign(c.style, { width: len + 'px', marginLeft: -len / 2 + 'px' }); c.dataset.a = a; return c; }));
+        const xMarks = F.worlds.map((w, n) => xSvg(w, n, false));
+        const words = F.worlds.map(w => el('vpi-word', w));
+        const letters = words.map(w => [...'ИТД'].map(ch => el('vpi-letter', w, ch)));
+        const G = geometry(F, words, letters);
+        const shades = F.halves.map(p => el('vpf-shade', p));
+        creases.flat().forEach(c => F.play(c, [
+            { transform: `rotate(${c.dataset.a}deg) scaleX(0)`, opacity: 0.32 },
+            { transform: `rotate(${c.dataset.a}deg) scaleX(1)`, opacity: 0.32 }
+        ], { delay: 150, duration: 460, easing: 'cubic-bezier(.6,0,.2,1)' }));
+        const R = ['rotateX', 'rotateY', 'rotateX', 'rotateY'], SG = [-1, -1, 1, 1];
+        F.halves.forEach((p, i) => F.play(p, [
+            { transform: `${R[i]}(0deg)` },
+            { transform: `${R[i]}(${SG[i] * 9}deg)`, offset: 0.4, easing: 'cubic-bezier(.3,0,.3,1)' },
+            { transform: `${R[i]}(${-SG[i] * 1.5}deg)`, offset: 0.75 },
+            { transform: `${R[i]}(0deg)` }
+        ], { delay: 680 + (i % 2) * 50, duration: 520, fill: 'none' }));
+        shades.forEach((s, i) => F.play(s, [{ opacity: 0 }, { opacity: 0.22, offset: 0.4 }, { opacity: 0 }], { delay: 680 + (i % 2) * 50, duration: 520, fill: 'none' }));
+        const LOCK = [1300, 1520, 1740];
+        letters[0].forEach((b, i) => {
+            F.playBoth(pairOf(letters, i), [
+                { transform: 'translateY(-3%) scale(1.3)', opacity: 0, filter: 'blur(6px)', easing: 'cubic-bezier(.55,0,.9,.45)' },
+                { opacity: 1, offset: 0.4 },
+                { transform: 'translateY(0) scale(.97, 1.02)', opacity: 1, filter: 'blur(0px)', offset: 0.72, easing: 'ease-out' },
+                { transform: 'none', opacity: 1, filter: 'blur(0px)' }
+            ], { delay: LOCK[i] - 260, duration: 360 });
+            kick(F, LOCK[i] - 8, 0.3);
+            bloom(F, LOCK[i] - 8, G.L[i].cx, G.L[i].cy, G.L[i].h * 1.7, 0.35);
+        });
+        const X = 2000, XD = 150, XG = 90, XL = X + XG + XD;
+        const S = drawX(F, xMarks, G, X, XD, XG);
+        creases.flat().forEach(c => F.play(c, [{ opacity: 0.32 }, { opacity: 0.75, offset: 0.2 }, { opacity: 0.4 }], { delay: XL, duration: 700, fill: 'none' }));
+        kick(F, XL, 1);
+        sheen(F, words, XL + 260);
+        const EXIT = XL + 640;
+        F.halves.forEach((p, i) => F.play(p, [
+            { transform: `${R[i]}(0deg)`, opacity: 1 },
+            { transform: `${R[i]}(${SG[i] * 88}deg)`, opacity: 1, offset: 0.9 },
+            { transform: `${R[i]}(${SG[i] * 96}deg)`, opacity: 0 }
+        ], { delay: EXIT + (i % 2) * 80, duration: 640, easing: 'cubic-bezier(.55,0,.85,.45)', fill: 'forwards' }));
+        shades.forEach((s, i) => F.play(s, [{ opacity: 0 }, { opacity: 0.6 }], { delay: EXIT + (i % 2) * 80, duration: 640, easing: 'ease-in', fill: 'forwards' }));
+        const END = EXIT + 80 + 640;
+        const cues = [
+            { t: 150, k: 'paper', a: [0.46, 0.8] },
+            { t: 680, k: 'paper', a: [0.42, 1] }, { t: 1080, k: 'thud', a: [0.4] },
+            ...LOCK.map((t, i) => ({ t: t - 8, k: 'thud', a: [0.55 + 0.15 * i] })),
+            { t: X - 200, k: 'riser', a: [0.2] },
+            { t: X, k: 'slash', a: [XD / 1000] }, { t: X + XG, k: 'slash', a: [XD / 1000] },
+            { t: XL, k: 'clank', a: [true, 0.85] }, { t: XL, k: 'sub' },
+            { t: EXIT - 200, k: 'whoosh', a: [0.26, false, 1] }
+        ];
+        return { anims: F.anims, total: END + 60, still: EXIT - 100, ov: F.ov, draw: null, cues };
+    }
+
+    function board(mount, light) {
+        const W = mount.clientWidth, H = mount.clientHeight;
+        const ov = el('vpi-overlay vpn-board' + (light ? ' vpi-light' : ''), mount);
+        const cv = document.createElement('canvas');
+        cv.className = 'vpi-shards';
+        ov.appendChild(cv);
+        const dpr = Math.min(2, devicePixelRatio || 1);
+        cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+        const g = cv.getContext('2d');
+        g.scale(dpr, dpr);
+        const c = Math.max(9, Math.round(Math.min(W, H) / 30));
+        const cols = Math.ceil(W / c), rows = Math.ceil(H / c);
+        const ox = (W - cols * c) / 2, oy = (H - rows * c) / 2;
+        const m = document.createElement('canvas');
+        m.width = cols; m.height = rows;
+        const mg = m.getContext('2d', { willReadFrequently: true });
+        const em = Math.min(rows * 0.62, cols / 3.1);
+        mg.font = `900 ${em}px "Arial Black", "Segoe UI Black", Arial, sans-serif`;
+        mg.textBaseline = 'alphabetic';
+        const ws = [...'ИТД'].map(ch => mg.measureText(ch));
+        const gap = em * 0.05, tw = ws.reduce((a, x) => a + x.width, 0) + gap * 2;
+        const asc = ws[0].actualBoundingBoxAscent, by = rows / 2 + asc / 2;
+        const cellL = new Int8Array(cols * rows).fill(-1);
+        const lx = [];
+        let x0 = (cols - tw) / 2;
+        [...'ИТД'].forEach((ch, i) => {
+            mg.clearRect(0, 0, cols, rows);
+            mg.fillStyle = '#fff';
+            mg.fillText(ch, x0, by);
+            const d = mg.getImageData(0, 0, cols, rows).data;
+            for (let k = 0; k < cols * rows; k++) if (d[k * 4 + 3] > 110) cellL[k] = i;
+            lx.push([x0, x0 + ws[i].width]);
+            x0 += ws[i].width + gap;
+        });
+        const S = Math.min(rows * 0.94, cols * 0.62), half = S * 0.36, sw = S * 0.075;
+        const cells = [];
+        const COL = light ? { bg: '#f5f5f5', off: '#e3e3e3', dim: '#b9b9b9', lit: '#141414' } : { bg: '#000', off: '#171717', dim: '#4d4d4d', lit: '#fff' };
+        const maxD = Math.hypot(cols, rows) / 2;
+        const LT = [430, 790, 1150], LW = 260, XT = 1600, SH = 2180, EXIT = 2700;
+        let dMax = 0;
+        for (let r = 0; r < rows; r++) for (let q = 0; q < cols; q++) {
+            const k = r * cols + q, dx = q + 0.5 - cols / 2, dy = r + 0.5 - rows / 2;
+            const li = cellL[k];
+            const onX = Math.abs(dx) < half + sw && Math.abs(dy) < half + sw && (Math.abs(dx - dy) / Math.SQRT2 < sw || Math.abs(dx + dy) / Math.SQRT2 < sw);
+            let lvl = 0, ton = Infinity;
+            if (li >= 0) { lvl = 2; const [a, b] = lx[li]; ton = LT[li] + Math.max(0, Math.min(1, (q - a) / (b - a))) * LW + rnd(0, 50); }
+            else if (onX) { lvl = 1; ton = XT + Math.hypot(dx, dy) / (half * 1.42) * 300 + rnd(0, 30); }
+            const dX = Math.min(Math.abs(dx - dy), Math.abs(dx + dy)) / Math.SQRT2;
+            dMax = Math.max(dMax, dX);
+            cells.push({ x: ox + q * c, y: oy + r * c, lvl, ton, tin: 40 + (q + r) / (cols + rows) * 330, tsh: lvl === 2 ? SH + (q + r) / (cols + rows) * 420 : Infinity, dX });
+        }
+        const OUT = 640;
+        cells.forEach(e => { e.off = EXIT + e.dX / dMax * OUT + rnd(0, 40); });
+        const FL = 90, END = EXIT + OUT + 40 + FL + 40;
+        const R = c * 0.4;
+        const anims = [];
+        const clock = cv.animate([{ opacity: 1 }, { opacity: 1 }], { duration: END, fill: 'both' });
+        clock.pause();
+        anims.push(clock);
+        const draw = () => {
+            const t = clock.currentTime;
+            g.clearRect(0, 0, W, H);
+            if (t === null) return;
+            const exiting = t >= EXIT;
+            if (!exiting) { g.fillStyle = COL.bg; g.fillRect(0, 0, W, H); }
+            const P = [new Path2D(), new Path2D(), new Path2D()];
+            if (exiting) g.fillStyle = COL.bg;
+            for (const e of cells) {
+                let sy = 1;
+                if (t >= e.off) { if (t >= e.off + FL) continue; sy = 1 - (t - e.off) / FL; }
+                if (exiting) g.fillRect(e.x - 0.3, e.y + c * (1 - sy) / 2 - 0.3, c + 0.6, c * sy + 0.6);
+                const grow = Math.max(0, Math.min(1, (t - e.tin) / 140));
+                if (grow <= 0) continue;
+                let lvl = 0, fk = 1;
+                if (t >= e.ton) {
+                    if (t < e.ton + FL) { const p = (t - e.ton) / FL; fk = Math.abs(Math.cos(Math.PI * p)); lvl = p < 0.5 ? 0 : e.lvl; }
+                    else lvl = e.lvl;
+                }
+                if (t >= e.tsh && t < e.tsh + FL) fk = Math.abs(Math.cos(Math.PI * (t - e.tsh) / FL));
+                const rx = R * grow, ry = Math.max(0.05, R * grow * fk * sy);
+                const cxe = e.x + c / 2, cye = e.y + c / 2;
+                P[lvl].moveTo(cxe + rx, cye);
+                P[lvl].ellipse(cxe, cye, rx, ry, 0, 0, Math.PI * 2);
+            }
+            g.fillStyle = COL.off; g.fill(P[0]);
+            g.fillStyle = COL.dim; g.fill(P[1]);
+            g.fillStyle = COL.lit; g.fill(P[2]);
+        };
+        const bins = new Map();
+        const addB = (t, w) => { const b = Math.round(t / 9); bins.set(b, (bins.get(b) || 0) + w); };
+        cells.forEach(e => { if (e.ton < Infinity) addB(e.ton, 1); if (e.tsh < Infinity) addB(e.tsh, 0.35); addB(e.off, 0.25); });
+        const cues = [...bins].map(([b, n]) => ({ t: b * 9, k: 'tick', a: [Math.min(0.42, 0.05 + 0.025 * n), 1500 + Math.random() * 2600] }));
+        cues.push({ t: 40, k: 'whoosh', a: [0.36, true, 0.7] });
+        LT.forEach((t, i) => cues.push({ t: t + LW + 70, k: 'thud', a: [0.45 + 0.15 * i] }));
+        cues.push({ t: XT - 60, k: 'whoosh', a: [0.36, true, 1] }, { t: XT + 340, k: 'thud', a: [0.6] });
+        cues.push({ t: EXIT - 200, k: 'whoosh', a: [0.26, false, 1] });
+        return { anims, total: END, still: EXIT - 120, ov, draw, cues };
+    }
+
+    const OLD = { classic: classic2, rare: rare2, assemble: assemble2, twist: twist2 };
+    const NEW = { cursor, board, fold };
+    return {
+        playCues,
+        build(kind, name, mount, light) {
+            mount.replaceChildren();
+            return (kind === 'new' ? NEW : OLD)[name](mount, light);
+        }
+    };
+})();
+
+        return { IntroDesign, IntroV2 };
+    })(Math, Date, Number, Object, Array, Map, Set, Promise, Error, JSON, String, Symbol, Infinity, NaN, Float32Array, Float64Array, Int8Array, Int16Array, Int32Array, Uint8Array, Uint8ClampedArray, Uint16Array, Uint32Array, isNaN, parseInt, parseFloat);
+    const INTRO_PACK_CSS = `
+    .vpi-overlay { position: absolute; inset: 0; overflow: hidden;
+        --vpi-bg: #000; --vpi-ink: #fff; --vpi-flash: #fff; --vpi-seam-glow: rgba(255, 255, 255, .5); --vpx-bloom: rgba(255, 255, 255, .55); --vpx-sheen: rgba(0, 0, 0, .5); }
+    .vpi-overlay.vpi-light { --vpi-bg: #f5f5f5; --vpi-ink: #141414; --vpi-flash: #000; --vpi-seam-glow: rgba(0, 0, 0, .22); --vpx-bloom: rgba(0, 0, 0, .16); --vpx-sheen: rgba(255, 255, 255, .7); }
+    .vpi-half { position: absolute; inset: 0; background: var(--vpi-bg); overflow: hidden; will-change: transform; }
+    .vpi-half-0 { clip-path: inset(0 50% 0 0); }
+    .vpi-half-1 { clip-path: inset(0 0 0 50%); }
+    .vpi-world { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+    .vpi-word { position: relative; display: flex; gap: .05em; color: var(--vpi-ink); user-select: none; line-height: 1;
+        font: 900 min(24cqw, 36cqh)/1 "Arial Black", "Segoe UI Black", "Helvetica Neue", Arial, sans-serif; }
+    .vpi-letter { display: inline-block; will-change: transform, opacity, filter; }
+    .vpi-fx { position: absolute; left: 0; top: 0; pointer-events: none; opacity: 0; }
+    .vpi-spark { width: 2px; height: 16px; margin: -8px 0 0 -1px; border-radius: 1px; background: linear-gradient(var(--vpi-ink), transparent); }
+    .vpi-flash { position: absolute; inset: 0; background: var(--vpi-flash); opacity: 0; pointer-events: none; }
+    .vpi-x { position: absolute; left: 50%; top: 50%; width: min(46cqw, 70cqh); height: min(46cqw, 70cqh); color: var(--vpi-ink);
+        transform: translate(-50%, -50%); overflow: visible; pointer-events: none; will-change: filter; }
+    .vpi-seam { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; opacity: 0; pointer-events: none;
+        background: linear-gradient(transparent, var(--vpi-ink) 30%, var(--vpi-ink) 70%, transparent); box-shadow: 0 0 18px 2px var(--vpi-seam-glow); }
+    .vpi-hole { stroke: var(--vpi-bg); }
+    .vpi-ghost { position: absolute; }
+    .vpi-xpulse { opacity: 0; }
+    .vpi-shards { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+    .vpx .vpi-letter { -webkit-text-stroke: .06em var(--vpi-bg); paint-order: stroke fill; }
+    .vpx .vpi-x { will-change: transform; }
+    .vpx-slice { position: absolute; }
+    .vpx-ring { border: 1.5px solid var(--vpi-ink); border-radius: 50%; }
+    .vpx-bloom { border-radius: 50%; background: radial-gradient(closest-side, var(--vpx-bloom), transparent); }
+    .vpx-glint { width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--vpi-ink); box-shadow: 0 0 16px 6px var(--vpx-bloom); }
+    .vpx-sheen { position: absolute; inset: 0; display: flex; gap: .05em; color: transparent; pointer-events: none;
+        background: linear-gradient(105deg, transparent 38%, var(--vpx-sheen) 50%, transparent 62%) 115% 0 / 260% 100% no-repeat;
+        -webkit-background-clip: text; background-clip: text; }
+    .vpx-sheen-l { display: inline-block; }
+    .vpx-seam { position: absolute; left: 50%; top: 50%; height: 2px; margin-top: -1px; background: var(--vpi-ink); box-shadow: 0 0 16px 2px var(--vpi-seam-glow); opacity: 0; pointer-events: none; }
+    .vpx-caret { position: absolute; width: .07em; background: var(--vpi-ink); opacity: 0; transform-origin: 50% 100%; }
+    .vpn-addr { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; color: var(--vpi-ink); white-space: pre;
+        font: 600 min(6.4cqw, 9cqh)/1 "Segoe UI", system-ui, sans-serif; letter-spacing: .01em; }
+    .vpn-ch { display: inline-block; opacity: 0; }
+    .vpn-caret { background: var(--vpi-ink); }
+    .vpf { perspective: 1600px; }
+    .vpf .vpi-half { backface-visibility: hidden; }
+    .vpf-crease { position: absolute; left: 50%; top: 50%; height: 1px; margin-top: -.5px; background: var(--vpi-ink); opacity: 0; pointer-events: none; }
+    .vpf-shade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+    .vpx-root { position: fixed; inset: 0; z-index: 2147483647; overflow: hidden; cursor: pointer;
+        --vpi-bg: #000; --vpi-ink: #fff; --vpi-hint: rgba(255, 255, 255, .38); }
+    .vpx-root.vpx-light { --vpi-bg: #f5f5f5; --vpi-ink: #141414; --vpi-hint: rgba(0, 0, 0, .42); }
+    .vpx-mount { position: absolute; inset: 0; container-type: size; overflow: hidden; }
+    .vpx-idle { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; }
+    .vpx-idle-logo { position: relative; width: 96px; height: 96px; display: flex; align-items: center; justify-content: center;
+        animation: vpxBreath 2.6s ease-in-out infinite; }
+    .vpx-idle-logo svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .vpx-idle-logo span { position: relative; color: var(--vpi-ink); font: 900 30px/1 "Arial Black", "Segoe UI Black", Arial, sans-serif; }
+    .vpx-idle-hint { color: var(--vpi-hint); font: 500 13px/1 system-ui, sans-serif; letter-spacing: .28em; text-transform: lowercase;
+        opacity: 0; animation: vpxHint .8s ease 1.1s forwards; }
+    @keyframes vpxBreath { 0%, 100% { opacity: .55; transform: scale(.96); } 50% { opacity: 1; transform: scale(1.03); } }
+    @keyframes vpxHint { to { opacity: 1; } }
+    `;
     const INTRO = {
         LOCK: [620, 1020, 1420],
         FLY: 520,
@@ -488,7 +2035,8 @@
         X_GAP: 150,
         SPLIT: 380,
         IDLE: 3000,
-        RARE: [[true, 0.05 / 3], ['assemble', 0.05 / 3], ['twist', 0.05 / 3]],
+        POOL: [['v2:rare', 10], ['v2:assemble', 10], ['v2:twist', 10], ['v2:was:rare', 10], ['v2:was:assemble', 10], ['v2:was:twist', 10],
+            ['v2:cursor', 10], ['v2:board', 10], ['v2:fold', 10], ['v2:classic', 10]],
         RARE_HOLD: 550
     };
     INTRO.X = INTRO.LOCK[2] + 220;
@@ -737,7 +2285,117 @@
         return t ? t !== 'dark' : GM_getValue('siteTheme', 'dark') === 'light';
     }
     let introOn = false, introReady = false, introGate = null;
+    function playIntroV2(mode, key) {
+        const root = document.documentElement;
+        const light = introIsLight();
+        const css = document.createElement('style');
+        css.textContent = INTRO_PACK_CSS;
+        root.appendChild(css);
+        const host = document.createElement('div');
+        host.className = 'vpx-root' + (light ? ' vpx-light' : '');
+        const mount = document.createElement('div');
+        mount.className = 'vpx-mount';
+        host.appendChild(mount);
+        root.appendChild(host);
+        introOn = true;
+        const prevOverflow = root.style.overflow;
+        root.style.overflow = 'hidden';
+        let cur;
+        try {
+            const was = key.startsWith('v2:was:');
+            const name = key.slice(was ? 7 : 3);
+            if (was) cur = IntroPack.IntroDesign.build('a', mount, name === 'rare' ? true : name, light);
+            else cur = IntroPack.IntroV2.build(name === 'cursor' || name === 'board' || name === 'fold' ? 'new' : 'old', name, mount, light);
+        } catch (e) {
+            host.remove(); css.remove(); introOn = false; root.style.overflow = prevOverflow;
+            throw e;
+        }
+        const anims = cur.anims;
+        for (const a of anims) a.pause();
+        if (cur.draw) cur.draw();
+        let ctx = null, done = false, started = false;
+        const cleanup = () => {
+            if (done) return;
+            done = true;
+            host.remove();
+            css.remove();
+            introOn = false;
+            document.dispatchEvent(new CustomEvent('vp-intro-done'));
+            root.style.overflow = prevOverflow;
+            if (ctx) setTimeout(() => ctx.close().catch(() => { }), 3500);
+        };
+        const skip = () => {
+            if (done) return;
+            removeEventListener('keydown', skip, true);
+            if (ctx) ctx.close().catch(() => { });
+            ctx = null;
+            host.animate([{ opacity: getComputedStyle(host).opacity }, { opacity: 0 }], { duration: 200, fill: 'forwards' }).finished.then(cleanup, cleanup);
+        };
+        const schedule = (c, at) => cur.cues ? IntroPack.IntroV2.playCues(c, at, cur.cues) : IntroPack.IntroDesign.introSound(c, at, cur.sound);
+        function syncSound() {
+            let queued = false;
+            try {
+                ctx = new (window.AudioContext || window.webkitAudioContext)();
+                Promise.all([ctx.resume(), anims[0].ready]).then(() => {
+                    if (!ctx || done) return;
+                    queued = true;
+                    const start = anims[0].startTime;
+                    const toCtx = perf => {
+                        const ts = ctx.getOutputTimestamp ? ctx.getOutputTimestamp() : null;
+                        if (ts && ts.performanceTime > 0) return ts.contextTime + (perf - ts.performanceTime) / 1000;
+                        return ctx.currentTime + (perf - performance.now()) / 1000 - (ctx.outputLatency || 0);
+                    };
+                    schedule(ctx, ms => Math.max(ctx.currentTime + 0.01, toCtx(start + ms)));
+                }, () => { });
+            } catch (e) { ctx = null; }
+            anims[0].ready.then(() => setTimeout(() => { if (!queued && ctx) { ctx.close().catch(() => { }); ctx = null; } }, 600), () => { });
+        }
+        function begin(withSound) {
+            if (started) return;
+            started = true;
+            for (const a of anims) { a.currentTime = 0; a.play(); }
+            if (cur.draw) {
+                const frame = () => { if (done) return; cur.draw(); requestAnimationFrame(frame); };
+                requestAnimationFrame(frame);
+            }
+            const last = anims.reduce((m, a) => a.effect.getComputedTiming().endTime > m.effect.getComputedTiming().endTime ? a : m, anims[0]);
+            last.finished.then(cleanup, cleanup);
+            setTimeout(cleanup, cur.total + 2500);
+            setTimeout(() => { if (done) return; host.addEventListener('click', skip); addEventListener('keydown', skip, true); }, 400);
+            if (withSound) syncSound();
+        }
+        if (mode !== 'tap') {
+            const go = () => {
+                if (started) return;
+                introGate = null;
+                requestAnimationFrame(() => requestAnimationFrame(() => begin(mode === 'desk')));
+            };
+            if (introReady) go(); else { introGate = go; setTimeout(go, 1800); }
+            return anims;
+        }
+        const idle = document.createElement('div');
+        idle.className = 'vpx-idle';
+        idle.innerHTML = `<div class="vpx-idle-logo"><svg viewBox="0 0 100 100"><g fill="none" stroke-linecap="round"><path d="M14 14L86 86M86 14L14 86" stroke="var(--vpi-ink)" stroke-width="12"/>
+            <path d="M14 14L86 86M86 14L14 86" stroke="var(--vpi-bg)" stroke-width="7"/></g></svg><span>ИТД</span></div><div class="vpx-idle-hint">коснись</div>`;
+        host.appendChild(idle);
+        const auto = setTimeout(() => go(false), INTRO.IDLE);
+        function go(withSound) {
+            if (started) return;
+            clearTimeout(auto);
+            host.removeEventListener('pointerup', tap, true);
+            host.removeEventListener('click', tap, true);
+            idle.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.9)' }], { duration: 220, fill: 'forwards' })
+                .finished.then(() => idle.remove(), () => idle.remove());
+            begin(withSound);
+        }
+        function tap(e) { e.stopPropagation(); go(true); }
+        host.addEventListener('pointerup', tap, true);
+        host.addEventListener('click', tap, true);
+        return anims;
+    }
+
     function playIntro(mode, variant) {
+        if (typeof variant === 'string' && variant.startsWith('v2:')) return playIntroV2(mode, variant);
         const root = document.documentElement;
         const rare = variant === true, asm = variant === 'assemble', twist = variant === 'twist';
         const light = introIsLight();
@@ -1162,9 +2820,26 @@
     if (window.top === window.self && introMode() !== 'off'
         && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
         const preview = GM_getValue('introPreview', '');
-        const pickIntro = () => { let r = Math.random(); for (const [v, p] of INTRO.RARE) { if (r < p) return v; r -= p; } return false; };
-        let again = false;
-        try { again = Date.now() - (+sessionStorage.getItem('vp-intro-at') || 0) < 60000; sessionStorage.setItem('vp-intro-at', Date.now()); } catch (e) { }
+        const pickIntro = () => {
+            let r = Math.random() * INTRO.POOL.reduce((s, p) => s + p[1], 0);
+            for (const [v, w] of INTRO.POOL) { if (r < w) return v; r -= w; }
+            return INTRO.POOL[INTRO.POOL.length - 1][0];
+        };
+        const ACT_KEY = 'vp-act', QUIET = 15000;
+        let again = false, lastBump = 0;
+        try {
+            const now = Date.now();
+            again = now - (+localStorage.getItem(ACT_KEY) || 0) < QUIET || now - (+sessionStorage.getItem('vp-intro-at') || 0) < QUIET;
+            localStorage.setItem(ACT_KEY, now);
+        } catch (e) { }
+        const bump = () => {
+            const t = Date.now();
+            if (t - lastBump < 500) return;
+            lastBump = t;
+            try { localStorage.setItem(ACT_KEY, t); } catch (e) { }
+        };
+        ['pointerdown', 'keydown', 'wheel', 'touchstart', 'scroll'].forEach(n => addEventListener(n, bump, { capture: true, passive: true }));
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) bump(); });
         if (!again || preview) try { playIntro(introMode(), preview ? (preview === 'rare' || preview) : pickIntro()); } catch (e) { console.warn('[ITD VP] заставка', e); }
     }
 
@@ -7585,6 +9260,11 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.9.4', '16 ноября 2026', [
+                'Заставка при входе стала чёрно-белой и поставлена заново: удары нарастают, камера и свет работают плавнее, звук мягче',
+                'Заставка не повторяется, пока ты что-то делаешь на сайте: снова она покажется, только если 15 секунд ничего не нажимать',
+                'Оптимизация и исправление багов'
+            ]],
             ['3.9.3 – 3.9.3.2', '11 ноября 2026', [
                 'Баннер: загрузка занимает секунды, а не минуты, в том числе на слабых компьютерах',
                 'Баннер: если баннера нет, кнопки на нём снова на месте и новую картинку можно поставить',
