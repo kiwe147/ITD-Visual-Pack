@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.4
+// @version      3.9.4.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -9260,7 +9260,9 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
-            ['3.9.4', '16 ноября 2026', [
+            ['3.9.4 – 3.9.4.1', '19 ноября 2026', [
+                'Чаты сайта: левое меню встаёт рядом с окном чатов и не уезжает под него, а панель справа не налезает на окно',
+                'Левое меню больше не обрезается и не показывает полосу прокрутки при наведении на пункты',
                 'Заставка при входе стала чёрно-белой и поставлена заново: удары нарастают, камера и свет работают плавнее, звук мягче',
                 'Заставка не повторяется, пока ты что-то делаешь на сайте: снова она покажется, только если 15 секунд ничего не нажимать',
                 'Оптимизация и исправление багов'
@@ -18959,6 +18961,10 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         const railCss = addCss(`
         html.vp-side-moved aside:has(nav), html.vp-side-moved .vp-sidebar { left: var(--vp-side-left) !important; }
         html.vp-side-wide aside:has(nav), html.vp-side-wide .vp-sidebar { width: var(--vp-side-w) !important; }
+        .vp-chats-wrap { pointer-events: none !important; }
+        .vp-chats-wrap > * { pointer-events: auto; }
+        html aside:has(nav), html .vp-sidebar { overflow: visible !important; }
+        html.vp-side-scroll aside:has(nav), html.vp-side-scroll .vp-sidebar { overflow-x: hidden !important; overflow-y: auto !important; }
         .vp-rail { position: fixed; top: 24px; z-index: 50; display: none; flex-direction: column; gap: 12px;
             max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
         .vp-rail.vp-on { display: flex; animation: vpRailIn .4s ease-out; }
@@ -19056,6 +19062,28 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         html.vp-menu-open .itd-scroll-top-btn { opacity: 0 !important; visibility: hidden !important; }`);
 
         const RAIL_TOP = 36;
+        const chatsPage = () => /^\/chats(\/|$)/.test(location.pathname);
+        function chatsGuess() {
+            const cs = getComputedStyle(document.documentElement), W = document.documentElement.clientWidth;
+            const l = (parseFloat(cs.getPropertyValue('--sidebar-gap')) || 36) * 2 + (parseFloat(cs.getPropertyValue('--sidebar-width')) || 200);
+            const w = Math.min(900, W - 2 * l);
+            if (W <= 1173 || w < 300) return null;
+            const left = W / 2 - w / 2;
+            return { left, right: left + w };
+        }
+        function chatsBox() {
+            let e = document.elementsFromPoint(innerWidth / 2, innerHeight / 2).find(x => !x.closest('.vp-msgs, .vp-rail, aside'));
+            while (e && e !== document.body && e !== document.documentElement && getComputedStyle(e).position !== 'fixed') e = e.parentElement;
+            if (!e || e === document.body || e === document.documentElement) return chatsGuess();
+            e.classList.add('vp-chats-wrap');
+            const c = [...e.children].find(x => x.getBoundingClientRect().width > 300) || e;
+            const r = c.getBoundingClientRect();
+            return r.width > 300 && r.width < innerWidth * 0.97 ? { left: r.left, right: r.right } : chatsGuess();
+        }
+        function sideScroll() {
+            const side = siteEl('sidebar');
+            if (side) document.documentElement.classList.toggle('vp-side-scroll', side.scrollHeight > side.clientHeight + 1);
+        }
         const baseLeft = el => el.getBoundingClientRect().left - new DOMMatrix(getComputedStyle(el).transform).m41;
         let cbCached;
         let cbMsgs = false;
@@ -19068,6 +19096,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             return cbCached;
         }
         function contentBoxNow() {
+            if (chatsPage()) return chatsBox();
             const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail';
             let left = Infinity, right = 0;
             const memo = new Map(), tops = new Set();
@@ -19206,14 +19235,14 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         }
         function placeRail() {
             if (mobileMenuOpen) return;
-            const cb = contentBox() || lastCb;
-            if (cb) lastCb = cb;
+            const cb = chatsPage() ? contentBox() : (contentBox() || lastCb);
+            lastCb = cb || (chatsPage() ? null : lastCb);
             const edge = cb ? cb.right : 0;
             const side = siteEl('sidebarRight');
             const right = side ? side.getBoundingClientRect().left : innerWidth;
             const gap = right - edge;
             let box = null, adj = false, sideW = 0;
-            const on = railEnabled && !!myUsername && !/^\/(login|register|signup|forgot|reset)/.test(location.pathname) && !!rail.querySelector(':scope > .vp-rail-card:not([hidden])');
+            const on = railEnabled && !!myUsername && !(chatsPage() && !cb) && !/^\/(login|register|signup|forgot|reset)/.test(location.pathname) && !!rail.querySelector(':scope > .vp-rail-card:not([hidden])');
             const sideEl = siteEl('sidebar');
             if (on && galOpen && sideEl && innerWidth > PHONE_MAX) {
                 const margin = Math.max(12, Math.round(baseLeft(sideEl))), width = 250;
@@ -19244,10 +19273,11 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         addEventListener('resize', placeRail);
 
         function placeSidebar() {
+            sideScroll();
             if (galOpen) { document.documentElement.classList.remove('vp-side-moved'); return; }
             const side = siteEl('sidebar');
-            const cb = contentBox() || lastCb;
-            if (!side || !cb) return;
+            const cb = chatsPage() ? contentBox() : (contentBox() || lastCb);
+            if (!side || !cb) { if (chatsPage()) document.documentElement.classList.remove('vp-side-moved'); return; }
             const siteLeft = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-gap')) || 36;
             const want = Math.round(cb.left - side.getBoundingClientRect().width - 24);
             const on = want > siteLeft + 8 && getComputedStyle(side).position === 'fixed';
@@ -19255,7 +19285,10 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             if (on) document.documentElement.style.setProperty('--vp-side-left', want + 'px');
         }
         addEventListener('resize', placeSidebar);
-        document.addEventListener('vp-loc', () => { placeSidebar(); placeRail(); });
+        document.addEventListener('vp-loc', () => {
+            if (chatsPage()) { glidePlace(); [250, 700, 1500].forEach(t => setTimeout(glidePlace, t)); return; }
+            placeSidebar(); placeRail();
+        });
         addEventListener('popstate', () => setTimeout(() => { placeSidebar(); placeRail(); }, 0));
         onDom(glidePlace);
         placeSidebar();
