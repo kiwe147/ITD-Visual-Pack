@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.4.1
+// @version      3.9.5
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -115,6 +115,13 @@
     else document.addEventListener('DOMContentLoaded', tabletViewport);
     addEventListener('orientationchange', () => setTimeout(tabletViewport, 50));
     matchMedia('(orientation: landscape)').addEventListener('change', tabletViewport);
+
+    function onResize(fn) {
+        let timers = [];
+        const h = () => { fn(); timers.forEach(clearTimeout); timers = [90, 280, 750].map(t => setTimeout(fn, t)); };
+        addEventListener('resize', h);
+        return () => { removeEventListener('resize', h); timers.forEach(clearTimeout); timers = []; };
+    }
 
     const vpErrors = [];
     const logErr = (where, e) => { vpErrors.push(new Date().toTimeString().slice(0, 8) + ' ' + where + ': ' + (e && (e.message || e))); if (vpErrors.length > 30) vpErrors.shift(); };
@@ -3366,7 +3373,16 @@ const IntroV2 = (function () {
             copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6A2.5 2.5 0 0 0 13 3.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/>',
             play: '<path d="m9 6.5 8 5.5-8 5.5z"/>',
             out: '<path d="M8 16 16 8M9.5 8H16v6.5"/>',
-            close: GLYPH.close
+            close: GLYPH.close,
+            edit: '<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16Z"/><path d="M13.5 6.5l4 4"/>',
+            bell: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15Z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/>',
+            bellOff: '<path d="M8.2 5.6A6 6 0 0 1 18 11v5.5l1.5 2h-11"/><path d="M6 11v5.5l-1.5 2H6"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/><path d="M4 4l16 16"/>',
+            search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>',
+            bookmark: '<path d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-4.2L6 20V5.5a1 1 0 0 1 1-1Z"/>',
+            unread: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3" fill="currentColor"/>',
+            grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+            up: '<path d="m6 15 6-6 6 6"/>',
+            down: '<path d="m6 9 6 6 6-6"/>'
         };
         const uiIcon = (name, size = 18, cls = '') => svgIcon(UI_GLYPH[name], size).replace('<svg ', `<svg class="vp-ico${cls ? ' ' + cls : ''}" `);
 
@@ -8290,14 +8306,15 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                     b.title = 'Настройки ИТД X';
                     b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openSettingsMenu(b); });
                     nuksta.after(b);
-                    if (innerWidth <= PHONE_MAX && !nuksta.parentElement.querySelector('.vp-menu-btn')) {
-                        const m = document.createElement('button');
-                        m.type = 'button';
-                        m.className = b.className.replace('vp-itdx-btn', '').trim() + ' vp-menu-btn';
-                        m.textContent = 'Меню';
-                        m.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openMobileMenu(); });
-                        b.after(m);
-                    }
+                }
+                const itdx = nuksta.nextElementSibling;
+                if (itdx && itdx.classList.contains('vp-itdx-btn') && !nuksta.parentElement.querySelector('.vp-menu-btn')) {
+                    const m = document.createElement('button');
+                    m.type = 'button';
+                    m.className = itdx.className.replace('vp-itdx-btn', '').trim() + ' vp-menu-btn';
+                    m.textContent = 'Меню';
+                    m.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openMobileMenu(); });
+                    itdx.after(m);
                 }
                 document.querySelectorAll('.nick-controls-panel').forEach(p => p.remove());
                 return;
@@ -9102,6 +9119,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         `);
 
         let accPop = null, accAnchor = null;
+        onResize(() => accPlace());
         function accClose() {
             if (accBusy) return;
             if (accPop) accPop.remove();
@@ -9260,6 +9278,27 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.9.5', '23 ноября 2026', [
+                'Сообщения: поиск по переписке — лупа в шапке чата, слова подсвечиваются, можно листать совпадения',
+                'Сообщения: поле «Поиск» в списке ищет и по тексту сообщений, нажатие открывает чат сразу на найденном месте',
+                'Сообщения: «Избранное» — чат с самим собой для заметок, ссылок и картинок, всегда первым в списке',
+                'Сообщения: вместо кнопки с карандашом в шапке — кнопка «Поддержка», сразу открывает чат с поддержкой',
+                'Сообщения: ники в списке чатов, в шапке чата и в окне «Переслать» показываются со своими стилями, как в клубе',
+                'Сообщения: пока список чатов грузится, показываются мерцающие заготовки строк, а потом чаты плавно появляются',
+                'Сообщения: порядок чатов запоминается — список сразу стоит как в прошлый раз, а потом обновляется по свежим сообщениям',
+                'Сообщения: аватарки и имена собеседников запоминаются и не сбрасываются при обновлении списка и при следующем запуске',
+                'Сообщения: на телефоне свайп влево по чату отмечает его прочитанным или непрочитанным',
+                'Сообщения: «в сети» у собеседника обновляется сам, без перезагрузки страницы',
+                'Сообщения: сообщение можно изменить — «Изменить» в меню по правой кнопке, у изменённого стоит «изм.»',
+                'Сообщения: пункт «Вложения» в меню «…» — все картинки переписки сеткой',
+                'Сообщения: черновики — недописанный текст помнится у каждого чата и виден в списке',
+                'Сообщения: у чата можно отключить звук и отметить его непрочитанным',
+                'Сообщения: папки чатов — плюс над списком создаёт папку (до 10, название до 13 символов), у чата в меню появился пункт «Папки», по правой кнопке или удержанию папки можно переименовать её, прочитать все, добавить чаты или удалить',
+                'Сообщения: картинки можно перетащить мышью прямо в окно чата',
+                'Сообщения: в меню по правой кнопке у картинки появилось «Копировать картинку», а лишнее «Открыть картинку» убрано',
+                'Окна и меню правильно перестраиваются, если растянуть окно браузера с телефонной ширины до компьютерной и обратно',
+                'Оптимизация и исправление багов'
+            ]],
             ['3.9.4 – 3.9.4.1', '19 ноября 2026', [
                 'Чаты сайта: левое меню встаёт рядом с окном чатов и не уезжает под него, а панель справа не налезает на окно',
                 'Левое меню больше не обрезается и не показывает полосу прокрутки при наведении на пункты',
@@ -11351,14 +11390,19 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 K.tabsRow.querySelectorAll('.vp-sp-tab').forEach(t => t.classList.toggle('vp-on', t.dataset.pack === active));
             }
 
+            function placePanel() {
+                if (!K.stickerPanel || !stickerBtn || !stickerBtn.isConnected) return;
+                const rect = stickerBtn.getBoundingClientRect();
+                K.stickerPanel.style.bottom = `${window.innerHeight - rect.top + 8}px`;
+                K.stickerPanel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - K.PANEL_WIDTH - 20))}px`;
+            }
+            onResize(() => { if (K.stickerPanel && K.stickerPanel.classList.contains('vp-open')) placePanel(); });
             function showPanel() {
                 if (!stickerBtn || !stickerBtn.isConnected) return;
                 clearTimeout(hideTimeout);
                 createStickerPanel();
                 if (!K.scrollContainer.children.length) renderAllContent();
-                const rect = stickerBtn.getBoundingClientRect();
-                K.stickerPanel.style.bottom = `${window.innerHeight - rect.top + 8}px`;
-                K.stickerPanel.style.left = `${Math.min(rect.left, window.innerWidth - K.PANEL_WIDTH - 20)}px`;
+                placePanel();
                 K.stickerPanel.classList.add('vp-open');
                 disablePageScroll();
             }
@@ -12194,6 +12238,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 if (!msgNet.me) await msgLoadMe();
                 await msgDecryptAll();
                 try { callCheck(); } catch (e) { logErr('звонок', e); }
+                msgNet.ready = true;
                 document.dispatchEvent(new Event('vp-msg-synced'));
             })().finally(() => { msgNet.syncing = null; mine.done = Date.now(); });
             mine.p = msgNet.syncing;
@@ -12256,12 +12301,12 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 if (!conv.has(uid)) conv.set(uid, []);
                 conv.get(uid).push({ dir, ...m, _v: v, _i: i });
             };
-            const others = [...msgNet.keys.keys()].filter(id => id !== me.id);
+            const others = [...msgNet.keys.keys()].filter(id => id !== me.id), cands = msgNet.keys.has(me.id) ? [...others, me.id] : others;
             for (const v of msgNet.vols) {
                 let recs;
                 try { recs = volRecs(v); } catch (e) { continue; }
                 if (v.author === me.id) {
-                    for (const [i, r] of recs.entries()) for (const uid of others) { const k = await msgPair(uid), m = k && await msgOpenRec(k, r); if (m) { add(uid, 'out', m, v, i); break; } }
+                    for (const [i, r] of recs.entries()) for (const uid of cands) { const k = await msgPair(uid), m = k && await msgOpenRec(k, r); if (m) { add(uid, 'out', m, v, i); break; } }
                 } else {
                     const k = await msgPair(v.author);
                     if (k) for (const [i, r] of recs.entries()) { const m = await msgOpenRec(k, r); if (m) add(v.author, 'in', m, v, i); }
@@ -12293,13 +12338,14 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 delete m._v; delete m._i;
             }));
             conv.forEach(list => list.sort((x, y) => x.at - y.at || x.ts - y.ts));
-            const reacts = new Map(), reads = new Map(), calls = [], sigs = [], pins = new Map();
+            const reacts = new Map(), reads = new Map(), calls = [], sigs = [], pins = new Map(), editSig = new Map();
             conv.forEach((list, uid) => {
-                const keep = [], gone = new Set(), pinEv = [];
+                const keep = [], gone = new Set(), pinEv = [], edits = new Map();
                 for (const m of list) {
                     if (!m.svc || m.svc.length < 6) continue;
                     const mine = !!m.svc[5], dir = m.dir === 'out' ? (mine ? 'out' : 'in') : (mine ? 'in' : 'out');
                     if (m.svc[0] === 7 && mine) gone.add(reactKey(uid, m.dir, u32(m.svc, 1)));
+                    else if (m.svc[0] === 8 && mine) { const ek = reactKey(uid, m.dir, u32(m.svc, 1)), pe = edits.get(ek); if (!pe || pe.at <= m.ts) edits.set(ek, { at: m.ts, text: td.decode(m.svc.slice(6)) }); }
                     else if (m.svc[0] === 6 && m.svc.length >= 7) pinEv.push({ key: reactKey(uid, dir, u32(m.svc, 1)), on: !!m.svc[6], at: m.at });
                 }
                 if (pinEv.length) {
@@ -12308,7 +12354,14 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                     pins.set(uid, [...on].sort((x, y) => x[1] - y[1]).map(x => x[0]));
                 }
                 for (const m of list) {
-                    if (!m.svc) { if (!gone.has(reactKey(uid, m.dir, m.ts))) keep.push(m); continue; }
+                    if (!m.svc) {
+                        const gk = reactKey(uid, m.dir, m.ts);
+                        if (gone.has(gk)) continue;
+                        const ed = edits.get(gk);
+                        if (ed && ed.text !== m.text) { m.orig = m.text; m.text = ed.text; m.edited = ed.at; editSig.set(uid, (editSig.get(uid) || 0) + ed.at); }
+                        keep.push(m);
+                        continue;
+                    }
                     const who = m.dir === 'out' ? 'me' : 'them', k = m.svc[0];
                     if (k === 1 && m.svc.length >= 6) {
                         const mine = !!m.svc[5], dir = m.dir === 'out' ? (mine ? 'out' : 'in') : (mine ? 'in' : 'out');
@@ -12334,6 +12387,13 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 e.me = { ts: q.ts, emoji: q.emoji };
                 reacts.set(key, e);
             });
+            const pendEd = msgNet.pendEdits || (msgNet.pendEdits = new Map());
+            pendEd.forEach((q, key) => {
+                const [u, dir, ts] = key.split('|'), m = (conv.get(u) || []).find(x => x.dir === dir && String(x.ts) === ts);
+                if (!m || Date.now() > q.until || (m.edited && m.edited >= q.at && m.text === q.text)) { pendEd.delete(key); return; }
+                if (m.text !== q.text) { m.orig = m.orig || m.text; m.text = q.text; m.edited = q.at; }
+            });
+            msgNet.editSig = editSig;
             msgNet.pins = pins; msgNet.reacts = reacts; msgNet.reads = reads; msgNet.calls = calls; msgNet.sigs = sigs;
             msgNet.conv = conv;
             let act = 0;
@@ -12372,6 +12432,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         function msgReact(uid, m, emoji) {
             return msgSend(uid, '', false, null, cat(new Uint8Array([1]), be32(m.ts), new Uint8Array([m.dir === 'out' ? 1 : 0]), te.encode(emoji || '')));
         }
+        function msgEditSend(uid, m, text) { return msgSend(uid, '', false, null, cat(new Uint8Array([8]), be32(m.ts), new Uint8Array([1]), te.encode(text.slice(0, MSG_TEXT_MAX)))); }
         function msgSendRead(uid, upTo, sup) { return msgSend(uid, '', false, null, cat(new Uint8Array([2]), be32(upTo), new Uint8Array([sup ? 1 : 0]))); }
         const sameBytes = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
         // Запись в свой том идёт строго по одной. Сигналы звонка (prio) обходят обычные сообщения, а те при повторе уступают им дорогу.
@@ -12531,10 +12592,21 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         const msgKeyOf = login => [...msgNet.keys.values()].find(k => k.login.toLowerCase() === String(login).toLowerCase()) || null;
         const msgIsSupport = () => msgMyId() === OWNER_ID;
         function msgTarget(d) {
+            if (d.saved) return { uid: msgMyId(), sup: false, missing: 'Избранное заработает, когда появится ключ сообщений' };
             if (d.supUid) return { uid: d.supUid, sup: true };
             if (d.support) { const k = msgNet.keys.get(OWNER_ID); return { uid: k && k.id, sup: true, missing: 'Поддержка ещё не подключила сообщения — напиши в тг @NeuroSFW' }; }
             const k = msgKeyOf(d.login);
             return { uid: k && k.id, sup: false, missing: `У ${d.name} ещё нет ключа сообщений — появится, когда откроет «Сообщения» в ИТД X 3.3.3` };
+        }
+        const msgStore = (name) => () => { const o = GM_getValue(acctKey(name), {}); return o && typeof o === 'object' ? o : {}; };
+        const msgDrafts = msgStore('msgDrafts'), msgMuted = msgStore('msgMuted'), msgMarked = msgStore('msgMarked');
+        function msgFlagSet(name, key, on) { const o = msgStore(name)(); if (on) o[key] = 1; else delete o[key]; GM_setValue(acctKey(name), o); }
+        function msgDraftSet(id, text) { const o = msgDrafts(); if (text) o[id] = text; else delete o[id]; GM_setValue(acctKey('msgDrafts'), o); }
+        const msgSaved = { id: 'saved', saved: true, ava: '🔖', name: 'Избранное', login: '', last: 'Заметки, ссылки и картинки для себя', time: '', unread: 0, msgs: [] };
+        const msgSavedOn = () => !!(msgNet.me && msgNet.keys.has(msgNet.me.id) && isApprovedId(msgMyId()));
+        function msgSavedKeep() {
+            const at = MSG_DIALOGS.indexOf(msgSaved);
+            if (msgSavedOn()) { if (at < 0) MSG_DIALOGS.push(msgSaved); } else if (at >= 0) MSG_DIALOGS.splice(at, 1);
         }
         const msgHidden = () => { const o = GM_getValue(acctKey('msgHidden'), {}); return o && typeof o === 'object' ? o : {}; };
         const hideKey = (uid, m) => uid + '|' + m.dir + '|' + m.ts;
@@ -12609,33 +12681,41 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             if (me) for (const [uid, list] of msgNet.conv) {
                 const k = msgNet.keys.get(uid);
                 if (!k) continue;
-                if (list.some(m => !m.sup) && !msgPeople.has(k.login) && uid !== OWNER_ID)
+                if (list.some(m => !m.sup) && !msgPeople.has(k.login) && uid !== OWNER_ID && uid !== me.id)
                     msgPeople.set(k.login, { id: 'u:' + k.login, login: k.login, ava: '👤', name: k.login, last: '', time: '', unread: 0, msgs: [] });
                 if (msgIsSupport() && list.some(m => m.sup) && !MSG_DIALOGS.some(d => d.supUid === uid))
                     MSG_DIALOGS.push({ id: 'sup:' + uid, supUid: uid, ava: '🛟', name: '🛟 ' + k.login, login: '', last: '', time: '', unread: 0, msgs: [] });
             }
             if (msgIsSupport()) MSG_DIALOGS = MSG_DIALOGS.filter(d => !d.support);
             for (const d of msgPeople.values()) if (!MSG_DIALOGS.includes(d)) MSG_DIALOGS.push(d);
-            const seen = msgSeen();
+            msgSavedKeep();
+            const seen = msgSeen(), muted = msgMuted(), marked = msgMarked();
             for (const d of MSG_DIALOGS) {
-                const t = msgTarget(d), list = msgThread(t);
-                if (!list.length) continue;
+                const t = msgTarget(d), list = msgThread(t), fk = seenKey(t);
+                d.muted = !!muted[fk];
+                d.marked = !!marked[fk];
+                if (!list.length) { d.unreadReal = 0; if (d.marked) d.unread = Math.max(d.unread, 1); continue; }
                 const last = list[list.length - 1];
-                d.last = (last.dir === 'out' ? 'Ты: ' : '') + msgPreview(last);
+                d.last = (last.dir === 'out' && !d.saved ? 'Ты: ' : '') + msgPreview(last);
                 d.lastTs = last.at || last.ts;
                 d.time = msgTime(last.at || last.ts);
                 d.unread = list.filter(m => m.dir === 'in' && m.ts > seenAt(seen, t.uid, t.sup)).length;
+                d.unreadReal = d.unread;
+                if (d.marked) d.unread = Math.max(d.unread, 1);
                 d.tick = last.dir === 'out' ? (readUpTo(t.uid, t.sup, 'them') >= last.ts ? 2 : 1) : 0;
+                if (d.saved) d.tick = 0;
                 const lim = (last.imgs && last.imgs[0]) || last.img;
                 d.lastImg = lim ? msgImgUrl(lim) : '';
                 if (!t.sup && msgIsBlocked(t.uid)) d.last = 'Заблокирован(а)';
                 else if (!t.sup && msgBlockedMe(t.uid)) d.last = 'Тебя заблокировали';
             }
+            msgTsPut(MSG_DIALOGS);
         }
         function msgUnread() {
-            const seen = msgSeen();
+            const seen = msgSeen(), muted = msgMuted(), marked = msgMarked(), got = new Set();
             let n = 0;
-            for (const [uid, list] of msgNet.conv) for (const m of list) if (m.dir === 'in' && m.ts > seenAt(seen, uid, m.sup)) n++;
+            for (const [uid, list] of msgNet.conv) for (const m of list) if (m.dir === 'in' && m.ts > seenAt(seen, uid, m.sup) && !muted[(m.sup ? 'sup:' : '') + uid]) { n++; got.add((m.sup ? 'sup:' : '') + uid); }
+            for (const k in marked) if (!muted[k] && !got.has(k)) n++;
             return n;
         }
         function msgBadge() {
@@ -13133,7 +13213,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             if (msgBase !== null) {
                 const fresh = incoming.filter(m => !msgBase.has(idOf(m))), last = fresh[fresh.length - 1];
                 const open = messagesOverlay && messagesOverlay.classList.contains('vp-open'), cur = open && messagesOverlay.currentTarget && messagesOverlay.currentTarget();
-                if (last && !(cur && cur.uid === last.uid && cur.sup === last.sup)) msgToast(last);
+                if (last && !(cur && cur.uid === last.uid && cur.sup === last.sup) && !msgMuted()[(last.sup ? 'sup:' : '') + last.uid]) msgToast(last);
             }
             msgBase = ids;
             msgBadge();
@@ -13199,7 +13279,8 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         html.vp-msgs-open .vp-msgs-navwrap { z-index: 10 !important; }
         html.vp-msgs-open .itd-scroll-top-btn { opacity: 0 !important; visibility: hidden !important; }
         html.vp-msgs-open .vp-comments-sheet { visibility: hidden !important; }
-        html.vp-msgs-open .vp-nav-link.vp-site-cur { color: var(--vp-off-c) !important; opacity: var(--vp-off-o) !important; background-color: var(--vp-off-b) !important; }
+        html.vp-msgs-open .vp-nav-link.vp-site-cur { color: var(--vp-off-c) !important; opacity: var(--vp-px-o, var(--vp-off-o)) !important; background-color: var(--vp-off-b) !important; }
+        html.vp-msgs-open .vp-nav-link.vp-site-cur:hover { color: var(--vp-hov-c, var(--vp-off-c)) !important; opacity: var(--vp-px-o, var(--vp-hov-o, var(--vp-off-o))) !important; background-color: var(--vp-hov-b, var(--vp-off-b)) !important; }
         html.vp-msgs-open .vp-nav-link[href="#"] { color: var(--vp-on-c) !important; opacity: var(--vp-on-o) !important; background-color: var(--vp-on-b) !important; }
         .vp-msgs.vp-card { border-radius: 36px; border: 1px solid var(--border-color, rgba(255, 255, 255, .15));
             box-shadow: 0 16px 48px rgba(0, 0, 0, .45); }
@@ -13228,14 +13309,36 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         .vp-msgs-callrow.vp-miss { color: #f23f43; }
         .vp-msgs-callrow time { opacity: .65; font-size: 12px; }
         .vp-msgs-top { display: flex; align-items: center; gap: 10px; padding: 18px 16px 10px; }
-        .vp-msgs-title { font-size: 24px; font-weight: 700; margin-right: auto; }
+        .vp-msgs-title { font-size: 24px; font-weight: 700; margin-right: auto; white-space: nowrap; min-width: 0; }
+        @media (max-width: 440px) { .vp-msgs-title { font-size: 21px; } }
+        @media (max-width: 380px) { .vp-msgs-supbtn { width: 40px; padding: 0; justify-content: center; } .vp-msgs-supbtn span { display: none; } }
         .vp-msgs-ib { width: 40px; height: 40px; border-radius: 50%; border: 0; padding: 0; display: flex; align-items: center; justify-content: center;
             cursor: pointer; background: var(--block-bg); color: var(--text-primary, #fff); flex-shrink: 0; }
         .vp-msgs-ib:active { transform: scale(.94); }
+        .vp-msgs-skel { display: flex; align-items: center; gap: 12px; padding: 10px 8px; pointer-events: none; }
+        .vp-msgs-skel i, .vp-msgs-skel b, .vp-msgs-skel u { display: block; border-radius: 999px; text-decoration: none;
+            background: linear-gradient(100deg, color-mix(in srgb, var(--text-primary, #fff) 7%, transparent) 30%, color-mix(in srgb, var(--text-primary, #fff) 15%, transparent) 50%, color-mix(in srgb, var(--text-primary, #fff) 7%, transparent) 70%) 0 0 / 220% 100%;
+            animation: vpMsgsShim 1.4s ease-in-out infinite; animation-delay: calc(var(--i, 0) * 90ms); }
+        .vp-msgs-skel i { width: 50px; height: 50px; flex: none; }
+        .vp-msgs-skel > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 9px; }
+        .vp-msgs-skel b { height: 13px; width: var(--w1); }
+        .vp-msgs-skel u { height: 11px; width: var(--w2); }
+        .vp-msgs-skel { animation: vpMsgsRowIn .4s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 45ms); }
+        @keyframes vpMsgsShim { from { background-position: 120% 0; } to { background-position: -100% 0; } }
+        @keyframes vpMsgsRowIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+        .vp-msgs-row.vp-new { animation: vpMsgsRowIn .42s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 32ms - var(--el, 0ms)); }
+        @media (prefers-reduced-motion: reduce) { .vp-msgs-skel, .vp-msgs-skel i, .vp-msgs-skel b, .vp-msgs-skel u, .vp-msgs-row.vp-new { animation: none !important; } }
+        .vp-msgs-supbtn { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 16px 0 13px; border: 0; border-radius: 999px; cursor: pointer; flex-shrink: 0;
+            color: var(--text-primary, #fff); font: inherit; font-size: 14px; font-weight: 600; background: var(--block-bg); }
+        .vp-msgs-supbtn:hover { background: color-mix(in srgb, var(--block-bg) 82%, var(--text-primary, #fff) 18%); }
+        .vp-msgs-supbtn:active { transform: scale(.96); }
+        .vp-msgs-supbtn svg { flex: none; stroke-width: 2.1; color: #ff5a5f; }
+        .vp-msgs-ib svg { display: block; margin: 0; flex: none; }
+        .vp-msgs-ib:focus { outline: none; }
+        .vp-msgs-ib:focus-visible { outline: none; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text-primary, #fff) 45%, transparent); }
         .vp-msgs-search { margin: 0 16px 10px; display: flex; align-items: center; gap: 8px; padding: 0 14px; height: 42px; border-radius: 999px;
             background: var(--block-bg); color: var(--text-secondary); }
         .vp-msgs-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 15px; }
-        .vp-msgs-sub { padding: 2px 20px 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
         .vp-msgs-ava img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
         .vp-msgs-who, .vp-msgs-chead .vp-msgs-ava { cursor: pointer; }
         .vp-msgs-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; overscroll-behavior: contain; }
@@ -13243,7 +13346,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         .vp-msgs-row:hover, .vp-msgs-row:active { background: var(--block-bg); }
         .vp-msgs-ava { position: relative; flex: 0 0 50px !important; min-width: 50px !important; min-height: 50px !important; max-width: 50px !important; max-height: 50px !important; box-sizing: border-box !important; border-radius: 50%; display: flex; align-items: center; justify-content: center;
             font-size: 26px; background: var(--block-bg); }
-        .vp-msgs-ava.vp-sm { flex: 0 0 38px !important; min-width: 38px !important; min-height: 38px !important; max-width: 38px !important; max-height: 38px !important; font-size: 20px; }
+        .vp-msgs-ava.vp-msgs-ava-sm { flex: 0 0 38px !important; min-width: 38px !important; min-height: 38px !important; max-width: 38px !important; max-height: 38px !important; font-size: 20px; }
         html.vp-glass .vp-msgs-chead .vp-msgs-ava { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
         .vp-msgs-ava.vp-sup { color: #fff; background: linear-gradient(145deg, #ff5a5f, #d0202a); box-shadow: 0 0 0 2px rgba(255, 90, 95, .28), 0 4px 14px rgba(208, 32, 42, .4); }
         .vp-msgs-ava.vp-sup svg { width: 58%; height: 58%; stroke-width: 2.1; }
@@ -13256,7 +13359,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         .vp-msgs-name { display: flex; align-items: center; gap: 5px; font-weight: 600; font-size: 15px; }
         .vp-msgs-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .vp-msgs-last { margin-top: 3px; font-size: 14px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .vp-msgs-side > span:first-child { display: inline-flex; align-items: center; gap: 3px; }
+        .vp-msgs-side > span:first-child { display: inline-flex; flex-direction: column-reverse; align-items: flex-end; gap: 2px; }
         .vp-msgs-tick { display: inline-flex; font-style: normal; color: var(--text-secondary); }
         .vp-msgs-tick.vp-read { color: #4aa3ff; }
         .vp-msgs-lthumb { width: 18px; height: 18px; border-radius: 4px; object-fit: cover; vertical-align: -4px; margin-right: 6px; }
@@ -13268,14 +13371,23 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         .vp-msgs-row.vp-pinned + .vp-msgs-row:not(.vp-pinned) { margin-top: 6px; }
         .vp-msgs-row { -webkit-touch-callout: none; user-select: none; transition: transform .15s; }
         .vp-msgs-row.vp-held { transform: scale(.97); }
-        .vp-msgs-ctx { position: absolute; z-index: 3; display: none; padding: 5px; border-radius: 16px; min-width: 170px;
-            background: var(--block-bg); border: 1px solid var(--border-color, rgba(255, 255, 255, .1)); box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
+        .vp-msgs-row { position: relative; touch-action: pan-y; }
+        .vp-msgs-list { overflow-x: hidden; }
+        .vp-msgs-row.vp-swp { transition: none; }
+        .vp-msgs-swact { position: absolute; left: calc(100% + 8px); top: 0; bottom: 0; width: 104px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+            border-radius: 18px; color: #fff; font-size: 12px; font-weight: 600; pointer-events: none; background: color-mix(in srgb, var(--vp-accent, #3b82f6) 55%, #1b1b1f); transition: background .15s; }
+        .vp-msgs-swact.vp-ready { background: var(--vp-accent, #3b82f6); }
+        .vp-msgs-ctx { position: absolute; left: 0; top: 0; z-index: 3; display: none; padding: 5px; border-radius: 16px; min-width: 210px; width: max-content; max-width: calc(100% - 16px); box-sizing: border-box; }
+        .vp-msgs-ctx button span { white-space: nowrap; }
+        .vp-msgs-ctx button { text-align: left; }
+        .vp-msgs-ctx { background: var(--block-bg); color: var(--text-primary, #fff); backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, .45), 0 0 0 1px var(--border-color, rgba(255, 255, 255, .08)); border: 0; }
         .vp-msgs-ctx.vp-open { display: block; animation: vpMsgsCtx .14s ease-out; }
         @keyframes vpMsgsCtx { from { opacity: 0; transform: scale(.94); } }
-        .vp-msgs-ctx button { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; color: var(--text-primary, #fff);
-            font: inherit; font-size: 15px; padding: 10px 12px; border-radius: 12px; cursor: pointer; }
-        .vp-msgs-ctx button:hover, .vp-msgs-ctx button:active { background: var(--bg-hover, rgba(255, 255, 255, .08)); }
-        .vp-msgs-ctx svg { width: 16px; height: 16px; }
+        .vp-msgs-ctx button { display: flex; align-items: center; gap: 12px; width: 100%; border: 0; background: transparent; color: inherit;
+            font: inherit; font-size: 14px; padding: 9px 12px; border-radius: 10px; cursor: pointer; }
+        .vp-msgs-ctx button:hover, .vp-msgs-ctx button:active { background: rgba(127, 127, 127, .15); }
+        .vp-msgs-ctx svg { width: 16px; height: 16px; flex: none; opacity: .85; }
         .vp-msgs-empty { padding: 40px 16px; text-align: center; color: var(--text-secondary); font-size: 14px; }
         .vp-msgs-chead { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px;
             border-bottom: 1px solid color-mix(in srgb, var(--text-primary, #fff) 8%, transparent); }
@@ -13394,27 +13506,114 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         @keyframes vpMsgsPop { from { opacity: 0; transform: translateY(6px) scale(.98); } }
         @keyframes vpMsgsDot { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
         @media (prefers-reduced-motion: reduce) { .vp-msgs, .vp-msgs * { animation: none !important; } }
-        html.vp-msgs-open video:not(.vp-screen-video):not(.vp-self-pip-video) { visibility: hidden !important; }`;
+        html.vp-msgs-open video:not(.vp-screen-video):not(.vp-self-pip-video) { visibility: hidden !important; }
+        .vp-msgs-find[hidden] { display: none; }
+        .vp-msgs-chips { display: flex; gap: 8px; padding: 0 16px 6px; }
+        .vp-msgs-chips button { border: 0; padding: 6px 13px; border-radius: 999px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-secondary);
+            background: color-mix(in srgb, var(--text-primary, #fff) 8%, transparent); transition: background-color .15s, color .15s; }
+        .vp-msgs-chips button:hover { color: var(--text-primary, #fff); background: color-mix(in srgb, var(--text-primary, #fff) 15%, transparent); }
+        .vp-msgs-chips button:active { transform: scale(.96); }
+        .vp-msgs-chips button.vp-on:hover { color: var(--vp-on-accent, #fff); background: color-mix(in srgb, var(--vp-accent, #3b82f6) 86%, var(--text-primary, #fff) 14%); }
+        .vp-msgs-chips button.vp-on { color: var(--vp-on-accent, #fff); background: var(--vp-accent, #3b82f6); }
+        .vp-msgs-chips { position: relative; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+        .vp-msgs-chips::-webkit-scrollbar { display: none; }
+        .vp-msgs-chips button { flex: none; white-space: nowrap; display: inline-flex; align-items: center; user-select: none; -webkit-touch-callout: none; }
+        .vp-msgs-tabn { margin-left: 6px; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-style: normal; font-size: 11px; font-weight: 700; background: var(--vp-accent, #3b82f6); color: var(--vp-on-accent, #fff); }
+        .vp-msgs-tabn.vp-mute { background: color-mix(in srgb, var(--text-primary, #fff) 28%, transparent); color: var(--text-primary, #fff); }
+        .vp-msgs-chips button.vp-on .vp-msgs-tabn { background: rgba(255, 255, 255, .3); color: inherit; }
+        .vp-msgs-chips .vp-msgs-tabadd { padding: 6px 10px; }
+        .vp-msgs-chips .vp-msgs-tabadd:disabled { opacity: .4; cursor: default; }
+        .vp-msgs-tabin { width: 13ch; min-width: 0; border: 0; outline: 0; padding: 0; background: transparent; color: inherit; font: inherit; }
+        .vp-msgs-ctx button.vp-danger { color: #ff5a5f; }
+        .vp-msgs-ctx .vp-ck { margin-left: auto; padding-left: 14px; font-style: normal; display: flex; }
+        .vp-msgs-ctx .vp-msgs-menu-sep { height: 1px; margin: 5px 6px; background: var(--border-color, rgba(255, 255, 255, .1)); }
+        .vp-msgs-fwd-l { overscroll-behavior: contain; }
+        .vp-msgs-pick-n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-msgs-pick-c { width: 22px; height: 22px; box-sizing: border-box; flex: none; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--text-primary, #fff) 30%, transparent); display: grid; place-items: center; font-style: normal; font-size: 13px; line-height: 1; }
+        .vp-msgs-fwd-r.vp-on .vp-msgs-pick-c { background: var(--vp-accent, #3b82f6); border-color: var(--vp-accent, #3b82f6); color: var(--vp-on-accent, #fff); }
+        .vp-msgs-fwd-r.vp-on .vp-msgs-pick-c::after { content: '✓'; }
+        .vp-msgs-draft { color: #ff5a5f; }
+        .vp-msgs-mute { display: inline-flex; flex: none; color: var(--text-secondary); }
+        .vp-msgs-row.vp-muted .vp-msgs-badge:not(.vp-dot) { background: color-mix(in srgb, var(--text-secondary) 55%, transparent); }
+        .vp-msgs-badge.vp-dot { min-width: 10px; width: 10px; height: 10px; padding: 0; }
+        .vp-msgs-ava.vp-saved { background: linear-gradient(135deg, #3b82f6, #6366f1); color: #fff; }
+        .vp-msgs-fbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid color-mix(in srgb, var(--text-primary, #fff) 8%, transparent); }
+        .vp-msgs-fbar[hidden] { display: none; }
+        .vp-msgs-fbar label { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 36px; border-radius: 999px; background: color-mix(in srgb, var(--text-primary, #fff) 8%, transparent); color: var(--text-secondary); }
+        .vp-msgs-fbar input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary, #fff); font: inherit; font-size: 14px; }
+        .vp-msgs-fcount { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+        ::highlight(vp-find) { background-color: rgba(255, 214, 10, .38); color: inherit; }
+        ::highlight(vp-find-cur) { background-color: rgba(255, 149, 0, .75); color: #fff; }
+        .vp-msgs-media { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; background: linear-gradient(var(--block-bg), var(--block-bg)), var(--bg-primary, #0b0b0d); border-radius: inherit; }
+        .vp-msgs-media[hidden] { display: none; }
+        .vp-msgs-mhead { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px; border-bottom: 1px solid color-mix(in srgb, var(--text-primary, #fff) 8%, transparent); }
+        .vp-msgs-mhead b { font-size: 16px; }
+        .vp-msgs-mhead span { margin-left: auto; padding-right: 8px; color: var(--text-secondary); font-size: 14px; }
+        .vp-msgs-mgrid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 3px; padding: 3px; align-content: start; overscroll-behavior: contain; }
+        .vp-msgs-mgrid .vp-msgs-empty { grid-column: 1 / -1; }
+        .vp-msgs-mgrid button { position: relative; padding: 0; border: 0; border-radius: 6px; overflow: hidden; cursor: pointer; aspect-ratio: 1; background: rgba(127, 127, 127, .18); }
+        .vp-msgs-mgrid img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .vp-msgs-chat.vp-drop::after { content: 'Отпусти, чтобы прикрепить картинки'; position: absolute; inset: 8px; z-index: 8; display: grid; place-items: center; text-align: center; padding: 20px; border-radius: 24px;
+            border: 2px dashed var(--vp-accent, #3b82f6); background: color-mix(in srgb, var(--block-bg) 82%, transparent); font-size: 15px; font-weight: 600; pointer-events: none; }
+        .vp-msgs-editbar svg { color: var(--vp-accent, #f91880); }`;
         const MSG_SUPPORT = {
             id: 'support', ava: '🛟', name: 'Поддержка ИТД X', login: '', last: 'Нашёл баг или есть идея — пиши сюда', time: '', unread: 0, online: true, support: true,
             msgs: [['in', 'Привет! Это поддержка ИТД X 👋'], ['in', 'Нашёл баг или есть идея — опиши здесь, ответ придёт в этот чат']]
         };
         let supportTicket = 0;
         let MSG_DIALOGS = [MSG_SUPPORT];
-        const msgPins = () => GM_getValue(acctKey('msgPins'), []);
+        const msgPins = () => {
+            const p = (GM_getValue(acctKey('msgPins'), []) || []).filter(x => x !== 'saved');
+            return MSG_DIALOGS.includes(msgSaved) ? ['saved', ...p] : p;
+        };
         const msgOpened = () => { const o = GM_getValue(acctKey('msgOpened'), {}); return o && typeof o === 'object' ? o : {}; };
         function msgMarkOpened(id) { const o = msgOpened(); o[id] = Math.floor(Date.now() / 1000); GM_setValue(acctKey('msgOpened'), o); }
         function sortDialogs(list) {
             const pins = msgPins(), opened = msgOpened();
-            const act = d => Math.max(d.lastTs || 0, opened[d.id] || 0);
+            const cached = msgNet.ready ? {} : msgTsMem();
+            const act = d => Math.max(d.lastTs || cached[d.id] || 0, opened[d.id] || 0);
             const rest = list.filter(d => !pins.includes(d.id)).map((d, i) => [d, i]).sort(([a, i], [b, j]) => act(b) - act(a) || i - j).map(([d]) => d);
             return [...list.filter(d => pins.includes(d.id)).sort((a, b) => pins.indexOf(a.id) - pins.indexOf(b.id)), ...rest];
         }
+        let msgTsCur = null, msgTsSig = '', msgTsT = 0;
+        const msgTsMem = () => {
+            if (!msgTsCur) { const c = GM_getValue(acctKey('msgTs'), {}); msgTsCur = c && typeof c === 'object' && !Array.isArray(c) ? c : {}; }
+            return msgTsCur;
+        };
+        function msgTsPut(list) {
+            if (!msgNet.ready) return;
+            const cur = {};
+            for (const d of list) if (d.lastTs) cur[d.id] = d.lastTs;
+            const sups = list.filter(d => d.supUid && d.lastTs);
+            if (sups.length) cur['@sup'] = Math.max(...sups.map(d => d.lastTs));
+            const sig = JSON.stringify(cur);
+            if (sig === msgTsSig) return;
+            msgTsSig = sig;
+            msgTsCur = cur;
+            clearTimeout(msgTsT);
+            msgTsT = setTimeout(() => GM_setValue(acctKey('msgTs'), cur), 1500);
+        }
         const msgPeople = new Map();
+        const msgAvaCache = () => { const c = GM_getValue('vp_msg_ava', {}); return c && typeof c === 'object' && !Array.isArray(c) ? c : {}; };
+        let msgAvaT = 0, msgAvaNew = null;
+        function msgAvaSave(n, a, name) {
+            if (!a || a === '👤') return;
+            (msgAvaNew = msgAvaNew || {})[n] = { a, n: name, t: Date.now() };
+            clearTimeout(msgAvaT);
+            msgAvaT = setTimeout(() => {
+                const all = Object.assign(msgAvaCache(), msgAvaNew);
+                msgAvaNew = null;
+                const keys = Object.keys(all);
+                if (keys.length > 400) keys.sort((x, y) => (all[x].t || 0) - (all[y].t || 0)).slice(0, keys.length - 400).forEach(k => { delete all[k]; });
+                GM_setValue('vp_msg_ava', all);
+            }, 1500);
+        }
         async function loadMsgPeople(onUpdate) {
             const names = verifiedNames().filter(n => !myUsername || n.toLowerCase() !== myUsername.toLowerCase()).sort((a, b) => a.localeCompare(b));
-            names.forEach(n => { if (!msgPeople.has(n)) msgPeople.set(n, { id: 'u:' + n, login: n, ava: '👤', name: n, last: 'Тоже с ИТД X · напиши первым', time: '', unread: 0, msgs: [] }); });
+            const avas = msgAvaCache();
+            names.forEach(n => { if (!msgPeople.has(n)) { const c = avas[n]; msgPeople.set(n, { id: 'u:' + n, login: n, ava: (c && c.a) || '👤', name: (c && c.n) || n, last: 'Тоже с ИТД X · напиши первым', time: '', unread: 0, msgs: [] }); } });
             MSG_DIALOGS = [MSG_SUPPORT, ...names.map(n => msgPeople.get(n))];
+            msgSavedKeep();
             onUpdate();
         }
         const MSG_ICON = {
@@ -13428,6 +13627,8 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             send: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg>',
             tick1: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
             tick2: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m1.5 12.5 4.5 4.5L15.5 7.5"/><path d="m10 15.5 1.5 1.5L21 7.5"/></svg>',
+            sup: svgIcon('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.6"/><path d="m5.6 5.6 3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>', 18),
+            plus: svgIcon('<path d="M12 5v14M5 12h14"/>', 16),
             pin: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M15 3l6 6-3 1-4 4 .5 4.5-1.5 1.5-4-4-5 5-1-1 5-5-4-4L5.5 9.5 10 10l4-4Z"/></svg>'
         };
 
@@ -13552,8 +13753,12 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             const root = document.createElement('div'); M.root = root;
             root.className = 'vp-msgs';
             const blockOuterScroll = e => {
-                const area = e.target.closest && e.target.closest('.vp-msgs-list, .vp-msgs-feed, textarea');
-                if (!area || area.scrollHeight <= area.clientHeight) e.preventDefault();
+                for (let n = e.target; n && n.nodeType === 1 && n !== root; n = n.parentElement) {
+                    const cs = getComputedStyle(n);
+                    if (/auto|scroll/.test(cs.overflowY) && n.scrollHeight > n.clientHeight) return;
+                    if (/auto|scroll/.test(cs.overflowX) && n.scrollWidth > n.clientWidth) return;
+                }
+                e.preventDefault();
             };
             root.addEventListener('wheel', blockOuterScroll, { passive: false });
             root.addEventListener('touchmove', blockOuterScroll, { passive: false });
@@ -13561,16 +13766,16 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             root.setAttribute('aria-label', 'Сообщения');
             root.innerHTML = `
             <section class="vp-msgs-view vp-msgs-home">
-                <div class="vp-msgs-top"><div class="vp-msgs-title">Сообщения <span class="vp-msgs-beta" title="Сообщения в бета-версии: возможны сбои — пиши в «Поддержку»">Beta</span></div>
-                    <button class="vp-msgs-ib vp-msgs-new" title="Новый чат (пока не работает)">${MSG_ICON.edit}</button></div>
+                <div class="vp-msgs-top"><div class="vp-msgs-title">Сообщения ИТД X <span class="vp-msgs-beta" title="Сообщения в бета-версии: возможны сбои — пиши в «Поддержку»">Beta</span></div>
+                    <button type="button" class="vp-msgs-supbtn" title="Написать в поддержку">${MSG_ICON.sup}<span>Поддержка</span></button></div>
                 <label class="vp-msgs-search">${MSG_ICON.search}<input type="search" placeholder="Поиск"></label>
-                <div class="vp-msgs-sub"></div>
+                <div class="vp-msgs-chips"></div>
                 <div class="vp-msgs-list"></div>
             </section>
             <section class="vp-msgs-view vp-msgs-chat" hidden>
                 <div class="vp-msgs-chead"><button class="vp-msgs-ib vp-msgs-back" title="Назад">${MSG_ICON.back}</button>
-                    <div class="vp-msgs-ava vp-sm"></div><div class="vp-msgs-who"><b></b><small></small></div>
-                    <button class="vp-msgs-ib vp-msgs-call" title="Позвонить">${MSG_ICON.call}</button><button class="vp-msgs-ib vp-msgs-more" title="Ещё">${MSG_ICON.more}</button>
+                    <div class="vp-msgs-ava vp-msgs-ava-sm"></div><div class="vp-msgs-who"><b></b><small></small></div>
+                    <button class="vp-msgs-ib vp-msgs-find" title="Поиск по переписке">${MSG_ICON.search}</button><button class="vp-msgs-ib vp-msgs-call" title="Позвонить">${MSG_ICON.call}</button><button class="vp-msgs-ib vp-msgs-more" title="Ещё">${MSG_ICON.more}</button>
                     <div class="vp-msgs-hmenu" hidden></div></div>
                 <div class="vp-msgs-feed" aria-live="polite"></div>
                 <button type="button" class="vp-msgs-down" title="Вниз" hidden>${svgIcon('<path d="m6 9 6 6 6-6"/>', 22)}<span></span></button>
@@ -13609,6 +13814,8 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             msgPartMenus(M);
             msgPartSelect(M);
             msgPartImages(M);
+            msgPartExtras(M);
+            msgPartTabs(M);
             function place() {
                 const nav = siteEl('nav');
                 const row = nav && navIsRow(nav) && nav.getBoundingClientRect().top > innerHeight / 2;
@@ -13632,15 +13839,17 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 if (!row) Object.assign(under.style, { left: root.style.left, width: root.style.width });
             }
             let openPath = '';
-            function onKey(e) { if (e.key === 'Escape' && root.classList.contains('vp-open')) { e.stopPropagation(); M.lb ? M.closeImg() : M.menu ? M.closeMenu() : M.fwdEl ? M.closeFwd() : M.sel ? M.selEnd() : M.reply ? M.clearReply() : M.current ? M.closeChat() : close(); } }
+            function onKey(e) { if (e.key === 'Escape' && root.classList.contains('vp-open')) { e.stopPropagation(); M.ctxOpen && M.ctxOpen() ? M.ctxClose() : M.pickEl ? M.pickClose() : M.tabEditing ? M.tabEditCancel() : M.lb ? M.closeImg() : M.menu ? M.closeMenu() : M.fwdEl ? M.closeFwd() : M.findOpen && M.findOpen() ? M.findClose() : M.mediaOpen && M.mediaOpen() ? M.mediaClose() : M.editing ? M.editEnd() : M.sel ? M.selEnd() : M.reply ? M.clearReply() : M.current ? M.closeChat() : close(); } }
             function close(fromHistory) {
                 if (!root.classList.contains('vp-open')) return;
                 clearTimeout(M.botTimer);
+                if (M.pickClose) M.pickClose();
+                if (M.tabEditCancel) M.tabEditCancel();
                 root.classList.remove('vp-open');
                 document.documentElement.classList.remove('vp-msgs-open');
                 document.querySelectorAll('.vp-msgs-navwrap').forEach(w => w.classList.remove('vp-msgs-navwrap'));
                 document.removeEventListener('keydown', onKey, true);
-                removeEventListener('resize', place);
+                if (M.offResize) { M.offResize(); M.offResize = null; }
                 msgsOpen = false;
                 avatarRefresh();
                 placeSidebar(); placeRail();
@@ -13688,6 +13897,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 msgsOpen = true;
                 M.closeChat();
                 loadMsgPeople(() => { if (!M.current) M.renderList(); else M.headAva(); });
+                if (!msgPeople.size && !M.loadGiveUp && !M.giveT) M.giveT = setTimeout(() => { M.giveT = 0; if (!msgPeople.size) { M.loadGiveUp = true; if (!M.current) M.renderList(); } }, 10000);
                 msgSync().then(() => { msgFillDialogs(); if (!M.current) M.renderList(); }).catch(() => { });
                 place();
                 placeSidebar(); placeRail();
@@ -13695,7 +13905,8 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 document.documentElement.classList.add('vp-msgs-open');
                 avatarRefresh();
                 document.addEventListener('keydown', onKey, true);
-                addEventListener('resize', place);
+                if (M.offResize) M.offResize();
+                M.offResize = onResize(place);
                 if (fromHistory !== true) overlayEnter('vpMsgs');
                 galHideFeed(true);
                 markActiveNav(); moveNavBlob();
@@ -13707,12 +13918,15 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         // Окно «Сообщения»: список диалогов, чат, отправка, обновление (часть buildMessagesOverlay, общее состояние — объект M)
         function msgPartChat(M) {
             const { $, chat, close, downSync, esc, feed, home, input, list, msgCount, root, search, send } = M;
+            M.jumpTo = jumpToBubble; M.repaintText = repaintText;
             M.renderList = renderList; M.setMeta = setMeta; M.bubble = bubble; M.openChat = openChat; M.msgOpenPerson = msgOpenPerson; M.msgRefreshChat = msgRefreshChat; M.closeChat = closeChat; M.supportReply = supportReply;
             M.current = null, M.botTimer = 0;
             const SUP_AVA = svgIcon('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.6"/><path d="m5.6 5.6 3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>', 28);
+            const SAVED_AVA = svgIcon('<path d="M7 4.5h10a1 1 0 0 1 1 1V20l-6-4.2L6 20V5.5a1 1 0 0 1 1-1Z"/>', 26);
             const avaHtml = (a, size) => {
                 const s = size || 50;
                 if (a === '🛟') return SUP_AVA;
+                if (a === '🔖') return SAVED_AVA;
                 if (!isUrl(a)) return esc(a);
                 const bg = String(a).replace(/[\\"\'()\r\n]/g, c => encodeURIComponent(c));
                 return '<div class="vp-ava-pic" style="width:' + s + 'px;height:' + s + 'px;min-width:' + s + 'px;min-height:' + s + 'px;max-width:' + s + 'px;max-height:' + s + 'px;flex:0 0 ' + s + 'px;background-image:url(' + bg + ');background-size:cover;background-position:center;background-repeat:no-repeat;border-radius:50%;"></div>';
@@ -13722,6 +13936,47 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             root.addEventListener('error', e => { const im = e.target; if (im && im.tagName === 'IMG' && im.closest('.vp-msgs-ava')) im.replaceWith(document.createTextNode('👤')); }, true);
 
             M.supDir = false;
+            const seenAgo = t => {
+                const d0 = new Date(t); if (isNaN(d0)) return ''; const h = d0.toTimeString().slice(0, 5);
+                return d0.toDateString() === new Date().toDateString() ? 'в ' + h : `${d0.getDate()}.${String(d0.getMonth() + 1).padStart(2, '0')} в ${h}`;
+            };
+            const headSub = d => d.support ? 'поддержка · на связи' : d.supUid ? 'обращение в поддержку'
+                : d.saved ? 'заметки, ссылки и картинки для себя' : '@' + d.login + ' · ' + (d.online ? 'в сети' : d.lastSeen && seenAgo(d.lastSeen) ? 'был(а) в сети ' + seenAgo(d.lastSeen) : 'с ИТД X');
+            const lookPut = (el, attr, val) => { if (val) { if (el.getAttribute(attr) !== val) el.setAttribute(attr, val); } else el.removeAttribute(attr); };
+            function lookApply(nameEl, avaEl, login) {
+                const look = login ? (verifiedInfo(login) || {}).look : null;
+                if (nameEl) { lookPut(nameEl, 'data-vp-look', look && look.n); lookPut(nameEl, 'data-vp-look-glow', look && look.g[0] === '1' && look.n); }
+                if (avaEl) lookPut(avaEl, 'data-vp-look-av', look && look.g[1] === '1' && look.n);
+            }
+            M.lookApply = lookApply;
+            function msgLooks() {
+                list.querySelectorAll('.vp-msgs-row[data-id^="u:"]').forEach(row => lookApply(row.querySelector('.vp-msgs-name span'), row.querySelector('.vp-msgs-ava'), row.dataset.id.slice(2)));
+            }
+            function peerApply(d) {
+                const s = d && d.login ? peerSeen(d.login) : null;
+                if (!s) return false;
+                const ch = !!d.online !== s.online || (s.lastSeen && d.lastSeen !== s.lastSeen);
+                d.online = s.online;
+                if (s.lastSeen) d.lastSeen = s.lastSeen;
+                return ch;
+            }
+            function peerRefresh() {
+                let any = false;
+                for (const d of msgPeople.values()) if (peerApply(d)) any = true;
+                if (!any) return;
+                list.querySelectorAll('.vp-msgs-row[data-id^="u:"]').forEach(row => {
+                    const d = msgPeople.get(row.dataset.id.slice(2)), av = row.querySelector('.vp-msgs-ava');
+                    if (d && av) av.classList.toggle('vp-online', !!d.online);
+                });
+                const cur = M.current;
+                if (cur && cur.login && !cur.support && !cur.supUid) {
+                    const h = $('.vp-msgs-chead .vp-msgs-ava'), sub = $('.vp-msgs-who small');
+                    if (h) h.classList.toggle('vp-online', !!cur.online);
+                    if (sub) sub.textContent = headSub(cur);
+                }
+            }
+            document.addEventListener('vp-online', peerRefresh);
+            document.addEventListener('vp-pulse', peerRefresh);
             const msgLazyTried = new Set();
             let msgLazyObserver = null;
             function msgLazyLoad(d, rowEl) {
@@ -13729,17 +13984,20 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 if (!n || msgLazyTried.has(n)) return;
                 msgLazyTried.add(n);
                 hcData(n).then(dt => {
-                    if (!dt) return;
+                    if (!dt) { setTimeout(() => msgLazyTried.delete(n), 30000); return; }
                     d.name = pick(dt.displayName, dt.display_name, d.name, n);
-                    d.ava = avaUrlOf(n) || siteAva(dt);
+                    const na = avaUrlOf(n) || siteAva(dt);
+                    if (na && (na !== '👤' || !d.ava || d.ava === '👤')) d.ava = na;
+                    msgAvaSave(n, d.ava, d.name);
                     d.online = !!dt.online;
                     d.lastSeen = dt.lastSeen || null;
+                    peerApply(d);
                     if (!rowEl || !rowEl.isConnected) return;
                     const av = rowEl.querySelector('.vp-msgs-ava');
                     if (av) { av.innerHTML = avaHtml(msgAva(d)); av.classList.toggle('vp-online', !!d.online); }
                     const nm = rowEl.querySelector('.vp-msgs-name span');
                     if (nm) nm.textContent = d.name;
-                }).catch(() => { });
+                }).catch(() => { msgLazyTried.delete(n); });
             }
             function msgLazyObserve() {
                 if (!msgLazyObserver) {
@@ -13757,34 +14015,64 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 msgLazyObserver.disconnect();
                 list.querySelectorAll('.vp-msgs-row[data-id^="u:"]').forEach(row => msgLazyObserver.observe(row));
             }
+            M.shown = new Map();
+            const SKEL_W = [[58, 82], [44, 66], [64, 90], [50, 74], [38, 60], [60, 78], [46, 70]];
+            const skelHtml = () => SKEL_W.map(([a, c], i) => '<div class="vp-msgs-skel" style="--i:' + i + ';--w1:' + a + '%;--w2:' + c + '%"><i></i><div><b></b><u></u></div></div>').join('');
             function renderList() {
+                if (M.swiping) return;
                 const q = search.value.trim().toLowerCase();
+                for (const p of msgPeople.values()) peerApply(p);
                 const pins = msgPins();
-                let rows = sortDialogs(MSG_DIALOGS).filter(d => !q || (d.name + ' ' + d.login + ' ' + d.last).toLowerCase().includes(q));
-                const people = MSG_DIALOGS.filter(d => d.login).length;
+                const hits = q ? M.msgHits(q) : null, drafts = msgDrafts();
+                let rows = sortDialogs(MSG_DIALOGS).filter(d => !(d.support && msgIsSupport()) && (!q || (d.name + ' ' + d.login + ' ' + d.last).toLowerCase().includes(q) || hits.has(d.id)) && (q || !M.tabHas || M.tabHas(d)));
                 const sups = msgIsSupport() ? sortDialogs(MSG_DIALOGS.filter(d => d.supUid)) : [];
-                if (sups.length && !q) {
+                if (sups.length && !q && (M.tab || 'all') === 'all') {
                     if (M.supDir) rows = [{ id: '@back', ava: '←', name: 'Все чаты', last: `Обращения в поддержку: ${sups.length}`, time: '', unread: 0 }, ...sups.map(d => Object.assign({}, d, { name: d.name.replace(/^🛟\s*/, '') }))];
                     else {
                         const top = sups.reduce((a, d) => (d.lastTs || 0) > (a.lastTs || 0) ? d : a, sups[0]);
-                        const opened = msgOpened(), act = d => Math.max(d.lastTs || 0, opened[d.id] || 0), fAct = Math.max(...sups.map(act));
+                        const opened = msgOpened(), act = d => Math.max(d.lastTs || (msgNet.ready ? 0 : msgTsMem()[d.id] || 0), opened[d.id] || 0), fAct = Math.max(...sups.map(act));
                         const folder = { id: '@sup', ava: '🛟', name: 'Поддержка', last: top.last ? top.name.replace(/^🛟\s*/, '') + ': ' + top.last : `обращений: ${sups.length}`,
                             time: top.time || '', lastTs: top.lastTs || 0, unread: sups.reduce((n, d) => n + (d.unread || 0), 0) };
                         rows = rows.filter(d => !d.supUid);
                         const at = rows.findIndex(d => !pins.includes(d.id) && act(d) < fAct);
                         rows.splice(at < 0 ? rows.length : at, 0, folder);
                     }
+                } else if (!sups.length && !q && !M.supDir && (M.tab || 'all') === 'all' && msgIsSupport() && !msgNet.ready && msgTsMem()['@sup']) {
+                    const fTs = msgTsMem()['@sup'], opened = msgOpened(), act = d => Math.max(d.lastTs || msgTsMem()[d.id] || 0, opened[d.id] || 0);
+                    const folder = { id: '@sup', ava: '🛟', name: 'Поддержка', last: 'Обращения в поддержку', time: '', lastTs: fTs, unread: 0 };
+                    const at = rows.findIndex(d => !pins.includes(d.id) && act(d) < fTs);
+                    rows.splice(at < 0 ? rows.length : at, 0, folder);
                 }
                 if (!sups.length) M.supDir = false;
-                $('.vp-msgs-sub').textContent = M.supDir && sups.length && !q ? 'Все, кто писал в поддержку' : people ? `Поддержка и ${people} ${plural(people, 'человек', 'человека', 'человек')} с ИТД X` : 'Пока никого с ИТД X — список обновится сам';
+                const lastOf = d => {
+                    const h = hits && hits.get(d.id), dr = drafts[d.id];
+                    if (h && !(d.name + ' ' + d.login).toLowerCase().includes(q)) return esc(h.snip);
+                    if (dr && M.current !== d) return `<span class="vp-msgs-draft">Черновик:</span> ${esc(dr.replace(/\s+/g, ' ').slice(0, 80))}`;
+                    return (d.lastImg ? `<img class="vp-msgs-lthumb" src="${esc(d.lastImg)}" alt="" loading="lazy">` : '') + esc(d.last);
+                };
+                const nowT = performance.now();
+                let newIdx = 0;
+                const rowFx = d => {
+                    let f = M.shown.get(d.id);
+                    if (!f) { f = { at: nowT, i: Math.min(newIdx++, 14) }; M.shown.set(d.id, f); }
+                    const el = nowT - f.at;
+                    return el < f.i * 32 + 480 ? ' vp-new" style="--i:' + f.i + ';--el:' + Math.round(el) + 'ms' : '';
+                };
+                const vs = myVerifyState(), loading = !msgPeople.size && !q && !M.loadGiveUp && (vs === 'loading' || vs === 'approved');
                 list.innerHTML = rows.length ? rows.map(d => `
-                <div class="vp-msgs-row${pins.includes(d.id) ? ' vp-pinned' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}" data-id="${d.id}">
-                    <div class="vp-msgs-ava${d.online ? ' vp-online' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}">${avaHtml(msgAva(d))}</div>
-                    <div class="vp-msgs-mid"><div class="vp-msgs-name"><span>${esc(d.name)}</span></div>
-                        <div class="vp-msgs-last">${d.lastImg ? `<img class="vp-msgs-lthumb" src="${esc(d.lastImg)}" alt="" loading="lazy">` : ''}${esc(d.last)}</div></div>
-                    <div class="vp-msgs-side"><span>${d.tick ? `<i class="vp-msgs-tick${d.tick === 2 ? ' vp-read' : ''}" title="${d.tick === 2 ? 'Прочитано' : 'Доставлено'}">${d.tick === 2 ? MSG_ICON.tick2 : MSG_ICON.tick1}</i>` : ''}${esc(d.time)}</span>${d.unread ? `<span class="vp-msgs-badge">${d.unread}</span>`
+                <div class="vp-msgs-row${pins.includes(d.id) ? ' vp-pinned' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}${d.muted ? ' vp-muted' : ''}${rowFx(d)}" data-id="${d.id}">
+                    <div class="vp-msgs-ava${d.online ? ' vp-online' : ''}${d.ava === '🛟' ? ' vp-sup' : ''}${d.saved ? ' vp-saved' : ''}">${avaHtml(msgAva(d))}</div>
+                    <div class="vp-msgs-mid"><div class="vp-msgs-name"><span>${esc(d.name)}</span>${d.muted ? `<i class="vp-msgs-mute" title="Без звука">${uiIcon('bellOff', 14)}</i>` : ''}</div>
+                        <div class="vp-msgs-last">${lastOf(d)}</div></div>
+                    <div class="vp-msgs-side"><span>${d.tick ? `<i class="vp-msgs-tick${d.tick === 2 ? ' vp-read' : ''}" title="${d.tick === 2 ? 'Прочитано' : 'Доставлено'}">${d.tick === 2 ? MSG_ICON.tick2 : MSG_ICON.tick1}</i>` : ''}${esc(d.time)}</span>${d.unread ? `<span class="vp-msgs-badge${d.marked && !d.unreadReal ? ' vp-dot' : ''}">${d.marked && !d.unreadReal ? '' : d.unread}</span>`
                         : pins.includes(d.id) ? `<span class="vp-msgs-pin" title="Закреплён">${MSG_ICON.pin}</span>` : ''}</div>
-                </div>`).join('') : '<div class="vp-msgs-empty">Ничего не нашлось</div>';
+                </div>`).join('') : loading ? '' : `<div class="vp-msgs-empty">${(M.tab || 'all') !== 'all' && !q ? 'В папке пока пусто: правая кнопка по чату → «Папки» или правая кнопка по папке → «Добавить чаты»' : 'Ничего не нашлось'}</div>`;
+                msgLooks();
+                if (M.paintTabs) M.paintTabs();
+                if (loading) {
+                    list.insertAdjacentHTML('beforeend', skelHtml());
+                    M.skelShown = true;
+                } else M.skelShown = false;
                 msgLazyObserve();
             }
             const now = () => new Date().toTimeString().slice(0, 5); M.now = now;
@@ -13889,24 +14177,24 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 if (M.current !== d) M.clearPending();
                 M.blockUi(null);
                 $('.vp-msgs-hmenu').hidden = true;
-                $('.vp-msgs-more').hidden = !d.login || !!d.support || !!d.supUid;
+                $('.vp-msgs-more').hidden = (!d.login && !d.saved) || !!d.support || !!d.supUid;
                 M.current = d;
                 M.downNew = 0;
                 M.selEnd(); M.clearReply(); M.closeFwd(); M.pinEl.hidden = true; M.pinIdx = 0;
-                d.unread = 0;
+                d.unread = 0; d.unreadReal = 0;
+                if (d.marked) { d.marked = false; msgFlagSet('msgMarked', seenKey(msgTarget(d)), false); }
+                if (M.onChatOpen) M.onChatOpen(d);
                 msgMarkOpened(d.id);
+                peerApply(d);
                 $('.vp-msgs-chead .vp-msgs-ava').innerHTML = avaHtml(msgAva(d), 38);
                 $('.vp-msgs-chead .vp-msgs-ava').classList.toggle('vp-online', !!d.online);
                 $('.vp-msgs-chead .vp-msgs-ava').classList.toggle('vp-sup', d.ava === '🛟');
                 $('.vp-msgs-who b').textContent = d.name;
-                const seenAgo = t => {
-                    const d0 = new Date(t); if (isNaN(d0)) return ''; const h = d0.toTimeString().slice(0, 5);
-                    return d0.toDateString() === new Date().toDateString() ? 'в ' + h : `${d0.getDate()}.${String(d0.getMonth() + 1).padStart(2, '0')} в ${h}`;
-                };
-                $('.vp-msgs-who small').textContent = d.support ? 'поддержка · на связи' : d.supUid ? 'обращение в поддержку'
-                    : '@' + d.login + ' · ' + (d.online ? 'в сети' : d.lastSeen && seenAgo(d.lastSeen) ? 'был(а) в сети ' + seenAgo(d.lastSeen) : 'с ИТД X');
-                $('.vp-msgs-call').hidden = !d.login || !!d.support || !!d.supUid;
-                if (d.login || d.support || d.supUid) { home.hidden = true; chat.hidden = false; input.value = ''; send.disabled = true; msgCount(); msgOpenPerson(d); return; }
+                $('.vp-msgs-who small').textContent = headSub(d);
+                lookApply($('.vp-msgs-who b'), $('.vp-msgs-chead .vp-msgs-ava'), d.login);
+                $('.vp-msgs-call').hidden = !d.login || !!d.support || !!d.supUid || !!d.saved;
+                $('.vp-msgs-find').hidden = !(d.login || d.support || d.supUid || d.saved);
+                if (d.login || d.support || d.supUid || d.saved) { home.hidden = true; chat.hidden = false; input.value = msgDrafts()[d.id] || ''; send.disabled = !input.value.trim(); msgCount(); msgOpenPerson(d); return; }
                 feed.innerHTML = (d.msgs.length ? '<div class="vp-msgs-note">Сегодня</div>' : `<div class="vp-msgs-note">Это начало переписки с ${esc(d.name)}</div>`);
                 d.msgs.forEach(([dir, text]) => bubble(dir, text, dir === 'out' ? now() + ' ✓✓' : now()));
                 home.hidden = true; chat.hidden = false;
@@ -13926,7 +14214,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 const rb = q.closest('.vp-msgs-b'), all = [...feed.querySelectorAll(':scope > .vp-msgs-b')], at = all.indexOf(rb);
                 if (!rb || at < 0) return null;
                 const dir = (bubbleDir(rb) === 'out') === q._q.me ? 'out' : 'in', want = quoteTrim(q._q.text);
-                const fits = x => x._m && bubbleDir(x) === dir && quoteTrim(M.replyQuote(x._m)) === want;
+                const fits = x => x._m && bubbleDir(x) === dir && (quoteTrim(M.replyQuote(x._m)) === want || (x._m.orig != null && quoteTrim(M.replyQuote({ text: x._m.orig, img: x._m.img, imgs: x._m.imgs })) === want));
                 for (let i = at - 1; i >= 0; i--) if (fits(all[i])) return all[i];
                 for (let i = at + 1; i < all.length; i++) if (fits(all[i])) return all[i];
                 return null;
@@ -14003,11 +14291,11 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 }
                 if (!msgNet.me) return msgKeyForm(d);
                 feed.textContent = '';
-                note('Сквозное шифрование: переписку можете прочитать только вы двое', 'lock');
+                note(d.saved ? 'Сквозное шифрование: эти заметки видишь только ты' : 'Сквозное шифрование: переписку можете прочитать только вы двое', 'lock');
                 const t = msgTarget(d);
                 if (!t.uid) { note(t.missing); return; }
                 const list = msgThread(t);
-                if (!list.length) note(d.support ? 'Опиши проблему или идею — ответ придёт сюда' : `Это начало переписки с ${d.name}`).classList.add('vp-msgs-first');
+                if (!list.length) note(d.support ? 'Опиши проблему или идею — ответ придёт сюда' : d.saved ? 'Пиши сюда заметки, ссылки и картинки — их видишь только ты' : `Это начало переписки с ${d.name}`).classList.add('vp-msgs-first');
                 list.forEach(m => {
                     const b = bubble(m.dir, m.text, msgMetaText(t, m), (m.imgs || (m.img ? [m.img] : [])).map(msgImgUrl));
                     b._m = m; b.dataset.ts = m.ts; b.dataset.dir = m.dir;
@@ -14022,6 +14310,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 stickEnd();
                 msgReadNow(d, t, list);
                 M.blockUi(d, t);
+                if (M.afterOpen) M.afterOpen(d, t);
             }
             const dayLabel = ts => {
                 const d = new Date(ts * 1000), now = new Date(), yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
@@ -14047,7 +14336,8 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             let daysRaf = 0;
             const scheduleDays = () => { if (!daysRaf) daysRaf = requestAnimationFrame(() => { daysRaf = 0; paintDays(); }); };
             const msgClock = ts => new Date(ts * 1000).toTimeString().slice(0, 5); M.msgClock = msgClock;
-            const msgMetaText = (t, m) => m.pending ? msgClock(m.ts) + (m.pending === 'fail' ? ' · не отправлено — нажми, чтобы повторить' : ' · отправка…') : msgClock(m.at || m.ts) + (m.dir === 'out' ? (readUpTo(t.uid, t.sup, 'them') >= m.ts ? ' ✓✓' : ' ✓') : '');
+            const msgMetaText = (t, m) => m.pending ? msgClock(m.ts) + (m.pending === 'fail' ? ' · не отправлено — нажми, чтобы повторить' : ' · отправка…') : (m.edited ? 'изм. ' : '') + msgClock(m.at || m.ts) + (m.dir === 'out' && !(msgNet.me && t.uid === msgNet.me.id) ? (readUpTo(t.uid, t.sup, 'them') >= m.ts ? ' ✓✓' : ' ✓') : '');
+            M.metaText = msgMetaText;
             function viewMark() {
                 const top = feed.getBoundingClientRect().top;
                 for (const b of feed.querySelectorAll(':scope > .vp-msgs-b')) {
@@ -14059,6 +14349,21 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                     };
                 }
                 return () => { };
+            }
+            function repaintText(b, m) {
+                const imgs = m.imgs || (m.img ? [m.img] : []);
+                if (imgs.length) {
+                    let cap = b.querySelector(':scope > .vp-msgs-cap');
+                    if (!m.text) { if (cap) cap.remove(); return; }
+                    if (!cap) { cap = document.createElement('span'); cap.className = 'vp-msgs-cap'; const box = b.querySelector(':scope > .vp-msgs-album, :scope > .vp-msgs-imgw'); if (box) box.after(cap); else b.insertBefore(cap, b.lastChild); }
+                    cap.textContent = '';
+                    msgBody(cap, m.text, true);
+                    return;
+                }
+                [...b.childNodes].forEach(n => { if (n !== b.lastChild && !(n.nodeType === 1 && n.matches('.vp-msgs-reacts'))) n.remove(); });
+                const tmp = document.createElement('span'), ref = b.querySelector(':scope > .vp-msgs-reacts') || b.lastChild;
+                msgBody(tmp, m.text, false);
+                while (tmp.firstChild) b.insertBefore(tmp.firstChild, ref);
             }
             function msgRefreshChat(d) {
                 const t = msgTarget(d);
@@ -14073,7 +14378,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 let prev = null, added = 0;
                 for (const m of list) {
                     let b = (have.get(m.dir + '|' + m.ts) || []).shift();
-                    if (b) setMeta(b.lastChild, msgMetaText(t, m));
+                    if (b) { if (b._m && b._m.text !== m.text) repaintText(b, m); setMeta(b.lastChild, msgMetaText(t, m)); }
                     else {
                         b = bubble(m.dir, m.text, msgMetaText(t, m), (m.imgs || (m.img ? [m.img] : [])).map(msgImgUrl));
                         b.dataset.ts = m.ts; b.dataset.dir = m.dir; added++;
@@ -14189,6 +14494,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 M.closeImg(true, true);
                 M.closeMenu();
                 M.selEnd(); M.clearReply(); M.closeFwd(); M.pinEl.hidden = true;
+                if (M.onChatClose) M.onChatClose();
                 if (fromHistory !== true && M.current && overlayAt('vpChat')) { M.chatBackPending = true; history.back(); }
                 clearTimeout(M.botTimer);
                 if (M.current && msgNet.me) msgSync().then(() => { msgFillDialogs(); msgBadge(); if (!M.current) renderList(); }).catch(() => { });
@@ -14215,26 +14521,101 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             const { $, close, closeChat, feed, input, list, msgAva, msgClock, msgCount, msgOpenPerson, msgRefreshChat, note, openChat, renderList, root, search, send } = M;
             M.blockUi = blockUi; M.paintCalls = paintCalls; M.paintReacts = paintReacts; M.toggleReact = toggleReact;
             const ctx = document.createElement('div');
-            ctx.className = 'vp-msgs-ctx';
+            ctx.className = 'vp-msgs-ctx vp-float';
             root.appendChild(ctx);
-            const hideCtx = () => ctx.classList.remove('vp-open');
-            function showCtx(row, x, y) {
-                const id = row.dataset.id, pinned = msgPins().includes(id);
-                ctx.innerHTML = `<button type="button">${MSG_ICON.pin}<span>${pinned ? 'Открепить' : 'Закрепить'}</span></button>`;
-                ctx.firstChild.onclick = (e) => {
-                    e.stopPropagation();
-                    const pins = msgPins().filter(p => p !== id);
-                    if (!pinned) pins.push(id);
-                    GM_setValue(acctKey('msgPins'), pins);
-                    hideCtx();
-                    renderList();
-                };
+            const ctxOutside = e => { if (!ctx.contains(e.target)) hideCtx(); };
+            const hideCtx = () => {
+                ctx.classList.remove('vp-open'); held = false;
+                document.removeEventListener('pointerdown', ctxOutside, true);
+            };
+            M.ctxOpen = () => ctx.classList.contains('vp-open'); M.ctxClose = hideCtx;
+            root.querySelector('.vp-msgs-supbtn').addEventListener('click', () => {
+                if (msgIsSupport()) { search.value = ''; M.supDir = true; list.scrollTop = 0; renderList(); return; }
+                const d = MSG_DIALOGS.find(z => z.support);
+                if (d) openChat(d);
+            });
+            const toggleUnread = (d, t, fk) => {
+                if (d.unread) { msgFlagSet('msgMarked', fk, false); msgMarkSeen(t); } else msgFlagSet('msgMarked', fk, true);
+            };
+            let ctxAt = [0, 0];
+            const ICO_CK = svgIcon('<path d="m5 12.5 4.5 4.5L19 7.5"/>', 16), ICO_RIGHT = svgIcon('<path d="m9 5 7 7-7 7"/>', 16), ICO_LEFT = svgIcon('<path d="m15 5-7 7 7 7"/>', 16);
+            const ICO_TAB = svgIcon('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>', 16), ICO_TABOFF = svgIcon('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M9 13h6"/>', 16);
+            function placeCtx() {
                 const rr = root.getBoundingClientRect();
+                ctx.style.left = '0px'; ctx.style.top = '0px';
+                const cw = ctx.offsetWidth, ch = ctx.offsetHeight;
+                ctx.style.left = Math.max(8, Math.min(ctxAt[0] - rr.left, rr.width - cw - 8)) + 'px';
+                ctx.style.top = Math.max(8, Math.min(ctxAt[1] - rr.top, rr.height - ch - 8)) + 'px';
+            }
+            function renderCtx(items) {
+                ctx.textContent = '';
+                items.forEach(it => {
+                    if (it === 'sep') { const sp = document.createElement('div'); sp.className = 'vp-msgs-menu-sep'; ctx.appendChild(sp); return; }
+                    const [ico, label, fn, opt = {}] = it;
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    if (opt.danger) btn.className = 'vp-danger';
+                    btn.innerHTML = ico;
+                    const sp = document.createElement('span');
+                    sp.textContent = label;
+                    btn.appendChild(sp);
+                    if (opt.check) btn.insertAdjacentHTML('beforeend', '<em class="vp-ck">' + ICO_CK + '</em>');
+                    if (opt.sub) btn.insertAdjacentHTML('beforeend', '<em class="vp-ck">' + ICO_RIGHT + '</em>');
+                    btn.onclick = e => {
+                        e.stopPropagation();
+                        const r = fn();
+                        if (Array.isArray(r)) { renderCtx(r); placeCtx(); return; }
+                        hideCtx();
+                        msgFillDialogs();
+                        msgBadge();
+                        renderList();
+                    };
+                    ctx.appendChild(btn);
+                });
+            }
+            function openMenu(items, x, y, anchor) {
+                ctxAt = [x, y];
+                renderCtx(items);
                 ctx.classList.add('vp-open');
-                ctx.style.left = Math.max(8, Math.min(x - rr.left, rr.width - ctx.offsetWidth - 8)) + 'px';
-                ctx.style.top = Math.max(8, Math.min(y - rr.top, rr.height - ctx.offsetHeight - 8)) + 'px';
-                row.classList.add('vp-held');
-                setTimeout(() => row.classList.remove('vp-held'), 250);
+                placeCtx();
+                if (anchor) {
+                    anchor.classList.add('vp-held');
+                    setTimeout(() => anchor.classList.remove('vp-held'), 250);
+                }
+                setTimeout(() => {
+                    if (!ctx.classList.contains('vp-open')) return;
+                    document.addEventListener('pointerdown', ctxOutside, true);
+                }, 0);
+            }
+            M.ctxMenu = openMenu;
+            M.ctxIcons = { tab: ICO_TAB, left: ICO_LEFT };
+            function showCtx(row, x, y) {
+                const id = row.dataset.id, d = MSG_DIALOGS.find(z => z.id === id), t = d && !d.support && msgTarget(d), fk = t && t.uid ? seenKey(t) : '';
+                if (d && d.saved) return;
+                const build = () => {
+                    const pinned = msgPins().includes(id);
+                    const items = [[MSG_ICON.pin, pinned ? 'Открепить' : 'Закрепить', () => {
+                        const pins = msgPins().filter(p => p !== id);
+                        if (!pinned) pins.push(id);
+                        GM_setValue(acctKey('msgPins'), pins);
+                    }]];
+                    const api = M.tabsApi;
+                    if (api) {
+                        items.push([ICO_TAB, 'Папки', () => tabsView(), { sub: true }]);
+                        const cur = M.tab || 'all';
+                        if (cur !== 'all' && api.has(id, cur)) items.push([ICO_TABOFF, 'Убрать из папки', () => { api.toggle(id, cur); }]);
+                    }
+                    if (fk) items.push([uiIcon(d.muted ? 'bell' : 'bellOff', 16), d.muted ? 'Включить звук' : 'Отключить звук', () => msgFlagSet('msgMuted', fk, !d.muted)]);
+                    if (fk) items.push([uiIcon('unread', 16), d.unread ? 'Отметить прочитанным' : 'Отметить непрочитанным', () => toggleUnread(d, t, fk)]);
+                    return items;
+                };
+                const tabsView = () => {
+                    const api = M.tabsApi, items = [[ICO_LEFT, 'Назад', () => build()], 'sep'];
+                    api.list().forEach(tb => items.push([ICO_TAB, tb.name, () => { api.toggle(id, tb.id); renderList(); return tabsView(); }, { check: api.has(id, tb.id) }]));
+                    if (api.list().length < api.max) items.push([MSG_ICON.plus, 'Новая папка', () => { const nid = api.create(); if (nid) api.toggle(id, nid); }]);
+                    return items;
+                };
+                openMenu(build(), x, y, row);
             }
             let holdT = 0, held = false, holdAt = null;
             list.addEventListener('pointerdown', e => {
@@ -14256,6 +14637,56 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             });
             root.addEventListener('pointerdown', e => { if (!ctx.contains(e.target)) hideCtx(); }, true);
             list.addEventListener('scroll', hideCtx, { passive: true });
+
+            const SW_MAX = 112;
+            let sw = null;
+            const swDown = e => {
+                sw = null;
+                if (e.pointerType !== 'touch') return;
+                const r = e.target.closest('.vp-msgs-row');
+                if (!r || r.dataset.id[0] === '@') return;
+                const d = MSG_DIALOGS.find(z => z.id === r.dataset.id), t = d && !d.support && !d.saved && msgTarget(d);
+                if (!t || !t.uid) return;
+                sw = { r, d, t, fk: seenKey(t), x: e.clientX, y: e.clientY, dx: 0, on: false, id: e.pointerId, act: null };
+            };
+            const swMove = e => {
+                if (!sw || e.pointerId !== sw.id) return;
+                const dx = e.clientX - sw.x, dy = e.clientY - sw.y;
+                if (!sw.on) {
+                    if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(dy) * 1.5) { if (Math.abs(dy) > 12) sw = null; return; }
+                    if (dx > 0) { sw = null; return; }
+                    sw.on = true; held = true; M.swiping = true;
+                    clearTimeout(holdT);
+                    sw.act = document.createElement('div');
+                    sw.act.className = 'vp-msgs-swact';
+                    sw.act.innerHTML = uiIcon('unread', 18) + '<span>' + (sw.d.unread ? 'Прочитано' : 'Непрочитано') + '</span>';
+                    sw.r.append(sw.act);
+                    sw.r.classList.add('vp-swp');
+                    try { list.setPointerCapture(e.pointerId); } catch (err) { }
+                }
+                sw.dx = Math.max(-SW_MAX, Math.min(0, dx));
+                sw.r.style.transform = 'translateX(' + sw.dx + 'px)';
+                sw.act.classList.toggle('vp-ready', sw.dx <= -SW_MAX * .6);
+            };
+            const swEnd = () => {
+                const s = sw;
+                sw = null;
+                if (!s || !s.on) return;
+                M.swiping = false;
+                const fire = s.dx <= -SW_MAX * .6;
+                s.r.classList.remove('vp-swp');
+                s.r.style.transform = '';
+                setTimeout(() => s.act.remove(), 220);
+                if (fire) { toggleUnread(s.d, s.t, s.fk); msgFillDialogs(); msgBadge(); renderList(); }
+            };
+            list.addEventListener('pointerdown', function swBoot(e) {
+                if (e.pointerType !== 'touch') return;
+                list.removeEventListener('pointerdown', swBoot);
+                list.addEventListener('pointerdown', swDown);
+                list.addEventListener('pointermove', swMove);
+                ['pointerup', 'pointercancel'].forEach(t => list.addEventListener(t, swEnd));
+                swDown(e);
+            });
 
             list.addEventListener('click', e => {
                 const r = e.target.closest('.vp-msgs-row');
@@ -14311,16 +14742,24 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             $('.vp-msgs-more').onclick = e => {
                 e.stopPropagation();
                 if (!blockMenu.hidden) { blockMenu.hidden = true; return; }
-                if (!M.current || !M.current.login || M.current.support || M.current.supUid) return;
+                if (!M.current || (!M.current.login && !M.current.saved) || M.current.support || M.current.supUid) return;
                 const t = msgTarget(M.current), d = M.current;
                 if (!t.uid) return note(t.missing);
-                const on = msgIsBlocked(t.uid);
-                blockMenu.innerHTML = '<button type="button"></button>';
-                const b = blockMenu.firstChild;
-                b.innerHTML = svgIcon(on ? '<path d="m5 12.5 4.5 4.5L19 7.5"/>' : '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>', 18) + '<span></span>';
-                b.querySelector('span').textContent = on ? 'Разблокировать' : 'Заблокировать';
-                b.classList.toggle('vp-danger', !on);
-                b.onclick = () => { blockMenu.hidden = true; msgBlockToggle(d, t, !on); };
+                const items = M.moreItems ? M.moreItems(d, t) : [];
+                if (!d.saved) {
+                    const on = msgIsBlocked(t.uid);
+                    items.push([svgIcon(on ? '<path d="m5 12.5 4.5 4.5L19 7.5"/>' : '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>', 18), on ? 'Разблокировать' : 'Заблокировать', () => msgBlockToggle(d, t, !on), !on]);
+                }
+                blockMenu.textContent = '';
+                items.forEach(([ico, label, fn, danger]) => {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.innerHTML = ico + '<span></span>';
+                    b.querySelector('span').textContent = label;
+                    b.classList.toggle('vp-danger', !!danger);
+                    b.onclick = () => { blockMenu.hidden = true; fn(); };
+                    blockMenu.appendChild(b);
+                });
                 blockMenu.hidden = false;
             };
             root.addEventListener('click', e => { if (!blockMenu.hidden && !e.target.closest('.vp-msgs-hmenu, .vp-msgs-more')) blockMenu.hidden = true; });
@@ -14347,7 +14786,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 let sg = '';
                 if (msgNet.reacts) msgNet.reacts.forEach((v, k) => { if (k.startsWith(uid + '|')) sg += k + (v.me ? v.me.emoji : '') + '/' + (v.them ? v.them.emoji : '') + ';'; });
                 const r = msgNet.reads && msgNet.reads.get(uid);
-                return sg + ((msgNet.pins && msgNet.pins.get(uid)) || []).join(',') + '|' + (r ? (r.them0 || 0) + '/' + (r.them1 || 0) : 0) + '|' + (msgNet.sigs || []).filter(x => x.uid === uid).length + '|' + (msgIsBlocked(uid) ? 1 : 0) + (msgBlockedMe(uid) ? 1 : 0) + '|' + msgOutGet().filter(e => e.uid === uid).map(e => e.ts + e.st).join(',');
+                return sg + (msgNet.editSig && msgNet.editSig.get(uid) || 0) + ((msgNet.pins && msgNet.pins.get(uid)) || []).join(',') + '|' + (r ? (r.them0 || 0) + '/' + (r.them1 || 0) : 0) + '|' + (msgNet.sigs || []).filter(x => x.uid === uid).length + '|' + (msgIsBlocked(uid) ? 1 : 0) + (msgBlockedMe(uid) ? 1 : 0) + '|' + msgOutGet().filter(e => e.uid === uid).map(e => e.ts + e.st).join(',');
             }; M.chatSig = chatSig;
             function paintCalls(t) {
                 feed.querySelectorAll(':scope > .vp-msgs-callrow').forEach(x => x.remove());
@@ -14611,8 +15050,9 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                     const row = document.createElement('button');
                     row.type = 'button';
                     row.className = 'vp-msgs-fwd-r';
-                    row.innerHTML = '<span class="vp-msgs-ava vp-sm">' + avaHtml(msgAva(x), 30) + '</span><span></span>';
+                    row.innerHTML = '<span class="vp-msgs-ava vp-msgs-ava-sm">' + avaHtml(msgAva(x), 30) + '</span><span></span>';
                     row.lastChild.textContent = x.name;
+                    M.lookApply(row.lastChild, row.firstChild, x.login);
                     row.addEventListener('click', () => forwardTo(x, ms));
                     box.appendChild(row);
                 });
@@ -14646,6 +15086,20 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                     save(href);
                     setTimeout(() => URL.revokeObjectURL(href), 4000);
                 } catch (e) { logErr('сохранение картинки', e); window.open(url, '_blank', 'noopener'); }
+            }
+            function copyImage(url) {
+                const png = (async () => {
+                    const bl = /^(blob|data):/.test(url) ? await (await fetch(url)).blob()
+                        : await new Promise((ok, no) => GM_xmlhttpRequest({ method: 'GET', url, responseType: 'blob', timeout: 60000,
+                            onload: r => r.status === 200 && r.response ? ok(r.response) : no(new Error('HTTP ' + r.status)), onerror: no, ontimeout: no }));
+                    if (bl.type === 'image/png') return bl;
+                    const bmp = await createImageBitmap(bl), cv = document.createElement('canvas');
+                    cv.width = bmp.width; cv.height = bmp.height;
+                    cv.getContext('2d').drawImage(bmp, 0, 0);
+                    return await new Promise((ok, no) => cv.toBlob(x => x ? ok(x) : no(new Error('toBlob')), 'image/png'));
+                })();
+                if (!navigator.clipboard || !navigator.clipboard.write || typeof ClipboardItem !== 'function') { flashNote('Браузер не умеет копировать картинки'); return; }
+                navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]).then(() => flashNote('Картинка скопирована'), e => { logErr('копирование картинки', e); flashNote('Не удалось скопировать картинку'); });
             }
             M.menu = null, M.pressT = 0;
             function closeMenu() {
@@ -14710,6 +15164,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 if (real) {
                     const t = msgTarget(M.current), pinned = ((msgNet.pins && msgNet.pins.get(t.uid)) || []).includes(reactKey(t.uid, m.dir, m.ts));
                     item('Ответить', () => setReply(b), 'reply');
+                    if (m.dir === 'out' && !m.pending && M.editStart) item('Изменить', () => M.editStart(b), 'edit');
                     item(pinned ? 'Открепить' : 'Закрепить', () => togglePin(m, !pinned), 'pin');
                     item('Переслать', () => openFwd([m]), 'fwd');
                     item(m.dir === 'out' ? 'Удалить' : 'Удалить у себя', () => msgDelete([b]), 'trash', 'vp-danger');
@@ -14718,8 +15173,9 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 }
                 if (text) item('Копировать текст', () => copyText(text), 'copy');
                 if (imgs.length) {
+                    item('Копировать картинку', () => copyImage(hit ? hit.src : imgs[0]), 'image');
                     item('Сохранить', () => saveImage(hit ? hit.src : imgs[0]), 'save');
-                    item(imgs.length > 1 ? 'Открыть альбом' : 'Открыть картинку', () => M.openImg(imgs, 0, text, [...b.querySelectorAll('.vp-msgs-img')]), 'image');
+                    if (imgs.length > 1) item('Открыть альбом', () => M.openImg(imgs, 0, text, [...b.querySelectorAll('.vp-msgs-img')]), 'image');
                 }
                 if (M.menu.lastChild && M.menu.lastChild.classList.contains('vp-msgs-menu-sep')) M.menu.lastChild.remove();
                 if (!M.menu.querySelector('.vp-msgs-menu-i')) { M.menu = null; return; }
@@ -14751,7 +15207,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         // Окно «Сообщения»: просмотр картинок, вложения, отправка картинок
         function msgPartImages(M) {
             const { $, bubble, feed, input, msgCount, msgRefreshChat, note, now, root, send, setMeta, stickEnd, supportReply, takeReply } = M;
-            M.openImg = openImg; M.closeImg = closeImg; M.clearPending = clearPending;
+            M.openImg = openImg; M.closeImg = closeImg; M.clearPending = clearPending; M.setPending = setPending;
             let lbKey = null;
             function openImg(list, idx, cap, thumbs) {
                 if (typeof list === 'string') list = [list];
@@ -14935,6 +15391,482 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 else bubble('out', text, now() + ' · не отправлено').classList.add('vp-fail');
             });
 
+        }
+        // Окно «Сообщения»: черновики, перетаскивание картинок, изменение сообщений, поиск по переписке, вкладка вложений, фильтр «непрочитанные»
+        function msgPartExtras(M) {
+            const { $, chat, feed, input, list, note, root, search, send } = M;
+            const bar = $('.vp-msgs-bar');
+            const hasFiles = e => !!(e.dataTransfer && [...e.dataTransfer.types].includes('Files'));
+
+            let draftT = 0;
+            input.addEventListener('input', () => {
+                if (!M.current || M.editing || input.disabled) return;
+                const id = M.current.id, v = input.value;
+                clearTimeout(draftT);
+                draftT = setTimeout(() => msgDraftSet(id, v.trim() ? v : ''), 400);
+            });
+            bar.addEventListener('submit', () => {
+                clearTimeout(draftT);
+                if (M.current && !M.editing) msgDraftSet(M.current.id, '');
+            });
+
+            let dragN = 0;
+            const dropOff = () => { dragN = 0; chat.classList.remove('vp-drop'); };
+            chat.addEventListener('dragenter', e => { if (!hasFiles(e)) return; e.preventDefault(); dragN++; chat.classList.add('vp-drop'); });
+            chat.addEventListener('dragover', e => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = input.disabled ? 'none' : 'copy'; });
+            chat.addEventListener('dragleave', e => { if (hasFiles(e) && --dragN <= 0) dropOff(); });
+            chat.addEventListener('drop', e => {
+                if (!hasFiles(e)) return;
+                e.preventDefault();
+                dropOff();
+                const all = [...e.dataTransfer.files], imgs = all.filter(f => /^image\//.test(f.type));
+                if (input.disabled || M.editing) return;
+                if (!imgs.length) { M.flashNote('Пока можно прикреплять только картинки'); return; }
+                M.setPending(imgs);
+                if (imgs.length < all.length) M.flashNote('Остальные файлы пропущены: пока только картинки');
+            });
+            root.addEventListener('dragover', e => { if (hasFiles(e) && !chat.contains(e.target)) e.preventDefault(); });
+            root.addEventListener('drop', e => { if (hasFiles(e) && !chat.contains(e.target)) e.preventDefault(); });
+
+            M.editing = null;
+            const editEl = document.createElement('div');
+            editEl.className = 'vp-msgs-reply vp-msgs-editbar';
+            editEl.hidden = true;
+            editEl.innerHTML = uiIcon('edit', 18) + '<span class="vp-msgs-reply-t"><b>Изменение сообщения</b><span></span></span><button type="button" class="vp-msgs-ib" title="Отмена">' + uiIcon('close', 16) + '</button>';
+            bar.before(editEl);
+            function editEnd() {
+                if (!M.editing) return;
+                M.editing = null;
+                editEl.hidden = true;
+                input.value = '';
+                send.disabled = true;
+                M.msgCount();
+            }
+            M.editEnd = editEnd;
+            M.editStart = b => {
+                const m = b._m;
+                if (!m || m.dir !== 'out' || m.pending || !M.current) return;
+                M.clearReply();
+                M.editing = { b, m, q: msgQuoteOf(m.text, msgHasImg(m)) };
+                editEl.querySelector('.vp-msgs-reply-t span').textContent = M.replyQuote(m);
+                editEl.hidden = false;
+                input.value = msgPlainOf(m);
+                send.disabled = !input.value.trim() && !msgHasImg(m);
+                M.msgCount();
+                input.focus();
+                input.setSelectionRange(input.value.length, input.value.length);
+            };
+            editEl.querySelector('button').addEventListener('click', editEnd);
+            input.addEventListener('input', () => { if (M.editing) send.disabled = !input.value.trim() && !msgHasImg(M.editing.m); });
+            bar.addEventListener('submit', e => {
+                if (!M.editing) return;
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                const { b, m, q } = M.editing, text = input.value.trim(), d = M.current, t = d && msgTarget(d);
+                if (!t || !t.uid || (!text && !msgHasImg(m))) return;
+                const full = q ? '> ' + q.line + (text ? '\n' + text : '') : msgMark(text);
+                editEnd();
+                if (full === m.text) return;
+                const was = { text: m.text, edited: m.edited, orig: m.orig }, key = reactKey(t.uid, m.dir, m.ts), at = Math.floor(srvNow() / 1000);
+                (msgNet.pendEdits || (msgNet.pendEdits = new Map())).set(key, { text: full, at, until: Date.now() + 60e3 });
+                m.orig = m.orig != null ? m.orig : m.text; m.text = full; m.edited = at;
+                M.repaintText(b, m);
+                M.setMeta(b.lastChild, M.metaText(t, m));
+                msgEditSend(t.uid, m, full).then(() => { msgFillDialogs(); if (M.current === d) M.msgRefreshChat(d); })
+                    .catch(err => {
+                        msgNet.pendEdits.delete(key);
+                        Object.assign(m, was);
+                        if (was.edited === undefined) delete m.edited;
+                        if (was.orig === undefined) delete m.orig;
+                        if (b.isConnected) { M.repaintText(b, m); M.setMeta(b.lastChild, M.metaText(t, m)); }
+                        logErr('изменение сообщения', err);
+                        M.flashNote('Не получилось изменить — попробуй ещё раз');
+                    });
+            }, true);
+
+            const fbar = document.createElement('div');
+            fbar.className = 'vp-msgs-fbar';
+            fbar.hidden = true;
+            fbar.innerHTML = '<label>' + MSG_ICON.search + '<input type="search" placeholder="Поиск по переписке" autocomplete="off"></label><span class="vp-msgs-fcount"></span>'
+                + '<button type="button" class="vp-msgs-ib vp-fprev" title="Выше (раньше)">' + uiIcon('up', 20) + '</button><button type="button" class="vp-msgs-ib vp-fnext" title="Ниже (позже)">' + uiIcon('down', 20) + '</button>'
+                + '<button type="button" class="vp-msgs-ib vp-fclose" title="Закрыть поиск">' + uiIcon('close', 18) + '</button>';
+            $('.vp-msgs-chead').after(fbar);
+            const fin = fbar.querySelector('input'), fcount = fbar.querySelector('.vp-msgs-fcount');
+            const canMark = !!(window.CSS && CSS.highlights && window.Highlight);
+            const lower = s => String(s || '').toLowerCase();
+            const textOf = b => lower(msgPlainOf(b._m));
+            let fcur = null, fq = '';
+            function fmatches(q) { return q ? [...feed.querySelectorAll(':scope > .vp-msgs-b')].filter(b => b._m && textOf(b).includes(q)) : []; }
+            function ranges(b, q) {
+                const out = [], w = document.createTreeWalker(b, NodeFilter.SHOW_TEXT);
+                for (let n = w.nextNode(); n; n = w.nextNode()) {
+                    if (n.parentElement && n.parentElement.closest('.vp-msgs-reacts, i:last-child')) continue;
+                    const s = lower(n.nodeValue);
+                    for (let at = s.indexOf(q); at >= 0; at = s.indexOf(q, at + q.length)) { const r = new Range(); r.setStart(n, at); r.setEnd(n, at + q.length); out.push(r); }
+                }
+                return out;
+            }
+            function fpaint(all, cur, q) {
+                if (!canMark) return;
+                const a = new Highlight(), c = new Highlight();
+                all.forEach(b => ranges(b, q).forEach(r => (b === cur ? c : a).add(r)));
+                CSS.highlights.set('vp-find', a); CSS.highlights.set('vp-find-cur', c);
+            }
+            function fclear() { if (canMark) { CSS.highlights.delete('vp-find'); CSS.highlights.delete('vp-find-cur'); } }
+            function fgo(step, first) {
+                const q = lower(fin.value.trim()), all = fmatches(q);
+                fq = q;
+                if (!all.length) { fcur = null; fcount.textContent = q ? 'Нет совпадений' : ''; fclear(); return; }
+                let i = fcur ? all.indexOf(fcur) : -1;
+                i = i < 0 ? all.length - 1 : first ? all.length - 1 : (i + step + all.length) % all.length;
+                fcur = all[i];
+                fcount.textContent = (all.length - i) + ' из ' + all.length;
+                fpaint(all, fcur, q);
+                M.jumpTo(fcur);
+            }
+            let fT = 0;
+            fin.addEventListener('input', () => { clearTimeout(fT); fT = setTimeout(() => { fcur = null; fgo(0, true); }, 140); });
+            fin.addEventListener('keydown', e => {
+                if (e.key === 'Enter') { e.preventDefault(); fgo(e.shiftKey ? 1 : -1); }
+                else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fclose(); }
+            });
+            fbar.querySelector('.vp-fprev').addEventListener('click', () => fgo(-1));
+            fbar.querySelector('.vp-fnext').addEventListener('click', () => fgo(1));
+            fbar.querySelector('.vp-fclose').addEventListener('click', () => fclose());
+            function fopen(q) {
+                fbar.hidden = false;
+                if (q !== undefined) { fin.value = q; fcur = null; fgo(0, true); }
+                fin.focus();
+                fin.select();
+            }
+            function fclose() { fbar.hidden = true; fin.value = ''; fcur = null; fq = ''; fcount.textContent = ''; fclear(); }
+            M.findOpen = () => !fbar.hidden;
+            M.findClose = fclose;
+            $('.vp-msgs-find').onclick = () => { if (fbar.hidden) fopen(); else fclose(); };
+            M.msgHits = q => {
+                const out = new Map();
+                if (q.length < 2) return out;
+                for (const d of MSG_DIALOGS) {
+                    if (!(d.login || d.support || d.supUid || d.saved)) continue;
+                    const t = msgTarget(d);
+                    if (!t.uid) continue;
+                    const th = msgThread(t);
+                    for (let i = th.length - 1; i >= 0; i--) {
+                        const m = th[i], s = msgPlainOf(m), at = lower(s).indexOf(q);
+                        if (at < 0) continue;
+                        const a = Math.max(0, at - 24), snip = (m.dir === 'out' && !d.saved ? 'Ты: ' : '') + (a ? '…' : '') + s.slice(a, at + q.length + 40).replace(/\s+/g, ' ') + (at + q.length + 40 < s.length ? '…' : '');
+                        out.set(d.id, { snip, ts: m.ts, dir: m.dir });
+                        break;
+                    }
+                }
+                return out;
+            };
+            list.addEventListener('click', e => {
+                const r = e.target.closest('.vp-msgs-row'), q = lower(search.value.trim());
+                if (!r || q.length < 2) return;
+                const h = M.msgHits(q).get(r.dataset.id);
+                if (h) M.pendingJump = { id: r.dataset.id, ts: h.ts, dir: h.dir, q };
+            }, true);
+
+            const mediaEl = document.createElement('div');
+            mediaEl.className = 'vp-msgs-media';
+            mediaEl.hidden = true;
+            mediaEl.innerHTML = '<div class="vp-msgs-mhead"><button type="button" class="vp-msgs-ib" title="Назад">' + MSG_ICON.back + '</button><b>Вложения</b><span></span></div><div class="vp-msgs-mgrid"></div>';
+            chat.appendChild(mediaEl);
+            const mgrid = mediaEl.querySelector('.vp-msgs-mgrid');
+            function mediaOpen() {
+                const d = M.current, t = d && msgTarget(d);
+                if (!t || !t.uid) return;
+                const items = [];
+                msgThread(t).forEach(m => (m.imgs || (m.img ? [m.img] : [])).forEach(im => items.push({ url: msgImgUrl(im), cap: msgPlainOf(m) })));
+                items.reverse();
+                mgrid.textContent = '';
+                mediaEl.querySelector('.vp-msgs-mhead span').textContent = items.length ? String(items.length) : '';
+                if (!items.length) { const e = document.createElement('div'); e.className = 'vp-msgs-empty'; e.textContent = 'Картинок в этой переписке пока нет'; mgrid.appendChild(e); }
+                const thumbs = [];
+                items.forEach((it, i) => {
+                    const cell = document.createElement('button'), im = document.createElement('img');
+                    cell.type = 'button';
+                    im.src = it.url; im.alt = ''; im.loading = 'lazy'; im.decoding = 'async'; im.draggable = false;
+                    cell.appendChild(im);
+                    thumbs.push(im);
+                    cell.addEventListener('click', () => M.openImg(items.map(x => x.url), i, it.cap, thumbs));
+                    mgrid.appendChild(cell);
+                });
+                mediaEl.hidden = false;
+                mgrid.scrollTop = 0;
+            }
+            function mediaClose() { mediaEl.hidden = true; mgrid.textContent = ''; }
+            M.mediaOpen = () => !mediaEl.hidden;
+            M.mediaClose = mediaClose;
+            mediaEl.querySelector('.vp-msgs-ib').addEventListener('click', mediaClose);
+
+            M.moreItems = (d, t) => {
+                const items = [
+                    [uiIcon('search', 18), 'Поиск по переписке', () => fopen()],
+                    [uiIcon('grid', 18), 'Вложения', mediaOpen]
+                ];
+                if (!d.saved) {
+                    const fk = seenKey(t), on = !!msgMuted()[fk];
+                    items.push([uiIcon(on ? 'bell' : 'bellOff', 18), on ? 'Включить звук' : 'Отключить звук', () => {
+                        msgFlagSet('msgMuted', fk, !on);
+                        d.muted = !on;
+                        msgFillDialogs();
+                        msgBadge();
+                        M.flashNote(on ? 'Звук включён' : 'Звук отключён: чат не шумит и не считается в счётчике');
+                    }]);
+                }
+                return items;
+            };
+
+            M.onChatOpen = () => { editEnd(); fclose(); mediaClose(); };
+            M.onChatClose = () => { clearTimeout(draftT); editEnd(); fclose(); mediaClose(); };
+            M.afterOpen = (d) => {
+                const j = M.pendingJump;
+                M.pendingJump = null;
+                if (!j || j.id !== d.id) return;
+                const b = feed.querySelector(`:scope > .vp-msgs-b[data-dir="${j.dir}"][data-ts="${j.ts}"]`);
+                fopen(j.q);
+                if (b) setTimeout(() => M.jumpTo(b), 60);
+            };
+        }
+        function msgPartTabs(M) {
+            const { $, list, root, renderList } = M;
+            const box = $('.vp-msgs-chips');
+            const TAB_MAX = 10, NAME_MAX = 13;
+            const ICO = {
+                plus: svgIcon('<path d="M12 5v14M5 12h14"/>', 16),
+                pen: svgIcon('<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16Z"/><path d="M13.5 6.5l4 4"/>', 16),
+                trash: svgIcon('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>', 16),
+                read: svgIcon('<path d="m3 12.5 4 4L15 8"/><path d="m11 15 1.5 1.5L21 8"/>', 16)
+            };
+            const tabsGet = () => {
+                const t = GM_getValue(acctKey('msgTabs'), []);
+                return Array.isArray(t) ? t.filter(x => x && typeof x.id === 'string' && typeof x.name === 'string').slice(0, TAB_MAX) : [];
+            };
+            const mapGet = () => {
+                const m = GM_getValue(acctKey('msgTabOf'), {});
+                return m && typeof m === 'object' && !Array.isArray(m) ? m : {};
+            };
+            const curTab = () => {
+                if (M.tab === undefined) {
+                    const s = GM_getValue(acctKey('msgTabSel'), 'all');
+                    M.tab = tabsGet().some(t => t.id === s) ? s : 'all';
+                } else if (M.tab !== 'all' && !tabsGet().some(t => t.id === M.tab)) M.tab = 'all';
+                return M.tab;
+            };
+            const has = (cid, tid) => (mapGet()[cid] || []).includes(tid);
+            function toggle(cid, tid) {
+                const m = mapGet(), a = (m[cid] || []).slice(), i = a.indexOf(tid);
+                if (i < 0) a.push(tid); else a.splice(i, 1);
+                if (a.length) m[cid] = a; else delete m[cid];
+                GM_setValue(acctKey('msgTabOf'), m);
+                M.tabSig = '';
+            }
+            function create() {
+                const tabs = tabsGet();
+                if (tabs.length >= TAB_MAX) return null;
+                let n = 1;
+                while (tabs.some(t => t.name === 'Папка ' + n)) n++;
+                const id = 't' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+                tabs.push({ id, name: 'Папка ' + n });
+                GM_setValue(acctKey('msgTabs'), tabs);
+                M.tabSig = '';
+                return id;
+            }
+            function rename(id, name) {
+                const tabs = tabsGet(), t = tabs.find(x => x.id === id), v = String(name || '').trim().slice(0, NAME_MAX);
+                if (!t || !v) return;
+                t.name = v;
+                GM_setValue(acctKey('msgTabs'), tabs);
+                M.tabSig = '';
+            }
+            function remove(id) {
+                const was = curTab();
+                GM_setValue(acctKey('msgTabs'), tabsGet().filter(t => t.id !== id));
+                const m = mapGet();
+                for (const k in m) { m[k] = m[k].filter(x => x !== id); if (!m[k].length) delete m[k]; }
+                GM_setValue(acctKey('msgTabOf'), m);
+                M.tabSig = '';
+                if (was === id) select('all');
+            }
+            M.tabsApi = { list: tabsGet, has, toggle, create, max: TAB_MAX };
+            M.tabHas = d => { const t = curTab(); return t === 'all' || (!d.saved && has(d.id, t)); };
+
+            const chip = (id, name, n, on, quiet) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                if (on) b.className = 'vp-on';
+                if (id === 'all') b.dataset.f = 'all'; else b.dataset.tab = id;
+                const s = document.createElement('span');
+                s.textContent = name;
+                b.appendChild(s);
+                if (n) { const c = document.createElement('i'); c.className = 'vp-msgs-tabn' + (quiet ? ' vp-mute' : ''); c.textContent = n > 99 ? '99+' : String(n); b.appendChild(c); }
+                return b;
+            };
+            function paintTabs() {
+                if (M.tabEditing) return;
+                const tabs = tabsGet(), cur = curTab(), m = mapGet(), stat = {};
+                const unread = d => d.unread > 0;
+                const calc = f => { const u = MSG_DIALOGS.filter(d => unread(d) && f(d)); return [u.length, u.length > 0 && !u.some(d => !d.muted)]; };
+                stat.all = calc(() => true);
+                tabs.forEach(t => { stat[t.id] = calc(d => (m[d.id] || []).includes(t.id)); });
+                const sig = cur + '|' + ['all', ...tabs.map(t => t.id)].map(k => k + ':' + (tabs.find(t => t.id === k) || { name: '' }).name + ':' + stat[k].join('/')).join(',');
+                if (sig === M.tabSig) return;
+                M.tabSig = sig;
+                box.textContent = '';
+                box.appendChild(chip('all', 'Все', stat.all[0], cur === 'all', stat.all[1]));
+                tabs.forEach(t => box.appendChild(chip(t.id, t.name, stat[t.id][0], cur === t.id, stat[t.id][1])));
+                const plus = document.createElement('button');
+                plus.type = 'button';
+                plus.className = 'vp-msgs-tabadd';
+                plus.innerHTML = ICO.plus;
+                plus.disabled = tabs.length >= TAB_MAX;
+                plus.title = plus.disabled ? 'Максимум ' + TAB_MAX + ' папок' : 'Новая папка';
+                box.appendChild(plus);
+            }
+            M.paintTabs = paintTabs;
+            function reveal(id) {
+                const b = box.querySelector(id === 'all' ? '[data-f="all"]' : '[data-tab="' + id + '"]');
+                if (!b) return;
+                const l = b.offsetLeft, r = l + b.offsetWidth;
+                if (l < box.scrollLeft + 8) box.scrollLeft = Math.max(0, l - 16);
+                else if (r > box.scrollLeft + box.clientWidth - 8) box.scrollLeft = r - box.clientWidth + 16;
+            }
+            function select(id) {
+                M.tab = id;
+                GM_setValue(acctKey('msgTabSel'), id);
+                M.tabSig = '';
+                paintTabs();
+                reveal(id);
+                list.scrollTop = 0;
+                renderList();
+            }
+            M.tabSelect = select;
+
+            let editFin = null;
+            M.tabEditCancel = () => { if (editFin) editFin(false); };
+            function startRename(id) {
+                const b = box.querySelector('[data-tab="' + id + '"]'), tab = tabsGet().find(t => t.id === id);
+                if (!b || !tab) return;
+                M.tabEditing = true;
+                b.textContent = '';
+                const inp = document.createElement('input');
+                inp.type = 'text';
+                inp.className = 'vp-msgs-tabin';
+                inp.maxLength = NAME_MAX;
+                inp.value = tab.name;
+                inp.setAttribute('aria-label', 'Название папки');
+                b.appendChild(inp);
+                reveal(id);
+                inp.focus();
+                inp.select();
+                let done = false;
+                const fin = ok => {
+                    if (done) return;
+                    done = true;
+                    editFin = null;
+                    M.tabEditing = false;
+                    if (ok) rename(id, inp.value);
+                    M.tabSig = '';
+                    paintTabs();
+                };
+                editFin = fin;
+                inp.addEventListener('keydown', e => {
+                    if (e.key === 'Enter') { e.preventDefault(); fin(true); }
+                    e.stopPropagation();
+                });
+                inp.addEventListener('blur', () => fin(true));
+            }
+            function readAll(id) {
+                const m = mapGet();
+                MSG_DIALOGS.forEach(d => {
+                    if (!(m[d.id] || []).includes(id) || d.support) return;
+                    const t = msgTarget(d);
+                    if (!t || !t.uid || !(d.unread || d.marked)) return;
+                    msgFlagSet('msgMarked', seenKey(t), false);
+                    msgMarkSeen(t);
+                });
+            }
+            function closePick() { if (M.pickEl) { M.pickEl.remove(); M.pickEl = null; } }
+            M.pickClose = closePick;
+            function openPick(id) {
+                closePick();
+                const tab = tabsGet().find(t => t.id === id);
+                if (!tab) return;
+                msgFillDialogs();
+                const targets = sortDialogs(MSG_DIALOGS.filter(x => !x.supUid && (x.login || x.support)));
+                const el = document.createElement('div');
+                el.className = 'vp-msgs-fwd vp-msgs-pick';
+                el.innerHTML = '<div class="vp-msgs-fwd-card"><div class="vp-msgs-fwd-h"><b></b><button type="button" class="vp-msgs-ib" title="Готово">' + uiIcon('close', 18) + '</button></div><div class="vp-msgs-fwd-l"></div></div>';
+                el.querySelector('b').textContent = 'В папку «' + tab.name + '»';
+                const lb = el.querySelector('.vp-msgs-fwd-l');
+                targets.forEach(x => {
+                    const row = document.createElement('button');
+                    row.type = 'button';
+                    row.className = 'vp-msgs-fwd-r';
+                    row.dataset.id = x.id;
+                    row.innerHTML = '<span class="vp-msgs-ava vp-msgs-ava-sm">' + M.avaHtml(M.msgAva(x), 30) + '</span><span class="vp-msgs-pick-n"></span><i class="vp-msgs-pick-c"></i>';
+                    row.children[1].textContent = x.name;
+                    M.lookApply(row.children[1], row.firstChild, x.login);
+                    const paint = () => row.classList.toggle('vp-on', has(x.id, id));
+                    paint();
+                    row.addEventListener('click', () => { toggle(x.id, id); paint(); paintTabs(); renderList(); });
+                    lb.appendChild(row);
+                });
+                el.addEventListener('click', e => { if (e.target === el || e.target.closest('.vp-msgs-fwd-h button')) closePick(); });
+                root.appendChild(el);
+                M.pickEl = el;
+            }
+            function openTabMenu(b, x, y) {
+                const id = b.dataset.tab;
+                if (!id) return;
+                M.ctxMenu([
+                    [ICO.pen, 'Переименовать', () => startRename(id)],
+                    [ICO.read, 'Прочитать все', () => readAll(id)],
+                    [ICO.plus, 'Добавить чаты', () => openPick(id)],
+                    'sep',
+                    [ICO.trash, 'Удалить', () => remove(id), { danger: true }]
+                ], x, y, b);
+            }
+
+            let holdT = 0, holdAt = null;
+            box.addEventListener('pointerdown', e => {
+                M.tabHeld = false;
+                const b = e.target.closest('button[data-tab]');
+                if (!b || e.button > 0 || b.querySelector('input')) return;
+                holdAt = [e.clientX, e.clientY];
+                clearTimeout(holdT);
+                holdT = setTimeout(() => { M.tabHeld = true; if (navigator.vibrate) navigator.vibrate(12); openTabMenu(b, holdAt[0], holdAt[1]); }, 450);
+            });
+            box.addEventListener('pointermove', e => { if (holdAt && Math.hypot(e.clientX - holdAt[0], e.clientY - holdAt[1]) > 8) clearTimeout(holdT); });
+            ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => box.addEventListener(t, () => { clearTimeout(holdT); holdAt = null; }));
+            box.addEventListener('contextmenu', e => {
+                const b = e.target.closest('button[data-tab]');
+                e.preventDefault();
+                clearTimeout(holdT);
+                if (!b || b.querySelector('input')) return;
+                if (!M.tabHeld) openTabMenu(b, e.clientX, e.clientY);
+                M.tabHeld = true;
+            });
+            box.addEventListener('click', e => {
+                if (M.tabHeld) { M.tabHeld = false; return; }
+                const b = e.target.closest('button');
+                if (!b || b.querySelector('input')) return;
+                if (b.classList.contains('vp-msgs-tabadd')) {
+                    const id = create();
+                    if (!id) return;
+                    select(id);
+                    startRename(id);
+                    return;
+                }
+                select(b.dataset.tab || 'all');
+            });
+            box.addEventListener('wheel', e => {
+                if (box.scrollWidth <= box.clientWidth || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+                box.scrollLeft += e.deltaY;
+                e.preventDefault();
+            }, { passive: false });
         }
         function messagesLabel(notificationsLink) {
             return /уведомления/i.test(notificationsLink.textContent) ? 'Сообщения' : 'Личка';
@@ -15787,6 +16719,27 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             });
             msgsNavLook();
         }
+        function navHoverLook(el) {
+            const out = {};
+            const walk = rules => {
+                for (const r of rules) {
+                    if (!r.selectorText) { if (r.cssRules && (!r.media || matchMedia(r.media.mediaText).matches)) walk(r.cssRules); continue; }
+                    if (r.selectorText.indexOf(':hover') < 0) continue;
+                    for (const part of r.selectorText.split(',')) {
+                        if (part.indexOf(':hover') < 0) continue;
+                        let ok = false;
+                        try { ok = el.matches(part.replace(/:hover/g, '')); } catch (e) { }
+                        if (!ok) continue;
+                        const st = r.style, bg = st.backgroundColor || st.background;
+                        if (st.color) out.c = st.color;
+                        if (st.opacity) out.o = st.opacity;
+                        if (bg && !/url\(|gradient/.test(bg)) out.b = bg;
+                    }
+                }
+            };
+            for (const sh of document.styleSheets) { let rules; try { rules = sh.cssRules; } catch (e) { continue; } walk(rules); }
+            return out;
+        }
         function msgsNavLook() {
             const links = [...document.querySelectorAll('.' + SELECTORS.navLink)];
             if (!msgsOpen && !galOpen) { links.forEach(a => { if (a.classList.contains('vp-site-cur')) a.classList.remove('vp-site-cur'); }); return; }
@@ -15797,6 +16750,8 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             if (!nav || !other || (cur && cur.classList.contains('vp-site-cur'))) return;
             const look = (a, k) => { const g = getComputedStyle(a); nav.style.setProperty(`--vp-${k}-c`, g.color); nav.style.setProperty(`--vp-${k}-o`, g.opacity); nav.style.setProperty(`--vp-${k}-b`, g.backgroundColor); };
             look(other, 'off');
+            const hv = navHoverLook(other);
+            ['c', 'o', 'b'].forEach(k => { if (hv[k]) nav.style.setProperty('--vp-hov-' + k, hv[k]); else nav.style.removeProperty('--vp-hov-' + k); });
             look(cur || other, 'on');
             if (!cur) { nav.style.setProperty('--vp-on-c', getComputedStyle(document.body).color); nav.style.setProperty('--vp-on-o', '1'); }
             if (cur) cur.classList.add('vp-site-cur');
@@ -16567,7 +17522,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         const navLater = () => [60, 250, 700].forEach(ms => setTimeout(() => { markActiveNav(); moveNavBlob(); }, ms));
         addEventListener('popstate', navLater);
         document.addEventListener('vp-loc', navLater);
-        addEventListener('resize', () => { blobAt = null; moveNavBlob(); });
+        onResize(() => { blobAt = null; moveNavBlob(); });
 
         const PROX_MAX = 14, PROX_SIGMA = 46;
         let proxY = null, proxRaf = 0, blobK = 0;
@@ -16590,6 +17545,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 const x = (k * PROX_MAX).toFixed(2);
                 a.style.transform = k ? `translateX(${x}px)` : '';
                 a.style.opacity = k && !a.classList.contains('vp-active') ? String((0.5 + 0.5 * k).toFixed(3)) : '';
+                if (a.classList.contains('vp-site-cur')) { if (k) a.style.setProperty('--vp-px-o', String((0.5 + 0.5 * k).toFixed(3))); else a.style.removeProperty('--vp-px-o'); }
                 const portal = a.querySelector(':scope > svg.vp-portal');
                 const icon = a.querySelector('.' + SELECTORS.navIcon) || portal;
                 if (icon) icon.style.transform = k ? `scale(${(1 + 0.12 * k).toFixed(3)})` : '';
@@ -17157,7 +18113,8 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         html.vp-gal-open iframe.vp-page-frame, html.vp-msgs-open iframe.vp-page-frame { visibility: hidden !important; }
         .vp-gal-body { padding: 12px 12px var(--vp-gal-pb, 24px) !important; }
         html.vp-gal-open .vp-gal-navwrap { z-index: 40 !important; }
-        html.vp-gal-open .vp-nav-link.vp-site-cur { color: var(--vp-off-c) !important; opacity: var(--vp-off-o) !important; background-color: var(--vp-off-b) !important; }
+        html.vp-gal-open .vp-nav-link.vp-site-cur { color: var(--vp-off-c) !important; opacity: var(--vp-px-o, var(--vp-off-o)) !important; background-color: var(--vp-off-b) !important; }
+        html.vp-gal-open .vp-nav-link.vp-site-cur:hover { color: var(--vp-hov-c, var(--vp-off-c)) !important; opacity: var(--vp-px-o, var(--vp-hov-o, var(--vp-off-o))) !important; background-color: var(--vp-hov-b, var(--vp-off-b)) !important; }
         html.vp-gal-open .vp-gal-nav { color: var(--vp-on-c) !important; opacity: var(--vp-on-o) !important; background-color: var(--vp-on-b) !important; }
         .vp-gal-tabs { position: relative; display: flex; flex: 0 0 auto; box-sizing: border-box; height: 45px; padding: 4px; margin: 0; border-radius: 9999px;
             background: var(--glass-bg, rgba(35, 35, 35, .5)); }
@@ -17930,7 +18887,8 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             galOpen = true;
             gal.path = location.pathname;
             galPosition();
-            addEventListener('resize', galPosition);
+            if (gal.offResize) gal.offResize();
+            gal.offResize = onResize(galPosition);
             document.documentElement.classList.add('vp-gal-open');
             galOpen = true;
             avatarRefresh();
@@ -17969,7 +18927,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             gal.el.remove();
             gal.kept = gal.el;
             gal.el = null;
-            removeEventListener('resize', galPosition);
+            if (gal.offResize) { gal.offResize(); gal.offResize = null; }
             document.documentElement.classList.remove('vp-gal-open');
             galOpen = false;
             avatarRefresh();
@@ -19270,7 +20228,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             rail.style.left = box.left + 'px';
             rail.style.maxHeight = box.maxH + 'px';
         }
-        addEventListener('resize', placeRail);
+        onResize(placeRail);
 
         function placeSidebar() {
             sideScroll();
@@ -19284,7 +20242,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             document.documentElement.classList.toggle('vp-side-moved', on);
             if (on) document.documentElement.style.setProperty('--vp-side-left', want + 'px');
         }
-        addEventListener('resize', placeSidebar);
+        onResize(placeSidebar);
         document.addEventListener('vp-loc', () => {
             if (chatsPage()) { glidePlace(); [250, 700, 1500].forEach(t => setTimeout(glidePlace, t)); return; }
             placeSidebar(); placeRail();
@@ -19592,7 +20550,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         loadStats();
 
         const PULSE_RE = /^ITDXB1 ([0-9a-z]{1,8})$/;
-        const PULSE_BEAT = 4 * 60e3, PULSE_LIVE = 9 * 60e3, PULSE_IDLE = 5 * 60e3, PULSE_PAGES = 15, PULSE_WARM = 30000;
+        const PULSE_BEAT = 2 * 60e3, PULSE_LIVE = 5 * 60e3, PULSE_IDLE = 5 * 60e3, PULSE_PAGES = 15, PULSE_WARM = 30000;
         let pulseShare = GM_getValue('pulseOn', true);
         const pulseMap = new Map(), pulseByName = new Map();
         const pulseSt = { active: Date.now(), sentAt: 0, busy: false, pages: 1, readAt: 0, cid: '', reading: false, fails: 0 };
@@ -19600,7 +20558,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         const pulseNote = () => { pulseSt.active = Date.now(); };
         for (const ev of ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart']) addEventListener(ev, pulseNote, { passive: true, capture: true });
         const pulseActive = () => !document.hidden && Date.now() - pulseSt.active < PULSE_IDLE;
-        const pulseCycle = () => Math.min(360000, Math.max(120000, pulseSt.pages * 25000)) * pulseJit;
+        const pulseCycle = () => Math.min(360000, Math.max(60000, pulseSt.pages * 25000)) * pulseJit;
         const pulseMinute = () => Math.floor(srvNow() / 60000);
         function pulseOwn(path) { return !!pulseSt.cid && String(path).endsWith('/' + pulseSt.cid); }
         function pulseParse(list) {
@@ -19767,7 +20725,17 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             const h = d.toTimeString().slice(0, 5);
             return 'был(а) в сети ' + (d.toDateString() === new Date().toDateString() ? 'в ' + h : `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')} в ${h}`);
         };
+        function peerSeen(n) {
+            try {
+                let st = clubOnline.get(n) || null;
+                const p = pulseOf(n);
+                if (p && (!st || st.at <= pulseSt.readAt)) st = { on: p.live, seen: p.live && st ? st.seen : p.seen, at: pulseSt.readAt || Date.now() };
+                if (!st) return null;
+                return { online: !!(st.on && Date.now() - (st.at || 0) < CLUB_LIVE), lastSeen: st.seen || null };
+            } catch (e) { return null; }
+        }
         function paintOnline() {
+            document.dispatchEvent(new CustomEvent('vp-online'));
             const rows = [...railClub.querySelectorAll('.vp-club-row')];
             if (!rows.length) return;
             let on = 0;
