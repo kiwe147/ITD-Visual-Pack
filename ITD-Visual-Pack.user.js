@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.5
+// @version      3.9.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -2981,7 +2981,7 @@ const IntroV2 = (function () {
             versionBtn: () => F('logoContainer').flatMap(c => $$('button', c))
                 .filter(b => /^v\d/.test(b.textContent.trim()) && !b.classList.contains('itd-update-sidebar-btn')),
             tabs: () => [...new Set($$('button')
-                .filter(b => ['Для вас', 'Подписки', 'Лента кланов', 'Кланы', 'Посты', 'Лайки'].includes(b.textContent.trim()))
+                .filter(b => ['Для вас', 'Подписки', 'Лента кланов', 'Кланы', 'Посты', 'Лайки'].includes(b.textContent.trim()) && !b.closest('.vp-rail, .vp-top-win'))
                 .map(b => b.parentElement))],
             feedBar: () => F('tabs').filter(t => /Для вас/.test(t.textContent)).map(t => t.parentElement).filter(Boolean),
             stickerContainer: () => commentInputs().map(commentRow).filter(Boolean),
@@ -3404,7 +3404,6 @@ const IntroV2 = (function () {
                 'Версия для ПК на планшете': svgIcon('<rect x="2.5" y="5" width="19" height="13" rx="2"/><path d="M9 21h6"/><path d="M6 9h6M6 12h4"/>'),
                 'Карточка профиля при наведении': svgIcon('<rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="11" r="2.2"/><path d="M5.8 16.2c.6-1.6 1.9-2.4 3.2-2.4s2.6.8 3.2 2.4M14.5 10h3.5M14.5 13.5h2.5"/>'),
                 'Листание вкладок': svgIcon('<rect x="5" y="3" width="14" height="7" rx="2"/><rect x="5" y="14" width="14" height="7" rx="2" stroke-dasharray="2 2.4"/><path d="M12 10.8v2.4M10.3 11.7 12 13.2l1.7-1.5"/>'),
-                'Сцена ленты': svgIcon('<rect x="5" y="3" width="14" height="5" rx="1.5" stroke-dasharray="2 2"/><rect x="4" y="10" width="16" height="5" rx="1.5"/><rect x="3" y="17" width="18" height="5" rx="1.5"/>'),
                 'Свечение видео': svgIcon('<rect x="6" y="7" width="12" height="10" rx="2"/><path d="m11 10 3 2-3 2z"/><path d="M3 5.5 4.5 7M21 5.5 19.5 7M3 18.5 4.5 17M21 18.5 19.5 17M12 2.5v2M12 19.5v2"/>'),
                 'Заставка при входе': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><path d="m10 9 5 3-5 3z"/>'),
                 'Мику и Тето': svgIcon('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="13" r="2"/><circle cx="15.5" cy="13" r="2"/><path d="M5 20c.5-2 2-3 3.5-3s3 1 3.5 3M12 20c.5-2 2-3 3.5-3s3 1 3.5 3"/>'),
@@ -5861,7 +5860,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                 const own = GM_getValue(acctKey('vp_ava'), null) || {}, ownAva = own.ref || '', ownVid = ownAva && own.vid || '';
                 let img = '', bv = '';
                 if (b === 'custom') ({ ref: img = '', vid: bv = '' } = await customBgCdn().then(x => x || {}).catch(e => { logErr('свой фон на сервер', e); return {}; }));
-                let text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (img && bv ? ' bv=' + bv : '') + (bannerVideoOwn() ? ' v=' + bannerVideoOwn() : '') + (ownAva ? ' a=' + ownAva : '') + (ownVid ? ' va=' + ownVid : '') + await lookVer().then(x => x ? ' vx=' + x : '') + ' t=' + day;
+                let text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (img && bv ? ' bv=' + bv : '') + (bannerVideoOwn() ? ' v=' + bannerVideoOwn() : '') + (ownAva ? ' a=' + ownAva : '') + (ownVid ? ' va=' + ownVid : '') + (myVerifyState() === 'approved' ? '' : await lookVer().then(x => x ? ' vx=' + x : '')) + ' t=' + day;
                 for (const k of ['va', 'bv', 'v', 'a']) { if (sealText(text).length <= 990) break; text = text.split(' ').filter(t => !t.startsWith(k + '=')).join(' '); }
                 if (text === lookSent) return;
                 const findMine = list => list.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
@@ -6107,7 +6106,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             }
         }
         function applyPostBlurSetting() {
-            document.querySelectorAll('.' + SELECTORS.post + '[data-post-colored]').forEach(post => {
+            document.querySelectorAll('.' + SELECTORS.post + '[data-post-colored], .vp-solo-card[data-post-colored]').forEach(post => {
                 post.removeAttribute('data-post-colored');
                 post.classList.remove('vp-emoji-tint');
             });
@@ -6239,6 +6238,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
                     if (palNavEl) break;
                 }
             }
+            if (!palNavEl && palsBox.classList.contains('vp-pals-phone') && performance.now() - palNavAt <= 800) return;
             const mob = !!palNavEl, size = GM_getValue('palSize', 45), ph = mob ? size * 0.8 + 'vw' : size + 'vh';
             palsBox.classList.toggle('vp-pals-phone', mob);
             if (palsBox.style.getPropertyValue('--vp-pal-h') !== ph) palsBox.style.setProperty('--vp-pal-h', ph);
@@ -6284,7 +6284,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             { label: 'Аватарки мода', get: () => GM_getValue('modAvatars', true), set: () => avatarRefresh(), key: 'modAvatars' },
             { label: 'Листание вкладок', get: () => GM_getValue('tabSlide', true), set: v => { if (!v) tabSlide.end(); }, key: 'tabSlide' },
             { label: 'Карточка профиля при наведении', get: () => GM_getValue('hoverCard', true), set: v => { if (!v) hcOff(); }, key: 'hoverCard' },
-            { label: 'Сцена ленты', get: () => sceneEnabled, set: v => { sceneEnabled = v; sceneAutoOff = false; document.documentElement.classList.toggle('vp-scene', v); sceneKick(); }, key: 'sceneEnabled' },
             { label: 'Свечение видео', get: () => ambientEnabled, set: v => { ambientEnabled = v; applyAmbient(); }, key: 'ambientEnabled' },
             { label: 'Боковая панель', get: () => railEnabled, set: v => { railEnabled = v; placeRail(); }, key: 'railEnabled' },
             { label: 'Показывать, что я в сети', get: () => GM_getValue('pulseOn', true), set: v => { pulseShare = v; if (v) pulseBeat(true); else pulseHide(); }, key: 'pulseOn' },
@@ -6297,7 +6296,7 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
         const SETTINGS_TABS = [
             { id: 'nick', name: 'Ник', items: ['Неоновая подсветка', 'Подсветка ника', 'Подсветка аватарок', 'Подсветка постов', 'Аватарки мода'] },
             { id: 'bg', name: 'Фон', items: ['Фон'] },
-            { id: 'look', name: 'Вид', items: ['Стекло', 'Листание вкладок', 'Карточка профиля при наведении', 'Сцена ленты', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Показывать, что я в сети', 'Вкладка «Магазин»', 'Карточки панели', 'Версия для ПК на планшете'] },
+            { id: 'look', name: 'Вид', items: ['Стекло', 'Листание вкладок', 'Карточка профиля при наведении', 'Свечение видео', 'Размытый фон постов', 'Боковая панель', 'Показывать, что я в сети', 'Вкладка «Магазин»', 'Карточки панели', 'Версия для ПК на планшете'] },
             { id: 'likes', name: 'Лайки', items: ['Автолайки'] },
             { id: 'pals', name: 'Мику', items: ['Мику и Тето', 'Мику справа', 'Тето слева', 'Размер персонажей'] },
             { id: 'misc', name: 'Ещё', items: ['Анти цензура', 'Звуки интерфейса', 'Громкость', 'Заставка при входе'] },
@@ -6482,7 +6481,6 @@ void main() { gl_FragColor = texture2D(uTex, gl_FragCoord.xy / uRes); }`);
             'Звуки интерфейса': 'Тихие звуки при нажатиях и переключателях',
             'Листание вкладок': 'Плавный переход между страницами по пунктам меню',
             'Карточка профиля при наведении': 'Окошко с баннером и подписчиками над ссылкой на профиль',
-            'Сцена ленты': 'Посты в ленте чуть уменьшаются и тают у края экрана',
             'Свечение видео': 'Мягкое цветное свечение вокруг видео',
             'Боковая панель': 'Правая панель с карточками',
             'Показывать, что я в сети': 'Другие пользователи мода видят, что ты сейчас в сети',
@@ -9278,6 +9276,25 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.9.6', '23 ноября 2026', [
+                'Посты: новый вид — большее скругление карточки, мягкая рамка у картинок, лайки, комментарии и просмотры на отдельной плашке',
+                'Опросы: больше не сдвинуты вправо, как и остальное содержимое поста',
+                'Репосты: убрана тёмная плашка под текстом репоста',
+                'Посты: аватар стал крупнее — по высоте как ник и строка текста, а картинки и нижняя панель идут на всю ширину поста, без сдвига вправо',
+                'Посты: картинки занимают всю ширину поста и не обрезаются, а слишком длинные вертикальные (картинки и видео) уменьшаются так, чтобы окно было не длиннее 9:16',
+                'Открытый пост: тот же вид, что в ленте — фон по картинке или эмодзи, крупный аватар, медиа на всю ширину, нижняя панель из двух плашек',
+                'Видео: в полном экране вертикальное видео больше не растягивается на ширину экрана',
+                'Видео в постах занимает всю ширину поста по своим пропорциям, как картинки (длиннее 9:16 — уже, окно не длиннее 9:16)',
+                'Просмотр картинки на весь экран: крестик справа сверху теперь нажимается',
+                'Альбомы: размер рамки задаёт первое медиа, остальные вписываются в неё без обрезки и тоже со скруглёнными углами, внизу точки-индикатор, листаются по одной картинке — пальцем, мышью (потянуть) и зонами у краёв со стрелками',
+                'Посты: нижняя панель из двух плашок — лайки, комментарии и репосты отдельно от просмотров; вместо «Пост захвачен» остался только эмодзи',
+                'Уведомления: аватар крупнее — по высоте как ник и одна строка текста',
+                'Клуб ИТД X: вкладка «Топ» в плитке и окно «Вся таблица» — аватар, ник, подписчики, подписки, посты и лайки, сортировка по любому столбцу',
+                'Сообщения: если открыть их со страницы чатов сайта, окно встаёт по ширине ленты, а чаты сайта прячутся под ним',
+                'Правая панель: плитки в том же стиле, что и посты — скругление, тонкая рамка, плашки у строк',
+                'Лента: расстояние между постами стало меньше',
+                'Лента: убрана «сцена» — посты больше не уменьшаются и не тают при прокрутке, пункт «Сцена ленты» убран из настроек',
+            ]],
             ['3.9.5', '23 ноября 2026', [
                 'Сообщения: поиск по переписке — лупа в шапке чата, слова подсвечиваются, можно листать совпадения',
                 'Сообщения: поле «Поиск» в списке ищет и по тексту сообщений, нажатие открывает чат сразу на найденном месте',
@@ -12904,6 +12921,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         document.addEventListener('pointercancel', thumbEnd(false), true);
         document.addEventListener('click', e => { if (e.isTrusted && Date.now() < thumbDrag.mute && e.target.closest && e.target.closest('.vp-thumbs')) { e.preventDefault(); e.stopPropagation(); } }, true);
         addCss(`
+        [role="dialog"][aria-label="Просмотр изображений"] > :has(> [data-viewer-close]) { z-index: 20 !important; }
         .vp-thumbs > .vp-thumb { touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; transition: box-shadow .18s ease, outline-color .15s ease; }
         .vp-thumbs > .vp-thumb img { -webkit-user-drag: none; user-select: none; }
         .vp-thumbs > .vp-thumb-lift { position: relative; z-index: 6; cursor: grabbing; transition: none; box-shadow: 0 14px 34px rgba(0, 0, 0, .5); }
@@ -16045,15 +16063,183 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             });
         });
 
+        function postTextBlock(body, foot) {
+            const kids = [...body.children].filter(c => c !== foot && !c.classList.contains('vp-repost'));
+            const marked = kids.find(c => c.querySelector('[data-haunt-text], [data-post-tool-text]'));
+            if (marked) return marked;
+            return kids.find(c => c.textContent.trim() && !c.querySelector('img, video, canvas, button, svg') && ![c, ...c.querySelectorAll('div')].some(d => d.querySelectorAll(':scope > div').length > 1));
+        }
+        onDom(function postLayout() {
+            document.querySelectorAll('article.vp-post:not([data-vp-lay])').forEach(a => {
+                const foot = [...a.querySelectorAll('footer')].filter(f => !f.closest('.vp-repost')).pop();
+                const body = foot && foot.parentElement, col = body && body.parentElement, row = col && col.parentElement;
+                if (!row || !row.querySelector(':scope > a.vp-avatar-link') || !col.querySelector(':scope > header')) return;
+                a.setAttribute('data-vp-lay', '');
+                row.classList.add('vp-p-row'); col.classList.add('vp-p-col'); body.classList.add('vp-p-body');
+                const t = postTextBlock(body, foot);
+                if (t) t.classList.add('vp-p-text');
+            });
+            document.querySelectorAll('.vp-post:not(article):not([data-vp-lay])').forEach(root => {
+                const foot = [...root.querySelectorAll('footer')].filter(f => !f.closest('.vp-repost')).pop();
+                const body = foot && foot.parentElement;
+                if (!body || body.parentElement !== root || !root.querySelector(':scope > header .vp-avatar-link')) return;
+                root.setAttribute('data-vp-lay', '');
+                root.classList.add('vp-p-solo'); body.classList.add('vp-p-body');
+                const card = root.parentElement;
+                if (card) {
+                    card.classList.add('vp-solo-card');
+                    for (let e = card.parentElement; e && e !== document.body; e = e.parentElement) {
+                        const r = getComputedStyle(e).borderTopLeftRadius;
+                        if (parseFloat(r) > 0) { card.style.setProperty('--vp-solo-r', r); break; }
+                    }
+                }
+                const t = postTextBlock(body, foot);
+                if (t) t.classList.add('vp-p-text');
+            });
+        });
+        const albumRO = typeof ResizeObserver === 'function' ? new ResizeObserver(es => es.forEach(e => albumFit(e.target))) : null;
+        function albumFit(c) {
+            const W = Math.floor(c.getBoundingClientRect().width), first = c.firstElementChild;
+            if (!first || W < 40) return;
+            const ratio = el => { const iw = +el.getAttribute('width') || el.videoWidth || 0, ih = +el.getAttribute('height') || el.videoHeight || 0; return iw && ih ? ih / iw : 9 / 16; };
+            const H = Math.round(Math.min(W * ratio(first), W * 16 / 9));
+            c.style.setProperty('--vp-album-w', W + 'px');
+            c.style.setProperty('--vp-album-h', H + 'px');
+            [...c.children].forEach((el, i) => {
+                const r = ratio(el), fw = Math.round(Math.min(W, H / r)), fh = Math.round(fw * r);
+                el.style.setProperty('object-fit', 'fill', 'important');
+                el.style.setProperty('--vp-iw', fw + 'px');
+                el.style.setProperty('--vp-ih', fh + 'px');
+                el.style.setProperty('--vp-im', Math.floor((W - fw) / 2) + 'px');
+            });
+        }
+        function albumCount(c) {
+            const wrap = c.parentElement;
+            let dots = wrap.querySelector(':scope > .vp-album-dots');
+            if (!dots) {
+                dots = document.createElement('div');
+                dots.className = 'vp-album-dots';
+                for (let k = 0; k < c.children.length; k++) { const d = document.createElement('i'); d.dataset.i = k; dots.appendChild(d); }
+                dots.addEventListener('click', e => { const d = e.target.closest('i'); if (d) { e.stopPropagation(); c.scrollTo({ left: +d.dataset.i * step(), behavior: 'smooth' }); } });
+                wrap.appendChild(dots);
+            }
+            const mk = (cls, label, d) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'vp-album-arrow ' + cls; b.setAttribute('aria-label', label); b.innerHTML = d; wrap.appendChild(b); return b; };
+            const prev = mk('vp-prev', 'Назад', '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 6-6 6 6 6"/></svg>');
+            const next = mk('vp-next', 'Дальше', '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9.5 6 6 6-6 6"/></svg>');
+            const step = () => (parseFloat(c.style.getPropertyValue('--vp-album-w')) || c.clientWidth) + 8;
+            const at = () => Math.max(0, Math.min(c.children.length - 1, Math.round(c.scrollLeft / Math.max(1, step()))));
+            const upd = () => {
+                const i = at();
+                [...dots.children].forEach((d, k) => d.classList.toggle('vp-on', k === i));
+                prev.classList.toggle('vp-edge', i === 0);
+                next.classList.toggle('vp-edge', i === c.children.length - 1);
+            };
+            c.addEventListener('scroll', upd, { passive: true });
+            if (albumRO) albumRO.observe(c);
+            const go = d => e => { e.stopPropagation(); e.preventDefault(); c.scrollTo({ left: Math.max(0, Math.min(c.children.length - 1, at() + d)) * step(), behavior: 'smooth' }); };
+            prev.addEventListener('click', go(-1));
+            next.addEventListener('click', go(1));
+            ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'dblclick'].forEach(t => { prev.addEventListener(t, e => e.stopPropagation()); next.addEventListener(t, e => e.stopPropagation()); });
+            c.addEventListener('dragstart', e => { e.preventDefault(); e.stopImmediatePropagation(); }, true);
+            const press = e => {
+                if (e.pointerType !== 'mouse' || e.button !== 0) return;
+                e.stopImmediatePropagation();
+                const x0 = e.clientX, s0 = c.scrollLeft, i0 = at();
+                let moved = false;
+                c._vpDragged = false;
+                const move = ev => {
+                    const dx = ev.clientX - x0;
+                    if (!moved && Math.abs(dx) < 6) return;
+                    if (!moved) { moved = true; c._vpDragged = true; c.classList.add('vp-album-drag'); try { c.setPointerCapture(e.pointerId); } catch (er) { } }
+                    c.scrollLeft = s0 - dx;
+                };
+                const up = ev => {
+                    c.removeEventListener('pointermove', move);
+                    c.removeEventListener('pointerup', up);
+                    c.removeEventListener('pointercancel', up);
+                    if (!moved) return;
+                    const dx = ev.clientX - x0;
+                    const i = Math.max(0, Math.min(c.children.length - 1, i0 + (dx < -40 ? 1 : dx > 40 ? -1 : 0)));
+                    c.scrollTo({ left: i * step(), behavior: 'smooth' });
+                    const done = () => c.classList.remove('vp-album-drag');
+                    c.addEventListener('scrollend', done, { once: true });
+                    setTimeout(done, 700);
+                    setTimeout(() => { c._vpDragged = false; }, 0);
+                };
+                c.addEventListener('pointermove', move);
+                c.addEventListener('pointerup', up);
+                c.addEventListener('pointercancel', up);
+            };
+            c.addEventListener('pointerdown', press, true);
+            c.addEventListener('mousedown', e => { if (e.button === 0) e.stopImmediatePropagation(); }, true);
+            c.addEventListener('click', e => { if (c._vpDragged) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+            upd();
+        }
+        onDom(function albumLayout() {
+            document.querySelectorAll(':is(article.vp-post, .vp-p-solo) .vp-p-body video.vp-post-media:not([data-vp-sh])').forEach(v => {
+                const box = v.parentElement, w = +v.getAttribute('width'), h = +v.getAttribute('height');
+                if (!box || !w || !h) return;
+                v.setAttribute('data-vp-sh', '');
+                box.setAttribute('data-vp-vsh', '');
+                box.style.setProperty('--vp-shrink', String(Math.min(1, 16 / 9 / (h / w)).toFixed(4)));
+                box.style.setProperty('--vp-vr', w + ' / ' + h);
+                for (let e = box.parentElement; e && !e.classList.contains('vp-p-body'); e = e.parentElement) e.classList.add('vp-pv-fill');
+            });
+            document.querySelectorAll(':is(article.vp-post, .vp-p-solo) .vp-p-body .vp-media-rel > img.vp-post-media:not([data-vp-sh])').forEach(img => {
+                const c = img.parentElement;
+                if (c.hasAttribute('data-vp-album') || c.querySelectorAll(':scope > .vp-post-media').length !== 1) return;
+                const w = +img.getAttribute('width'), h = +img.getAttribute('height');
+                if (!w || !h) return;
+                img.setAttribute('data-vp-sh', '');
+                img.style.setProperty('--vp-shrink', String(Math.min(1, 16 / 9 / (h / w)).toFixed(4)));
+            });
+            document.querySelectorAll(':is(article.vp-post, .vp-p-solo) .vp-p-body .vp-media-rel:not([data-vp-album])').forEach(c => {
+                if (c.closest('.vp-repost') || c.children.length < 2 || !c.querySelector(':scope > .vp-post-media ~ .vp-post-media, :scope > video')) return;
+                c.setAttribute('data-vp-album', '');
+                c.parentElement.classList.add('vp-album-wrap');
+                albumFit(c);
+                albumCount(c);
+            });
+        });
+        const notifRO = typeof ResizeObserver === 'function' ? new ResizeObserver(es => es.forEach(e => notifAva(e.target._vpNotif))) : null;
+        function notifAva(n) {
+            const link = n && n._vpAvaLink, col = link && link.nextElementSibling;
+            if (!col || !link.isConnected) return;
+            const kids = col.children, upto = kids.length > 2 ? kids[kids.length - 2] : kids[kids.length - 1];
+            const ur = upto && upto.getBoundingClientRect(), lh = upto ? parseFloat(getComputedStyle(upto).lineHeight) || ur.height : 0;
+            const h = upto ? ur.top - col.getBoundingClientRect().top + Math.min(ur.height, lh) : col.getBoundingClientRect().height;
+            const k = Math.max(1, Math.min(2.2, h / 40));
+            if (Math.abs(k - (parseFloat(link.style.zoom) || 1)) > 0.01) { link.style.zoom = k.toFixed(3); link.style.setProperty('--vp-nz', (1 / k).toFixed(4)); }
+        }
+        onDom(function notifAvatars() {
+            document.querySelectorAll('.vp-notif:not([data-vp-na])').forEach(n => {
+                const av = n.querySelector('.vp-avatar'), link = av && av.parentElement;
+                if (!link || !link.nextElementSibling) return;
+                n.setAttribute('data-vp-na', '');
+                n._vpAvaLink = link;
+                const col = link.nextElementSibling;
+                col._vpNotif = n;
+                if (notifRO) notifRO.observe(col);
+                notifAva(n);
+            });
+        });
+        onDom(function capturedLabel() {
+            document.querySelectorAll('footer > div:last-child > span:first-child:not([data-vp-cap])').forEach(g => {
+                g.setAttribute('data-vp-cap', '');
+                const t = g.lastElementChild;
+                if (t && t !== g.firstElementChild && !t.children.length && t.textContent.trim() === 'Пост захвачен') t.classList.add('vp-cap-text');
+            });
+        });
         const postDesignStyle = addCss(`
-        html { overflow-anchor: none; }
-        article[data-alice-water-anchor-kind="post"] { margin-bottom: 16px !important; }
+        html { overflow-anchor: none; --vp-post-gap: 4px; }
+        article[data-alice-water-anchor-kind="post"] { margin-bottom: var(--vp-post-gap) !important; }
         article.vp-post {
             background: var(--block-bg);
             backdrop-filter: var(--vp-glass-filter, blur(4px)) !important;
-            --vp-card-r: 24px;
+            --vp-card-r: 28px;
+            --vp-ink: var(--text-primary, #fff);
             border-radius: var(--vp-card-r) !important;
-            margin-bottom: 16px !important;
+            margin-bottom: var(--vp-post-gap) !important;
             transition: all 0.25s ease !important;
             position: relative;
             border: none !important;
@@ -16068,6 +16254,90 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
             transition: opacity .25s ease;
         }
+
+        .vp-solo-card { position: relative; isolation: isolate; border-radius: var(--vp-solo-r, 0px) var(--vp-solo-r, 0px) 0 0; --vp-edge-a: rgba(255, 255, 255, .08); --vp-edge-b: rgba(255, 255, 255, .08); }
+        .vp-solo-card.vp-emoji-tint { border: 0 !important; }
+        .vp-p-solo { --vp-ink: var(--text-primary, #fff); display: grid !important; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto minmax(23px, auto);
+            column-gap: 14px; row-gap: 0; align-items: start; container-type: inline-size; }
+        .vp-p-solo > header, .vp-p-solo > header > div:has(> .vp-avatar-link), .vp-p-solo > .vp-p-body { display: contents !important; }
+        .vp-p-solo .vp-avatar-link { grid-column: 1; grid-row: 1 / span 2; zoom: 1.2; align-self: start; }
+        .vp-p-solo .vp-avatar-link .vp-avatar > button { zoom: .85; }
+        .vp-p-solo .vp-nick-row { grid-column: 2; grid-row: 1; min-width: 0; }
+        :is(article.vp-post, .vp-p-solo) .vp-p-row {
+            display: grid !important; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto minmax(23px, auto);
+            column-gap: 14px; row-gap: 0; align-items: start; container-type: inline-size;
+        }
+        :is(article.vp-post, .vp-p-solo) .vp-p-col, :is(article.vp-post, .vp-p-solo) .vp-p-body { display: contents !important; }
+        :is(article.vp-post, .vp-p-solo) .vp-p-row > .vp-avatar-link { grid-column: 1; grid-row: 1 / span 2; zoom: 1.2; }
+        :is(article.vp-post, .vp-p-solo) .vp-p-row > .vp-avatar-link .vp-avatar > button { zoom: .85; }
+        :is(article.vp-post, .vp-p-solo) .vp-p-col > header { grid-column: 2; grid-row: 1; min-width: 0; }
+        :is(article.vp-post, .vp-p-solo) .vp-p-body > .vp-p-text { grid-column: 2; grid-row: 2; min-width: 0; margin: 8px 0 0 !important; }
+        :is(article.vp-post, .vp-p-solo) .vp-p-body > :not(.vp-p-text) { grid-column: 1 / -1; min-width: 0; margin-left: 0 !important; margin-right: 0 !important; margin-top: 14px; }
+        :is(article.vp-post, .vp-p-solo) .vp-p-body .vp-media-rel:not(:has(.vp-post-media ~ .vp-post-media)) { width: 100% !important; max-width: 100% !important; max-height: none !important; height: auto !important; aspect-ratio: auto !important; }
+        :is(article.vp-post, .vp-p-solo) .vp-p-body .vp-media-rel:not(:has(.vp-post-media ~ .vp-post-media)) > img.vp-post-media {
+            width: 100% !important; height: auto !important; max-height: calc(100cqw * 16 / 9) !important; object-fit: cover !important;
+        }
+        :is(article.vp-post, .vp-p-solo) .vp-p-body .vp-media-rel { margin-left: 0 !important; margin-right: 0 !important; padding-left: 0 !important; }
+        :is(article.vp-post, .vp-p-solo) .vp-p-body .vp-media-rel:not(:has(.vp-post-media ~ .vp-post-media)) > img.vp-post-media[data-vp-sh] {
+            width: calc(100% * var(--vp-shrink, 1)) !important; margin: 0 auto !important; object-fit: fill !important; border-radius: 20px !important;
+        }
+        :is(article.vp-post, .vp-p-solo) .vp-p-body .vp-media-rel img.vp-post-media { object-fit: contain !important; }
+        :is(article.vp-post, .vp-p-solo) .vp-p-body video { max-height: calc(100cqw * 16 / 9) !important; }
+        :is(article.vp-post, .vp-p-solo) .vp-p-body .vp-pv-fill { width: 100% !important; max-width: 100% !important; margin-left: 0 !important; margin-right: 0 !important; padding-left: 0 !important; }
+        :is(article.vp-post, .vp-p-solo) .vp-p-body [data-vp-vsh]:not(:fullscreen) {
+            width: calc(100% * var(--vp-shrink, 1)) !important; max-width: 100% !important; margin: 0 auto !important; height: auto !important; max-height: none !important;
+            aspect-ratio: var(--vp-vr) !important; border-radius: 20px; overflow: hidden;
+        }
+        :is(article.vp-post, .vp-p-solo) .vp-p-body [data-vp-vsh]:not(:fullscreen) > video { width: 100% !important; height: 100% !important; max-height: none !important; object-fit: fill !important; border-radius: 20px; }
+        :is(article.vp-post, .vp-p-solo) .vp-p-body video.vp-post-media:fullscreen, :is(article.vp-post, .vp-p-solo) .vp-p-body [data-vp-vsh]:fullscreen > video { object-fit: contain !important; width: 100% !important; height: 100% !important; border-radius: 0 !important; }
+        :is(article.vp-post, .vp-p-solo) .vp-p-body [data-count] { margin-left: 0 !important; margin-right: 0 !important; padding-left: 0 !important; }
+        :is(article.vp-post, .vp-p-solo) .vp-album-wrap { position: relative; }
+        :is(article.vp-post, .vp-p-solo) .vp-media-rel[data-vp-album] {
+            display: flex !important; gap: 8px; width: 100% !important; max-width: 100% !important; height: var(--vp-album-h, auto) !important; max-height: none !important;
+            overflow-x: auto !important; overflow-y: hidden !important; aspect-ratio: auto !important; scroll-snap-type: x mandatory !important; overscroll-behavior-x: contain;
+        }
+        :is(article.vp-post, .vp-p-solo) .vp-media-rel[data-vp-album].vp-album-drag { scroll-snap-type: none !important; }
+        :is(article.vp-post, .vp-p-solo) .vp-p-body .vp-media-rel[data-vp-album] > * {
+            flex: 0 0 auto !important; align-self: center; width: var(--vp-iw, 100%) !important; height: var(--vp-ih, auto) !important;
+            margin: 0 var(--vp-im, 0px) !important; max-width: none !important; max-height: none !important; object-fit: fill !important;
+            border-radius: 20px !important; scroll-snap-align: center; scroll-snap-stop: always;
+        }
+        @media (pointer: coarse), (max-width: 700px) { .vp-album-arrow { display: none !important; } .vp-album-dots { pointer-events: none; } }
+        .vp-album-arrow { position: absolute; top: 0; bottom: 17px; width: 22%; max-width: 96px; z-index: 3; border: 0; padding: 0; margin: 0; display: none; align-items: center; cursor: pointer;
+            color: #fff; background: none; -webkit-tap-highlight-color: transparent; transition: background .2s; }
+        .vp-album-arrow.vp-prev { left: 0; justify-content: flex-start; padding-left: 12px; border-radius: 20px 0 0 20px; }
+        .vp-album-arrow.vp-next { right: 0; justify-content: flex-end; padding-right: 12px; border-radius: 0 20px 20px 0; }
+        .vp-album-arrow.vp-edge { opacity: 0; pointer-events: none; }
+        .vp-album-arrow svg { opacity: 0; transition: opacity .2s; filter: drop-shadow(0 1px 4px rgba(0, 0, 0, .7)); }
+        @media (hover: hover) and (pointer: fine) {
+            .vp-album-arrow { display: flex; }
+            .vp-album-wrap:hover .vp-album-arrow.vp-prev { background: linear-gradient(90deg, rgba(255, 255, 255, .12), transparent); }
+            .vp-album-wrap:hover .vp-album-arrow.vp-next { background: linear-gradient(270deg, rgba(255, 255, 255, .12), transparent); }
+            .vp-album-arrow.vp-prev:hover { background: linear-gradient(90deg, rgba(255, 255, 255, .34), transparent) !important; }
+            .vp-album-arrow.vp-next:hover { background: linear-gradient(270deg, rgba(255, 255, 255, .34), transparent) !important; }
+            .vp-album-wrap:hover .vp-album-arrow svg { opacity: .55; }
+            .vp-album-arrow:hover svg { opacity: 1; }
+            :is(article.vp-post, .vp-p-solo) .vp-media-rel[data-vp-album] { cursor: grab; }
+        }
+        .vp-album-dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; padding-top: 10px; }
+        .vp-album-dots i { width: 7px; height: 7px; border-radius: 50%; cursor: pointer; background: color-mix(in srgb, var(--vp-ink, #fff) 28%, transparent); transition: background-color .2s ease, width .2s ease, border-radius .2s ease; }
+        .vp-album-dots i.vp-on { width: 18px; border-radius: 4px; background: color-mix(in srgb, var(--vp-ink, #fff) 85%, transparent); }
+        :is(article.vp-post, .vp-p-solo) .vp-media-rel {
+            border-radius: 20px !important;
+        }
+        :is(article.vp-post, .vp-p-solo) footer:not(.vp-repost footer) { margin: 14px 0 -4px !important; padding: 0 !important; gap: 8px; align-items: center; }
+        :is(article.vp-post, .vp-p-solo) footer:not(.vp-repost footer) > div {
+            display: flex; align-items: center; box-sizing: border-box; min-height: 40px; padding: 0 8px; border-radius: 22px;
+            background: color-mix(in srgb, var(--vp-ink) 5%, transparent);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-ink) 8%, transparent);
+        }
+        :is(article.vp-post, .vp-p-solo) footer:not(.vp-repost footer) > div:first-child > * + * { position: relative; }
+        :is(article.vp-post, .vp-p-solo) footer:not(.vp-repost footer) > div:first-child > * + *::before {
+            content: ""; position: absolute; left: 0; top: 24%; bottom: 24%; width: 1px; pointer-events: none;
+            background: color-mix(in srgb, var(--vp-ink) 14%, transparent);
+        }
+        .vp-cap-text { display: none !important; }
+        .vp-notif .vp-avatar > div:has(> div) { zoom: var(--vp-nz, 1); }
 
         @media (hover: hover) {
             html.vp-post-hl article.vp-post:hover { --vp-edge-a: rgba(255, 255, 255, .24); box-shadow: 0 12px 32px rgba(0, 0, 0, .32) !important; }
@@ -16084,6 +16354,9 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             padding: 8px 12px !important;
             border-radius: 16px !important;
             margin: 8px 0 !important;
+        }
+        article.vp-post .vp-repost .vp-post-text, article.vp-post .vp-repost .vp-post-text.vp-soft-bg, .vp-p-solo .vp-repost .vp-post-text, .vp-p-solo .vp-repost .vp-post-text.vp-soft-bg {
+            background: none !important; padding-left: 0 !important; padding-right: 0 !important; margin: 4px 0 !important;
         }
         .vp-post-action {
             transition: all 0.2s ease !important;
@@ -16349,7 +16622,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             document.querySelectorAll('img.' + SELECTORS.postMedia).forEach(img => {
                 if (img._vpBlurDone === img.src) return;
                 let pending = false;
-                for (const card of [img.closest('.' + SELECTORS.repost), img.closest('article.' + SELECTORS.post)]) {
+                for (const card of [img.closest('.' + SELECTORS.repost), img.closest('article.' + SELECTORS.post + ', .vp-solo-card')]) {
                     const first = card && card.querySelector('img.' + SELECTORS.postMedia);
                     if (card && first && card.getAttribute('data-blur-bg') !== first.src) { cards.add(card); pending = true; }
                 }
@@ -16366,7 +16639,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         }
 
         const styleBlurPosts = addCss(`
-        .vp-post.itd-blur-active, .vp-repost.itd-blur-active {
+        .vp-post.itd-blur-active, .vp-repost.itd-blur-active, .vp-solo-card.itd-blur-active {
             background: transparent !important;
             backdrop-filter: none !important;
         }
@@ -16524,7 +16797,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             el.style.removeProperty('--vp-emoji');
         }
         function colorizePosts() {
-            document.querySelectorAll('article.' + SELECTORS.post).forEach(post => {
+            document.querySelectorAll('article.' + SELECTORS.post + ', .vp-solo-card').forEach(post => {
                 const avatar = post.querySelector('.' + SELECTORS.avatarLink + ' .' + SELECTORS.avatar);
                 const emoji = avatar ? avatar.textContent.trim() : '';
                 const withBlur = postBlurEnabled && !!post.querySelector('.' + SELECTORS.postMedia);
@@ -16536,7 +16809,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 post.setAttribute('data-post-colored', key);
                 if (!withBlur) tintCard(post, emoji);
             });
-            document.querySelectorAll('article.' + SELECTORS.post + '[data-post-colored] .' + SELECTORS.repost + ':not([data-vp-soft])').forEach(rp => softenRepost(rp.closest('article')));
+            document.querySelectorAll('[data-post-colored] .' + SELECTORS.repost + ':not([data-vp-soft])').forEach(rp => softenRepost(rp.closest('article, .vp-solo-card')));
         }
         function softenRepost(post) {
             post.querySelectorAll('.' + SELECTORS.repost + ':not([data-vp-soft])').forEach(rp => {
@@ -17174,15 +17447,6 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             88% { text-shadow: -2px 0 rgba(255, 0, 200, .85), 2px 0 rgba(0, 255, 240, .85); transform: translateX(-1px); }
             89% { text-shadow: 1.5px 0 rgba(255, 0, 200, .75), -1.5px 0 rgba(0, 255, 240, .75); transform: none; }
         }
-        @property --vp-so { syntax: '<number>'; inherits: false; initial-value: 1; }
-        @property --vp-ss { syntax: '<number>'; inherits: false; initial-value: 1; }
-        @property --vp-sy { syntax: '<length>'; inherits: false; initial-value: 0px; }
-        html.vp-scene article.vp-post {
-            animation: none !important; transform-origin: 50% 0; backface-visibility: hidden;
-            opacity: var(--vp-so, 1); transform: translateY(var(--vp-sy, 0px)) scale(var(--vp-ss, 1));
-            transition: background-color .25s ease, border-color .25s ease, box-shadow .25s ease, color .25s ease !important;
-        }
-
         .vp-ambient-host { isolation: isolate; }
         .vp-ambient { position: absolute; z-index: -1; pointer-events: none; border-radius: 40px; opacity: 0;
             filter: blur(26px) saturate(1.7); transition: opacity .8s ease; }
@@ -17589,70 +17853,11 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             addEventListener('blur', () => { if (proxY !== null) { proxY = null; proxKick(); } });
         }
 
-        let sceneEnabled = GM_getValue('sceneEnabled', true) && !calm;
-        document.documentElement.classList.toggle('vp-scene', sceneEnabled);
-        const sceneSeen = new Set();
-        const sceneIO = new IntersectionObserver(es => es.forEach(e => {
-            if (e.isIntersecting) { sceneLive(e.target); sceneKick(); }
-            else sceneDrop(e.target);
-        }), { rootMargin: '150px 0px' });
-        function sceneLive(a) {
-            if (sceneSeen.has(a)) return;
-            sceneSeen.add(a);
-            if (sceneEnabled && !sceneAutoOff) a.style.willChange = 'transform, opacity';
-        }
-        function sceneDrop(a) {
-            sceneSeen.delete(a);
-            a._vpSceneKey = null;
-            ['--vp-so', '--vp-sy', '--vp-ss', 'will-change'].forEach(v => a.style.removeProperty(v));
-        }
-        const ease = t => t * t * (3 - 2 * t);
-        let sceneQueued = false, sceneAutoOff = false, sceneLast = 0, sceneGaps = [];
-        function sceneTurnOff() {
-            sceneAutoOff = true;
-            document.documentElement.classList.remove('vp-scene');
-            [...sceneSeen].forEach(a => { a._vpSceneKey = null;['--vp-so', '--vp-sy', '--vp-ss', 'will-change'].forEach(v => a.style.removeProperty(v)); });
-            console.info('[ITD VP] сцена ленты выключена до перезагрузки: устройство не успевает рисовать её при прокрутке');
-        }
-        function sceneFrame(t) {
-            sceneQueued = false;
-            if (!sceneEnabled || sceneAutoOff) return;
-            if (sceneLast && t - sceneLast < 100) {
-                sceneGaps.push(t - sceneLast);
-                if (sceneGaps.length >= 40) {
-                    const med = sceneGaps.sort((x, y) => x - y)[20];
-                    sceneGaps = [];
-                    if (med > 28) { sceneLast = 0; return sceneTurnOff(); }
-                }
-            }
-            sceneLast = t;
-            const H = innerHeight;
-            const rects = [...sceneSeen].map(a => [a, a.getBoundingClientRect()]);
-            for (const [a, r] of rects) {
-                const out = ease(Math.max(0, Math.min(1, (-r.top - r.height * 0.25) / Math.max(1, r.height * 0.75))));
-                const inn = ease(Math.max(0, Math.min(1, (H - r.top) / 220)));
-                const so = (1 - 0.45 * out).toFixed(3), ss = (1 - 0.04 * out).toFixed(4), sy = (14 * (1 - inn)).toFixed(1) + 'px';
-                const key = so + ss + sy;
-                if (a._vpSceneKey === key) continue;
-                a._vpSceneKey = key;
-                a.style.setProperty('--vp-so', so);
-                a.style.setProperty('--vp-ss', ss);
-                a.style.setProperty('--vp-sy', sy);
-            }
-        }
-        const sceneKick = () => { if (!sceneQueued) { sceneQueued = true; requestAnimationFrame(sceneFrame); } };
-        addEventListener('scroll', sceneKick, { capture: true, passive: true });
-        addEventListener('resize', sceneKick);
-        onDom(function sceneWatch() {
+        onDom(function postSlots() {
             document.querySelectorAll('article.' + SELECTORS.post).forEach(a => {
-                if (!a._vpScene) {
-                    a._vpScene = true;
-                    sceneIO.observe(a);
-                }
                 const slot = a.parentElement;
                 if (slot && !slot.classList.contains('vp-post-slot')) slot.classList.add('vp-post-slot');
             });
-            sceneKick();
         });
 
         const feedSaved = new Map();
@@ -18846,10 +19051,14 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             };
             const hide = t => { if (!t.classList.contains('vp-gal-hidden')) t.classList.add('vp-gal-hidden'); };
             document.querySelectorAll('.' + [SELECTORS.tabs, SELECTORS.feedBar, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .'))
-                .forEach(e => { if (e.closest('.vp-sw-stage')) return; const t = up(e); if (!t.closest('.vp-gal, .vp-msgs, nav')) hide(t); });
+                .forEach(e => { if (e.closest('.vp-sw-stage, .vp-rail, .vp-top-win')) return; const t = up(e); if (!t.closest('.vp-gal, .vp-msgs, nav, .vp-rail')) hide(t); });
             const win = gal.el || document.querySelector('.vp-msgs.vp-open:not(.vp-sw-stage *)');
             const root = document.getElementById('root');
             const r = win && win.getBoundingClientRect();
+            if (chatsPage() && r && r.width) {
+                const cw = document.querySelector('.vp-chats-wrap') || chatsWrapEl([[r.left + r.width / 2, r.top + r.height / 2], [Math.max(8, r.left - 40), r.top + r.height / 3], [r.right + 40, r.top + r.height / 3]]);
+                if (cw) { cw.classList.add('vp-chats-wrap'); hide(cw); }
+            }
             if (!r || !r.width || !root || performance.now() - (galHideFeed.at || 0) < 400) return;
             galHideFeed.at = performance.now();
             for (const [fx, fy] of [[.5, .25], [.5, .6], [.3, .45], [.7, .45]]) {
@@ -19929,6 +20138,15 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         .vp-rail-card { border-radius: 36px; padding: 20px 22px; color: var(--text-primary, #fff); background: var(--block-bg);
             backdrop-filter: var(--vp-glass-filter, none); -webkit-backdrop-filter: var(--vp-glass-filter, none); }
         .vp-rail-card[hidden] { display: none !important; }
+        .vp-rail-card { --vp-ink: var(--text-primary, #fff); --vp-ring: color-mix(in srgb, var(--vp-ink) 8%, transparent); border-radius: 28px; padding: 20px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, .2), inset 0 0 0 1px var(--vp-ring); }
+        .vp-rail-card.vp-rail-drag { box-shadow: 0 16px 40px rgba(0, 0, 0, .45), inset 0 0 0 1px var(--vp-ring); }
+        .vp-rail-card .vp-seg, .vp-rail-card .vp-more { box-shadow: inset 0 0 0 1px var(--vp-ring); }
+        .vp-rail-card .vp-stats { border-radius: 22px; box-shadow: inset 0 0 0 1px var(--vp-ring); }
+        .vp-rail-card .vp-chart { border-radius: 22px; box-shadow: inset 0 0 0 1px var(--vp-ring); }
+        .vp-rail-card .vp-game-row, .vp-rail-card .vp-club-row { border-radius: 22px; background: color-mix(in srgb, var(--vp-ink) 4%, transparent); box-shadow: inset 0 0 0 1px var(--vp-ring); }
+        .vp-rail-card .vp-game-row:hover, .vp-rail-card .vp-club-row:hover { background: color-mix(in srgb, var(--vp-ink) 9%, transparent); }
+        .vp-rail-card .vp-games-list { gap: 6px; }
         .vp-rail-card > .vp-rail-title { cursor: grab; }
         .vp-rail-card.vp-rail-drag { position: relative; z-index: 2; cursor: grabbing; box-shadow: 0 16px 40px rgba(0, 0, 0, .45); transition: none; }
         .vp-rail-sorting { -webkit-user-select: none; user-select: none; }
@@ -20029,6 +20247,17 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             const left = W / 2 - w / 2;
             return { left, right: left + w };
         }
+        function chatsWrapEl(points) {
+            const root = document.getElementById('root'), side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail';
+            for (const [x, y] of points) {
+                for (let e of document.elementsFromPoint(x, y)) {
+                    if (!root || !root.contains(e) || e === root || e.closest('.vp-msgs, .vp-rail, aside, nav, .vp-gal')) continue;
+                    while (e && e !== root && getComputedStyle(e).position !== 'fixed') e = e.parentElement;
+                    if (e && e !== root && !e.querySelector(side)) return e;
+                }
+            }
+            return null;
+        }
         function chatsBox() {
             let e = document.elementsFromPoint(innerWidth / 2, innerHeight / 2).find(x => !x.closest('.vp-msgs, .vp-rail, aside'));
             while (e && e !== document.body && e !== document.documentElement && getComputedStyle(e).position !== 'fixed') e = e.parentElement;
@@ -20054,7 +20283,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             return cbCached;
         }
         function contentBoxNow() {
-            if (chatsPage()) return chatsBox();
+            if (chatsPage()) return msgsOpen ? frameColumn() : chatsBox();
             const side = '.' + SELECTORS.sidebar + ', .' + SELECTORS.sidebarRight + ', .vp-rail';
             let left = Infinity, right = 0;
             const memo = new Map(), tops = new Set();
@@ -20064,7 +20293,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 if (!memo.has(p)) memo.set(p, !p.querySelector(side) && p.getBoundingClientRect().width < innerWidth * 0.72 ? up(p) : null);
                 return memo.get(p) || el;
             };
-            document.querySelectorAll('.' + [SELECTORS.tabs, SELECTORS.feedBar, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .')).forEach(e => { if (!e.closest('.vp-sw-stage')) tops.add(up(e)); });
+            document.querySelectorAll('.' + [SELECTORS.tabs, SELECTORS.feedBar, SELECTORS.banner, SELECTORS.post, SELECTORS.notification].join(', .')).forEach(e => { if (!e.closest('.vp-sw-stage, .vp-rail, .vp-top-win')) tops.add(up(e)); });
             tops.forEach(el => {
                 const r = el.getBoundingClientRect();
                 if (r.width > 300) { left = Math.min(left, r.left); right = Math.max(right, r.right); }
@@ -20549,7 +20778,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         renderStats();
         loadStats();
 
-        const PULSE_RE = /^ITDXB1 ([0-9a-z]{1,8})$/;
+        const PULSE_RE = /^ITDXB([12]) ([0-9a-z]{1,8})(?: ([\w-]{40,400}))?$/;
         const PULSE_BEAT = 2 * 60e3, PULSE_LIVE = 5 * 60e3, PULSE_IDLE = 5 * 60e3, PULSE_PAGES = 15, PULSE_WARM = 30000;
         let pulseShare = GM_getValue('pulseOn', true);
         const pulseMap = new Map(), pulseByName = new Map();
@@ -20568,7 +20797,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 if (!a || !a.id) continue;
                 const m = PULSE_RE.exec(openText(c.content));
                 if (!m) continue;
-                const min = parseInt(m[1], 36);
+                const min = parseInt(m[2], 36);
                 if (!(min > now - 86400) || min > now + 5) continue;
                 const o = map.get(a.id);
                 if (!o || min > o.min) map.set(a.id, { min, name: String(a.username || ''), cid: c.id });
@@ -20591,6 +20820,30 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 document.dispatchEvent(new CustomEvent('vp-pulse'));
             } catch (e) { pulseSt.fails++; logErr('присутствие: чтение', e); } finally { pulseSt.reading = false; }
         }
+        async function pulseText(min) {
+            const vx = await lookVer().catch(() => '');
+            return vx ? 'ITDXB2 ' + min.toString(36) + ' ' + vx : 'ITDXB1 ' + min.toString(36);
+        }
+        let pulseVerSent = '';
+        async function pulseVerSync() {
+            if (pulseShare || pulseSt.busy || !meData || !meData.id || myVerifyState() !== 'approved' || apiPaused()) return;
+            const vx = await lookVer().catch(() => '');
+            if (!vx || pulseVerSent === vx) return;
+            pulseSt.busy = true;
+            try {
+                if (!pulseSt.cid) await pulseRead();
+                const content = sealText('ITDXB2 0 ' + vx);
+                let res = pulseSt.cid ? await editComment(pulseSt.cid, content) : await sendComment(PRESENCE_POST_ID, content);
+                if (pulseSt.cid && (res.status === 404 || res.status === 403)) { pulseSt.cid = ''; res = await sendComment(PRESENCE_POST_ID, content); }
+                if (res.ok) {
+                    pulseVerSent = vx;
+                    if (!pulseSt.cid) {
+                        const j = await res.json().catch(() => null), d = j && (j.data || j), id = d && (d.id || (d.comment && d.comment.id));
+                        if (id) pulseSt.cid = String(id);
+                    }
+                }
+            } catch (e) { logErr('присутствие: версия', e); } finally { pulseSt.busy = false; }
+        }
         async function pulseBeat(force) {
             if (!pulseShare || pulseSt.busy || !meData || !meData.id || myVerifyState() !== 'approved' || apiPaused() || !pulseActive()) return;
             const now = srvNow();
@@ -20598,7 +20851,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             pulseSt.busy = true;
             try {
                 if (!pulseSt.cid) await pulseRead();
-                const min = Math.floor(now / 60000), content = sealText('ITDXB1 ' + min.toString(36));
+                const min = Math.floor(now / 60000), content = sealText(await pulseText(min));
                 let res = pulseSt.cid ? await editComment(pulseSt.cid, content) : await sendComment(PRESENCE_POST_ID, content);
                 if (pulseSt.cid && (res.status === 404 || res.status === 403)) { pulseSt.cid = ''; res = await sendComment(PRESENCE_POST_ID, content); }
                 if (res.ok) {
@@ -20615,7 +20868,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         }
         async function pulseHide() {
             if (!pulseSt.cid || apiPaused()) return;
-            try { await editComment(pulseSt.cid, sealText('ITDXB1 0')); } catch (e) { logErr('присутствие: скрыть', e); }
+            try { await editComment(pulseSt.cid, sealText(await pulseText(0))); } catch (e) { logErr('присутствие: скрыть', e); }
             pulseSt.sentAt = 0;
         }
         function pulseOf(name) {
@@ -20623,6 +20876,7 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             return v ? { live: srvNow() - v.min * 60000 < PULSE_LIVE, seen: v.min * 60000 } : null;
         }
         const pulseWarm = () => !!pulseSt.readAt || performance.now() > PULSE_WARM;
+        sched.add('pulseVer', pulseVerSync, { every: 10 * 60e3, net: true, visible: true, first: 30000 });
         sched.add('pulseRead', () => { if (!leadTab()) return; return pulseRead(); }, { every: pulseCycle, net: true, visible: true, first: 15000 });
         sched.add('pulseBeat', () => pulseBeat(false), { every: 60000, net: true, visible: true, first: 9000 });
         document.addEventListener('visibilitychange', () => { if (!document.hidden) pulseBeat(false); });
@@ -20824,6 +21078,257 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
         document.addEventListener('visibilitychange', () => { if (!document.hidden) clubPollOnline(); });
         new IntersectionObserver(es => { if (es.some(e => e.isIntersecting) && Date.now() - clubPolledAt > 30e3) clubPollOnline(); }).observe(railClub);
 
+        const TOP_CACHE_KEY = 'vp_top_cache', TOP_COLS = [['followers', 'Подписчики'], ['following', 'Подписки'], ['posts', 'Посты'], ['likes', 'Лайки']];
+        const TOP_PROFILE_TTL = 6 * 3600e3, TOP_LIKES_TTL = 24 * 3600e3, TOP_WANT_MS = 30 * 60e3;
+        const topCache = (() => { try { const c = GM_getValue(TOP_CACHE_KEY, {}); return c && typeof c === 'object' && !Array.isArray(c) ? c : {}; } catch (e) { return {}; } })();
+        let topRows = [], topSort = GM_getValue('vp_top_sort', 'followers'), topWantAt = 0, topWin = null, topFillBusy = false, topSaveT = 0;
+        if (!TOP_COLS.some(c => c[0] === topSort)) topSort = 'followers';
+        const topSave = () => { clearTimeout(topSaveT); topSaveT = setTimeout(() => GM_setValue(TOP_CACHE_KEY, topCache), 1500); };
+        const topNum = v => typeof v === 'number' ? v.toLocaleString('ru-RU') : '—';
+        async function topCollect() {
+            const names = verifiedNames();
+            if (myUsername && !names.some(n => n.toLowerCase() === myUsername.toLowerCase())) names.push(myUsername);
+            const byId = new Map();
+            try {
+                for (const c of await serviceComments(STICKER_POST_ID, { maxAge: 10 * 60e3 })) {
+                    const a = c.author, t = a && a.id && openText(c.content);
+                    if (!t || !t.startsWith(STATS_TAG)) continue;
+                    let hist;
+                    try { hist = statsUnpack(t.slice(STATS_TAG.length)); } catch (e) { continue; }
+                    const o = {};
+                    for (let i = hist.length - 1; i >= 0; i--) for (const f of STATS_F) if (!(f in o) && typeof hist[i][f] === 'number') o[f] = hist[i][f];
+                    byId.set(a.id, o);
+                }
+            } catch (e) { logErr('топ клуба', e); }
+            return names.map(n => {
+                const v = verifiedInfo(n) || {}, own = myUsername && n.toLowerCase() === myUsername.toLowerCase();
+                const s = own && statsNow ? statsNow : (v.id && byId.get(v.id)) || {}, c = topCache[n] || {};
+                const val = f => typeof s[f] === 'number' ? s[f] : typeof c[f] === 'number' ? c[f] : f === 'likes' && c.lk ? (c.lk.done ? c.lk.sum : typeof c.lk.prev === 'number' ? c.lk.prev : null) : null;
+                return { n, v, followers: val('followers'), following: val('following'), posts: val('posts'), likes: val('likes'), pub: STATS_F.some(f => typeof s[f] === 'number') };
+            });
+        }
+        function topSorted(rows) {
+            return rows.slice().sort((a, b) => {
+                const x = a[topSort], y = b[topSort];
+                if (x === null && y === null) return a.n.localeCompare(b.n);
+                if (x === null) return 1;
+                if (y === null) return -1;
+                return y - x || a.n.localeCompare(b.n);
+            });
+        }
+        function topPersonRow(r, cls) {
+            const row = document.createElement('div');
+            row.className = cls;
+            row.dataset.login = r.n;
+            const fb = pick(r.v && r.v.avatar && (r.v.avatar.url || r.v.avatar), r.v && r.v.avatarUrl, '👤');
+            row.innerHTML = '<div class="vp-top-ava vp-club-ava"></div><div class="vp-top-who"><span class="vp-top-name vp-club-name"></span><span class="vp-top-login"></span></div>';
+            clubAvaPut(row.querySelector('.vp-top-ava'), clubAvaOf(r.n, fb), isUrl(fb) ? '👤' : fb);
+            const name = row.querySelector('.vp-top-name'), av = row.querySelector('.vp-top-ava');
+            name.textContent = pick(r.v && r.v.displayName, r.v && r.v.display_name, r.n);
+            row.querySelector('.vp-top-login').textContent = '@' + r.n;
+            if (myUsername && r.n.toLowerCase() === myUsername.toLowerCase()) { name.classList.add('vp-my-nick', 'vp-my-nick-box'); av.classList.add('my-avatar-glow'); }
+            else {
+                const look = (verifiedInfo(r.n) || {}).look;
+                if (look && look.n) name.setAttribute('data-vp-look', look.n);
+                if (look && look.g[0] === '1' && look.n) name.setAttribute('data-vp-look-glow', look.n);
+                if (look && look.g[1] === '1' && look.n) av.setAttribute('data-vp-look-av', look.n);
+            }
+            row.onclick = () => { if (topWin) topClose(); openProfile(r.n); };
+            return row;
+        }
+        const topPanel = rail.querySelector('[data-block="club"]');
+        const topBox = document.createElement('div'), topTabs = document.createElement('div');
+        topBox.className = 'vp-top'; topBox.hidden = true;
+        topTabs.className = 'vp-club-tabs';
+        topTabs.innerHTML = '<button type="button" data-t="people">Люди</button><button type="button" data-t="top">Топ</button>';
+        if (topPanel) {
+            topPanel.querySelector('.vp-rail-title').after(topTabs);
+            topPanel.querySelector('.vp-club').after(topBox);
+        }
+        async function topRender() {
+            topRows = await topCollect();
+            const sorted = topSorted(topRows), have = topRows.filter(r => r.followers !== null).length;
+            if (topBox.hidden && !topWin) return;
+            if (!topBox.hidden) {
+                topBox.textContent = '';
+                const chips = document.createElement('div');
+                chips.className = 'vp-top-chips';
+                TOP_COLS.forEach(([k, label]) => {
+                    const b = document.createElement('button');
+                    b.type = 'button'; b.dataset.k = k; b.textContent = label;
+                    b.classList.toggle('vp-on', k === topSort);
+                    b.onclick = () => { topSort = k; GM_setValue('vp_top_sort', k); topRender(); };
+                    chips.appendChild(b);
+                });
+                topBox.appendChild(chips);
+                sorted.slice(0, 5).forEach((r, i) => {
+                    const row = topPersonRow(r, 'vp-club-row vp-top-row');
+                    const rank = document.createElement('span'), val = document.createElement('b');
+                    rank.className = 'vp-top-rank'; rank.textContent = i + 1;
+                    val.className = 'vp-top-val'; val.textContent = topNum(r[topSort]);
+                    row.prepend(rank); row.appendChild(val);
+                    topBox.appendChild(row);
+                });
+                const foot = document.createElement('div');
+                foot.className = 'vp-top-foot';
+                const more = document.createElement('button');
+                more.type = 'button'; more.className = 'vp-more'; more.innerHTML = '<span>Вся таблица</span>';
+                more.onclick = topOpen;
+                foot.appendChild(more);
+                if (have < topRows.length) { const s = document.createElement('div'); s.className = 'vp-stats-since'; s.textContent = 'Собрано ' + have + ' из ' + topRows.length + ' — остальные подтянутся со временем'; foot.appendChild(s); }
+                topBox.appendChild(foot);
+            }
+            if (topWin) topWinPaint(sorted, have);
+        }
+        function topEta(rows) {
+            const now = Date.now();
+            const prof = rows.filter(r => !r.pub && now - ((topCache[r.n] || {}).at || 0) >= TOP_PROFILE_TTL).length;
+            const pages = rows.filter(r => !r.pub).reduce((a, r) => { const lk = (topCache[r.n] || {}).lk; return lk && lk.done ? a : a + Math.max(1, Math.ceil((typeof r.posts === 'number' ? r.posts : 500) / 50) - (lk ? lk.pages : 0)); }, 0);
+            return Math.max(Math.ceil(prof / 3), pages);
+        }
+        const topDur = m => m < 60 ? 'около ' + Math.max(1, m) + ' мин' : 'около ' + Math.floor(m / 60) + ' ч' + (m % 60 >= 10 ? ' ' + Math.round(m % 60 / 5) * 5 % 60 + ' мин' : '');
+        function topWinPaint(sorted, have) {
+            const body = topWin.querySelector('.vp-top-body');
+            topWin.querySelector('.vp-top-sub').textContent = 'Участников: ' + topRows.length;
+            const eta = topEta(topRows), left = topRows.some(r => typeof r.likes !== 'number' || r.followers === null);
+            const note = topWin.querySelector('.vp-top-note');
+            note.hidden = !left;
+            note.textContent = 'Статистика собирается в фоне, пока открыто это окно или вкладка «Топ», — по несколько запросов в минуту, чтобы не нагружать сайт. Полностью соберётся ' + (eta ? topDur(eta) : 'скоро') + ' (у кого-то лайки могут тянуться дольше). Уже найденное сохраняется, в следующий раз будет быстрее.';
+            body.textContent = '';
+            const head = document.createElement('div');
+            head.className = 'vp-top-tr vp-top-th';
+            head.innerHTML = '<span class="vp-top-rank">#</span><span class="vp-top-who">Участник</span>';
+            TOP_COLS.forEach(([k, label]) => {
+                const b = document.createElement('button');
+                b.type = 'button'; b.className = 'vp-top-num'; b.textContent = label; b.classList.toggle('vp-on', k === topSort);
+                b.onclick = () => { topSort = k; GM_setValue('vp_top_sort', k); topRender(); };
+                head.appendChild(b);
+            });
+            body.appendChild(head);
+            sorted.forEach((r, i) => {
+                const row = topPersonRow(r, 'vp-top-tr');
+                const rank = document.createElement('span');
+                rank.className = 'vp-top-rank'; rank.textContent = i + 1;
+                row.prepend(rank);
+                TOP_COLS.forEach(([k]) => {
+                    const c = document.createElement('span');
+                    c.className = 'vp-top-num' + (k === topSort ? ' vp-on' : '');
+                    c.textContent = topNum(r[k]);
+                    row.appendChild(c);
+                });
+                body.appendChild(row);
+            });
+        }
+        function topClose() {
+            if (!topWin) return;
+            topWin.remove();
+            topWin = null;
+            removeEventListener('keydown', topKey, true);
+        }
+        function topKey(e) { if (e.key === 'Escape' && topWin) { e.stopPropagation(); topClose(); } }
+        function topOpen() {
+            topWantAt = Date.now();
+            if (topWin) return;
+            topWin = document.createElement('div');
+            topWin.className = 'vp-top-win';
+            topWin.innerHTML = '<div class="vp-top-card" role="dialog" aria-label="Топ клуба"><div class="vp-top-head"><b>Топ клуба ИТД X</b><span class="vp-top-sub"></span><button type="button" class="vp-top-x" aria-label="Закрыть">×</button></div><div class="vp-top-note" hidden></div><div class="vp-top-body"></div></div>';
+            topWin.addEventListener('pointerdown', e => { if (e.target === topWin) topClose(); });
+            topWin.querySelector('.vp-top-x').onclick = topClose;
+            document.body.appendChild(topWin);
+            addEventListener('keydown', topKey, true);
+            topRender();
+        }
+        function topTab(t) {
+            const top = t === 'top';
+            topTabs.querySelectorAll('button').forEach(b => b.classList.toggle('vp-on', b.dataset.t === t));
+            if (!topPanel) return;
+            topPanel.querySelector('.vp-club').hidden = top;
+            topBox.hidden = !top;
+            if (top) { topWantAt = Date.now(); topRender(); }
+        }
+        topTabs.addEventListener('click', e => {
+            const b = e.target.closest('button');
+            if (!b) return;
+            GM_setValue('vp_club_tab', b.dataset.t);
+            topTab(b.dataset.t);
+        });
+        topTab(GM_getValue('vp_club_tab', 'people') === 'top' ? 'top' : 'people');
+        const topWanted = () => Date.now() - topWantAt < TOP_WANT_MS && (!topBox.hidden || topWin);
+        async function topFill() {
+            if (topFillBusy || !topWanted() || document.hidden || !leadTab() || apiPaused() || netBusy()) return;
+            topFillBusy = true;
+            try {
+                const rows = await topCollect(), now = Date.now();
+                let n = 0;
+                for (const r of rows) {
+                    if (n >= 3) break;
+                    const c = topCache[r.n] || {};
+                    if (r.pub || now - (c.at || 0) < TOP_PROFILE_TTL) continue;
+                    n++;
+                    const d = await hcData(r.n, 0).catch(() => null);
+                    if (!d) { topCache[r.n] = Object.assign(c, { at: now }); continue; }
+                    const f = pick(d.followersCount, d.followers_count, d.stats && d.stats.followers, typeof d.followers === 'number' ? d.followers : undefined);
+                    const g = pick(d.followingCount, d.following_count, d.stats && d.stats.following, typeof d.following === 'number' ? d.following : undefined);
+                    const p = pick(d.postsCount, d.posts_count, d.stats && d.stats.posts);
+                    topCache[r.n] = Object.assign(c, { followers: typeof f === 'number' ? f : c.followers, following: typeof g === 'number' ? g : c.following, posts: typeof p === 'number' ? p : c.posts, at: now });
+                }
+                const target = rows.find(r => { const lk = (topCache[r.n] || {}).lk; return !r.pub && (!lk || !lk.done || now - lk.at > TOP_LIKES_TTL); });
+                if (target) {
+                    const c = topCache[target.n] || (topCache[target.n] = {});
+                    if (c.lk && c.lk.done) c.lk = { sum: 0, cursor: '', done: false, pages: 0, at: now, prev: c.lk.sum };
+                    const lk = c.lk || (c.lk = { sum: 0, cursor: '', done: false, pages: 0, at: now });
+                    const res = await api(`/api/posts/user/${encodeURIComponent(target.n)}?limit=50&sort=new` + (lk.cursor ? '&cursor=' + encodeURIComponent(lk.cursor) : ''));
+                    if (res.ok) {
+                        const j = await res.json(), d = j.data || j, posts = d.posts || [];
+                        keepSitePosts(j);
+                        lk.sum += posts.reduce((a, p) => a + (+p.likesCount || 0), 0);
+                        lk.pages++;
+                        lk.cursor = (d.pagination && d.pagination.nextCursor) || d.nextCursor || d.cursor || '';
+                        if (!posts.length || !lk.cursor || lk.pages >= 80) { lk.done = true; lk.cursor = ''; }
+                        lk.at = Date.now();
+                    }
+                }
+                topSave();
+                await topRender();
+            } catch (e) { logErr('топ клуба: догрузка', e); } finally { topFillBusy = false; }
+        }
+        sched.add('clubTopFill', topFill, { every: 60000, net: true, visible: true, first: 20000 });
+        sched.add('clubTopView', () => { if (topWanted()) return topRender(); }, { every: 5 * 60e3, visible: true });
+        addCss(`
+        .vp-club-tabs { display: flex; gap: 4px; margin: -2px 0 10px; padding: 3px; border-radius: 9999px; background: var(--glass-bg, rgba(35, 35, 35, .8)); box-shadow: inset 0 0 0 1px var(--vp-ring, rgba(255, 255, 255, .08)); }
+        .vp-club-tabs button { flex: 1; padding: 6px 0; border: 0; border-radius: 9999px; background: none; cursor: pointer; font: inherit; font-size: 13px; font-weight: 500; color: var(--text-secondary); transition: color .2s ease, background-color .2s ease; }
+        .vp-club-tabs button.vp-on { color: var(--text-primary, #fff); background: var(--tab-active-bg, rgba(255, 255, 255, .08)); }
+        .vp-top[hidden], .vp-club[hidden] { display: none; }
+        .vp-top-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+        .vp-top-chips button { padding: 3px 9px; border: 0; border-radius: 9999px; cursor: pointer; font: inherit; font-size: 12px; color: var(--text-secondary); background: color-mix(in srgb, var(--text-primary, #fff) 6%, transparent); }
+        .vp-top-chips button.vp-on { color: var(--text-primary, #fff); background: color-mix(in srgb, var(--text-primary, #fff) 16%, transparent); }
+        .vp-top-row { margin-bottom: 4px; }
+        .vp-top-rank { flex: 0 0 22px; text-align: center; font-size: 13px; font-weight: 700; color: var(--text-secondary); }
+        .vp-top-val { margin-left: auto; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .vp-top-who { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+        .vp-top-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 14px; }
+        .vp-top-login { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-secondary); }
+        .vp-top-ava { flex: 0 0 auto; }
+        .vp-top-foot { margin-top: 6px; }
+        .vp-top-win { position: fixed; inset: 0; z-index: 2147483040; display: flex; align-items: center; justify-content: center; padding: 12px; background: rgba(0, 0, 0, .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+        .vp-top-card { --vp-ink: var(--text-primary, #fff); --vp-ring: color-mix(in srgb, var(--vp-ink) 8%, transparent); display: flex; flex-direction: column; width: min(760px, 100%); max-height: min(860px, 100%); padding: 18px 20px 14px; border-radius: 28px; color: var(--text-primary, #fff);
+            background: var(--bg-primary, #111); box-shadow: 0 24px 60px rgba(0, 0, 0, .5), inset 0 0 0 1px var(--vp-ring); }
+        .vp-top-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+        .vp-top-head b { font-size: 18px; }
+        .vp-top-sub { flex: 1; min-width: 0; font-size: 12px; color: var(--text-secondary); }
+        .vp-top-x { width: 34px; height: 34px; border: 0; border-radius: 50%; cursor: pointer; font-size: 20px; line-height: 1; color: inherit; background: color-mix(in srgb, var(--vp-ink) 8%, transparent); align-self: center; }
+        .vp-top-note { margin: -4px 0 12px; padding: 8px 12px; border-radius: 16px; font-size: 12.5px; line-height: 1.4; color: var(--text-secondary); background: color-mix(in srgb, var(--vp-ink) 5%, transparent); box-shadow: inset 0 0 0 1px var(--vp-ring); }
+        .vp-top-note[hidden] { display: none; }
+        .vp-top-body { overflow: auto; scrollbar-width: thin; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+        .vp-top-tr { display: grid; grid-template-columns: 30px 36px minmax(110px, 1fr) repeat(4, minmax(72px, auto)); align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 22px; cursor: pointer; min-width: 560px;
+            background: color-mix(in srgb, var(--vp-ink) 4%, transparent); box-shadow: inset 0 0 0 1px var(--vp-ring); }
+        .vp-top-tr:not(.vp-top-th):hover { background: color-mix(in srgb, var(--vp-ink) 9%, transparent); }
+        .vp-top-th { position: sticky; top: 0; z-index: 1; cursor: default; background: var(--bg-primary, #111); box-shadow: inset 0 0 0 1px var(--vp-ring); padding: 4px 12px 4px 6px; font-size: 12px; color: var(--text-secondary); }
+        .vp-top-th .vp-top-who { display: block; grid-column: 2 / 4; }
+        .vp-top-num { text-align: right; font-variant-numeric: tabular-nums; font-size: 14px; border: 0; background: none; color: inherit; font-family: inherit; }
+        button.vp-top-num { cursor: pointer; font-size: 12px; color: var(--text-secondary); padding: 6px 0; }
+        button.vp-top-num.vp-on, span.vp-top-num.vp-on { color: var(--text-primary, #fff); font-weight: 700; }
+        `);
         const PSORT = [['new', 'Новые'], ['old', 'Старые'], ['popular', 'Популярные']];
         const psortCss = addCss(`
         .vp-psort { position: relative; display: flex; gap: 4px; margin: 0 0 12px; padding: 4px; border-radius: 9999px; background: var(--glass-bg, rgba(35, 35, 35, .8)); }
