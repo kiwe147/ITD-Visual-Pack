@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.8.2
+// @version      3.9.8.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -494,9 +494,22 @@ return o;
 };
 const pathPaused = key => !!key && (pathPauses()[key] || 0) > Date.now();
 const apiPaused = key => Date.now() < (+setting('vp_api_pause') || 0) || pathPaused(key);
+const netLimits = {};
+const PAUSE_CAP = 10 * 60e3;
+(function capPauses() {
+const m = setting('vp_api_pause_paths') || {}, lim = Date.now() + PAUSE_CAP;
+let ch = false;
+for (const k in m) if (m[k] > lim) { m[k] = lim; ch = true; }
+if (ch) GM_setValue('vp_api_pause_paths', m);
+if ((+setting('vp_api_pause') || 0) > lim) GM_setValue('vp_api_pause', lim);
+})();
 function apiPause(res, key) {
 if (!res || res.status !== 429) return;
-const ra = Math.max(0, +(res.headers && res.headers.get('Retry-After')) || 0);
+const ra = Math.min(PAUSE_CAP / 1000, Math.max(0, +(res.headers && res.headers.get('Retry-After')) || 0));
+if (!(res.headers && res.headers.get('X-VP-Local'))) {
+const h = n => (res.headers && res.headers.get(n)) || '';
+logErr('429 ' + (key || 'общий'), 'Retry-After ' + h('Retry-After') + ' (принято ' + ra + ' с), лимит ' + h('X-RateLimit-Limit') + ', осталось ' + h('X-RateLimit-Remaining') + ', сброс ' + h('X-RateLimit-Reset') + ', область ' + h('X-RateLimit-Scope'));
+}
 const scope = String((res.headers && res.headers.get('X-RateLimit-Scope')) || '').toLowerCase();
 const globalPause = s => GM_setValue('vp_api_pause', Math.max(+setting('vp_api_pause') || 0, Date.now() + s * 1000));
 if (scope === 'ip_flood' || scope === 'global_flood' || !key) { globalPause(Math.max(60, ra)); return; }
@@ -9521,6 +9534,17 @@ console.table(Object.values(accSlots()).map(s => ({ ник: s.username, id: s.id
 console.table(setting('vp_acc_log').map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
 };
 const CHANGELOG = [
+['3.9.8.3', '25 ноября 2026', [
+['Сообщения', 'Неотправленное можно удалить, отправка не зависит от паузы сайта, «Проверить ещё раз»', [
+'У неотправленного сообщения две кнопки: «Повторить» и «Удалить»; удалить можно и через меню сообщения',
+'Если сайт временно запретил правки комментариев, сообщения всё равно отправляются',
+'Если переписка пишет «откроется, когда разработчик подтвердит галочку», а тебя уже подтвердили, нажми «Проверить ещё раз»'
+]],
+['ИТД Х', 'Пауза после ограничения сайта не дольше 10 минут, метка «в сети» реже', [
+'Исправлено: после ответа сайта «слишком много запросов» скрипт мог ждать несколько часов, теперь не дольше 10 минут',
+'Метка «в сети» обновляется реже, поэтому на сайт уходит вдвое меньше запросов'
+]]
+]],
 ['3.9.8.2', '25 ноября 2026', [
 ['Сообщения', 'Меньше запросов к сайту, сообщения реже висят на отправке', [
 'Исправлено: при открытом чате и после отправки скрипт слишком часто обращался к сайту, из-за чего сообщения могли зависать на отправке — запросов стало заметно меньше'
@@ -10916,6 +10940,7 @@ return r;
 };
 let res = await call(await getAccessToken());
 if (res.status === 401) res = await call(await getAccessToken(true));
+if (pkey && res.headers && res.headers.get('X-RateLimit-Limit')) netLimits[pkey] = res.headers.get('X-RateLimit-Limit') + '/' + (res.headers.get('X-RateLimit-Remaining') || '?');
 apiPause(res, pkey);
 if (opts.method && opts.method !== 'GET' && opts.method !== 'POST' && /\/comments/.test(path)) try { if (msgNet.cache && !pulseOwn(path)) msgNet.cache.dirty = true; } catch (e) { }
 return res;
@@ -11086,6 +11111,12 @@ serviceCommentsPut(postId, { id: c.id, content, author: c.author && c.author.id 
 function loadVerificationComments(maxAge) {
 return serviceComments(VERIFICATION_POST_ID, { maxAge: maxAge === true ? -1 : typeof maxAge === 'number' ? maxAge : VERIFY_READ_AGE });
 }
+pageWindow.itdvp.verify = async name => {
+const n = String(name || '').replace(/^@/, '').toLowerCase(), all = readVerified(), k = Object.keys(all).find(x => x.toLowerCase() === n), info = k ? all[k] : null;
+if (!info || !info.id) return { ник: n, код_мода_найден: false };
+const lists = parseAllOwnerLists(await loadVerificationComments(true)), id = String(info.id).toLowerCase(), t = verifyTimeline(info.id, lists, Date.now()), d = x => x ? new Date(x * 1000).toLocaleString('ru-RU') : '';
+return { ник: k, id, состояние: t.state, в_подтверждённых: lists.approved.has(id), метка_снятия: lists.revoked.has(id), SEEN: d(lists.seen.get(id)), отказ_до: d(lists.cooldown.get(id)), запрос_R: d(lists.request && lists.request.get(id)), комментарий_кода: info.commentId || '' };
+};
 function verifiedInfo(name) {
 try {
 const all = readVerified();
@@ -13152,6 +13183,7 @@ const msgPreview = m => { const t = msgBodyText(m); return m.imgs && m.imgs.leng
 const msgNet = { keys: new Map(), vols: [], me: null, pairs: new Map(), conv: new Map(), syncing: null, blocks: {} };
 const MSG_SHARE_MS = 2000, MSG_DONE_MS = 700, MSG_WARM_MS = 5 * 60e3, MSG_STAMP_KEY = 'vp_msg_sync';
 const MSG_READ_KEY = netKey('/api/posts/' + MSG_POST_ID + '/comments', 'GET');
+const MSG_PATCH_KEY = netKey('/api/comments/00000000-0000-0000-0000-000000000000', 'PATCH');
 const msgAge = () => Date.now() - (msgNet.stamp || 0);
 const msgSharedAge = () => { const a = Date.now() - (+GM_getValue(MSG_STAMP_KEY, 0) || 0); return a < 0 ? 1e9 : a; };
 function msgMarkShared(now) {
@@ -13582,7 +13614,7 @@ const recs = last ? last.recs : [];
 if (recs.some(r => sameBytes(r, rec))) return true;
 let seq = last ? last.seq : 1, cid = last ? last.cid : null, all = [...recs, rec];
 let content = volText(seq, mode, all);
-if (!last || content.length > MSG_MAX) { seq = last ? seq + 1 : 1; all = [rec]; content = volText(seq, mode, all); cid = null; }
+if (!last || content.length > MSG_MAX || (cid && !svc && pathPaused(MSG_PATCH_KEY))) { seq = last ? seq + 1 : 1; all = [rec]; content = volText(seq, mode, all); cid = null; }
 const res = cid
 ? await editComment(cid, content)
 : await sendComment(MSG_POST_ID, content);
@@ -13640,6 +13672,10 @@ msgNet.hotUntil = Date.now() + 120000;
 setTimeout(msgPump, 0);
 return e;
 }
+function msgDrop(uid, ts) {
+msgOutSet(msgOutGet().filter(e => !(e.uid === uid && e.ts === ts && e.st === 'fail')));
+document.dispatchEvent(new Event('vp-msg-outbox'));
+}
 function msgRetry(uid, ts) {
 const l = msgOutGet();
 l.forEach(e => { if (e.uid === uid && e.ts === ts) { e.st = 'send'; e.tries = 0; e.next = 0; } });
@@ -13678,6 +13714,13 @@ clearTimeout(msgPumpT);
 const nx = msgOutGet().filter(x => x.st === 'send').map(x => x.next || 0);
 if (nx.length) msgPumpT = setTimeout(msgPump, Math.max(1500, Math.min(...nx) - Date.now()));
 }
+pageWindow.itdvp.msg = () => ({
+ты: myUsername || '', meData: !!meData, id: msgMyId(), ключ_открыт: !!msgNet.me, синхронизация_готова: !!msgNet.ready, ключей: msgNet.keys.size, томов: msgNet.vols.length,
+лимиты: netLimits, идёт_чтение: !!msgNet.syncing, насос_занят: msgPumpBusy, записей_в_очереди: msgWriteJobs.length, идёт_запись: msgWriteRun,
+паузы: Object.entries(pathPauses()).filter(([k, t]) => t > Date.now()).map(([k, t]) => k + ' ещё ' + Math.round((t - Date.now()) / 1000) + ' с'),
+очередь: msgOutGet().map(e => ({ ts: e.ts, состояние: e.st, попыток: e.tries, ждать_с: Math.round(((e.next || 0) - Date.now()) / 1000), ошибка: e.err || '' })),
+журнал: vpErrors.slice(-12)
+});
 document.addEventListener('vp-msg-synced', () => { msgPump(); });
 addEventListener('online', () => {
 const l = msgOutGet();
@@ -16611,6 +16654,12 @@ const MSG_CSS = `
             mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 11' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M.8 6 3.9 9.1 10.8 2.2M7.4 8.1l1 1 6.9-6.9'/%3E%3C/svg%3E"); }
         .vp-msgs-b.vp-fail i { opacity: .85; }
         .vp-msgs-b.vp-fail { cursor: pointer; }
+        .vp-msgs-recheck { align-self: center; margin: 10px auto 0; padding: 9px 18px; border: 0; border-radius: 9999px; background: var(--vp-accent); color: #000; font: inherit; font-weight: 600; cursor: pointer; }
+        .vp-msgs-recheck:disabled { opacity: .55; cursor: default; }
+        .vp-msgs-failact { display: flex; gap: 8px; margin: 8px 0 2px; }
+        .vp-msgs-failact button { padding: 6px 14px; border: 0; border-radius: 9999px; background: rgba(255, 255, 255, .2); color: inherit; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s ease; }
+        .vp-msgs-failact button:hover { background: rgba(255, 255, 255, .32); }
+        .vp-msgs-failact button[data-a="del"]:hover { background: rgba(255, 69, 58, .75); color: #fff; }
         .vp-msgs-typing { display: flex; gap: 5px; padding: 14px 16px; }
         .vp-msgs-typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary); animation: vpMsgsDot 1s infinite; }
         .vp-msgs-typing span:nth-child(2) { animation-delay: .15s; } .vp-msgs-typing span:nth-child(3) { animation-delay: .3s; }
@@ -17465,8 +17514,10 @@ feed.addEventListener('click', e => {
 if (e.target.closest && e.target.closest('.vp-msgs-jump')) return;
 const fb = e.target.closest && e.target.closest('.vp-msgs-b.vp-fail');
 if (!fb || !fb._m || fb._m.pending !== 'fail' || !M.current) return;
-const tt = msgTarget(M.current);
-if (tt.uid) msgRetry(tt.uid, fb._m.ts);
+const tt = msgTarget(M.current), del = e.target.closest('.vp-msgs-failact [data-a="del"]');
+if (!tt.uid) return;
+if (del) { e.stopPropagation(); msgDrop(tt.uid, fb._m.ts); return; }
+msgRetry(tt.uid, fb._m.ts);
 });
 ['wheel', 'touchstart', 'keydown'].forEach(t => feed.addEventListener(t, () => { stickUntil = 0; }, { passive: true }));
 let renderN = 0;
@@ -17479,7 +17530,17 @@ try { await msgSyncPatient(); } catch (e) { if (my === renderN) wait.textContent
 if (M.current !== d || my !== renderN) return;
 if (d.login && !d.support && !isApprovedId(msgMyId())) {
 feed.textContent = '';
-note('Переписка с людьми откроется, когда разработчик подтвердит твою галочку ИТД X. Поддержка работает уже сейчас.', 'lock');
+note('Переписка с людьми откроется, когда разработчик подтвердит твою галочку ИТД X. Если тебя уже подтвердили, нажми «Проверить ещё раз». Поддержка работает уже сейчас.', 'lock');
+const rb = document.createElement('button');
+rb.type = 'button';
+rb.className = 'vp-msgs-recheck';
+rb.textContent = 'Проверить ещё раз';
+rb.addEventListener('click', () => {
+rb.disabled = true;
+rb.textContent = 'Проверяю…';
+checkAllComments(true).then(() => markVerifiedUsers()).catch(e => logErr('проверка галочки', e)).then(() => { if (M.current === d) msgOpenPerson(d); });
+});
+feed.appendChild(rb);
 return;
 }
 if (!msgNet.me) return msgKeyForm(d);
@@ -17492,7 +17553,7 @@ if (!list.length) note(d.support ? 'Опиши проблему или идею 
 list.forEach(m => {
 const b = bubble(m.dir, m.text, msgMetaText(t, m), (m.imgs || (m.img ? [m.img] : [])).map(msgImgUrl));
 b._m = m; b.dataset.ts = m.ts; b.dataset.dir = m.dir;
-b.classList.toggle('vp-fail', m.pending === 'fail');
+failUi(b, m);
 M.paintReacts(b, t.uid);
 });
 M.paintCalls(t);
@@ -17529,7 +17590,17 @@ if (!keep && near) feed.scrollTop = feed.scrollHeight;
 let daysRaf = 0;
 const scheduleDays = () => { if (!daysRaf) daysRaf = requestAnimationFrame(() => { daysRaf = 0; paintDays(); }); };
 const msgClock = ts => new Date(ts * 1000).toTimeString().slice(0, 5); M.msgClock = msgClock;
-const msgMetaText = (t, m) => m.pending ? msgClock(m.ts) + (m.pending === 'fail' ? ' · не отправлено — нажми, чтобы повторить' : ' · отправка…') : (m.edited ? 'изм. ' : '') + msgClock(m.at || m.ts) + (m.dir === 'out' && !(msgNet.me && t.uid === msgNet.me.id) ? (readUpTo(t.uid, t.sup, 'them') >= m.ts ? ' ✓✓' : ' ✓') : '');
+function failUi(b, m) {
+const on = m.pending === 'fail', el = b.querySelector(':scope > .vp-msgs-failact');
+b.classList.toggle('vp-fail', on);
+if (on && !el) {
+const a = document.createElement('div');
+a.className = 'vp-msgs-failact';
+a.innerHTML = '<button type="button" data-a="retry">Повторить</button><button type="button" data-a="del">Удалить</button>';
+b.insertBefore(a, b.lastChild);
+} else if (!on && el) el.remove();
+}
+const msgMetaText = (t, m) => m.pending ? msgClock(m.ts) + (m.pending === 'fail' ? ' · не отправлено' : ' · отправка…') : (m.edited ? 'изм. ' : '') + msgClock(m.at || m.ts) + (m.dir === 'out' && !(msgNet.me && t.uid === msgNet.me.id) ? (readUpTo(t.uid, t.sup, 'them') >= m.ts ? ' ✓✓' : ' ✓') : '');
 M.metaText = msgMetaText;
 function viewMark() {
 const top = feed.getBoundingClientRect().top;
@@ -17577,7 +17648,7 @@ b = bubble(m.dir, m.text, msgMetaText(t, m), (m.imgs || (m.img ? [m.img] : [])).
 b.dataset.ts = m.ts; b.dataset.dir = m.dir; added++;
 }
 b._m = m;
-b.classList.toggle('vp-fail', m.pending === 'fail');
+failUi(b, m);
 const sig = JSON.stringify(msgNet.reacts && msgNet.reacts.get(reactKey(t.uid, m.dir, m.ts)) || null);
 if (b._rs !== sig) { b._rs = sig; M.paintReacts(b, t.uid); }
 const want = prev ? prev.nextElementSibling : feed.querySelector(':scope > .vp-msgs-b');
@@ -18214,6 +18285,14 @@ async function msgDelete(bs) {
 const t = M.current && msgTarget(M.current);
 bs = bs.filter(b => b._m);
 if (!t || !t.uid || !bs.length) return;
+const unsent = bs.filter(b => b._m.pending);
+if (unsent.length) {
+const failed = unsent.filter(b => b._m.pending === 'fail');
+if (failed.length && confirm(failed.length === 1 ? 'Удалить неотправленное сообщение?' : `Удалить неотправленные сообщения (${failed.length})?`)) failed.forEach(b => msgDrop(t.uid, b._m.ts));
+else if (!failed.length) flashNote('Сообщение ещё отправляется — подожди');
+bs = bs.filter(b => !b._m.pending);
+if (!bs.length) return;
+}
 const own = bs.filter(b => b._m.dir === 'out'), theirs = bs.filter(b => b._m.dir === 'in');
 const ask = own.length && !theirs.length ? (own.length === 1 ? 'Удалить сообщение у обоих?' : `Удалить ${own.length} сообщ. у обоих?`)
 : !own.length ? (theirs.length === 1 ? 'Удалить сообщение у себя? У собеседника оно останется.' : `Удалить ${theirs.length} сообщ. у себя? У собеседника они останутся.`)
@@ -24151,7 +24230,7 @@ renderStats();
 loadStats();
 
 const PULSE_RE = /^ITDXB([12]) ([0-9a-z]{1,8})(?: ([\w-]{40,400}))?$/;
-const PULSE_BEAT = 2 * 60e3, PULSE_LIVE = 5 * 60e3, PULSE_IDLE = 5 * 60e3, PULSE_PAGES = 15, PULSE_WARM = 30000;
+const PULSE_BEAT = 4 * 60e3, PULSE_LIVE = 8 * 60e3, PULSE_IDLE = 5 * 60e3, PULSE_PAGES = 15, PULSE_WARM = 30000;
 let pulseShare = setting('pulseOn');
 const pulseMap = new Map(), pulseByName = new Map();
 const pulseSt = { active: Date.now(), sentAt: 0, busy: false, pages: 1, readAt: 0, cid: '', reading: false, fails: 0 };
