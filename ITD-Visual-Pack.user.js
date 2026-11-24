@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.6
+// @version      3.9.6.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -9276,6 +9276,11 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             console.table(GM_getValue('vp_acc_log', []).map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
         };
         const CHANGELOG = [
+            ['3.9.6.1', '24 ноября 2026', [
+                'Открытый пост: комментарии в отдельной карточке с мягкой рамкой, без сплошных линий между ними, пост скруглён со всех сторон',
+                'Открытый пост: картинки в комментариях занимают всю ширину колонки текста и скруглены',
+                'Открытый пост: убрана серая подложка по бокам и под карточками, поле комментария скруглено со всех сторон'
+            ]],
             ['3.9.6', '23 ноября 2026', [
                 'Посты: новый вид — большее скругление карточки, мягкая рамка у картинок, лайки, комментарии и просмотры на отдельной плашке',
                 'Опросы: больше не сдвинуты вправо, как и остальное содержимое поста',
@@ -16086,15 +16091,21 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
                 root.setAttribute('data-vp-lay', '');
                 root.classList.add('vp-p-solo'); body.classList.add('vp-p-body');
                 const card = root.parentElement;
-                if (card) {
-                    card.classList.add('vp-solo-card');
-                    for (let e = card.parentElement; e && e !== document.body; e = e.parentElement) {
-                        const r = getComputedStyle(e).borderTopLeftRadius;
-                        if (parseFloat(r) > 0) { card.style.setProperty('--vp-solo-r', r); break; }
-                    }
-                }
+                if (card) card.classList.add('vp-solo-card');
                 const t = postTextBlock(body, foot);
                 if (t) t.classList.add('vp-p-text');
+            });
+        });
+        onDom(function commentsPanel() {
+            document.querySelectorAll('.vp-solo-card').forEach(card => {
+                const wrap = card.parentElement && card.parentElement.nextElementSibling, sel = wrap && wrap.querySelector('select');
+                const head = sel && sel.parentElement, list = head && head.nextElementSibling;
+                if (!list) return;
+                if (!wrap.classList.contains('vp-cm')) wrap.classList.add('vp-cm');
+                if (wrap.parentElement && !wrap.parentElement.classList.contains('vp-cm-col')) wrap.parentElement.classList.add('vp-cm-col');
+                if (!head.classList.contains('vp-cm-head')) head.classList.add('vp-cm-head');
+                if (!list.classList.contains('vp-cm-list')) list.classList.add('vp-cm-list');
+                for (const t of list.children) if (!t.classList.contains('vp-cm-thread')) t.classList.add('vp-cm-thread');
             });
         });
         const albumRO = typeof ResizeObserver === 'function' ? new ResizeObserver(es => es.forEach(e => albumFit(e.target))) : null;
@@ -16255,8 +16266,27 @@ return __vpBannerAuto;})(Math,Date,Number,Object,Array,Map,Set,Promise,Error,JSO
             transition: opacity .25s ease;
         }
 
-        .vp-solo-card { position: relative; isolation: isolate; border-radius: var(--vp-solo-r, 0px) var(--vp-solo-r, 0px) 0 0; --vp-edge-a: rgba(255, 255, 255, .08); --vp-edge-b: rgba(255, 255, 255, .08); }
+        .vp-solo-card { position: relative; isolation: isolate; border-radius: var(--vp-card-r, 28px) !important; border-bottom: 0 !important; margin-bottom: var(--vp-post-gap, 4px); --vp-card-r: 28px; --vp-edge-a: rgba(255, 255, 255, .08); --vp-edge-b: rgba(255, 255, 255, .08); }
         .vp-solo-card.vp-emoji-tint { border: 0 !important; }
+        .vp-cm { position: relative; border-radius: 28px; overflow: clip; background: var(--block-bg); box-shadow: 0 8px 20px rgba(0, 0, 0, .2); --vp-edge-a: rgba(255, 255, 255, .08); --vp-edge-b: rgba(255, 255, 255, .08); }
+        .vp-solo-card::before, .vp-cm::before {
+            content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; z-index: 1;
+            background: linear-gradient(to bottom, var(--vp-edge-a), var(--vp-edge-b));
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+            mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+        }
+        .vp-cm-col { background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-radius: 0 !important; }
+        .vp-cm { backdrop-filter: var(--vp-glass-filter, blur(4px)); }
+        body:has(.vp-solo-card) .vp-comments-sheet { border-top: 0 !important; }
+        body:has(.vp-solo-card) .vp-comments-sheet > .vp-float { border: 0 !important; border-radius: 28px !important; margin-bottom: 10px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08), 0 8px 20px rgba(0, 0, 0, .2); }
+        .vp-cm .vp-cm-head { border-bottom: 0 !important; }
+        .vp-cm .vp-cm-thread { border-top: 0 !important; border-bottom: 0 !important; }
+        .vp-cm .vp-cm-thread + .vp-cm-thread {
+            background-image: linear-gradient(color-mix(in srgb, var(--text-primary, #fff) 7%, transparent), color-mix(in srgb, var(--text-primary, #fff) 7%, transparent));
+            background-repeat: no-repeat; background-position: right 24px top; background-size: calc(100% - 100px) 1px;
+        }
+        .vp-cm .vp-cm-thread .vp-media-rel { width: 100% !important; max-width: 100% !important; height: auto !important; aspect-ratio: auto !important; max-height: none !important; border-radius: 20px !important; }
+        .vp-cm .vp-cm-thread .vp-media-rel > img.vp-post-media { width: 100% !important; height: auto !important; max-height: 80vh !important; object-fit: contain !important; border-radius: 20px !important; }
         .vp-p-solo { --vp-ink: var(--text-primary, #fff); display: grid !important; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto minmax(23px, auto);
             column-gap: 14px; row-gap: 0; align-items: start; container-type: inline-size; }
         .vp-p-solo > header, .vp-p-solo > header > div:has(> .vp-avatar-link), .vp-p-solo > .vp-p-body { display: contents !important; }
