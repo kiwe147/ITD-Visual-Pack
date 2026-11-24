@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.8.1
+// @version      3.9.8.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -9521,6 +9521,11 @@ console.table(Object.values(accSlots()).map(s => ({ ник: s.username, id: s.id
 console.table(setting('vp_acc_log').map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
 };
 const CHANGELOG = [
+['3.9.8.2', '25 ноября 2026', [
+['Сообщения', 'Меньше запросов к сайту, сообщения реже висят на отправке', [
+'Исправлено: при открытом чате и после отправки скрипт слишком часто обращался к сайту, из-за чего сообщения могли зависать на отправке — запросов стало заметно меньше'
+]]
+]],
 ['3.9.8.1', '25 ноября 2026', [
 ['Галочка', 'Галка рядом с ником снова в одной строке с ним', [
 'Исправлено: галка рядом с ником уезжала на строку ниже, теперь снова стоит справа от ника'
@@ -11028,6 +11033,7 @@ async function allComments(postId, maxPages = 30, opts = {}) {
 const all = [];
 let cursor = null;
 for (let page = 0; page < maxPages; page++) {
+if (page) await new Promise(r => setTimeout(r, opts.gap === undefined ? 1000 : opts.gap));
 const res = await api(`/api/posts/${postId}/comments?limit=${opts.limit || 100}` + (opts.sort ? '&sort=' + opts.sort : '') + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
 if (!res.ok) throw new Error('комментарии: ' + res.status);
 const j = await res.json(), d = j.data || j;
@@ -13260,7 +13266,7 @@ ca.dirty = false;
 ca.pages = Math.max(1, Math.ceil(list.length / 100));
 return list;
 };
-const hot = (msgNet.hotUntil || 0) > Date.now(), base = hot ? Math.max(10000, (ca.pages || 1) * 2500) : 60000;
+const hot = (msgNet.hotUntil || 0) > Date.now(), base = hot ? Math.max(20000, (ca.pages || 1) * 4000) : 60000;
 const ttl = msgNet.ttlFn ? msgNet.ttlFn(hot, base) : base;
 if (!ca.full || ca.dirty || !ca.light || Date.now() - ca.full > ttl) return full();
 let newest = 0, first = true, bad = false;
@@ -13585,6 +13591,11 @@ if (!res.ok) throw new Error('сообщение: ' + res.status);
 const d = await res.json().then(j => j && (j.data || j.comment || j)).catch(() => null);
 if (d && d.content != null && d.content !== content) return false;
 const id = cid || (d && d.id) || null;
+const ca = msgNet.cache;
+if (ca && id && d && d.content === content) {
+const old = ca.byId.get(id) || {};
+ca.byId.set(id, Object.assign({}, old, d, { id, content, author: d.author || old.author || { id: me.id }, createdAt: d.createdAt || old.createdAt || '' }));
+}
 msgNet.ownVol = id ? { me: me.id, cid: id, seq, recs: all } : null;
 return true;
 };
@@ -13604,6 +13615,8 @@ if (present()) { err = null; break; }
 if (a) msgNet.ownVol = null;
 const mode = setting('msgMode');
 if (!(await write(mode)) && mode === 'c') { GM_setValue('msgMode', 'b'); await write('b'); }
+await msgSync();
+if (present()) { err = null; break; }
 await msgSync(true);
 if (present()) { err = null; break; }
 err = new Error('сообщение не появилось на сервере');
@@ -17620,7 +17633,7 @@ const msgPoll = sched.add('msgPoll', async () => {
 if (!root.isConnected) return msgPoll.remove();
 const talking = callNet.cur && callNet.cur.state === 'talk';
 if ((!msgsOpen && !talking) || !msgNet.me || apiPaused(MSG_READ_KEY) || (document.hidden && !talking)) return;
-if (M.current) msgNet.hotUntil = Date.now() + 120000;
+if (M.current && Date.now() - msgActive.at < 3 * 60e3) msgNet.hotUntil = Date.now() + 120000;
 if (msgAge() > 12000) { try { await msgSync(); } catch (e) { return; } }
 msgFillDialogs();
 if (!M.current) return renderList();
