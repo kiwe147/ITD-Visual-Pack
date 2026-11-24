@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.8
+// @version      3.9.8.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4285,7 +4285,7 @@ const globalStyles = addCss(`
         html.vp-light .vp-emoji-tint .vp-soft-bg, html.vp-light .itd-blur-active .vp-soft-bg { background-color: rgba(255, 255, 255, .35) !important; }
         .vp-nick-row > a { min-width: 0; overflow: hidden; }
         .vp-nick-row .vp-nick:not(.vp-nick-large *) { min-width: 0; max-width: 100%; }
-        .vp-nick:not(.vp-nick-large) > :has(> .vp-nick-text) { display: inline-flex; align-items: center; gap: inherit; min-width: 0; }
+        .vp-nick:not(.vp-nick-large) :has(> .vp-nick-text) { display: inline-flex; align-items: center; gap: inherit; min-width: 0; }
         .vp-nick-row .vp-nick-text:not(.vp-nick-large *) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
         .vp-post header .vp-nick-row:not(:last-child) { padding-right: 50px; }
         @media (max-width: ${PHONE_MAX}px) { .vp-post header .vp-nick-row:not(:last-child) { padding-right: 42px; } }
@@ -9521,6 +9521,11 @@ console.table(Object.values(accSlots()).map(s => ({ ник: s.username, id: s.id
 console.table(setting('vp_acc_log').map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
 };
 const CHANGELOG = [
+['3.9.8.1', '25 ноября 2026', [
+['Галочка', 'Галка рядом с ником снова в одной строке с ним', [
+'Исправлено: галка рядом с ником уезжала на строку ниже, теперь снова стоит справа от ника'
+]]
+]],
 ['3.9.8', '25 ноября 2026', [
 ['Редактор картинок', 'Кадр, цвета, резкость, кисть, фигуры, текст, размытие, «Курсор»', [
 'Редактор картинок для постов: на прикреплённой картинке появилась кнопка-карандаш',
