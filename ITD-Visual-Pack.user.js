@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.8.3
+// @version      3.9.9
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -494,7 +494,6 @@ return o;
 };
 const pathPaused = key => !!key && (pathPauses()[key] || 0) > Date.now();
 const apiPaused = key => Date.now() < (+setting('vp_api_pause') || 0) || pathPaused(key);
-const netLimits = {};
 const PAUSE_CAP = 10 * 60e3;
 (function capPauses() {
 const m = setting('vp_api_pause_paths') || {}, lim = Date.now() + PAUSE_CAP;
@@ -6188,7 +6187,8 @@ const GLOW_ROOM = 60, CLIP_MARGIN = typeof CSS !== 'undefined' && CSS.supports('
 function glowRoom(el) {
 for (let p = el, i = 0; p && i < 4 && p !== document.body; p = p.parentElement, i++) {
 if (p.matches('article, .' + SELECTORS.post)) return;
-if (p._vpGlowRoom) continue;
+if (p._vpGlowRoom || (p._vpGlowAt && performance.now() - p._vpGlowAt < 4000)) continue;
+p._vpGlowAt = performance.now();
 const cs = getComputedStyle(p);
 if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
 if (cs.overflowX === 'auto' || cs.overflowX === 'scroll' || cs.overflowY === 'auto' || cs.overflowY === 'scroll') continue;
@@ -7353,8 +7353,8 @@ c.voiceT = setInterval(() => {
 if (c.state !== 'talk' || !c.el) { clearInterval(c.voiceT); if (c.el) c.el.classList.remove('vp-voice'); return; }
 const now = Date.now();
 if (c.rawStream && (!me || me.stream !== c.rawStream)) me = mk(c.rawStream);
-if (me && level(me) > 0.025) last = now;
-c.el.classList.toggle('vp-voice', now - last < 400);
+if (me && !c.muted && level(me) > 0.025) last = now;
+c.el.classList.toggle('vp-voice', !c.muted && now - last < 400);
 }, 80);
 }
 async function callMicFallback(c) {
@@ -9534,6 +9534,22 @@ console.table(Object.values(accSlots()).map(s => ({ ник: s.username, id: s.id
 console.table(setting('vp_acc_log').map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
 };
 const CHANGELOG = [
+['3.9.9', '25 ноября 2026', [
+['Лента', 'Прокрутка плавнее, полоса прокрутки и новая кнопка «наверх»', [
+'Прокрутка заметно плавнее: подгрузка новых постов меньше тормозит страницу',
+'Полоса прокрутки между лентой и правой панелью, когда обычная спрятана из-за Мику и Тето',
+'Кнопка «наверх» стала меньше и стоит внизу по центру ленты',
+'Она выезжает, когда листаешь вверх, и прячется, когда листаешь вниз',
+'Кнопка «наверх» докручивает до самого начала',
+'Свечение под видео больше не выходит за карточку поста'
+]],
+['Листание вкладок', 'Меньше подвисаний при переходе по меню, особенно когда лента сильно прогружена'],
+['Посты', 'Правки открытого черновика сохраняются в нём же, копия «Недописанный пост» не появляется'],
+['Звонки', 'С выключенным микрофоном карточка звонка больше не светится зелёным'],
+['Игры', 'Песочница идёт с одной скоростью на любом экране: раньше на 120–240 Гц всё происходило в разы быстрее'],
+['Оформление и фон', 'Фон всегда рисуется на частоте экрана и не переходит на половину кадров'],
+['ИТД', 'Исправлено: лента могла падать до 30 кадров, когда масштаб экрана дробный']
+]],
 ['3.9.8.3', '25 ноября 2026', [
 ['Сообщения', 'Неотправленное можно удалить, отправка не зависит от паузы сайта, «Проверить ещё раз»', [
 'У неотправленного сообщения две кнопки: «Повторить» и «Удалить»; удалить можно и через меню сообщения',
@@ -10940,7 +10956,6 @@ return r;
 };
 let res = await call(await getAccessToken());
 if (res.status === 401) res = await call(await getAccessToken(true));
-if (pkey && res.headers && res.headers.get('X-RateLimit-Limit')) netLimits[pkey] = res.headers.get('X-RateLimit-Limit') + '/' + (res.headers.get('X-RateLimit-Remaining') || '?');
 apiPause(res, pkey);
 if (opts.method && opts.method !== 'GET' && opts.method !== 'POST' && /\/comments/.test(path)) try { if (msgNet.cache && !pulseOwn(path)) msgNet.cache.dirty = true; } catch (e) { }
 return res;
@@ -11111,12 +11126,6 @@ serviceCommentsPut(postId, { id: c.id, content, author: c.author && c.author.id 
 function loadVerificationComments(maxAge) {
 return serviceComments(VERIFICATION_POST_ID, { maxAge: maxAge === true ? -1 : typeof maxAge === 'number' ? maxAge : VERIFY_READ_AGE });
 }
-pageWindow.itdvp.verify = async name => {
-const n = String(name || '').replace(/^@/, '').toLowerCase(), all = readVerified(), k = Object.keys(all).find(x => x.toLowerCase() === n), info = k ? all[k] : null;
-if (!info || !info.id) return { ник: n, код_мода_найден: false };
-const lists = parseAllOwnerLists(await loadVerificationComments(true)), id = String(info.id).toLowerCase(), t = verifyTimeline(info.id, lists, Date.now()), d = x => x ? new Date(x * 1000).toLocaleString('ru-RU') : '';
-return { ник: k, id, состояние: t.state, в_подтверждённых: lists.approved.has(id), метка_снятия: lists.revoked.has(id), SEEN: d(lists.seen.get(id)), отказ_до: d(lists.cooldown.get(id)), запрос_R: d(lists.request && lists.request.get(id)), комментарий_кода: info.commentId || '' };
-};
 function verifiedInfo(name) {
 try {
 const all = readVerified();
@@ -11240,18 +11249,27 @@ return false;
 const styleScrollTop = addCss(`
         .itd-scroll-top-btn {
             position: fixed !important; bottom: 16px !important; right: 16px !important;
-            width: 64px !important; height: 64px !important;
+            width: 43px !important; height: 43px !important;
             display: flex !important; align-items: center !important; justify-content: center !important;
             background: var(--glass-bg) !important;
             -webkit-backdrop-filter: blur(16px) !important; backdrop-filter: blur(16px) !important;
-            border: none !important; border-radius: 32px !important; cursor: pointer !important;
+            border: none !important; border-radius: 22px !important; cursor: pointer !important;
             pointer-events: auto !important; color: var(--text-primary) !important;
             box-shadow: var(--shadow-elevated) !important;
-            transition: opacity 0.2s ease, visibility 0.2s ease !important;
+            transition: transform 0.35s cubic-bezier(.2, .8, .2, 1), opacity 0.25s ease, visibility 0s linear 0.35s !important;
             margin: 0 !important; padding: 0 !important;
             opacity: 0 !important; visibility: hidden !important;
+            transform: translateY(calc(100% + 24px)) !important;
         }
-        .itd-scroll-top-btn.vp-shown { opacity: 1 !important; visibility: visible !important; }
+        .itd-scroll-top-btn svg { width: 16px !important; height: 16px !important; }
+        .itd-scroll-top-btn.vp-shown { opacity: 1 !important; visibility: visible !important; transform: translateY(0) !important; transition: transform 0.35s cubic-bezier(.2, .8, .2, 1), opacity 0.25s ease, visibility 0s !important; }
+        @media (hover: hover) {
+            .itd-scroll-top-btn.vp-shown:hover { transform: translateY(-3px) scale(1.1) !important; color: var(--vp-accent, var(--text-primary)) !important; box-shadow: var(--shadow-elevated), 0 0 0 1px color-mix(in srgb, var(--vp-accent, #fff) 55%, transparent), 0 6px 18px color-mix(in srgb, var(--vp-accent, #000) 35%, transparent) !important; }
+        }
+        .itd-scroll-top-btn.vp-shown:active { transform: translateY(0) scale(0.94) !important; transition-duration: 0.1s !important; }
+        @media (min-width: ${PHONE_MAX + 1}px) {
+            .itd-scroll-top-btn { left: var(--vp-up-x, 50%) !important; right: auto !important; translate: -50% 0; }
+        }
         .itd-scroll-top-btn::before {
             content: "";
             position: absolute;
@@ -11265,7 +11283,8 @@ const styleScrollTop = addCss(`
             pointer-events: none;
         }
         @media (max-width: ${PHONE_MAX}px) {
-            .itd-scroll-top-btn { z-index: 1 !important; bottom: 100px !important; }
+            .itd-scroll-top-btn { z-index: 1 !important; bottom: 100px !important; transform: translateY(calc(100% + 124px)) !important; }
+            .itd-scroll-top-btn.vp-shown { transform: translateY(0) !important; }
             html.vp-has-up, html.vp-has-up body { overscroll-behavior: none !important; }
             html.vp-has-up ::-webkit-scrollbar { display: none !important; }
             html.vp-has-up .vp-nick-large { display: flex; flex-direction: column; align-items: center; gap: 4px; }
@@ -11273,16 +11292,41 @@ const styleScrollTop = addCss(`
         }
     `);
 
-let scrollTopButton = null;
+let scrollTopButton = null, upAnim = 0;
+function scrollToTop() {
+const y0 = scrollY;
+if (y0 <= 0) return;
+cancelAnimationFrame(upAnim);
+if (matchMedia('(prefers-reduced-motion: reduce)').matches) { scrollTo({ top: 0, behavior: 'instant' }); return; }
+holdPause = true;
+const dur = Math.min(900, 350 + y0 / 8), t0 = performance.now(), evs = ['wheel', 'touchstart', 'keydown', 'pointerdown'];
+const finish = () => { cancelAnimationFrame(upAnim); holdPause = false; evs.forEach(n => removeEventListener(n, finish, true)); };
+evs.forEach(n => addEventListener(n, finish, { capture: true, passive: true }));
+const step = now => {
+const k = Math.min(1, (now - t0) / dur);
+scrollTo({ top: Math.round(y0 * Math.pow(1 - k, 3)), behavior: 'instant' });
+if (k < 1) { upAnim = requestAnimationFrame(step); return; }
+upAnim = requestAnimationFrame(() => { if (scrollY > 0) scrollTo({ top: 0, behavior: 'instant' }); upAnim = requestAnimationFrame(() => { if (scrollY > 0) scrollTo({ top: 0, behavior: 'instant' }); finish(); }); });
+};
+upAnim = requestAnimationFrame(step);
+}
 function createScrollTopButton() {
 if (scrollTopButton) return;
 scrollTopButton = document.createElement('button');
 scrollTopButton.className = 'itd-scroll-top-btn';
 scrollTopButton.innerHTML = ICONS.SCROLL_TOP;
-scrollTopButton.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+scrollTopButton.onclick = scrollToTop;
 document.body.appendChild(scrollTopButton);
 document.documentElement.classList.add('vp-has-up');
-const toggle = () => scrollTopButton.classList.toggle('vp-shown', window.scrollY > 300);
+let upLastY = scrollY, upAcc = 0, upOn = false;
+const toggle = () => {
+const y = scrollY, d = y - upLastY;
+upLastY = y;
+if (performance.now() - holdMoved < 80) return;
+if (d < 0) upAcc = Math.min(upAcc - d, 2000); else if (d > 4) upAcc = 0;
+const on = y > 300 && upAcc >= 300;
+if (on !== upOn) { upOn = on; scrollTopButton.classList.toggle('vp-shown', on); }
+};
 window.addEventListener('scroll', toggle, { passive: true });
 toggle();
 placeNickWrapper();
@@ -11844,7 +11888,7 @@ scheduleAutoLike();
 } catch (e) { console.warn('[ITD VP] запуск мода', e); logErr('запуск мода', e); }
 }
 
-let perfLow = false, perfHigh = false;
+let perfLow = false;
 (function perfProbe() {
 if (navigator.webdriver) return;
 const cores = navigator.hardwareConcurrency || 4, mem = navigator.deviceMemory || 4;
@@ -11862,28 +11906,13 @@ if (lose) lose.loseContext();
 }
 } catch (e) { soft = true; }
 if (soft) { perfLow = true; document.documentElement.classList.add('vp-glass-lite'); }
-else perfHigh = cores >= 8 && !IS_PHONE;
 }, 1200);
 })();
-let lastFrame = 0, bestGap = 1000, slow = 0, halfRate = false, odd = false, halfSince = 0, retryMs = 15000, liftTries = 0;
+let lastFrame = 0;
 function frame(t) {
 requestAnimationFrame(frame);
-if (halfRate && t - halfSince > retryMs) {
-halfRate = false; slow = 0; retryMs = Math.min(retryMs * 2, 240000);
-if (perfHigh && !perfLow && liftTries < 2) { liftTries++; bestGap = 1000; document.documentElement.classList.remove('vp-glass-lite'); }
-}
-if (halfRate && (odd = !odd)) return;
 const gap = lastFrame ? t - lastFrame : 16.7;
 lastFrame = t;
-if (gap > 0 && gap < 100) {
-const base = halfRate ? gap / 2 : gap;
-bestGap = Math.min(bestGap, base);
-slow = base > bestGap * 1.7 ? slow + 1 : Math.max(0, slow - 2);
-if (!halfRate && slow > 45) {
-halfRate = true; halfSince = t; slow = 0;
-document.documentElement.classList.add('vp-glass-lite');
-}
-}
 const dt = Math.min(3, gap / 50);
 if (currentStyle === 'rainbow') { stepHue(dt); paint(); }
 bgFrame(dt);
@@ -13714,13 +13743,6 @@ clearTimeout(msgPumpT);
 const nx = msgOutGet().filter(x => x.st === 'send').map(x => x.next || 0);
 if (nx.length) msgPumpT = setTimeout(msgPump, Math.max(1500, Math.min(...nx) - Date.now()));
 }
-pageWindow.itdvp.msg = () => ({
-ты: myUsername || '', meData: !!meData, id: msgMyId(), ключ_открыт: !!msgNet.me, синхронизация_готова: !!msgNet.ready, ключей: msgNet.keys.size, томов: msgNet.vols.length,
-лимиты: netLimits, идёт_чтение: !!msgNet.syncing, насос_занят: msgPumpBusy, записей_в_очереди: msgWriteJobs.length, идёт_запись: msgWriteRun,
-паузы: Object.entries(pathPauses()).filter(([k, t]) => t > Date.now()).map(([k, t]) => k + ' ещё ' + Math.round((t - Date.now()) / 1000) + ' с'),
-очередь: msgOutGet().map(e => ({ ts: e.ts, состояние: e.st, попыток: e.tries, ждать_с: Math.round(((e.next || 0) - Date.now()) / 1000), ошибка: e.err || '' })),
-журнал: vpErrors.slice(-12)
-});
 document.addEventListener('vp-msg-synced', () => { msgPump(); });
 addEventListener('online', () => {
 const l = msgOutGet();
@@ -15754,13 +15776,17 @@ const text = trayText(comp);
 trayS.text = text;
 trayS.html = trayHtml(comp);
 try {
-if (!trayS.owned) {
+if (trayS.loaded) {
+if (text.trim() || trayS.items.length) await draftPut({ id: trayS.loaded, text, html: trayS.html, files: draftFiles() });
+} else if (!trayS.owned) {
 trayS.owned = true;
 const old = await draftGet('auto');
 if (old && (text.trim() || trayS.items.length)) await draftTx('readwrite', st => st.put({ ...old, id: 'd' + Date.now() }));
 }
+if (!trayS.loaded) {
 if (!text.trim() && !trayS.items.length) await draftDel('auto');
 else await draftPut({ id: 'auto', text, html: trayS.html, files: draftFiles() });
+}
 } catch (e) { }
 draftBadge();
 }
@@ -15925,7 +15951,7 @@ const comp = trayComposer();
 if (!comp) return;
 const text = trayText(comp);
 if (!text.trim() && !trayS.items.length) return;
-try { await draftPut({ id: 'd' + Date.now(), text, html: trayHtml(comp), files: draftFiles() }); } catch (e) { vpNote('Не получилось сохранить черновик'); return; }
+try { await draftPut({ id: trayS.loaded || 'd' + Date.now(), text, html: trayHtml(comp), files: draftFiles() }); } catch (e) { vpNote('Не получилось сохранить черновик'); return; }
 trayClear();
 trayS.loaded = null;
 trayS.dirty = false;
@@ -15962,7 +15988,7 @@ peEl('div', 'vp-dr-when', { text: (d.id === 'auto' ? 'Недописанный �
 ]),
 peEl('div', 'vp-dr-act', null, [
 peEl('button', 'vp-dr-open', { type: 'button', text: 'Открыть', on: { click: () => draftLoad(d) } }),
-peEl('button', 'vp-dr-del', { type: 'button', html: traySvg, title: 'Удалить', on: { click: async () => { await draftDel(d.id); draftOpen(btn); draftBadge(); } } })
+peEl('button', 'vp-dr-del', { type: 'button', html: traySvg, title: 'Удалить', on: { click: async () => { if (trayS.loaded === d.id) trayS.loaded = null; await draftDel(d.id); draftOpen(btn); draftBadge(); } } })
 ])
 ]);
 box.appendChild(row);
@@ -19539,7 +19565,8 @@ albumFit(c);
 albumCount(c);
 });
 });
-const notifRO = typeof ResizeObserver === 'function' ? new ResizeObserver(es => es.forEach(e => notifAva(e.target._vpNotif))) : null;
+const notifRO = typeof ResizeObserver === 'function' ? new ResizeObserver(es => notifAvaAll(es.map(e => e.target._vpNotif))) : null;
+function notifAvaAll(list) { list.map(notifAva).forEach(w => w && w()); }
 function notifAva(n) {
 const link = n && n._vpAvaLink, col = link && link.nextElementSibling;
 if (!col || !link.isConnected) return;
@@ -19547,9 +19574,10 @@ const kids = col.children, upto = kids.length > 2 ? kids[kids.length - 2] : kids
 const ur = upto && upto.getBoundingClientRect(), lh = upto ? parseFloat(getComputedStyle(upto).lineHeight) || ur.height : 0;
 const h = upto ? ur.top - col.getBoundingClientRect().top + Math.min(ur.height, lh) : col.getBoundingClientRect().height;
 const k = Math.max(1, Math.min(2.2, h / 40));
-if (Math.abs(k - (parseFloat(link.style.zoom) || 1)) > 0.01) { link.style.zoom = k.toFixed(3); link.style.setProperty('--vp-nz', (1 / k).toFixed(4)); }
+if (Math.abs(k - (parseFloat(link.style.zoom) || 1)) > 0.01) return () => { link.style.zoom = k.toFixed(3); link.style.setProperty('--vp-nz', (1 / k).toFixed(4)); };
 }
 onDom(function notifAvatars() {
+const fresh = [];
 document.querySelectorAll('.vp-notif:not([data-vp-na])').forEach(n => {
 const av = n.querySelector('.vp-avatar'), link = av && av.parentElement;
 if (!link || !link.nextElementSibling) return;
@@ -19558,8 +19586,9 @@ n._vpAvaLink = link;
 const col = link.nextElementSibling;
 col._vpNotif = n;
 if (notifRO) notifRO.observe(col);
-notifAva(n);
+fresh.push(n);
 });
+notifAvaAll(fresh);
 });
 onDom(function capturedLabel() {
 document.querySelectorAll('footer > div:last-child > span:first-child:not([data-vp-cap])').forEach(g => {
@@ -19578,7 +19607,7 @@ const postDesignStyle = addCss(`
             --vp-ink: var(--text-primary, #fff);
             border-radius: var(--vp-card-r) !important;
             margin-bottom: var(--vp-post-gap) !important;
-            transition: all 0.25s ease !important;
+            transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, color 0.25s ease, transform 0.25s ease, opacity 0.25s ease !important;
             position: relative;
             border: none !important;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2) !important;
@@ -19718,7 +19747,7 @@ const postDesignStyle = addCss(`
             background: none !important; padding-left: 0 !important; padding-right: 0 !important; margin: 4px 0 !important;
         }
         .vp-post-action {
-            transition: all 0.2s ease !important;
+            transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease, filter 0.2s ease !important;
             border-radius: 40px !important;
             padding: 6px 10px !important;
         }
@@ -19740,7 +19769,7 @@ const postDesignStyle = addCss(`
         a[href*="/hashtag/"], a[href*="/tag/"], a:not([href^="/@"]):not([href*="/@"]):not([href^="#"]) {
             font-weight: 600 !important;
             text-decoration: none !important;
-            transition: all 0.15s ease !important;
+            transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, text-decoration-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease, filter 0.15s ease !important;
         }
         a[href*="/hashtag/"]:hover, a[href*="/tag/"]:hover, a:not([href^="/@"]):not([href*="/@"]):not([href^="#"]):hover {
             filter: brightness(1.25) !important;
@@ -19918,33 +19947,34 @@ const styleIcons = addCss(`
 
 const blurCards = new Map();
 const blurRO = new ResizeObserver(entries => {
-const todo = new Set(entries.map(e => blurCards.has(e.target) ? e.target : e.target._vpBlurCard));
-todo.forEach(card => card && placeBlur(card));
+placeBlur(new Set(entries.map(e => blurCards.has(e.target) ? e.target : e.target._vpBlurCard).filter(Boolean)));
 });
 // Обрезка размытого фона берёт углы самой карточки; перечитывается, когда углы меняются (сайт и мод ставят их в разное время, плюс transition)
-function blurClip(card) {
+function blurClipRead(card) {
 const box = card.querySelector(':scope > .itd-blur-container');
-if (!box) return;
+if (!box) return null;
 const cs = getComputedStyle(card);
 const v = `inset(0 round ${cs.borderTopLeftRadius} ${cs.borderTopRightRadius} ${cs.borderBottomRightRadius} ${cs.borderBottomLeftRadius})`;
-if (box.style.clipPath !== v) box.style.clipPath = v;
+return () => { if (box.style.clipPath !== v) box.style.clipPath = v; };
 }
+function blurClip(cards) { [...cards].map(blurClipRead).forEach(w => w && w()); }
 document.addEventListener('transitionend', e => {
-if (/radius/.test(e.propertyName) && e.target.classList && e.target.classList.contains('itd-blur-active')) blurClip(e.target);
+if (/radius/.test(e.propertyName) && e.target.classList && e.target.classList.contains('itd-blur-active')) blurClip([e.target]);
 }, true);
-function placeBlur(card) {
+function blurPlaceRead(card) {
 const b = blurCards.get(card);
-if (!b) return;
-blurClip(card);
-if (!b.img.isConnected || !card.isConnected) { b.img._vpBlurDone = null; dropBlur(card); return; }
+if (!b) return null;
+const clip = blurClipRead(card);
+if (!b.img.isConnected || !card.isConnected) return () => { if (clip) clip(); b.img._vpBlurDone = null; dropBlur(card); };
 const ar = card.getBoundingClientRect(), ir = b.img.getBoundingClientRect();
-if (!ar.width || !ir.width) return;
-const k = card.offsetWidth / ar.width;
-Object.assign(b.layer.style, {
+if (!ar.width || !ir.width) return clip;
+const k = card.offsetWidth / ar.width, at = {
 left: ((ir.left - ar.left) * k - card.clientLeft) + 'px', top: ((ir.top - ar.top) * k - card.clientTop) + 'px',
 width: ir.width * k + 'px', height: ir.height * k + 'px'
-});
+};
+return () => { if (clip) clip(); Object.assign(b.layer.style, at); };
 }
+function placeBlur(cards) { [...cards].map(blurPlaceRead).forEach(w => w && w()); }
 function dropBlur(card) {
 const b = blurCards.get(card);
 if (b) { blurRO.unobserve(b.img); blurRO.unobserve(card); blurCards.delete(card); }
@@ -19953,11 +19983,11 @@ card.classList.remove('itd-blur-active', 'vp-blur-rel');
 const c = card.querySelector(':scope > .itd-blur-container');
 if (c) c.remove();
 }
-function buildBlur(card, img) {
+function buildBlur(card, img, still) {
 const old = blurCards.get(card);
 if (old) { blurRO.unobserve(old.img); blurRO.unobserve(card); }
 card.setAttribute('data-blur-bg', img.src);
-if (getComputedStyle(card).position === 'static') card.classList.add('vp-blur-rel');
+if (still) card.classList.add('vp-blur-rel');
 card.classList.add('itd-blur-active');
 let box = card.querySelector(':scope > .itd-blur-container');
 if (!box) {
@@ -19966,15 +19996,12 @@ box.className = 'itd-blur-container';
 box.innerHTML = '<div class="vp-blur-img"></div><div class="vp-blur-dim"></div>';
 card.insertBefore(box, card.firstChild);
 }
-blurClip(card);
-setTimeout(() => blurClip(card), 400);
 const layer = box.firstChild;
 layer.style.backgroundImage = `url("${img.src}")`;
 blurCards.set(card, { img, layer });
 img._vpBlurCard = card;
 blurRO.observe(img);
 blurRO.observe(card);
-placeBlur(card);
 }
 function addBlurBackground() {
 const cards = new Set();
@@ -19990,11 +20017,13 @@ if (!pending) img._vpBlurDone = img.src;
 document.querySelectorAll('[data-blur-bg]').forEach(card => {
 if (!card.querySelector('img.' + SELECTORS.postMedia)) dropBlur(card);
 });
-cards.forEach(card => {
-const img = card.querySelector('img.' + SELECTORS.postMedia);
-if (!img || !img.src || img.src.includes('avatar')) return;
-buildBlur(card, img);
-});
+const todo = [...cards].map(card => ({ card, img: card.querySelector('img.' + SELECTORS.postMedia), still: false })).filter(t => t.img && t.img.src && !t.img.src.includes('avatar'));
+if (!todo.length) return;
+todo.forEach(t => { t.still = getComputedStyle(t.card).position === 'static'; });
+todo.forEach(t => buildBlur(t.card, t.img, t.still));
+const built = todo.map(t => t.card);
+placeBlur(built);
+setTimeout(() => blurClip(built), 400);
 }
 
 const styleBlurPosts = addCss(`
@@ -20405,7 +20434,7 @@ addEventListener('popstate', markActiveNav);
 const tabSlide = (() => {
 const MS = 560, PHONE_MS = 400, EASE = 'cubic-bezier(.25, .8, .25, 1)', MAX_WAIT = 900, SETTLE = 90;
 addCss(`
-            html.vp-sw .${SELECTORS.sidebar} ~ :not(aside):not(.vp-sw-stage), html.vp-sw [data-vp-sw] { visibility: hidden !important; }
+            html.vp-sw [data-vp-sw] { opacity: 0 !important; }
             html.vp-sw .vp-msgs.vp-open, html.vp-sw .vp-gal { animation-duration: 1ms !important; }
             html.vp-sw .vp-msgs, html.vp-sw .vp-gal-card { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
             html.vp-sw-pin aside.${SELECTORS.sidebar} { left: var(--vp-pin-side) !important; }
@@ -20551,7 +20580,12 @@ wrap.appendChild(copy);
 wrap._sc = copy._sc;
 return wrap;
 };
-const unpin = () => document.documentElement.classList.remove('vp-sw-pin');
+let pinned = [];
+const unpin = () => {
+document.documentElement.classList.remove('vp-sw-pin');
+pinned.forEach(e => ['--vp-pin-side', '--vp-pin-rail', '--vp-pin-railw'].forEach(k => e.style.removeProperty(k)));
+pinned = [];
+};
 let cur = null;
 const end = () => {
 if (!cur) return;
@@ -20652,15 +20686,21 @@ const host = document.querySelector('aside.' + SELECTORS.sidebar);
 const pre = panels();
 if (mode !== 'lead' && scene.kind === 'route') {
 const root = document.documentElement;
-if (pre.side) root.style.setProperty('--vp-pin-side', pre.sl + 'px');
-if (pre.rail) { root.style.setProperty('--vp-pin-rail', pre.rl + 'px'); root.style.setProperty('--vp-pin-railw', pre.rw + 'px'); }
+if (pre.side) { pre.side.style.setProperty('--vp-pin-side', pre.sl + 'px'); pinned.push(pre.side); }
+if (pre.rail) { pre.rail.style.setProperty('--vp-pin-rail', pre.rl + 'px'); pre.rail.style.setProperty('--vp-pin-railw', pre.rw + 'px'); pinned.push(pre.rail); }
 root.classList.add('vp-sw-pin');
 }
 document.documentElement.classList.add('vp-sw');
 const t0 = performance.now(), path = location.pathname + location.search;
 let last = t0;
 const c = cur = { stage, ghost, down, pre, anims: [], raf: 0, guard: setTimeout(end, 4000), ov: scene.kind !== 'route', t0, phone: phone(), w: innerWidth };
-const hideLive = () => { if (!c.phone) return; const ce = centerOf(); if (ce && !ce.hasAttribute('data-vp-sw')) ce.setAttribute('data-vp-sw', ''); };
+const hideLive = () => {
+const ce = centerOf();
+if (ce && !ce.hasAttribute('data-vp-sw')) ce.setAttribute('data-vp-sw', '');
+if (c.phone) return;
+const host = document.querySelector('aside.' + SELECTORS.sidebar), box = host && host.parentElement;
+if (box) for (const s of box.children) if (s !== host && !s.classList.contains('vp-sw-stage') && !s.hasAttribute('data-vp-sw')) s.setAttribute('data-vp-sw', '');
+};
 hideLive();
 if (mode === 'lead') return c;
 c.glide = scene.kind !== 'route';
@@ -21398,7 +21438,8 @@ if (!a || !v.isConnected || v.readyState < 2) return;
 const vr = v.getBoundingClientRect(), hr = a.host.getBoundingClientRect(), pad = 26;
 Object.assign(a.cv.style, {
 left: (vr.left - hr.left - pad) + 'px', top: (vr.top - hr.top - pad) + 'px',
-width: (vr.width + pad * 2) + 'px', height: (vr.height + pad * 2) + 'px'
+width: (vr.width + pad * 2) + 'px', height: (vr.height + pad * 2) + 'px',
+clipPath: `inset(${(hr.top - vr.top + pad).toFixed(1)}px ${(vr.right + pad - hr.right).toFixed(1)}px ${(vr.bottom + pad - hr.bottom).toFixed(1)}px ${(hr.left - vr.left + pad).toFixed(1)}px round var(--vp-card-r, 24px))`
 });
 a.g.globalAlpha = a.cv.classList.contains('vp-on') ? .2 : 1;
 try { a.g.drawImage(v, 0, 0, 48, 27); a.cv.classList.add('vp-on'); } catch (e) { }
@@ -21438,74 +21479,43 @@ tabObs.observe(ind, { attributes: true, attributeFilter: ['style'], attributeOld
 });
 });
 
-let holdEl = null, holdTop = 0, holdQueued = false;
+(function slotRectFix() {
+const proto = pageWindow.Element && pageWindow.Element.prototype, native = proto && proto.getBoundingClientRect;
+if (!native || native.__vpSlot) return;
+const Rect = pageWindow.DOMRect;
+const patched = function getBoundingClientRect() {
+const r = native.call(this), st = this.style;
+if (!st || !st.transform || st.transform.indexOf('translateY') !== 0) return r;
+const h = Math.floor(r.height * 64 + 1e-4) / 64;
+return h === r.height ? r : new Rect(r.x, r.y, r.width, h);
+};
+patched.__vpSlot = true;
+proto.getBoundingClientRect = patched;
+})();
+var holdMoved = 0;
+let holdEl = null, holdTop = 0, holdQueued = false, holdPause = false;
 function holdPick() {
-for (const s of document.querySelectorAll('.vp-post-slot')) {
-if (s.closest('article')) continue;
-const r = s.getBoundingClientRect();
-if (r.height > 0 && r.bottom > 1) { holdEl = s; holdTop = r.top + scrollY; return; }
+const list = [...document.querySelectorAll('.vp-post-slot')].filter(s => !s.closest('article'));
+let lo = 0, hi = list.length;
+while (lo < hi) {
+const mid = (lo + hi) >> 1;
+if (list[mid].getBoundingClientRect().bottom > 1) hi = mid; else lo = mid + 1;
+}
+for (let i = lo; i < list.length; i++) {
+const r = list[i].getBoundingClientRect();
+if (r.height > 0 && r.bottom > 1) { holdEl = list[i]; holdTop = r.top + scrollY; return; }
 }
 holdEl = null;
 }
 function holdKeep() {
-if (feedJob || document.hidden) { holdEl = null; return; }
+if (feedJob || document.hidden || holdPause) { holdEl = null; return; }
 if (!holdEl || !holdEl.isConnected) { holdPick(); return; }
 const top = holdEl.getBoundingClientRect().top + scrollY, d = top - holdTop;
 holdTop = top;
-if (Math.abs(d) > 0.5 && Math.abs(d) < 3000) scrollBy({ top: d, behavior: 'instant' });
-}
-const loopW = { hits: [], y0: 0, snaps: null, quiet: 0 };
-let loopUid = 0;
-function loopLabel(e) {
-const cls = String(e.className && e.className.baseVal !== undefined ? e.className.baseVal : e.className).split(/\s+/).filter(Boolean).slice(0, 3).join('.');
-let mod = '';
-for (let n = e; n && n !== document.body; n = n.parentElement) { if (/(^|\s)vp-/.test(String(n.className && n.className.baseVal !== undefined ? n.className.baseVal : n.className))) { mod = n === e ? '' : ' (внутри ' + String(n.className).split(/\s+/).find(c => c.startsWith('vp-')) + ')'; break; } }
-return e.tagName.toLowerCase() + (cls ? '.' + cls : '') + mod + ' «' + (e.children.length ? '' : (e.textContent || '').trim().slice(0, 16)) + '»';
-}
-function loopSnap() {
-const snap = new Map();
-for (const s of document.querySelectorAll('.vp-post-slot')) {
-if (s.closest('article')) continue;
-for (const e of [s, ...s.querySelectorAll('*')]) {
-const h = e.getBoundingClientRect().height;
-if (h < 1 && e !== s) continue;
-if (!e._vpLw) e._vpLw = ++loopUid;
-snap.set(e._vpLw, [h, e]);
-}
-}
-return snap;
-}
-function loopReport() {
-const sn = loopW.snaps, ids = new Set();
-sn.forEach(m => m.forEach((v, k) => ids.add(k)));
-const rows = [];
-ids.forEach(k => {
-const series = sn.map(m => m.has(k) ? m.get(k)[0] : null), el = (sn.find(m => m.has(k)) || new Map()).get(k)[1];
-const vals = series.filter(v => v !== null), dist = new Set(vals.map(v => Math.round(v * 10))).size;
-if (dist > 1 || series.some(v => v === null)) rows.push({ k, el, series, dist, miss: series.filter(v => v === null).length });
-});
-rows.sort((a, b) => (b.miss + b.dist) - (a.miss + a.dist));
-const lines = rows.slice(0, 14).map(r => loopLabel(r.el) + ': ' + r.series.map(v => v === null ? '–' : v.toFixed(1)).join(' '));
-const text = 'кадров ' + sn.length + ', меняются: ' + rows.length + '\n' + lines.join('\n');
-try { console.warn('[ITD VP] посты в ленте дёргаются без остановки (петля пересчёта высот)\n' + text); } catch (e) { }
-try { logErr('петля высот', text.split('\n')[1] || text); } catch (e) { }
-window.__vpLoop = text;
-}
-function loopNote() {
-const now = performance.now(), h = loopW.hits;
-if (loopW.snaps) {
-loopW.snaps.push(loopSnap());
-if (loopW.snaps.length >= 8) { try { loopReport(); } catch (e) { } loopW.snaps = null; loopW.quiet = now + 60000; h.length = 0; }
-return;
-}
-if (now < loopW.quiet) return;
-if (!h.length) loopW.y0 = scrollY;
-h.push(now);
-while (h.length && now - h[0] > 3000) { h.shift(); if (h.length) loopW.y0 = scrollY; }
-if (h.length > 40 && Math.abs(scrollY - loopW.y0) < 2 && !document.hidden) loopW.snaps = [loopSnap()];
+if (Math.abs(d) > 0.5 && Math.abs(d) < 3000) { holdMoved = performance.now(); scrollBy({ top: d, behavior: 'instant' }); }
 }
 new MutationObserver(muts => {
-for (const m of muts) if (m.target.classList && m.target.classList.contains('vp-post-slot')) { loopNote(); return holdKeep(); }
+for (const m of muts) if (m.target.classList && m.target.classList.contains('vp-post-slot')) return holdKeep();
 }).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['style'] });
 addEventListener('scroll', () => {
 if (holdQueued) return;
@@ -22809,35 +22819,37 @@ const styleRefresh = addCss(`
         .vp-bump { animation: vp-bump .7s ease-out; display: inline-block; }
         @keyframes vp-bump { 30% { transform: scale(1.35); color: var(--accent-primary); } }
     `);
-function placeRefresh(b) {
+function placeRefreshRead(b) {
 const card = b.parentElement, menu = b._vpMenu;
-if (!card || !menu || !menu.isConnected) return;
+if (!card || !menu || !menu.isConnected) return null;
 const cr = card.getBoundingClientRect(), mr = menu.getBoundingClientRect();
-if (!mr.width) return;
+if (!mr.width) return null;
 const top = Math.round(mr.top - cr.top + (mr.height - 32) / 2) + 'px', right = Math.round(cr.right - mr.left + 2) + 'px';
-if (b.style.top !== top || b.style.right !== right) Object.assign(b.style, { position: 'absolute', zIndex: '2', top, right });
 const row = menu.parentElement && menu.parentElement.querySelector(':scope > .' + SELECTORS.nickRow);
-if (!row) return;
-const need = Math.max(0, Math.round(row.getBoundingClientRect().right - (cr.right - parseFloat(right) - b.offsetWidth) + 8)) + 'px';
-if (row.style.paddingRight !== need) row.style.paddingRight = need;
+const need = row ? Math.max(0, Math.round(row.getBoundingClientRect().right - (cr.right - parseFloat(right) - b.offsetWidth) + 8)) + 'px' : null;
+return () => {
+if (b.style.top !== top || b.style.right !== right) Object.assign(b.style, { position: 'absolute', zIndex: '2', top, right });
+if (row && row.style.paddingRight !== need) row.style.paddingRight = need;
+};
 }
-addEventListener('resize', () => document.querySelectorAll('.vp-post-tools').forEach(placeRefresh));
+function placeRefresh(list) { [...list].map(placeRefreshRead).forEach(w => w && w()); }
+addEventListener('resize', () => placeRefresh(document.querySelectorAll('.vp-post-tools')));
 const postHeadRow = h => [...h.children].find(c => c.querySelector(PROFILE_LINK)) || h.firstElementChild;
 onDom(function postToolButtons() {
 if (!myUsername) return;
-document.querySelectorAll('.vp-post-tools').forEach(b => {
+const shown = [...document.querySelectorAll('.vp-post-tools')], added = new Map();
+shown.forEach(b => {
 if (b._vpMenu && !b._vpMenu.isConnected) {
 const h = b.parentElement && b.parentElement.querySelector('header'), row = h && postHeadRow(h);
 b._vpMenu = row && [...row.children].reverse().find(c => c.querySelector('svg') && !c.matches('.' + SELECTORS.nickRow + ', a, .vp-post-tools'));
 }
-placeRefresh(b);
 });
 const me = myUsername.toLowerCase();
 document.querySelectorAll('header').forEach(h => {
 const row = postHeadRow(h);
 if (!row) return;
 const card = h.closest('article') || h.closest('div:has(> footer)') || (h.parentElement && h.parentElement.closest('div:has(footer)'));
-if (!card || card.querySelector(':scope > .vp-post-tools') || !card.querySelector('footer') || card.closest('.vp-msgs, .vp-gal')) return;
+if (!card || added.has(card) || card.querySelector(':scope > .vp-post-tools') || !card.querySelector('footer') || card.closest('.vp-msgs, .vp-gal')) return;
 const link = h.querySelector(PROFILE_LINK) || card.querySelector(PROFILE_LINK);
 const user = link && loginOf(link.getAttribute('href'));
 if (!user) return;
@@ -22846,6 +22858,7 @@ const id = menu && postIdOf(card);
 if (!id) return;
 const box = document.createElement('div');
 box.className = 'vp-post-tools';
+box.style.cssText = 'position:absolute;z-index:2';
 const tool = (cls, title, html) => {
 const b = document.createElement('button');
 b.type = 'button';
@@ -22877,11 +22890,13 @@ b._vpT = setTimeout(() => { b.innerHTML = icon(act); b.title = title; }, 1400);
 });
 };
 copyTool('link', 'Скопировать ссылку', () => copyText(`${location.origin}/@${user}/post/${id}`));
-if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
 box._vpMenu = menu;
-card.appendChild(box);
-placeRefresh(box);
+added.set(card, box);
 });
+const loose = [...added.keys()].filter(card => getComputedStyle(card).position === 'static');
+loose.forEach(card => { card.style.position = 'relative'; });
+added.forEach((box, card) => card.appendChild(box));
+placeRefresh([...shown, ...added.values()]);
 });
 
 const TOAST_MS = 7000;
@@ -24229,6 +24244,77 @@ sched.add('statsLikes', () => { if (statsOnScreen) return statsLikesRefresh(); }
 renderStats();
 loadStats();
 
+const psbEl = document.createElement('div');
+psbEl.className = 'vp-psb';
+psbEl.innerHTML = '<div class="vp-psb-t"></div>';
+const psbThumb = psbEl.firstChild;
+addCss(`
+        .vp-psb { position: fixed; top: ${RAIL_TOP}px; bottom: 24px; width: 14px; z-index: 40; display: none; touch-action: none; user-select: none; }
+        .vp-psb.vp-on { display: block; }
+        .vp-psb::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 4px; margin-left: -2px; border-radius: 4px; background: rgba(127, 127, 127, .14); }
+        .vp-psb-t { position: absolute; left: 50%; top: 0; width: 6px; margin-left: -3px; border-radius: 6px; background: color-mix(in srgb, var(--vp-accent, #fff) 55%, transparent); transition: width .15s ease, margin-left .15s ease, background .15s ease; }
+        .vp-psb:hover .vp-psb-t, .vp-psb.vp-drag .vp-psb-t { width: 10px; margin-left: -5px; background: color-mix(in srgb, var(--vp-accent, #fff) 80%, transparent); }
+        `);
+let psbX = null, psbRaf = 0, psbDrag = null, psbLen = 0, psbRange = 0, psbLast = 0, psbT = 0;
+function psbWanted() {
+const cl = document.documentElement.classList;
+return cl.contains('vp-pals-r') && innerWidth > PHONE_MAX && !cl.contains('vp-gal-open') && !cl.contains('vp-msgs-open');
+}
+function psbPlace() {
+const wide = innerWidth > PHONE_MAX, cb = wide ? contentBox() : null;
+psbX = cb && psbWanted() ? Math.min(innerWidth - 16, Math.round(cb.right + 12)) : null;
+if (cb) document.documentElement.style.setProperty('--vp-up-x', Math.round((cb.left + cb.right) / 2) + 'px');
+else document.documentElement.style.removeProperty('--vp-up-x');
+psbPaint();
+}
+function psbPaint() {
+psbRaf = 0;
+if (psbX == null && psbWanted() && performance.now() - psbLast > 1000) { psbLast = performance.now(); psbPlace(); return; }
+const de = document.documentElement, sh = de.scrollHeight, vh = innerHeight;
+if (psbX == null || !psbWanted() || sh <= vh + 8) {
+psbEl.classList.remove('vp-on');
+return;
+}
+if (!psbEl.isConnected) document.body.appendChild(psbEl);
+psbEl.classList.add('vp-on');
+psbEl.style.left = (psbX - 7) + 'px';
+const track = vh - RAIL_TOP - 24, len = Math.max(36, Math.round(track * vh / sh));
+psbLen = len;
+psbRange = Math.max(1, track - len);
+psbThumb.style.height = len + 'px';
+psbThumb.style.transform = 'translateY(' + Math.round(psbRange * Math.min(1, Math.max(0, de.scrollTop / (sh - vh)))) + 'px)';
+}
+const psbSoon = () => { if (!psbRaf) psbRaf = requestAnimationFrame(psbPaint); };
+addEventListener('scroll', psbSoon, { passive: true });
+onResize(psbPlace);
+document.addEventListener('vp-loc', () => { psbPlace(); [300, 900, 2000].forEach(t => setTimeout(psbPlace, t)); });
+new ResizeObserver(() => {
+psbSoon();
+if (!psbT) psbT = setTimeout(() => { psbT = 0; psbPlace(); }, 400);
+}).observe(document.documentElement);
+psbEl.addEventListener('pointerdown', e => {
+if (e.button) return;
+const de = document.documentElement;
+if (e.target === psbThumb) {
+psbDrag = { y: e.clientY, top: de.scrollTop };
+psbEl.classList.add('vp-drag');
+psbEl.setPointerCapture(e.pointerId);
+} else {
+const r = psbThumb.getBoundingClientRect();
+scrollBy({ top: (e.clientY < r.top ? -1 : 1) * innerHeight * 0.9, behavior: 'smooth' });
+}
+e.preventDefault();
+});
+psbEl.addEventListener('pointermove', e => {
+if (!psbDrag) return;
+const de = document.documentElement;
+scrollTo(0, psbDrag.top + (e.clientY - psbDrag.y) * (de.scrollHeight - innerHeight) / psbRange);
+});
+const psbEnd = () => { psbDrag = null; psbEl.classList.remove('vp-drag'); };
+psbEl.addEventListener('pointerup', psbEnd);
+psbEl.addEventListener('pointercancel', psbEnd);
+psbPlace();
+setTimeout(psbPlace, 1500);
 const PULSE_RE = /^ITDXB([12]) ([0-9a-z]{1,8})(?: ([\w-]{40,400}))?$/;
 const PULSE_BEAT = 4 * 60e3, PULSE_LIVE = 8 * 60e3, PULSE_IDLE = 5 * 60e3, PULSE_PAGES = 15, PULSE_WARM = 30000;
 let pulseShare = setting('pulseOn');
@@ -26198,17 +26284,24 @@ const up = () => { down = false; };
 cv.addEventListener('pointerup', up);
 cv.addEventListener('pointercancel', up);
 
-let on = true, raf = 0, lastScore = 0, fitted = false;
+let on = true, raf = 0, lastScore = 0, fitted = false, prev = 0, acc = 0;
+const TICK = 1000 / 60;
 function frame(now) {
 if (!on) return;
 raf = requestAnimationFrame(frame);
+const dt = prev ? Math.min(100, now - prev) : TICK;
+prev = now;
 if (!paused) {
+acc += dt;
+for (let n = 0; acc >= TICK - 1 && n < 4; n++, acc -= TICK) {
 if (down && mat !== SAND_HOLE) brush(ptX, ptY);
 const a = step(), b = step();
 if (a || b) dirty = true;
 }
+if (acc > TICK) acc = 0;
+}
 if (flash > 0) {
-flash = Math.max(0, flash - .045);
+flash = Math.max(0, flash - .045 * dt / TICK);
 cv.style.transform = flash > 0 ? 'translate(' + ((rnd() * 8 - 4) * flash).toFixed(1) + 'px,' + ((rnd() * 8 - 4) * flash).toFixed(1) + 'px)' : '';
 dirty = true;
 }
@@ -26556,6 +26649,8 @@ loadVerificationComments, checkAllComments, parseAllOwnerLists, readVerified, ve
 isApprovedAuthor, loadApprovedIds, parseLook, verCmp, lbComments, lbVoids, lbReplays, parseLB, lbBetter, repTag, lbIsVoid,
 playIntro, fakeCall, callCss, msgSync, msgMyId, msgSend, verifiedNames, verifiedInfo, fpsMeter, tagAll, onDom,
 lbReload: () => { lbLoad = null; if (gw.el) lbRender(); },
+setting, SETTING_DEFAULTS, SELECTORS,
+state: () => ({ username: myUsername || '', meData: !!meData, bg: effBg(), gl: bgGlShown, glFail: bgGlFail, pump: msgPumpBusy, jobs: msgWriteJobs.length, writing: msgWriteRun, pauses: pathPauses(), outbox: msgOutGet() }),
 look: () => ({ currentStyle, backgroundStyle, appIcon }),
 legacy: () => ({ adminFabPos: GM_getValue('adminFabPos', null), fabFace: GM_getValue('fabFace', ''), junkOk: GM_getValue('junkOk', []) })
 };
