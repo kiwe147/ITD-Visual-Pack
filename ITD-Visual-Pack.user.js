@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.9
+// @version      3.9.9.1
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4293,8 +4293,8 @@ const globalStyles = addCss(`
         }
         .vp-feed-bar .vp-tabs button { white-space: nowrap !important; }
         @media (max-width: ${PHONE_MAX}px) { [data-vp-posts] > hr { display: none !important; } }
-        .vp-emoji-tint .vp-soft-bg, .itd-blur-active .vp-soft-bg { background-color: rgba(0, 0, 0, .22) !important; }
-        html.vp-light .vp-emoji-tint .vp-soft-bg, html.vp-light .itd-blur-active .vp-soft-bg { background-color: rgba(255, 255, 255, .35) !important; }
+        .vp-emoji-tint .vp-soft-bg, .itd-blur-active .vp-soft-bg, .vp-repost:has(video).vp-soft-bg, .vp-repost:has(video) .vp-soft-bg { background-color: rgba(0, 0, 0, .22) !important; }
+        html.vp-light .vp-emoji-tint .vp-soft-bg, html.vp-light .itd-blur-active .vp-soft-bg, html.vp-light .vp-repost:has(video).vp-soft-bg, html.vp-light .vp-repost:has(video) .vp-soft-bg { background-color: rgba(255, 255, 255, .35) !important; }
         .vp-nick-row > a { min-width: 0; overflow: hidden; }
         .vp-nick-row .vp-nick:not(.vp-nick-large *) { min-width: 0; max-width: 100%; }
         .vp-nick:not(.vp-nick-large) :has(> .vp-nick-text) { display: inline-flex; align-items: center; gap: inherit; min-width: 0; }
@@ -9534,6 +9534,23 @@ console.table(Object.values(accSlots()).map(s => ({ ник: s.username, id: s.id
 console.table(setting('vp_acc_log').map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
 };
 const CHANGELOG = [
+['3.9.9.1', '25 ноября 2026', [
+['Сообщения', 'Стикеры и эмодзи в переписке, как в комментариях', [
+'Кнопка у поля сообщения открывает ту же панель: эмодзи и твои стикерпаки',
+'Стикер прикрепляется к сообщению и отправляется кнопкой отправки',
+'На телефоне кнопка «Поддержка» стала значком и не теснит заголовок'
+]],
+['Посты', 'Репост с видео: ровный текст, мягкий фон, свечение внутри карточки', [
+'У репоста с видео текст больше не прилипает к левому краю',
+'Фон такого репоста не чёрный, а полупрозрачный, как у остальных',
+'Свечение под видео не вылезает за карточку и не падает на правую панель'
+]],
+['ИТД', 'Комментарии: ветки не наезжают друг на друга, курсор не пропадает', [
+'Исправлено: поле ответа и раскрытые ответы наезжали на следующий комментарий',
+'Исправлено: если нажать «Ответить» на другой ответ, пропадал курсор и закрывалась клавиатура'
+]],
+['Комментарии', 'На телефоне под полем ответа больше нет серого прямоугольника']
+]],
 ['3.9.9', '25 ноября 2026', [
 ['Лента', 'Прокрутка плавнее, полоса прокрутки и новая кнопка «наверх»', [
 'Прокрутка заметно плавнее: подгрузка новых постов меньше тормозит страницу',
@@ -12061,6 +12078,7 @@ const stickerCss = panelWidth => `
             .vp-crop-cancel { background: transparent; border: 1px solid var(--border-color,rgba(255,255,255,0.3)); }
             .vp-crop-actions > .vp-crop-ok { background: #0080FF; border: none; color: white; }
         `;
+let stickerPanelFor = null;
 (function () {
 const K = {};
 K.uploadImageToServer = uploadImageToServer; K.updateTabButtons = updateTabButtons; K.rebuildPanel = rebuildPanel; K.createStickerButton = createStickerButton; K.showPanel = showPanel;
@@ -12199,9 +12217,12 @@ attached.send.click();
 }, true);
 
 K.stickerPanel = null, K.scrollContainer = null, K.tabsRow = null, K.recentBtn = null;
-let stickerBtn = null, hideTimeout = null;
+let stickerBtn = null, hideTimeout = null, host = null;
+const hosts = [], anchor = () => (host ? host.btn : stickerBtn);
+const panelOpen = () => !!K.stickerPanel && K.stickerPanel.classList.contains('vp-open');
 K.stickerButton = () => stickerBtn;
-K.refreshButton = () => { if (stickerBtn) stickerBtn.innerHTML = K.btnIcon(); };
+K.stickerHost = () => host;
+K.refreshButton = () => { for (const b of [stickerBtn, ...hosts.map(h => h.btn)]) if (b) b.innerHTML = K.btnIcon(); };
 K.editPack = null;
 
 let blockWheel = null;
@@ -12359,9 +12380,12 @@ const fallback = e => {
 if (e) { console.warn('[ITD VP] стикер через сайт', e); logErr('стикер через сайт', e); }
 try { insertStickerToComment(sticker); } catch (err) { console.warn('[ITD VP] стикер', err); logErr('стикер', err); }
 };
+if (host) host.sticker(sticker, () => stickerFile(sticker));
+else {
 if (stickerBtn) stickerBtn.innerHTML = ICONS.LOADING;
 attachAsSiteFile(sticker).then(ok => { if (!ok) fallback(); }, fallback)
 .finally(() => { if (stickerBtn) stickerBtn.innerHTML = K.btnIcon(); });
+}
 }
 K.stickerPanel.classList.remove('vp-open');
 K.exitEditMode();
@@ -12403,14 +12427,15 @@ K.tabsRow.querySelectorAll('.vp-sp-tab').forEach(t => t.classList.toggle('vp-on'
 }
 
 function placePanel() {
-if (!K.stickerPanel || !stickerBtn || !stickerBtn.isConnected) return;
-const rect = stickerBtn.getBoundingClientRect();
+const at = anchor();
+if (!K.stickerPanel || !at || !at.isConnected) return;
+const rect = at.getBoundingClientRect();
 K.stickerPanel.style.bottom = `${window.innerHeight - rect.top + 8}px`;
 K.stickerPanel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - K.PANEL_WIDTH - 20))}px`;
 }
 onResize(() => { if (K.stickerPanel && K.stickerPanel.classList.contains('vp-open')) placePanel(); });
 function showPanel() {
-if (!stickerBtn || !stickerBtn.isConnected) return;
+if (!anchor() || !anchor().isConnected) return;
 clearTimeout(hideTimeout);
 createStickerPanel();
 if (!K.scrollContainer.children.length) renderAllContent();
@@ -12433,13 +12458,38 @@ enablePageScroll();
 
 stickerPartCrop(K);
 
+stickerPanelFor = (btn, handlers) => {
+const own = Object.assign({ btn }, handlers), fine = matchMedia('(hover: hover) and (pointer: fine)').matches;
+hosts.push(own);
+btn.innerHTML = K.btnIcon();
+const open = () => { host = own; showPanel(); };
+if (fine) {
+btn.addEventListener('mouseenter', open);
+btn.addEventListener('mouseleave', () => hidePanel(300));
+}
+btn.addEventListener('click', e => {
+e.preventDefault();
+if (!fine && host === own && panelOpen()) hidePanel(0); else open();
+});
+};
+document.addEventListener('pointerdown', e => {
+if (host && panelOpen() && !K.stickerPanel.contains(e.target) && !host.btn.contains(e.target)) hidePanel(0);
+}, true);
+addEventListener('keydown', e => {
+if (e.key !== 'Escape' || !host || !panelOpen()) return;
+e.preventDefault();
+e.stopPropagation();
+hidePanel(0);
+}, true);
+onDom(function stickerHostGone() { if (host && panelOpen() && !host.btn.getClientRects().length) hidePanel(0); });
+
 onDom(function stickerButton() {
 const row = siteEl('stickerContainer');
 if (!row || row.querySelector('.sticker-btn')) return;
 const before = row.querySelector('.' + SELECTORS.stickerMicBtn) || row.querySelector('.' + SELECTORS.stickerSendBtn);
 if (!before) return;
 stickerBtn = el('button', 'sticker-btn', K.btnIcon());
-stickerBtn.onmouseenter = showPanel;
+stickerBtn.onmouseenter = () => { host = null; showPanel(); };
 stickerBtn.onmouseleave = () => hidePanel(300);
 row.insertBefore(stickerBtn, before);
 });
@@ -13070,6 +13120,11 @@ const row = btn && btn.closest('.' + SELECTORS.stickerContainer), box = row && r
 return (box && box.querySelector('[contenteditable="true"]')) || document.querySelector('[contenteditable="true"][data-placeholder*="комментарий"]');
 }
 function insertEmoji(ch) {
+const away = K.stickerHost();
+if (away) {
+if (away.emoji(ch) !== false) { emojiRemember(ch); fillRecent(); }
+return;
+}
 const field = targetField();
 if (!field) return;
 field.focus();
@@ -16568,7 +16623,6 @@ const MSG_CSS = `
         .vp-msgs-top { display: flex; align-items: center; gap: 10px; padding: 18px 16px 10px; }
         .vp-msgs-title { font-size: 24px; font-weight: 700; margin-right: auto; white-space: nowrap; min-width: 0; }
         @media (max-width: 440px) { .vp-msgs-title { font-size: 21px; } }
-        @media (max-width: 380px) { .vp-msgs-supbtn { width: 40px; padding: 0; justify-content: center; } .vp-msgs-supbtn span { display: none; } }
         .vp-msgs-ib { width: 40px; height: 40px; border-radius: 50%; border: 0; padding: 0; display: flex; align-items: center; justify-content: center;
             cursor: pointer; background: var(--block-bg); color: var(--text-primary, #fff); flex-shrink: 0; }
         .vp-msgs-ib:active { transform: scale(.94); }
@@ -16590,6 +16644,7 @@ const MSG_CSS = `
         .vp-msgs-supbtn:hover { background: color-mix(in srgb, var(--block-bg) 82%, var(--text-primary, #fff) 18%); }
         .vp-msgs-supbtn:active { transform: scale(.96); }
         .vp-msgs-supbtn svg { flex: none; stroke-width: 2.1; color: #ff5a5f; }
+        @media (max-width: 480px) { .vp-msgs-supbtn { width: 40px; padding: 0; justify-content: center; } .vp-msgs-supbtn span { display: none; } }
         .vp-msgs-ib svg { display: block; margin: 0; flex: none; }
         .vp-msgs-ib:focus { outline: none; }
         .vp-msgs-ib:focus-visible { outline: none; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text-primary, #fff) 45%, transparent); }
@@ -16766,6 +16821,7 @@ const MSG_CSS = `
         .vp-msgs-count.vp-warn { color: #ff5c5c; }
         .vp-msgs-ghost { width: 36px; height: 36px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
             background: transparent; color: var(--text-secondary); cursor: pointer; flex-shrink: 0; }
+        .vp-msgs-ghost.vp-msgs-emoji svg { width: 22px; height: 22px; }
         .vp-msgs-send { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;
             flex-shrink: 0; background: var(--vp-accent); color: var(--vp-on-accent, #fff); transition: opacity .15s, transform .15s; }
         .vp-msgs-send:disabled { opacity: .4; cursor: default; }
@@ -16914,104 +16970,8 @@ const EMOJI_SETS = [
 const EMOJI_RECENT_MAX = 24;
 const emojiRecent = () => { const r = GM_getValue(acctKey('vp_emoji_recent'), []); return Array.isArray(r) ? r : []; };
 function emojiRemember(e) { GM_setValue(acctKey('vp_emoji_recent'), [e, ...emojiRecent().filter(x => x !== e)].slice(0, EMOJI_RECENT_MAX)); }
-const vpEmojiCss = addCss(`
-        .vp-emoji { position: fixed; z-index: 2147483600; width: 280px; height: 380px; display: flex; flex-direction: column; border-radius: 18px; overflow: hidden;
-            background: var(--block-bg); color: var(--text-primary, #fff); box-shadow: 0 12px 40px rgba(0, 0, 0, .45), 0 0 0 1px var(--border-color, rgba(255, 255, 255, .08));
-            animation: vp-emoji-in .15s ease-out both; }
-        .vp-emoji.vp-closing { animation: vp-emoji-out .15s ease-in both; }
-        @keyframes vp-emoji-in { from { opacity: 0; transform: scale(.94); } }
-        @keyframes vp-emoji-out { to { opacity: 0; transform: scale(.94); } }
-        .vp-emoji-tabs { display: flex; gap: 2px; padding: 6px 6px 4px; border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, .08)); flex-shrink: 0; }
-        .vp-emoji-tabs button { flex: 1; min-width: 0; height: 30px; border: 0; padding: 0; border-radius: 8px; background: transparent; font-size: 17px; line-height: 1; cursor: pointer;
-            filter: grayscale(1); opacity: .6; transition: opacity .15s, filter .15s, background-color .15s; }
-        .vp-emoji-tabs button:hover, .vp-emoji-tabs button.vp-on { filter: none; opacity: 1; background: var(--block-hover-bg, rgba(255, 255, 255, .06)); }
-        .vp-emoji-body { flex: 1; overflow-y: auto; padding: 0 6px 8px; overscroll-behavior: contain; scrollbar-width: thin; }
-        .vp-emoji-sec b { display: block; position: sticky; top: 0; padding: 8px 4px 4px; font-size: 12px; font-weight: 600; color: var(--text-secondary);
-            background-color: var(--block-bg); z-index: 1; }
-        .vp-emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); }
-        .vp-emoji-grid button { aspect-ratio: 1; border: 0; padding: 0; border-radius: 8px; background: transparent; font-size: 22px; line-height: 1; cursor: pointer;
-            font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; transition: transform .1s, background-color .1s; }
-        .vp-emoji-grid button:hover { background: var(--block-hover-bg, rgba(255, 255, 255, .08)); transform: scale(1.15); }
-        .vp-emoji-empty { padding: 6px 4px; font-size: 12px; color: var(--text-secondary); }`);
-function attachEmojiPicker(btn, onPick) {
-let el = null, openT = 0, closeT = 0;
-const hover = matchMedia('(hover: hover) and (pointer: fine)').matches;
-const place = () => {
-const r = btn.getBoundingClientRect(), W = 280, H = 380, gap = 8;
-const top = innerHeight - r.bottom >= H + gap ? r.bottom + gap : Math.max(gap, r.top - H - gap);
-const left = innerWidth - r.left >= W || innerWidth - r.left > r.right ? Math.min(r.left, innerWidth - W - gap) : Math.max(gap, r.right - W);
-el.style.top = top + 'px';
-el.style.left = Math.max(gap, left) + 'px';
-el.style.transformOrigin = `${top < r.top ? 'bottom' : 'top'} ${left <= r.left ? 'left' : 'right'}`;
-};
-const outside = e => { if (el && !el.contains(e.target) && !btn.contains(e.target)) close(); };
-const onKey = e => { if (e.key === 'Escape' && el) { e.stopPropagation(); close(); } };
-function close() {
-clearTimeout(openT); clearTimeout(closeT);
-if (!el) return;
-const old = el;
-el = null;
-old.classList.add('vp-closing');
-setTimeout(() => old.remove(), 150);
-document.removeEventListener('pointerdown', outside, true);
-removeEventListener('keydown', onKey, true);
-removeEventListener('resize', close);
-}
-function later() { clearTimeout(closeT); closeT = setTimeout(close, 250); }
-function build() {
-el = document.createElement('div');
-el.className = 'vp-emoji';
-const recent = emojiRecent();
-const secs = [['🕘', 'Недавние', recent], ...EMOJI_SETS.map(([i, n, e]) => [i, n, e.split(' ')])];
-el.innerHTML = `<div class="vp-emoji-tabs">${secs.map(([i, n], k) => `<button type="button" title="${n}" data-k="${k}">${i}</button>`).join('')}</div><div class="vp-emoji-body"></div>`;
-const body = el.querySelector('.vp-emoji-body');
-secs.forEach(([, n, list], k) => {
-const sec = document.createElement('section');
-sec.className = 'vp-emoji-sec';
-sec.dataset.k = k;
-sec.innerHTML = '<b></b><div class="vp-emoji-grid"></div>';
-sec.firstChild.textContent = n;
-if (!list.length) sec.lastChild.outerHTML = '<div class="vp-emoji-empty">Здесь появятся эмодзи, которые ты выбирал</div>';
-else sec.lastChild.innerHTML = list.map(e => `<button type="button">${e}</button>`).join('');
-body.appendChild(sec);
-});
-const tabs = [...el.querySelectorAll('.vp-emoji-tabs button')];
-const mark = () => {
-const y = body.scrollTop + 4;
-let cur = 0;
-body.querySelectorAll('.vp-emoji-sec').forEach(sc => { if (sc.offsetTop <= y) cur = +sc.dataset.k; });
-tabs.forEach(t => t.classList.toggle('vp-on', +t.dataset.k === cur));
-};
-body.addEventListener('scroll', mark, { passive: true });
-el.querySelector('.vp-emoji-tabs').addEventListener('click', e => {
-const t = e.target.closest('button');
-if (!t) return;
-const sc = body.querySelector(`.vp-emoji-sec[data-k="${t.dataset.k}"]`);
-if (sc) body.scrollTo({ top: sc.offsetTop, behavior: 'smooth' });
-});
-body.addEventListener('click', e => {
-const b = e.target.closest('.vp-emoji-grid button');
-if (!b) return;
-const em = b.textContent;
-if (onPick(em) !== false) emojiRemember(em);
-});
-el.addEventListener('mousedown', e => e.preventDefault());
-if (hover) { el.addEventListener('mouseenter', () => clearTimeout(closeT)); el.addEventListener('mouseleave', later); }
-document.body.appendChild(el);
-place();
-if (!recent.length) body.scrollTop = body.querySelector('.vp-emoji-sec[data-k="1"]').offsetTop;
-mark();
-document.addEventListener('pointerdown', outside, true);
-addEventListener('keydown', onKey, true);
-addEventListener('resize', close);
-}
-btn.addEventListener('click', e => { e.preventDefault(); if (el) close(); else build(); });
-if (hover) {
-btn.addEventListener('mouseenter', () => { clearTimeout(closeT); if (!el) { clearTimeout(openT); openT = setTimeout(() => { if (!el) build(); }, 100); } });
-btn.addEventListener('mouseleave', () => { clearTimeout(openT); if (el) later(); });
-}
-return { close };
-}
+addCss(`
+        @keyframes vp-emoji-in { from { opacity: 0; transform: scale(.94); } }`);
 function buildMessagesOverlay() {
 const M = {};
 M.close = close;
@@ -17049,7 +17009,7 @@ root.innerHTML = `
                 <button type="button" class="vp-msgs-down" title="Вниз" hidden>${svgIcon('<path d="m6 9 6 6 6-6"/>', 22)}<span></span></button>
                 <form class="vp-msgs-bar"><div class="vp-msgs-field"><button type="button" class="vp-msgs-ghost vp-msgs-attach" title="Картинка">${MSG_ICON.clip}</button>
                     <input type="text" placeholder="Сообщение" enterkeyhint="send" autocomplete="off"><span class="vp-msgs-count" hidden></span>
-                    <button type="button" class="vp-msgs-ghost vp-msgs-emoji" title="Эмодзи">${MSG_ICON.smile}</button></div>
+                    <button type="button" class="vp-msgs-ghost vp-msgs-emoji" title="Стикеры и эмодзи">${MSG_ICON.smile}</button></div>
                     <button type="submit" class="vp-msgs-send" title="Отправить" disabled>${MSG_ICON.send}</button><input type="file" class="vp-msgs-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden></form>
             </section>`;
 document.body.appendChild(root);
@@ -18063,13 +18023,16 @@ callStart(t.uid, M.current.name, msgAva(M.current));
 search.addEventListener('input', renderList);
 $('.vp-msgs-back').onclick = closeChat;
 input.addEventListener('input', () => { send.disabled = !input.value.trim() && !M.pendingImg; msgCount(); });
-attachEmojiPicker($('.vp-msgs-emoji'), em => {
+stickerPanelFor($('.vp-msgs-emoji'), {
+emoji: em => {
 if (input.disabled) return false;
 const max = input.maxLength > 0 ? input.maxLength : MSG_TEXT_MAX;
 if (input.value.length + em.length > max) return false;
 const a = input.selectionStart ?? input.value.length, z = input.selectionEnd ?? a;
 input.setRangeText(em, a, z, 'end');
 input.dispatchEvent(new Event('input', { bubbles: true }));
+},
+sticker: (s, load) => { if (!input.disabled) M.pickSticker(s, load); }
 });
 M.lb = null;
 const chatSig = uid => {
@@ -18506,6 +18469,15 @@ feed.addEventListener('scroll', () => closeMenu(), { passive: true });
 function msgPartImages(M) {
 const { $, bubble, feed, input, msgCount, msgRefreshChat, note, now, root, send, setMeta, stickEnd, supportReply, takeReply } = M;
 M.openImg = openImg; M.closeImg = closeImg; M.clearPending = clearPending; M.setPending = setPending;
+M.pickSticker = async (sticker, load) => {
+const d = M.current;
+try {
+const file = await load();
+if (M.current !== d) return;
+const m = String(sticker.url).match(MSG_IMG_RE), ext = m ? MSG_IMG_EXT.indexOf(m[2].toLowerCase()) : -1;
+setPending([file], ext < 0 ? [] : [{ ext, id: m[1].toLowerCase() }]);
+} catch (e) { note('Стикер не загрузился'); logErr('стикер в личке', e); }
+};
 const imgDb = (() => {
 let p = null;
 return () => p || (p = new Promise((ok, no) => {
@@ -18681,7 +18653,7 @@ else if (res.status !== 'skip') out.push(f);
 }
 if (out.length) setPending(out);
 }
-function setPending(files) {
+function setPending(files, ready = []) {
 files = (Array.isArray(files) ? files : [files]).filter(f => f && /^image\//.test(f.type));
 if (!files.length) return;
 const t = M.current && msgNet.me ? msgTarget(M.current) : null;
@@ -18689,7 +18661,7 @@ if (!t || !t.uid) { note('Картинки можно отправлять в п
 M.pendingImg = M.pendingImg || [];
 const room = MSG_ALBUM_MAX - M.pendingImg.length;
 if (files.length > room) note(`В одном сообщении — не больше ${MSG_ALBUM_MAX} картинок`);
-files.slice(0, Math.max(0, room)).forEach(file => M.pendingImg.push({ file, url: URL.createObjectURL(file) }));
+files.slice(0, Math.max(0, room)).forEach((file, i) => M.pendingImg.push({ file, url: URL.createObjectURL(file), ready: ready[i] }));
 renderPending();
 imgDraftWrite(M.current, M.pendingImg);
 input.focus();
@@ -18716,7 +18688,7 @@ else if (ts) { b.dataset.ts = ts; b.dataset.dir = 'out'; }
 msgFillDialogs();
 if (M.current === d) msgRefreshChat(d);
 }
-function sendImages(files) {
+function sendImages(files, ready = []) {
 if (!files.length || !M.current) return;
 const t = msgNet.me ? msgTarget(M.current) : null;
 if (!t || !t.uid) { note('Картинки можно отправлять в переписке с людьми и поддержкой'); return; }
@@ -18733,7 +18705,7 @@ localsGone.observe(feed, { childList: true });
 const imgs = [];
 for (const f of files) {
 if (files.length > 1) setMeta(b.lastChild, now() + ` · загрузка ${imgs.length + 1} из ${files.length}…`);
-imgs.push(await msgUploadImage(f));
+imgs.push(ready[imgs.length] || await msgUploadImage(f));
 }
 setMeta(b.lastChild, now() + ' · отправка…');
 return msgSend(t.uid, caption, t.sup, imgs);
@@ -18751,7 +18723,7 @@ if (f.length) { e.preventDefault(); pickPending(f); }
 $('.vp-msgs-bar').before(pendEl);
 $('.vp-msgs-bar').addEventListener('submit', e => {
 e.preventDefault();
-if (M.pendingImg && M.current) { const f = M.pendingImg.map(p => p.file); clearPending(); sendImages(f); return; }
+if (M.pendingImg && M.current) { const f = M.pendingImg.map(p => p.file), ready = M.pendingImg.map(p => p.ready); clearPending(); sendImages(f, ready); return; }
 const text = input.value.trim();
 if (!text || !M.current) return;
 input.value = ''; send.disabled = true; msgCount();
@@ -19547,7 +19519,7 @@ v.setAttribute('data-vp-sh', '');
 box.setAttribute('data-vp-vsh', '');
 box.style.setProperty('--vp-shrink', String(Math.min(1, 16 / 9 / (h / w)).toFixed(4)));
 box.style.setProperty('--vp-vr', w + ' / ' + h);
-for (let e = box.parentElement; e && !e.classList.contains('vp-p-body'); e = e.parentElement) e.classList.add('vp-pv-fill');
+for (let e = box.parentElement; e && !e.classList.contains('vp-p-body') && !e.classList.contains(SELECTORS.repost); e = e.parentElement) e.classList.add('vp-pv-fill');
 });
 document.querySelectorAll(':is(article.vp-post, .vp-p-solo) .vp-p-body .vp-media-rel > img.vp-post-media:not([data-vp-sh])').forEach(img => {
 const c = img.parentElement;
@@ -20208,12 +20180,16 @@ post.setAttribute('data-post-colored', key);
 if (!withBlur) tintCard(post, emoji);
 });
 document.querySelectorAll('[data-post-colored] .' + SELECTORS.repost + ':not([data-vp-soft])').forEach(rp => softenRepost(rp.closest('article, .vp-solo-card')));
+document.querySelectorAll('.' + SELECTORS.repost + ':not([data-vp-soft])').forEach(rp => {
+const card = rp.querySelector('video') && rp.closest('article, .vp-solo-card');
+if (card) softenRepost(card);
+});
 }
 function softenRepost(post) {
 post.querySelectorAll('.' + SELECTORS.repost + ':not([data-vp-soft])').forEach(rp => {
 rp.setAttribute('data-vp-soft', '');
 [rp, ...rp.querySelectorAll('div, p, section')].forEach(el => {
-if (el.closest('button, a, video') || el.querySelector(':scope > img, :scope > video')) return;
+if (el.closest('button, a, video, .vp-vbar, .vp-vflash') || el.querySelector(':scope > img, :scope > video')) return;
 const m = getComputedStyle(el).backgroundColor.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?/);
 if (!m || (m[4] !== undefined && +m[4] < .5)) return;
 el.classList.add('vp-soft-bg');
@@ -20860,7 +20836,8 @@ const fx = addCss(`
             89% { text-shadow: 1.5px 0 rgba(255, 0, 200, .75), -1.5px 0 rgba(0, 255, 240, .75); transform: none; }
         }
         .vp-ambient-host { isolation: isolate; }
-        .vp-ambient { position: absolute; z-index: -1; pointer-events: none; border-radius: 40px; opacity: 0;
+        .vp-ambient-clip { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; border-radius: inherit; clip-path: inset(0 round var(--vp-card-r, 24px)); }
+        .vp-ambient { position: absolute; pointer-events: none; border-radius: 40px; opacity: 0;
             filter: blur(26px) saturate(1.7); transition: opacity .8s ease; }
         .vp-ambient.vp-on { opacity: .8; }
 
@@ -20902,29 +20879,32 @@ const glassPer = new WeakMap();
 function collectGlass() {
 if (document.styleSheets.length === glassSheets) return;
 glassSheets = document.styleSheets.length;
-const sels = new Set();
+const sels = new Set(), clears = new Map();
 for (const sh of document.styleSheets) {
 if (sh.ownerNode === glassCss || sh.ownerNode === fx) continue;
 let rules;
 try { rules = sh.cssRules; } catch (e) { continue; }
 let own = glassPer.get(sh);
 if (!own || own.n !== rules.length) {
-own = { n: rules.length, sels: new Set() };
-const walk = list => {
+own = { n: rules.length, sels: new Set(), clears: [] };
+const walk = (list, media) => {
 for (const r of list) {
-if (r.cssRules && !r.selectorText) { walk(r.cssRules); continue; }
+if (r.cssRules && !r.selectorText) { walk(r.cssRules, r.media ? r.media.mediaText : media); continue; }
 if (!r.selectorText || r.selectorText.includes('::')) continue;
 if (/var\(--(block-bg|modal-bg|block-bg-secondary|glass-bg)/.test(r.style.background + r.style.backgroundColor)) own.sels.add(r.selectorText);
+else if (media && /^(unset|transparent|none)\b/.test(r.style.background || r.style.backgroundColor)) own.clears.push([media, r.selectorText]);
 }
 };
 try { walk(rules); } catch (e) { }
 glassPer.set(sh, own);
 }
 own.sels.forEach(x => sels.add(x));
+own.clears.forEach(([media, sel]) => clears.set(media + sel, [media, sel]));
 }
 glassSel = [...sels].join(', ');
 glassFullAt = 0;
-glassCss.textContent = [...sels].map(sel => `html.vp-glass :is(${sel}) { backdrop-filter: var(--vp-glass-filter); -webkit-backdrop-filter: var(--vp-glass-filter); }`).join('\n');
+glassCss.textContent = [...sels].map(sel => `html.vp-glass :is(${sel}) { backdrop-filter: var(--vp-glass-filter); -webkit-backdrop-filter: var(--vp-glass-filter); }`)
+.concat([...clears.values()].filter(([, sel]) => sels.has(sel)).map(([media, sel]) => `@media ${media} { html.vp-glass :is(${sel}) { backdrop-filter: none; -webkit-backdrop-filter: none; } }`)).join('\n');
 }
 function applyGlass() {
 document.documentElement.classList.toggle('vp-glass', glassEnabled);
@@ -21415,19 +21395,28 @@ let ambientEnabled = GM_getValue('ambientEnabled', true);
 const ambient = new Map();
 const ambientSeen = new Set();
 const ambientIO = new IntersectionObserver(es => es.forEach(e => e.isIntersecting ? ambientSeen.add(e.target) : ambientSeen.delete(e.target)));
+const ambientRO = new ResizeObserver(es => {
+const changed = new Set(es.map(e => e.target));
+for (const [v, a] of ambient) if (changed.has(v) || changed.has(a.host)) ambientDraw(v);
+});
+function ambientDrop(v, a) { a.clip.remove(); ambientIO.unobserve(v); ambientRO.unobserve(v); ambientRO.unobserve(a.host); }
 function ambientScan() {
 if (!ambientEnabled || calm) return;
 document.querySelectorAll('.' + SELECTORS.post + ' video').forEach(v => {
 if (ambient.has(v)) return;
 const host = v.closest('.' + SELECTORS.post);
-const cv = document.createElement('canvas');
+const cv = document.createElement('canvas'), clip = document.createElement('div');
 cv.className = 'vp-ambient';
 cv.width = 48; cv.height = 27;
+clip.className = 'vp-ambient-clip';
+clip.appendChild(cv);
 host.classList.add('vp-ambient-host');
 const under = host.querySelector(':scope > .itd-blur-container');
-if (under) under.after(cv); else host.prepend(cv);
-ambient.set(v, { cv, g: cv.getContext('2d'), host });
+if (under) under.after(clip); else host.prepend(clip);
+ambient.set(v, { cv, clip, g: cv.getContext('2d'), host });
 ambientIO.observe(v);
+ambientRO.observe(v);
+ambientRO.observe(host);
 v.addEventListener('loadeddata', () => ambientDraw(v));
 v.addEventListener('seeked', () => ambientDraw(v));
 });
@@ -21438,8 +21427,7 @@ if (!a || !v.isConnected || v.readyState < 2) return;
 const vr = v.getBoundingClientRect(), hr = a.host.getBoundingClientRect(), pad = 26;
 Object.assign(a.cv.style, {
 left: (vr.left - hr.left - pad) + 'px', top: (vr.top - hr.top - pad) + 'px',
-width: (vr.width + pad * 2) + 'px', height: (vr.height + pad * 2) + 'px',
-clipPath: `inset(${(hr.top - vr.top + pad).toFixed(1)}px ${(vr.right + pad - hr.right).toFixed(1)}px ${(vr.bottom + pad - hr.bottom).toFixed(1)}px ${(hr.left - vr.left + pad).toFixed(1)}px round var(--vp-card-r, 24px))`
+width: (vr.width + pad * 2) + 'px', height: (vr.height + pad * 2) + 'px'
 });
 a.g.globalAlpha = a.cv.classList.contains('vp-on') ? .2 : 1;
 try { a.g.drawImage(v, 0, 0, 48, 27); a.cv.classList.add('vp-on'); } catch (e) { }
@@ -21447,11 +21435,11 @@ try { a.g.drawImage(v, 0, 0, 48, 27); a.cv.classList.add('vp-on'); } catch (e) {
 setInterval(() => {
 if (!ambientEnabled || document.hidden) return;
 for (const v of ambientSeen) if (!v.paused || !ambient.get(v)?.cv.classList.contains('vp-on')) ambientDraw(v);
-for (const [v, a] of ambient) if (!v.isConnected) { a.cv.remove(); ambient.delete(v); ambientSeen.delete(v); }
+for (const [v, a] of ambient) if (!v.isConnected) { ambientDrop(v, a); ambient.delete(v); ambientSeen.delete(v); }
 }, 150);
 function applyAmbient() {
 if (ambientEnabled) ambientScan();
-else { for (const [v, a] of ambient) { a.cv.remove(); ambientIO.unobserve(v); } ambient.clear(); ambientSeen.clear(); }
+else { for (const [v, a] of ambient) ambientDrop(v, a); ambient.clear(); ambientSeen.clear(); }
 }
 onDom(ambientScan);
 
@@ -21523,6 +21511,57 @@ holdQueued = true;
 requestAnimationFrame(() => { holdQueued = false; holdKeep(); if (!feedJob) holdPick(); });
 }, { passive: true });
 addEventListener('resize', () => { holdEl = null; });
+const commentLists = new WeakSet();
+const commentRowsOf = content => [...content.children].filter(r => r.style.transform.startsWith('translateY('));
+function commentLayout(content, seen) {
+const rows = commentRowsOf(content);
+if (!rows.length) return;
+const at = rows.map(r => parseFloat(r.style.transform.slice(11)) || 0), tall = rows.map(r => r.getBoundingClientRect().height);
+if (tall.some(h => !h)) return;
+let y = at[0], grown = 0;
+const moves = [];
+rows.forEach((r, i) => {
+if (i) {
+y += tall[i - 1];
+if (Math.abs(at[i] - y) > .5) moves.push([r, y]); else y = at[i];
+}
+if (seen.has(r)) grown += tall[i] - seen.get(r);
+seen.set(r, tall[i]);
+});
+const total = parseFloat(content.style.height) || 0, want = Math.max(total + grown, y + tall[tall.length - 1]);
+moves.forEach(([r, v]) => { r.style.transform = `translateY(${v}px)`; });
+if (Math.abs(want - total) > .5) content.style.height = want + 'px';
+}
+function commentWatch(list) {
+const content = list.firstElementChild;
+if (!content || commentLists.has(content)) return;
+commentLists.add(content);
+const seen = new WeakMap(), run = () => commentLayout(content, seen);
+const sizes = new ResizeObserver(run), watch = () => commentRowsOf(content).forEach(r => sizes.observe(r));
+new MutationObserver(muts => {
+if (!muts.some(m => m.target === content || m.target.parentElement === content)) return;
+watch();
+run();
+}).observe(content, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+watch();
+run();
+}
+onDom(function commentListsWatch() { document.querySelectorAll('[data-comments-scroll]').forEach(commentWatch); });
+document.addEventListener('click', e => {
+const b = e.target.closest && e.target.closest('[data-comment-id] button');
+if (!b || b.textContent.trim() !== 'Ответить') return;
+let thread = b.closest('[data-comment-id]');
+for (let up = thread; up; up = up.parentElement.closest('[data-comment-id]')) thread = up;
+if (!thread.querySelector('[contenteditable="true"]')) return;
+setTimeout(() => {
+const field = thread.querySelector('[contenteditable="true"]');
+if (!field) return;
+field.focus();
+const sel = getSelection();
+sel.selectAllChildren(field);
+sel.collapseToEnd();
+}, 0);
+}, true);
 const hcCache = new Map();
 let hc = null, hcTimer = 0, hcHide = 0, hcUser = null, hcLink = null;
 const loginOf = href => ((href || '').match(/^\/@([\w.]+)/) || [])[1] || null;
