@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.9.2
+// @version      3.9.9.3
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -149,6 +149,8 @@ function randIn(a, b) { return a + Math.random() * (b - a); }
 function rgbHex(r, g, b) { return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1); }
 function mmss(sec) { return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }
 function bytesToUuid(b) { return [...b].map(x => x.toString(16).padStart(2, '0')).join('').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5'); }
+function eventPage() { return /^\/(event|awards)(\/|$)/.test(location.pathname); }
+
 function escHtml(t) { return String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function fpsMeter(box, label = '') {
 let n = 0, t0 = performance.now(), last = t0, worst = 0;
@@ -4346,7 +4348,7 @@ const globalStyles = addCss(`
         .vp-settings-tabs .settings-option.vp-dim { opacity: .4; pointer-events: none; }
         .vp-pals { position: fixed; inset: 0; z-index: 9000; pointer-events: none; overflow: hidden; }
         .vp-pals { transition: opacity .3s ease, visibility 0s; }
-        html.vp-blackout .vp-pals { opacity: 0; visibility: hidden; transition: opacity .3s ease, visibility 0s .3s; }
+        html:is(.vp-blackout, .vp-on-event) .vp-pals { opacity: 0; visibility: hidden; transition: opacity .3s ease, visibility 0s .3s; }
         .vp-pal { position: absolute; bottom: 0; box-sizing: content-box; padding: 70px; margin: -70px; width: auto; height: calc(min(var(--vp-pal-h, 45vh), calc(48vw * var(--vp-pal-r, 1))) * var(--vp-pal-k, 1)); pointer-events: none;
             user-select: none; -webkit-user-drag: none; animation: vpPalIn .7s cubic-bezier(.2, .9, .3, 1.15) both; }
         .vp-pal-miku { right: 0; transform: translate(calc((100% - 92px) * var(--vp-pal-dx, .06)), calc((100% - 92px) * .05)); }
@@ -4361,8 +4363,8 @@ const globalStyles = addCss(`
         .vp-pals-phone { -webkit-mask-image: linear-gradient(to top, transparent calc(var(--vp-pal-nav, 0px) - 6px), #000 calc(var(--vp-pal-nav, 0px) + 20px));
             mask-image: linear-gradient(to top, transparent calc(var(--vp-pal-nav, 0px) - 6px), #000 calc(var(--vp-pal-nav, 0px) + 20px)); }
         .vp-pals-phone .vp-pal { bottom: calc(var(--vp-pal-nav, 0px) - 4px); }
-        html.vp-pals-r { scrollbar-width: none !important; scrollbar-gutter: auto !important; }
-        html.vp-pals-r::-webkit-scrollbar { display: none !important; }
+        html:is(.vp-pals-r, .vp-on-event) { scrollbar-width: none !important; scrollbar-gutter: auto !important; }
+        html:is(.vp-pals-r, .vp-on-event)::-webkit-scrollbar { display: none !important; }
         @keyframes vpPalIn { from { translate: 0 60%; opacity: 0; } }
         @media (prefers-reduced-motion: reduce) { .vp-pal { animation: none; } }
         .vp-rcard-move { display: flex; gap: 2px; margin-left: auto; margin-right: 10px; }
@@ -9534,6 +9536,13 @@ console.table(Object.values(accSlots()).map(s => ({ ник: s.username, id: s.id
 console.table(setting('vp_acc_log').map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
 };
 const CHANGELOG = [
+['3.9.9.3', '26 ноября 2026', [
+['Ивенты', 'Страница голосования: меню на месте, ничего не мешает, кнопка в её стиле', [
+'Боковое меню больше не уезжает под страницу ивента и не пропадает',
+'На странице ивента скрыты Мику, Тето, плитки справа и полоса прокрутки',
+'Кнопка «Ивент» в стиле голосования вместо паутины'
+]]
+]],
 ['3.9.9.2', '25 ноября 2026', [
 ['Посты', 'Стрелки в альбомах: по размеру картинки и заметнее', [
 'Зоны нажатия подстраиваются под высоту и место картинки, которая сейчас на экране',
@@ -19314,10 +19323,7 @@ if (label && label.textContent.trim() === 'Профиль') label.textContent = 
 });
 });
 
-const PORTAL_ICON = {
-idle: { mask: '<path d="M12 4.17L14.35 9.82L20.45 10.31L15.8 14.28L17.22 20.23L12 17.05L6.78 20.23L8.2 14.28L3.55 10.31L9.65 9.82Z" stroke="currentColor" stroke-width="4.4" stroke-linejoin="round"/>', hole: '<path d="M12 11.13L12.59 12.54L14.11 12.66L12.95 13.66L13.3 15.15L12 14.35L10.7 15.15L11.05 13.66L9.89 12.66L11.41 12.54Z" stroke="currentColor" stroke-width="1.9800000000000002" stroke-linejoin="round"/>' },
-live: { mask: '<path d="M12 4.17L14.35 9.82L20.45 10.31L15.8 14.28L17.22 20.23L12 17.05L6.78 20.23L8.2 14.28L3.55 10.31L9.65 9.82Z" stroke="currentColor" stroke-width="4.4" stroke-linejoin="round"/><path d="M20.5 0.8C21.2 2.6 21.2 2.6 23 3.3C21.2 4 21.2 4 20.5 5.8C19.8 4 19.8 4 18 3.3C19.8 2.6 19.8 2.6 20.5 0.8Z"/><path d="M21.7 15C22.09 16.01 22.09 16.01 23.1 16.4C22.09 16.79 22.09 16.79 21.7 17.8C21.31 16.79 21.31 16.79 20.3 16.4C21.31 16.01 21.31 16.01 21.7 15Z"/><path d="M15.9 0.2C16.26 1.14 16.26 1.14 17.2 1.5C16.26 1.86 16.26 1.86 15.9 2.8C15.54 1.86 15.54 1.86 14.6 1.5C15.54 1.14 15.54 1.14 15.9 0.2Z"/>', over: '<path d="M12 9.18L13.1 11.83L15.97 12.06L13.79 13.93L14.45 16.73L12 15.23L9.55 16.73L10.21 13.93L8.03 12.06L10.9 11.83Z" fill="#5cc8ff" stroke="#5cc8ff" stroke-width="2.64" stroke-linejoin="round"/>' }
-};
+const PORTAL_ICON = { mask: '<path d="M12 4.17L14.35 9.82L20.45 10.31L15.8 14.28L17.22 20.23L12 17.05L6.78 20.23L8.2 14.28L3.55 10.31L9.65 9.82Z" stroke="currentColor" stroke-width="4.4" stroke-linejoin="round"/>', hole: '<path d="M12 11.13L12.59 12.54L14.11 12.66L12.95 13.66L13.3 15.15L12 14.35L10.7 15.15L11.05 13.66L9.89 12.66L11.41 12.54Z" stroke="currentColor" stroke-width="1.9800000000000002" stroke-linejoin="round"/>' };
 const BUMP = 40, BUMP_UP = 5, BUMP_W = 160, BUMP_H = 21, BUMP_LIFT = BUMP_H;
 function bumpPath(w, h, top) {
 const r = h / 2, cx = w / 2, half = BUMP_W / 2, peak = top - BUMP_H, n = v => +v.toFixed(2);
@@ -19417,17 +19423,14 @@ svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 svg.setAttribute('class', 'vp-portal');
 svg.setAttribute('width', '24'); svg.setAttribute('height', '24');
 svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'currentColor');
+const id = 'vp-ev-' + (++eventMaskN);
+svg.innerHTML = `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">`
++ `<g fill="#fff" style="color:#fff">${PORTAL_ICON.mask}</g>`
++ `<g fill="#000" style="color:#000">${PORTAL_ICON.hole}</g></mask></defs>`
++ `<rect width="24" height="24" fill="currentColor" mask="url(#${id})"/>`;
 img.after(svg);
 }
-if (svg.dataset.state !== state) {
-svg.dataset.state = state;
-const id = 'vp-ev-' + (++eventMaskN);
-const ic = PORTAL_ICON[state];
-svg.innerHTML = `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">`
-+ `<g fill="#fff" style="color:#fff">${ic.mask}</g>`
-+ (ic.hole ? `<g fill="#000" style="color:#000">${ic.hole}</g>` : '') + `</mask></defs>`
-+ `<rect width="24" height="24" fill="currentColor" mask="url(#${id})"/>` + (ic.over || '');
-}
+if (svg.dataset.state !== state) svg.dataset.state = state;
 });
 });
 
@@ -20855,12 +20858,6 @@ const fx = addCss(`
             backdrop-filter: var(--vp-glass-filter, blur(16px)); -webkit-backdrop-filter: var(--vp-glass-filter, blur(16px)); }
         .vp-bump-bg .vp-bump-fill { fill: var(--glass-bg); }
         a[href^="/event"] img[src*="/portal/"], img.vp-portal-img { display: none !important; }
-        .vp-nav-link:has(> svg.vp-portal[data-state="live"]) { position: relative; }
-        html:is(.vp-msgs-open, .vp-gal-open) .vp-nav-link.vp-site-cur:has(> svg.vp-portal[data-state="live"]) { opacity: 1 !important; }
-        .vp-nav-link:has(> svg.vp-portal[data-state="live"])::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-            background: radial-gradient(circle at 28px 50%, rgba(190, 150, 255, calc(.6 * var(--vp-k, 0))) 0, transparent 58px) 0 0 / 100% 100% no-repeat, url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 250 56%22 preserveAspectRatio=%22none%22%3E%3Cpath d=%22M0 0L250 1M0 0L246 20M0 0L226 44M0 0L190 56M0 0L140 56M0 0L84 56M0 0L30 56M0 0L1 56M34.0 0.1Q29.2 1.2 33.9 2.8M33.9 2.8Q28.9 4.0 33.4 6.5M33.4 6.5Q28.4 6.9 32.6 9.6M32.6 9.6Q27.6 9.6 31.6 12.6M31.6 12.6Q25.7 13.5 28.3 18.9M28.3 18.9Q19.1 21.0 16.1 30.0M16.1 30.0Q7.2 27.5 0.6 34.0M62.0 0.2Q53.2 2.3 61.8 5.0M61.8 5.0Q52.7 7.3 60.9 11.8M60.9 11.8Q51.7 12.6 59.5 17.5M59.5 17.5Q50.3 17.4 57.6 23.0M57.6 23.0Q46.9 24.7 51.6 34.4M51.6 34.4Q34.8 38.3 29.3 54.7M29.3 54.7Q13.0 47.6 1.0 56.0M98.0 0.4Q84.1 3.6 97.7 7.9M97.7 7.9Q83.4 11.5 96.2 18.7M96.2 18.7Q81.8 20.0 94.0 27.7M94.0 27.7Q79.5 27.6 91.0 36.4M91.0 36.4Q74.2 39.0 81.5 54.4M81.5 54.4Q48.0 47.5 30.0 56.0M140.0 0.6Q120.2 5.1 139.5 11.3M139.5 11.3Q119.1 16.4 137.4 26.8M137.4 26.8Q116.8 28.5 134.3 39.6M134.3 39.6Q113.6 39.4 130.0 52.0M130.0 52.0Q92.0 46.4 84.0 56.0M190.0 0.8Q163.1 6.9 189.4 15.4M189.4 15.4Q161.6 22.2 186.5 36.3M186.5 36.3Q158.6 38.7 182.2 53.7M182.2 53.7Q138.6 47.2 140.0 56.0%22 fill=%22none%22 stroke=%22rgb%28205%2C184%2C255%29%22 stroke-opacity=%22.5%22 stroke-width=%221%22 stroke-linecap=%22round%22 vector-effect=%22non-scaling-stroke%22/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; -webkit-mask-image: linear-gradient(90deg, #000, rgba(0, 0, 0, .35) 55%, rgba(0, 0, 0, .7)); mask-image: linear-gradient(90deg, #000, rgba(0, 0, 0, .35) 55%, rgba(0, 0, 0, .7)); }
-        .vp-nav-link:has(> svg.vp-portal[data-state="live"])::after { content: ""; display: block !important; position: absolute; inset: 0 !important; pointer-events: none;
-            background: var(--hw-asset-web-corner-webp, none) 0 0 / 42px 42px no-repeat !important; opacity: .75; }
         .vp-itdx-btn, .vp-write-btn { background: color-mix(in srgb, var(--vp-accent) 16%, var(--block-bg)) !important;
             color: color-mix(in srgb, var(--vp-accent) 75%, #fff) !important; border-color: transparent !important;
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent) 40%, transparent) !important; transition: background-color .15s ease; }
@@ -20874,12 +20871,6 @@ const fx = addCss(`
         :has(> .mod-badge-verify), :has(> .mod-badge-voronoi) { flex-wrap: nowrap !important; }
         [data-vp-stack] { grid-template-columns: minmax(0, 1fr) !important; row-gap: 14px !important; }
         [data-vp-stack] > * { grid-area: auto !important; grid-column: 1 / -1 !important; }
-        @media (prefers-reduced-motion: reduce) { .vp-portal { animation: none !important; } }
-        .vp-portal[data-state="live"] { animation: vpPortalPulse 2s ease-in-out infinite; }
-        @keyframes vpPortalPulse {
-            0%, 100% { filter: drop-shadow(0 0 4px rgba(144, 162, 255, .2)); }
-            50% { filter: drop-shadow(0 0 16px rgb(144, 162, 255)); }
-        }
         .vp-nav-blob > i { display: none; }
         .vp-nav-blob.vp-blob-row { width: 0 !important; height: 0 !important; background: none !important; box-shadow: none !important; }
         .vp-nav-blob.vp-blob-row > i { display: block; position: absolute; left: 0; top: 0; box-sizing: border-box; transform-origin: 0 50%; will-change: transform;
@@ -21342,7 +21333,6 @@ if (a.classList.contains('vp-site-cur')) { if (k) a.style.setProperty('--vp-px-o
 const portal = a.querySelector(':scope > svg.vp-portal');
 const icon = a.querySelector('.' + SELECTORS.navIcon) || portal;
 if (icon) icon.style.transform = k ? `scale(${(1 + 0.12 * k).toFixed(3)})` : '';
-if (portal) a.style.setProperty('--vp-k', k && a.matches(':hover') ? k.toFixed(3) : '0');
 if (a.classList.contains('vp-active')) activeK = k;
 rows.push([geo[gi][1], k]);
 });
@@ -21813,6 +21803,17 @@ wrap.innerHTML = EVW_HTML;
 box.insertBefore(wrap, box.firstChild);
 });
 });
+addCss(`
+        html .vp-nav-link.vp-nav-link:has(svg.vp-portal[data-state="live"]) { position: relative; opacity: 1 !important; color: #f4ebe8 !important; border-radius: 18px !important;
+            background: linear-gradient(180deg, #8e1e17, #4d0c09 55%, #320706) !important;
+            box-shadow: inset 0 0 0 1px #a9abb0, inset 0 0 0 3px #240504, inset 0 0 0 4px rgba(200, 202, 208, .34), 0 6px 22px rgba(178, 26, 18, .4) !important; }
+        html .vp-nav-link.vp-nav-link:has(svg.vp-portal[data-state="live"]):hover { filter: brightness(1.2) saturate(1.1); }
+        html .vp-nav-link.vp-nav-link:has(svg.vp-portal[data-state="live"]) span { color: inherit; text-shadow: 0 1px 2px rgba(0, 0, 0, .65); }
+        @media (min-width: 1174px) {
+            html .vp-nav-link.vp-nav-link:has(> svg.vp-portal[data-state="live"])::after { content: ""; display: block !important; position: absolute; inset: 50% 14px auto auto !important; width: 22px; height: 22px; margin-top: -11px; opacity: .85 !important; pointer-events: none;
+                background: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23200404%22 stroke=%22%23b6b8be%22 stroke-width=%221.6%22%3E%3Cpath d=%22M8 8A4.4 4.4 0 1 1 16 8A4.4 4.4 0 1 1 16 16A4.4 4.4 0 1 1 8 16A4.4 4.4 0 1 1 8 8Z%22/%3E%3C/svg%3E") center / contain no-repeat !important; }
+        }
+        `);
 const MEME_ERR = new Map([
 ['Превышено время ожидания', 'Нет.'],
 ['Ошибка сети. Проверьте подключение', 'Бро, проверь интернет'],
@@ -24011,7 +24012,15 @@ placeSidebar();
 return m || w;
 }
 function placeRail() {
+const scene = eventPage() && !msgsOpen && !galOpen;
+document.documentElement.classList.toggle('vp-on-event', scene);
 if (mobileMenuOpen) return;
+if (scene) {
+sideSync(0);
+rail.classList.remove('vp-on');
+document.documentElement.classList.remove('vp-rail-adj');
+return;
+}
 const cb = chatsPage() ? contentBox() : (contentBox() || lastCb);
 lastCb = cb || (chatsPage() ? null : lastCb);
 const edge = cb ? cb.right : 0;
@@ -24051,7 +24060,7 @@ onResize(placeRail);
 
 function placeSidebar() {
 sideScroll();
-if (galOpen) { document.documentElement.classList.remove('vp-side-moved'); return; }
+if (galOpen || (eventPage() && !msgsOpen)) { document.documentElement.classList.remove('vp-side-moved'); return; }
 const side = siteEl('sidebar');
 const cb = chatsPage() ? contentBox() : (contentBox() || lastCb);
 if (!side || !cb) { if (chatsPage()) document.documentElement.classList.remove('vp-side-moved'); return; }
@@ -24382,7 +24391,7 @@ addCss(`
 let psbX = null, psbRaf = 0, psbDrag = null, psbLen = 0, psbRange = 0, psbLast = 0, psbT = 0;
 function psbWanted() {
 const cl = document.documentElement.classList;
-return cl.contains('vp-pals-r') && innerWidth > PHONE_MAX && !cl.contains('vp-gal-open') && !cl.contains('vp-msgs-open');
+return cl.contains('vp-pals-r') && !cl.contains('vp-on-event') && innerWidth > PHONE_MAX && !cl.contains('vp-gal-open') && !cl.contains('vp-msgs-open');
 }
 function psbPlace() {
 const wide = innerWidth > PHONE_MAX, cb = wide ? contentBox() : null;
