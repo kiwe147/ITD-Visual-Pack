@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.9.1
+// @version      3.9.9.2
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -3066,11 +3066,11 @@ el = el.parentElement;
 }
 return [];
 },
-bannerButtons: () => F('banner').map(b => [...b.children].find(c => c.querySelector('button') && !c.querySelector('section'))).filter(Boolean),
+bannerButtons: () => F('banner').map(b => [...b.children].find(c => c.querySelector('button') && !c.querySelector('section') && !c.classList.contains('vp-pcard-bar'))).filter(Boolean),
 bannerDelete: () => F('bannerButtons').flatMap(c => $$('button', c))
 .filter(b => /удал/i.test(b.title || '') || b.innerHTML.includes('points="3 6 5 6 21 6"')),
 bannerDraw: () => F('bannerButtons').map(c => $$('button', c)
-.find(b => !/custom-/.test(b.className) && !/удал/i.test(b.title || '') && !b.innerHTML.includes('points="3 6 5 6 21 6"'))).filter(Boolean),
+.find(b => !/custom-|vp-pcard/.test(b.className) && !/удал/i.test(b.title || '') && !b.innerHTML.includes('points="3 6 5 6 21 6"'))).filter(Boolean),
 nav: () => $$('nav').filter(n => n.querySelector('a[href="/"], a[href="/notifications"]')),
 navLink: () => F('nav').flatMap(n => $$('a[href], a[title="Ивент"]', n).filter(a => a.parentElement === n || a.parentElement.parentElement === n)),
 navIcon: () => F('navLink').map(a => a.firstElementChild).filter(s => s && s.tagName === 'SPAN' && s.querySelector('svg')),
@@ -4309,23 +4309,23 @@ const globalStyles = addCss(`
         .vp-clamp { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); }
         .vp-ico { display: inline-block !important; width: 1.15em; height: 1.15em; flex: none; vertical-align: -.2em; margin-right: .4em; }
         .vp-ico.vp-solo { margin: 0; vertical-align: -.15em; }
-        .vp-banner-buttons { inset: var(--vp-bar-top, 0px) auto auto 50% !important; width: auto !important; height: auto !important; margin: 0 !important; translate: none !important; scale: none !important; rotate: none !important;
+        :is(.vp-banner-buttons, .vp-pcard-bar) { inset: var(--vp-bar-top, 0px) auto auto 50% !important; width: auto !important; height: auto !important; margin: 0 !important; translate: none !important; scale: none !important; rotate: none !important;
             transform: translateX(-50%); display: flex !important; gap: 2px !important; padding: 4px 12px 7px !important;
             border-radius: 0 0 22px 22px; background: rgba(12, 12, 16, .6); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
             z-index: 3; transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s; }
-        html.vp-light .vp-banner-buttons { background: rgba(255, 255, 255, .65); }
-        .vp-banner-buttons > button { background: transparent !important; box-shadow: none !important; }
-        .vp-banner-buttons > button:hover { background: rgba(128, 128, 128, .22) !important; }
+        html.vp-light :is(.vp-banner-buttons, .vp-pcard-bar) { background: rgba(255, 255, 255, .65); }
+        :is(.vp-banner-buttons, .vp-pcard-bar) > button { background: transparent !important; box-shadow: none !important; }
+        :is(.vp-banner-buttons, .vp-pcard-bar) > button:hover { background: rgba(128, 128, 128, .22) !important; }
         @media (hover: hover) and (pointer: fine) {
-            .vp-banner-buttons:not(.vp-banner-editing) { opacity: 0; clip-path: inset(0 0 100% 0); visibility: hidden;
+            :is(.vp-banner-buttons, .vp-pcard-bar):not(.vp-banner-editing) { opacity: 0; clip-path: inset(0 0 100% 0); visibility: hidden;
                 transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s, visibility 0s linear .25s; }
-            .vp-banner:hover .vp-banner-buttons, .vp-banner-buttons:has(:focus-visible) { opacity: 1; clip-path: inset(0 0 0 0); visibility: visible;
+            .vp-banner:hover :is(.vp-banner-buttons, .vp-pcard-bar), :is(.vp-banner-buttons, .vp-pcard-bar):has(:focus-visible) { opacity: 1; clip-path: inset(0 0 0 0); visibility: visible;
                 transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s, visibility 0s; }
         }
         @media not ((hover: hover) and (pointer: fine)) {
-            .vp-banner-buttons:not(.vp-banner-editing) { opacity: 0; clip-path: inset(0 0 100% 0); visibility: hidden;
+            :is(.vp-banner-buttons, .vp-pcard-bar):not(.vp-banner-editing) { opacity: 0; clip-path: inset(0 0 100% 0); visibility: hidden;
                 transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s, visibility 0s linear .25s; }
-            .vp-banner.vp-bar-open > .vp-banner-buttons:not(.vp-banner-editing) { opacity: 1; clip-path: inset(0 0 0 0); visibility: visible;
+            .vp-banner.vp-bar-open > :is(.vp-banner-buttons, .vp-pcard-bar):not(.vp-banner-editing) { opacity: 1; clip-path: inset(0 0 0 0); visibility: visible;
                 transition: clip-path .25s cubic-bezier(.2,.8,.2,1), opacity .2s, visibility 0s; }
         }
         .toggle-switch.vp-tri { width: 58px !important; }
@@ -9534,6 +9534,24 @@ console.table(Object.values(accSlots()).map(s => ({ ник: s.username, id: s.id
 console.table(setting('vp_acc_log').map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
 };
 const CHANGELOG = [
+['3.9.9.2', '25 ноября 2026', [
+['Посты', 'Стрелки в альбомах: по размеру картинки и заметнее', [
+'Зоны нажатия подстраиваются под высоту и место картинки, которая сейчас на экране',
+'Стрелки стали тёмными кружками со светлой обводкой — видно на любом фоне'
+]],
+['Боковое меню и плитки', '«Галерея» в меню стоит сразу под «Лентой»'],
+['Профиль', 'Карточка, чтобы поделиться; кнопки и плашки', [
+'Новая кнопка в шторке баннера собирает карточку профиля: баннер целиком, аватарка, ник с галочкой и пинами, описание и цифры',
+'Карточку можно скопировать или скачать картинкой',
+'Кнопка сайта называется «Чат», как раздел «Чаты», а кнопка мода — «Сообщение ИТД X» и выделена цветом',
+'«Вы подписаны» больше не переносится на две строки',
+'На телефоне вкладки, «Написать на стене» и сортировка — по ширине нижнего меню, с равными отступами и без полосок'
+]],
+['Оформление и фон', 'Открытая картинка: размытый фон и новые точки', [
+'Вместо чёрного фона — размытая страница позади',
+'Точки снизу такие же, как у альбомов в постах'
+]]
+]],
 ['3.9.9.1', '25 ноября 2026', [
 ['Сообщения', 'Стикеры и эмодзи в переписке, как в комментариях', [
 'Кнопка у поля сообщения открывает ту же панель: эмодзи и твои стикерпаки',
@@ -13960,6 +13978,16 @@ if (!messagesOverlay) messagesOverlay = buildMessagesOverlay();
 if (!messagesOverlay.classList.contains('vp-open')) messagesOverlay.open();
 setTimeout(() => messagesOverlay.openDialog && messagesOverlay.openDialog('u:' + login), 60);
 }
+onDom(function profileSiteChat() {
+if (!/^\/@[^/]+\/?$/.test(location.pathname)) return;
+const dots = document.querySelector('[data-alice-profile-root] button[aria-label="Действия с профилем"]');
+const row = dots && dots.parentElement.parentElement.parentElement;
+if (!row) return;
+for (const b of row.querySelectorAll(':scope > button:not(.vp-write-btn)')) {
+const t = [...b.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim() === 'Сообщение');
+if (t) t.nodeValue = 'Чат';
+}
+});
 onDom(function profileWriteBtn() {
 const m = location.pathname.match(/^\/@([^/]+)\/?$/), old = document.querySelector('.vp-write-btn');
 const login = m && verifiedNames().find(n => n.toLowerCase() === decodeURIComponent(m[1]).toLowerCase());
@@ -13974,14 +14002,24 @@ b.type = 'button';
 b.className = follow.className + ' vp-write-btn';
 b.dataset.login = login;
 b.title = 'Написать в личку ИТД X';
-b.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/></svg><span>Написать</span>';
+b.innerHTML = ICONS.MESSAGES + '<span>Сообщение ИТД X</span>';
 b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); msgOpenLogin(login); });
 follow.before(b);
 });
 addCss(`
-        .vp-write-btn { display: inline-flex !important; align-items: center; justify-content: center; gap: 6px; }
-        .vp-write-btn > svg { flex: none; }
-        @media (max-width: ${PHONE_MAX}px) { .vp-write-btn > span { display: none; } }
+        .vp-write-btn { display: inline-flex !important; align-items: center; justify-content: center; gap: 6px; order: 2; }
+        .vp-write-btn > svg { flex: none; width: 18px; height: 18px; }
+        [data-alice-profile-root] div:has(> div > div > button[aria-label="Действия с профилем"]) { flex-wrap: wrap; max-width: 100%; }
+        [data-alice-profile-root] div:has(> div > div > button[aria-label="Действия с профилем"]) > button { white-space: nowrap; flex-shrink: 0; padding-inline: 12px; }
+        @media (min-width: ${PHONE_MAX + 1}px) {
+            [data-alice-profile-root] div:has(> div > div > button[aria-label="Действия с профилем"]) { flex-wrap: nowrap; column-gap: 6px; }
+            [data-alice-profile-root] div:has(> div > div > button[aria-label="Действия с профилем"]) > button { padding-inline: 10px; gap: 6px; }
+        }
+        @media (max-width: ${PHONE_MAX}px) {
+            [data-alice-profile-root] div:has(> .vp-write-btn) { justify-content: center; row-gap: 0; }
+            [data-alice-profile-root] div:has(> .vp-write-btn)::after { content: ""; order: 1; flex-basis: 100%; }
+            [data-alice-profile-root] div:has(> .vp-write-btn) > .vp-write-btn { margin-top: 8px; min-width: 220px; }
+        }
         `);
 function thumbBoxes() {
 const seen = new Set(), out = [];
@@ -17259,7 +17297,7 @@ if (M.supDir) rows = [{ id: '@back', ava: '←', name: 'Все чаты', last: 
 else {
 const top = sups.reduce((a, d) => (d.lastTs || 0) > (a.lastTs || 0) ? d : a, sups[0]);
 const opened = msgOpened(), act = d => Math.max(d.lastTs || (msgNet.ready ? 0 : msgTsMem()[d.id] || 0), opened[d.id] || 0), fAct = Math.max(...sups.map(act));
-const folder = { id: '@sup', ava: '🛟', name: 'Поддержка', last: top.last ? top.name.replace(/^🛟\s*/, '') + ': ' + top.last : `обращений: ${sups.length}`,
+const folder = { id: '@sup', ava: '🛟', name: 'Поддержка ИТД X', last: top.last ? top.name.replace(/^🛟\s*/, '') + ': ' + top.last : `обращений: ${sups.length}`,
 time: top.time || '', lastTs: top.lastTs || 0, unread: sups.reduce((n, d) => n + (d.unread || 0), 0) };
 rows = rows.filter(d => !d.supUid);
 const at = rows.findIndex(d => !pins.includes(d.id) && act(d) < fAct);
@@ -17267,7 +17305,7 @@ rows.splice(at < 0 ? rows.length : at, 0, folder);
 }
 } else if (!sups.length && !q && !M.supDir && (M.tab || 'all') === 'all' && msgIsSupport() && !msgNet.ready && msgTsMem()['@sup']) {
 const fTs = msgTsMem()['@sup'], opened = msgOpened(), act = d => Math.max(d.lastTs || msgTsMem()[d.id] || 0, opened[d.id] || 0);
-const folder = { id: '@sup', ava: '🛟', name: 'Поддержка', last: 'Обращения в поддержку', time: '', lastTs: fTs, unread: 0 };
+const folder = { id: '@sup', ava: '🛟', name: 'Поддержка ИТД X', last: 'Обращения в поддержку', time: '', lastTs: fTs, unread: 0 };
 const at = rows.findIndex(d => !pins.includes(d.id) && act(d) < fTs);
 rows.splice(at < 0 ? rows.length : at, 0, folder);
 }
@@ -19448,6 +19486,7 @@ el.style.setProperty('--vp-iw', fw + 'px');
 el.style.setProperty('--vp-ih', fh + 'px');
 el.style.setProperty('--vp-im', Math.floor((W - fw) / 2) + 'px');
 });
+if (c._vpUpd) c._vpUpd();
 }
 function albumCount(c) {
 const wrap = c.parentElement;
@@ -19459,17 +19498,29 @@ for (let k = 0; k < c.children.length; k++) { const d = document.createElement('
 dots.addEventListener('click', e => { const d = e.target.closest('i'); if (d) { e.stopPropagation(); c.scrollTo({ left: +d.dataset.i * step(), behavior: 'smooth' }); } });
 wrap.appendChild(dots);
 }
-const mk = (cls, label, d) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'vp-album-arrow ' + cls; b.setAttribute('aria-label', label); b.innerHTML = d; wrap.appendChild(b); return b; };
+const mk = (cls, label, d) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'vp-album-arrow ' + cls; b.setAttribute('aria-label', label); b.innerHTML = '<span class="vp-album-chip">' + d + '</span>'; wrap.appendChild(b); return b; };
 const prev = mk('vp-prev', 'Назад', '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 6-6 6 6 6"/></svg>');
 const next = mk('vp-next', 'Дальше', '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9.5 6 6 6-6 6"/></svg>');
 const step = () => (parseFloat(c.style.getPropertyValue('--vp-album-w')) || c.clientWidth) + 8;
 const at = () => Math.max(0, Math.min(c.children.length - 1, Math.round(c.scrollLeft / Math.max(1, step()))));
+const fit = i => {
+const el = c.children[i], px = (e, n) => parseFloat(e.style.getPropertyValue(n)) || 0;
+const w = el ? px(el, '--vp-iw') : 0, h = el ? px(el, '--vp-ih') : 0;
+if (!w || !h) return;
+const x = c.offsetLeft + px(el, '--vp-im'), y = c.offsetTop + (px(c, '--vp-album-h') - h) / 2;
+const z = Math.round(Math.min(96, Math.max(52, w * .22), w / 2));
+Object.assign(prev.style, { left: x + 'px', top: y + 'px', width: z + 'px', height: h + 'px' });
+Object.assign(next.style, { left: x + w - z + 'px', top: y + 'px', width: z + 'px', height: h + 'px' });
+for (const b of [prev, next]) b.classList.toggle('vp-slim', z < 52);
+};
 const upd = () => {
 const i = at();
+fit(i);
 [...dots.children].forEach((d, k) => d.classList.toggle('vp-on', k === i));
 prev.classList.toggle('vp-edge', i === 0);
 next.classList.toggle('vp-edge', i === c.children.length - 1);
 };
+c._vpUpd = upd;
 c.addEventListener('scroll', upd, { passive: true });
 if (albumRO) albumRO.observe(c);
 const go = d => e => { e.stopPropagation(); e.preventDefault(); c.scrollTo({ left: Math.max(0, Math.min(c.children.length - 1, at() + d)) * step(), behavior: 'smooth' }); };
@@ -19536,6 +19587,19 @@ c.parentElement.classList.add('vp-album-wrap');
 albumFit(c);
 albumCount(c);
 });
+});
+onDomScoped(function viewerDots(sc) {
+for (const d of domFind(sc, '[role="dialog"][aria-label="Просмотр изображений"]')) {
+const box = [...d.children].find(e => e.tagName === 'DIV' && e.children.length > 1 && [...e.children].every(b => b.tagName === 'BUTTON' && !b.firstChild));
+if (!box || box.classList.contains('vp-view-dots')) continue;
+box.classList.add('vp-view-dots');
+const sync = () => {
+const slide = d.querySelector('[data-active-slide]'), at = slide ? +slide.getAttribute('data-slide-index') : 0;
+[...box.children].forEach((b, i) => b.classList.toggle('vp-on', i === at));
+};
+new MutationObserver(sync).observe(d, { subtree: true, attributes: true, attributeFilter: ['data-active-slide', 'class'] });
+sync();
+}
 });
 const notifRO = typeof ResizeObserver === 'function' ? new ResizeObserver(es => notifAvaAll(es.map(e => e.target._vpNotif))) : null;
 function notifAvaAll(list) { list.map(notifAva).forEach(w => w && w()); }
@@ -19663,25 +19727,34 @@ const postDesignStyle = addCss(`
             border-radius: var(--vp-r-mid) !important; scroll-snap-align: center; scroll-snap-stop: always;
         }
         @media (pointer: coarse), (max-width: 700px) { .vp-album-arrow { display: none !important; } .vp-album-dots { pointer-events: none; } }
-        .vp-album-arrow { position: absolute; top: 0; bottom: 17px; width: 22%; max-width: 96px; z-index: 3; border: 0; padding: 0; margin: 0; display: none; align-items: center; cursor: pointer;
-            color: #fff; background: none; -webkit-tap-highlight-color: transparent; transition: background .2s; }
-        .vp-album-arrow.vp-prev { left: 0; justify-content: flex-start; padding-left: 12px; border-radius: var(--vp-r-mid) 0 0 var(--vp-r-mid); }
-        .vp-album-arrow.vp-next { right: 0; justify-content: flex-end; padding-right: 12px; border-radius: 0 var(--vp-r-mid) var(--vp-r-mid) 0; }
+        .vp-album-arrow { position: absolute; top: 0; left: 0; z-index: 3; border: 0; padding: 0; margin: 0; display: none; align-items: center; cursor: pointer;
+            color: #fff; background: none; -webkit-tap-highlight-color: transparent; transition: background .2s, left .2s, top .2s, width .2s, height .2s; }
+        .vp-album-arrow.vp-prev { justify-content: flex-start; padding-left: 10px; border-radius: var(--vp-r-mid) 0 0 var(--vp-r-mid); }
+        .vp-album-arrow.vp-next { justify-content: flex-end; padding-right: 10px; border-radius: 0 var(--vp-r-mid) var(--vp-r-mid) 0; }
         .vp-album-arrow.vp-edge { opacity: 0; pointer-events: none; }
-        .vp-album-arrow svg { opacity: 0; transition: opacity .2s; filter: drop-shadow(0 1px 4px rgba(0, 0, 0, .7)); }
+        .vp-album-chip { flex: none; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff;
+            background: rgba(14, 14, 18, .68); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .55), 0 2px 12px rgba(0, 0, 0, .45);
+            backdrop-filter: blur(8px) saturate(1.3); -webkit-backdrop-filter: blur(8px) saturate(1.3); opacity: 0; transition: opacity .2s, background-color .2s, box-shadow .2s, transform .15s ease; }
+        .vp-album-chip svg { width: 24px; height: 24px; }
+        .vp-album-arrow.vp-slim { padding: 0 2px; }
+        .vp-album-arrow.vp-slim .vp-album-chip { width: 28px; height: 28px; }
+        .vp-album-arrow.vp-slim .vp-album-chip svg { width: 18px; height: 18px; }
         @media (hover: hover) and (pointer: fine) {
             .vp-album-arrow { display: flex; }
             .vp-album-wrap:hover .vp-album-arrow.vp-prev { background: linear-gradient(90deg, rgba(255, 255, 255, .12), transparent); }
             .vp-album-wrap:hover .vp-album-arrow.vp-next { background: linear-gradient(270deg, rgba(255, 255, 255, .12), transparent); }
             .vp-album-arrow.vp-prev:hover { background: linear-gradient(90deg, rgba(255, 255, 255, .34), transparent) !important; }
             .vp-album-arrow.vp-next:hover { background: linear-gradient(270deg, rgba(255, 255, 255, .34), transparent) !important; }
-            .vp-album-wrap:hover .vp-album-arrow svg { opacity: .55; }
-            .vp-album-arrow:hover svg { opacity: 1; }
+            .vp-album-wrap:hover .vp-album-chip { opacity: 1; }
+            .vp-album-arrow:hover .vp-album-chip { background: rgba(14, 14, 18, .86); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .9), 0 2px 14px rgba(0, 0, 0, .55); transform: scale(1.08); }
             :is(article.vp-post, .vp-p-solo) .vp-media-rel[data-vp-album] { cursor: grab; }
         }
         .vp-album-dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; padding-top: 10px; }
-        .vp-album-dots i { width: 7px; height: 7px; border-radius: 50%; cursor: pointer; background: color-mix(in srgb, var(--vp-ink, #fff) 28%, transparent); transition: background-color .2s ease, width .2s ease, border-radius .2s ease; }
-        .vp-album-dots i.vp-on { width: 18px; border-radius: 4px; background: color-mix(in srgb, var(--vp-ink, #fff) 85%, transparent); }
+        .vp-album-dots i, [role="dialog"] .vp-view-dots > button { width: 7px; height: 7px; border-radius: 50%; cursor: pointer; background: color-mix(in srgb, var(--vp-ink, #fff) 28%, transparent); transition: background-color .2s ease, width .2s ease, border-radius .2s ease; }
+        .vp-album-dots i.vp-on, [role="dialog"] .vp-view-dots > button.vp-on { width: 18px; border-radius: 4px; background: color-mix(in srgb, var(--vp-ink, #fff) 85%, transparent); }
+        [role="dialog"] .vp-view-dots { --vp-ink: #fff; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; width: max-content; max-width: calc(100% - 32px); padding: 8px 10px;
+            border-radius: 999px; background: rgba(14, 14, 18, .55); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
+        [role="dialog"] .vp-view-dots > button { flex: none; box-sizing: border-box; padding: 0; margin: 0; border: 0; transform: none; }
         :is(article.vp-post, .vp-p-solo) .vp-media-rel {
             border-radius: var(--vp-r-mid) !important;
         }
@@ -19840,7 +19913,7 @@ return false;
 function isModalVisible() {
 const modals = document.querySelectorAll('.vp-modal, [class*="modal"]');
 for (const modal of modals) {
-if (!floatsOverPage(modal) || /штор/i.test(modal.getAttribute('aria-label') || '')) continue;
+if (!floatsOverPage(modal) || /штор|просмотр изображений/i.test(modal.getAttribute('aria-label') || '')) continue;
 const style = getComputedStyle(modal);
 if (style.display !== 'none' &&
 style.visibility !== 'hidden' &&
@@ -19914,6 +19987,15 @@ const styleIcons = addCss(`
         }
         .vp-nav-link:hover .vp-nav-icon svg {
             transform: translateY(-2px) scale(1.05) !important;
+        }
+    `);
+
+addCss(`
+        [role="dialog"][aria-label="Просмотр изображений"] > [aria-hidden="true"]:first-child {
+            background: rgba(0, 0, 0, .55) !important; -webkit-backdrop-filter: blur(28px) saturate(1.4); backdrop-filter: blur(28px) saturate(1.4);
+        }
+        html.vp-glass-lite [role="dialog"][aria-label="Просмотр изображений"] > [aria-hidden="true"]:first-child {
+            background: rgba(0, 0, 0, .92) !important; -webkit-backdrop-filter: none; backdrop-filter: none;
         }
     `);
 
@@ -20779,13 +20861,13 @@ const fx = addCss(`
             background: radial-gradient(circle at 28px 50%, rgba(190, 150, 255, calc(.6 * var(--vp-k, 0))) 0, transparent 58px) 0 0 / 100% 100% no-repeat, url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 250 56%22 preserveAspectRatio=%22none%22%3E%3Cpath d=%22M0 0L250 1M0 0L246 20M0 0L226 44M0 0L190 56M0 0L140 56M0 0L84 56M0 0L30 56M0 0L1 56M34.0 0.1Q29.2 1.2 33.9 2.8M33.9 2.8Q28.9 4.0 33.4 6.5M33.4 6.5Q28.4 6.9 32.6 9.6M32.6 9.6Q27.6 9.6 31.6 12.6M31.6 12.6Q25.7 13.5 28.3 18.9M28.3 18.9Q19.1 21.0 16.1 30.0M16.1 30.0Q7.2 27.5 0.6 34.0M62.0 0.2Q53.2 2.3 61.8 5.0M61.8 5.0Q52.7 7.3 60.9 11.8M60.9 11.8Q51.7 12.6 59.5 17.5M59.5 17.5Q50.3 17.4 57.6 23.0M57.6 23.0Q46.9 24.7 51.6 34.4M51.6 34.4Q34.8 38.3 29.3 54.7M29.3 54.7Q13.0 47.6 1.0 56.0M98.0 0.4Q84.1 3.6 97.7 7.9M97.7 7.9Q83.4 11.5 96.2 18.7M96.2 18.7Q81.8 20.0 94.0 27.7M94.0 27.7Q79.5 27.6 91.0 36.4M91.0 36.4Q74.2 39.0 81.5 54.4M81.5 54.4Q48.0 47.5 30.0 56.0M140.0 0.6Q120.2 5.1 139.5 11.3M139.5 11.3Q119.1 16.4 137.4 26.8M137.4 26.8Q116.8 28.5 134.3 39.6M134.3 39.6Q113.6 39.4 130.0 52.0M130.0 52.0Q92.0 46.4 84.0 56.0M190.0 0.8Q163.1 6.9 189.4 15.4M189.4 15.4Q161.6 22.2 186.5 36.3M186.5 36.3Q158.6 38.7 182.2 53.7M182.2 53.7Q138.6 47.2 140.0 56.0%22 fill=%22none%22 stroke=%22rgb%28205%2C184%2C255%29%22 stroke-opacity=%22.5%22 stroke-width=%221%22 stroke-linecap=%22round%22 vector-effect=%22non-scaling-stroke%22/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; -webkit-mask-image: linear-gradient(90deg, #000, rgba(0, 0, 0, .35) 55%, rgba(0, 0, 0, .7)); mask-image: linear-gradient(90deg, #000, rgba(0, 0, 0, .35) 55%, rgba(0, 0, 0, .7)); }
         .vp-nav-link:has(> svg.vp-portal[data-state="live"])::after { content: ""; display: block !important; position: absolute; inset: 0 !important; pointer-events: none;
             background: var(--hw-asset-web-corner-webp, none) 0 0 / 42px 42px no-repeat !important; opacity: .75; }
-        .vp-itdx-btn { background: color-mix(in srgb, var(--vp-accent) 16%, var(--block-bg)) !important;
+        .vp-itdx-btn, .vp-write-btn { background: color-mix(in srgb, var(--vp-accent) 16%, var(--block-bg)) !important;
             color: color-mix(in srgb, var(--vp-accent) 75%, #fff) !important; border-color: transparent !important;
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent) 40%, transparent) !important; transition: background-color .15s ease; }
         .vp-itdx-btn { display: inline-flex !important; align-items: center; justify-content: center; gap: 6px; }
         .vp-itdx-btn > svg { flex: none; }
-        .vp-itdx-btn:hover { background: color-mix(in srgb, var(--vp-accent) 24%, var(--block-bg)) !important; }
-        html.vp-light .vp-itdx-btn { background: color-mix(in srgb, var(--vp-accent) 12%, #fff) !important; color: color-mix(in srgb, var(--vp-accent) 80%, #000) !important; }
+        .vp-itdx-btn:hover, .vp-write-btn:hover { background: color-mix(in srgb, var(--vp-accent) 24%, var(--block-bg)) !important; }
+        html.vp-light .vp-itdx-btn, html.vp-light .vp-write-btn { background: color-mix(in srgb, var(--vp-accent) 12%, #fff) !important; color: color-mix(in srgb, var(--vp-accent) 80%, #000) !important; }
         .vp-nick-tail-moved { display: none !important; }
         .vp-nick-large .vp-nick-text + .mod-badge-voronoi { margin-left: 5px !important; }
         .vp-nick-large .mod-badge-voronoi, .vp-nick-large .mod-badge-verify { vertical-align: -0.08em !important; }
@@ -22659,7 +22741,9 @@ search.before(b);
 });
 onDom(function galleryNav() {
 const search = document.querySelector('nav a[href="/search"]');
-if (!search || search.parentElement.querySelector('.vp-gal-nav')) return;
+if (!search) return;
+const nav = search.parentElement, feed = nav.querySelector(':scope > a[href="/"]'), old = nav.querySelector('.vp-gal-nav');
+if (old) { if (feed && feed.nextElementSibling !== old) feed.after(old); return; }
 const a = search.cloneNode(true);
 a.setAttribute('href', '#gallery');
 a.classList.add('vp-gal-nav');
@@ -22668,7 +22752,8 @@ const icon = a.querySelector('svg'), label = [...a.querySelectorAll('span')].fin
 if (icon) icon.outerHTML = galIcon(24);
 if (label) label.textContent = 'Галерея';
 a.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); gal.el ? galRefresh() : openGallery(); }, true);
-search.before(a);
+if (feed) feed.after(a);
+else search.before(a);
 });
 
 function framePages() {
@@ -23276,8 +23361,8 @@ document.addEventListener('click', e => {
 if (matchMedia('(hover: hover) and (pointer: fine)').matches || !e.target.closest) return;
 const banner = e.target.closest('.' + SELECTORS.banner), open = document.querySelector('.vp-banner.vp-bar-open');
 if (open && open !== banner) open.classList.remove('vp-bar-open');
-if (!banner || banner.classList.contains('vp-banner-editing') || !banner.querySelector(':scope > .' + SELECTORS.bannerButtons)) return;
-if (e.target.closest('.' + SELECTORS.bannerButtons)) banner.classList.remove('vp-bar-open');
+if (!banner || banner.classList.contains('vp-banner-editing') || !banner.querySelector(':scope > .' + SELECTORS.bannerButtons + ', :scope > .vp-pcard-bar')) return;
+if (e.target.closest('.' + SELECTORS.bannerButtons + ', .vp-pcard-bar')) banner.classList.remove('vp-bar-open');
 else banner.classList.toggle('vp-bar-open');
 }, true);
 function bannerVideoWant() {
@@ -24915,6 +25000,18 @@ const psortCss = addCss(`
         .vp-psort-ind { position: absolute; top: 4px; bottom: 4px; left: 0; width: 0; border-radius: 9999px; pointer-events: none; background: var(--tab-active-bg, rgba(255, 255, 255, .1));
             box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #4aa3ff) 55%, transparent); }
         .vp-psort.vp-busy { opacity: .6; pointer-events: none; }
+        @media (max-width: ${PHONE_MAX}px) {
+            [data-alice-profile-root] > div:has(+ div > .vp-tabs) { border-bottom: 0 !important; }
+            [data-alice-profile-root] > div:has(> .vp-tabs) { padding: 0 16px 12px !important; }
+            [data-alice-profile-root] > div:has(> .vp-tabs) ~ div { border-top: 0 !important; }
+            [data-alice-profile-root] > div:has(> .vp-tabs) + div > button { margin: 0 16px 12px !important; width: auto !important; align-self: stretch !important; }
+            .vp-psort { margin: 0 16px 12px; }
+        }
+        @media (max-width: 700px) {
+            [data-alice-profile-root] > div:has(> .vp-tabs) { padding-inline: 6px !important; }
+            [data-alice-profile-root] > div:has(> .vp-tabs) + div > button { margin-inline: 6px !important; }
+            .vp-psort { margin-inline: 6px; }
+        }
         `);
 let psortPrev = null, psortFrom = null, profOldWhy = '';
 const PROF_OLD_PAGES = 200;
@@ -25183,6 +25280,235 @@ if (o) profUnpinSoon();
 if (typeof ResizeObserver === 'function') new ResizeObserver(() => psortMove(box, false)).observe(box);
 }
 onDom(profileSort);
+const PCARD_W = 1080, PCARD_OUT = 1920, PCARD_FONT = 'Inter, "Segoe UI", system-ui, sans-serif';
+const PCARD_ICON = '<path d="M12 15V4m0 0L8 8m4-4 4 4"/><path d="M6 12H5v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6h-1"/>';
+function pcardBlob(url) {
+if (/^blob:/.test(url) || new URL(url, location.href).origin === location.origin)
+return fetch(url).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); });
+return new Promise((ok, no) => GM_xmlhttpRequest({ method: 'GET', url, responseType: 'blob', timeout: 30000,
+onload: r => r.status === 200 && r.response ? ok(r.response) : no(new Error('HTTP ' + r.status)), onerror: no, ontimeout: no }));
+}
+function pcardImg(src) {
+return new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('картинка не читается')); i.src = src; });
+}
+function pcardPicture(url, video) {
+const job = !video && /^(blob|data):/.test(url) ? pcardImg(url) : pcardBlob(url).then(b => video ? videoFrame(b) : b).then(createImageBitmap);
+return job.catch(e => { logErr('карточка профиля: картинка', e); return null; });
+}
+function pcardSvg(svg, size) {
+const NS = 'http://www.w3.org/2000/svg', copy = svg.cloneNode(true), from = [svg, ...svg.querySelectorAll('*')], to = [copy, ...copy.querySelectorAll('*')];
+from.forEach((el, i) => { const s = getComputedStyle(el); for (const p of ['fill', 'stroke', 'color', 'stop-color', 'opacity']) to[i].style.setProperty(p, s.getPropertyValue(p)); });
+const defs = document.createElementNS(NS, 'defs');
+copy.insertBefore(defs, copy.firstChild);
+for (let pass = 0; pass < 4; pass++) {
+const ids = [...new Set([...copy.outerHTML.matchAll(/(?:url\((?:&quot;|["'])?|href=")#([\w-]+)/g)].map(m => m[1]))].filter(id => !copy.querySelector('[id="' + id + '"]'));
+if (!ids.length) break;
+ids.forEach(id => { const el = document.getElementById(id); if (el) defs.appendChild(el.cloneNode(true)); });
+}
+copy.setAttribute('width', size);
+copy.setAttribute('height', size);
+return pcardImg('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(copy)));
+}
+function pcardMark(el) {
+const job = el.tagName.toLowerCase() === 'img' ? pcardPicture(el.currentSrc || el.src) : pcardSvg(el, 192);
+return job.catch(e => { logErr('карточка профиля: значок', e); return null; });
+}
+async function pcardData(login) {
+const root = document.querySelector('[data-alice-profile-root]') || document.body, head = root.firstElementChild || root;
+const nick = head.querySelector('.' + SELECTORS.nickLarge), ink = nick && nick.querySelector('.' + SELECTORS.nickText);
+const marks = nick ? [...nick.querySelectorAll('svg, img')].filter(e => !e.closest('button, .nick-controls-panel') && !e.parentElement.closest('svg') && e.getClientRects().length) : [];
+const banner = head.querySelector('.' + SELECTORS.banner), bannerVid = banner && banner.querySelector(':scope > video.vp-live');
+const bannerImg = banner && (banner.querySelector(':scope > img[alt="Banner"]') || banner.querySelector(':scope > img'));
+const av = head.querySelector('.' + SELECTORS.avatar), avVid = av && av.querySelector('video.vp-live'), avRef = av && av.getAttribute('data-vp-ava'), avImg = av && av.querySelector('img');
+const avUrl = avRef ? lookImgUrl(avRef) : avImg ? avImg.currentSrc || avImg.src : '';
+const stat = root.querySelector('.vp-posts-stat');
+let stats = stat ? [...stat.parentElement.children].filter(c => c.children.length > 1)
+.map(c => [c.firstElementChild.style.getPropertyValue('--vp-to').trim() || c.firstElementChild.textContent.trim(), c.lastElementChild.textContent.trim()]).filter(x => /\d/.test(x[0])) : [];
+const d = await hcData(login, 2500) || {};
+if (!stats.length) stats = [[pick(d.followersCount, d.followers_count), 'подписчиков'], [pick(d.followingCount, d.following_count), 'подписок'], [pick(d.postsCount, d.posts_count), 'постов']].filter(x => x[0] !== undefined);
+const [back, face, pictures] = await Promise.all([
+bannerVid ? pcardPicture(bannerVid.src, true) : bannerImg ? pcardPicture(bannerImg.currentSrc || bannerImg.src) : null,
+avVid ? pcardPicture(avVid.src, true) : avUrl ? pcardPicture(avUrl) : null,
+Promise.all(marks.map(pcardMark))
+]);
+return {
+login: pick(d.username, login), name: String(pick(d.displayName, d.display_name, ink && ink.textContent, login)).trim(), bio: String(pick(d.bio, d.description, '')).trim(),
+stats: stats.slice(0, 4), back, face, emoji: (av && av.textContent.trim()) || d.emoji || '👤', marks: pictures.filter(Boolean), ink,
+accent: getComputedStyle(document.documentElement).getPropertyValue('--vp-accent').trim() || '#f9457f'
+};
+}
+function pcardCover(g, pic, x, y, w, h) {
+const k = Math.max(w / pic.width, h / pic.height), sw = w / k, sh = h / k;
+g.drawImage(pic, (pic.width - sw) / 2, (pic.height - sh) / 2, sw, sh, x, y, w, h);
+}
+function pcardCut(g, text, max) {
+if (g.measureText(text).width <= max) return text;
+const chars = [...text];
+while (chars.length && g.measureText(chars.join('') + '…').width > max) chars.pop();
+return chars.join('') + '…';
+}
+function pcardLines(g, text, max, count) {
+const lines = [];
+for (const part of text.split(/\n+/)) {
+let line = '';
+for (const word of part.split(/\s+/).filter(Boolean)) {
+const next = line ? line + ' ' + word : word;
+if (line && g.measureText(next).width > max) { lines.push(line); line = word; } else line = next;
+}
+if (line) lines.push(line);
+}
+if (lines.length > count) { lines.length = count; lines[count - 1] += '…'; }
+return lines.map(l => pcardCut(g, l, max));
+}
+function pcardInk(g, el, left, right) {
+const s = el && getComputedStyle(el);
+const stops = s && /gradient/.test(s.backgroundImage) ? s.backgroundImage.match(/rgba?\([^)]+\)|#[0-9a-f]{3,8}/gi) : null;
+if (stops && stops.length > 1) {
+const gr = g.createLinearGradient(left, 0, right, 0);
+stops.forEach((c, i) => gr.addColorStop(i / (stops.length - 1), c));
+return gr;
+}
+return s && s.color && !/,\s*0\)$/.test(s.color) ? s.color : '#f5f5f5';
+}
+function pcardDraw(o) {
+const c = document.createElement('canvas'), g = c.getContext('2d'), mid = PCARD_W / 2;
+const top = o.back ? Math.round(Math.min(900, Math.max(200, PCARD_W * o.back.height / o.back.width))) : 420;
+g.font = `400 34px ${PCARD_FONT}`;
+const bio = pcardLines(g, o.bio, 920, 3);
+const face = top + 80, nameY = face + 258, bioY = nameY + 120, statY = bio.length ? bioY + (bio.length - 1) * 46 + 40 : nameY + 92, footY = statY + (o.stats.length ? 220 : 60);
+const k = PCARD_OUT / PCARD_W;
+c.width = PCARD_OUT; c.height = Math.round((footY + 70) * k);
+g.setTransform(k, 0, 0, k, 0, 0);
+c.dataset.banner = top; c.dataset.name = nameY;
+const write = (text, x, y, size, color, weight, align) => { g.font = `${weight || 400} ${size}px ${PCARD_FONT}`; g.textAlign = align || 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = color; g.fillText(text, x, y); };
+const round = (x, y, w, h, r) => { g.beginPath(); g.roundRect(x, y, w, h, r); };
+const tint = a => `color-mix(in srgb, ${o.accent} ${a}%, transparent)`;
+g.fillStyle = '#101016'; g.fillRect(0, 0, PCARD_W, footY + 72);
+if (o.back) {
+const fit = Math.min(PCARD_W / o.back.width, top / o.back.height), w = o.back.width * fit, h = o.back.height * fit;
+g.save(); g.beginPath(); g.rect(0, 0, PCARD_W, top); g.clip(); g.filter = `blur(${Math.round(30 * k)}px)`; pcardCover(g, o.back, -60, -60, PCARD_W + 120, top + 120); g.restore();
+g.drawImage(o.back, mid - w / 2, (top - h) / 2, w, h);
+} else { const bg = g.createLinearGradient(0, 0, PCARD_W, top); bg.addColorStop(0, tint(85)); bg.addColorStop(1, tint(20)); g.fillStyle = bg; g.fillRect(0, 0, PCARD_W, top); }
+const fade = g.createLinearGradient(0, top - 48, 0, top + 1); fade.addColorStop(0, 'rgba(16,16,22,0)'); fade.addColorStop(1, '#101016'); g.fillStyle = fade; g.fillRect(0, top - 48, PCARD_W, 49);
+g.save(); g.shadowColor = o.accent; g.shadowBlur = 70 * k; g.fillStyle = '#0d0d12'; g.beginPath(); g.arc(mid, face, 164, 0, Math.PI * 2); g.fill(); g.restore();
+g.save(); g.beginPath(); g.arc(mid, face, 150, 0, Math.PI * 2); g.clip(); g.fillStyle = '#24222e'; g.fillRect(mid - 150, face - 150, 300, 300);
+if (o.face) pcardCover(g, o.face, mid - 150, face - 150, 300, 300);
+else { g.font = '160px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji"'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; g.fillText(o.emoji, mid, face + 11); }
+g.restore();
+let size = 64, shapes, wide;
+const measure = () => {
+g.font = `700 ${size}px ${PCARD_FONT}`;
+shapes = o.marks.map(m => ({ m, h: size * .86, w: size * .86 * (m.width / m.height || 1) }));
+wide = shapes.reduce((a, s) => a + s.w + 12, 0);
+return g.measureText(o.name).width + wide;
+};
+const full = measure();
+if (full > 960) { size = Math.max(40, Math.floor(size * 960 / full)); measure(); }
+const name = pcardCut(g, o.name, 960 - wide), tw = g.measureText(name).width, left = mid - (tw + wide) / 2;
+write(name, left, nameY, size, pcardInk(g, o.ink, left, left + tw), 700, 'left');
+let x = left + tw + 12;
+shapes.forEach(s => { g.drawImage(s.m, x, nameY - size * .36 - s.h / 2, s.w, s.h); x += s.w + 12; });
+write('@' + o.login, mid, nameY + 52, 36, '#a9a9ba');
+bio.forEach((l, i) => write(l, mid, bioY + i * 46, 34, '#e9e9f1'));
+const n = o.stats.length, tile = n ? (960 - 18 * (n - 1)) / n : 0;
+o.stats.forEach(([value, label], i) => {
+const at = 60 + i * (tile + 18);
+round(at, statY, tile, 140, 26); g.fillStyle = 'rgba(255,255,255,.07)'; g.fill(); g.strokeStyle = 'rgba(255,255,255,.14)'; g.lineWidth = 2; g.stroke();
+write(String(value), at + tile / 2, statY + 70, 48, '#fff', 700);
+write(label, at + tile / 2, statY + 112, 27, '#a9a9ba');
+});
+write(pcardCut(g, 'итд.com/@' + o.login, 760), 60, footY, 36, '#fff', 600, 'left');
+round(858, footY - 40, 162, 58, 29); g.fillStyle = tint(18); g.fill(); g.strokeStyle = tint(65); g.lineWidth = 2; g.stroke();
+write('ИТД X', 939, footY - 1, 30, `color-mix(in srgb, ${o.accent} 70%, #fff)`, 700);
+return c;
+}
+function pcardOpen(login) {
+if (document.querySelector('.vp-pcard')) return;
+const box = document.createElement('div');
+box.className = 'vp-pcard';
+box.dataset.path = location.pathname;
+box.setAttribute('role', 'dialog');
+box.setAttribute('aria-modal', 'true');
+box.setAttribute('aria-label', 'Карточка профиля');
+box.innerHTML = '<div class="vp-pcard-win"><div class="vp-pcard-view"><span>Собираю карточку…</span></div><div class="vp-pcard-acts">'
++ '<button type="button" data-act="copy" disabled>Копировать</button><button type="button" data-act="save" disabled>Скачать</button><button type="button" data-act="close">Закрыть</button></div></div>';
+let png = null;
+const key = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } };
+const close = () => { box.remove(); removeEventListener('keydown', key, true); };
+box.vpClose = close;
+const say = (b, text) => { const was = b.dataset.label || (b.dataset.label = b.textContent); b.textContent = text; setTimeout(() => { b.textContent = was; }, 1800); };
+box.addEventListener('click', e => {
+e.stopPropagation();
+const b = e.target.closest('button[data-act]'), act = e.target === box ? 'close' : b && b.dataset.act;
+if (act === 'close') close();
+else if (act === 'save' && png) {
+const a = document.createElement('a');
+a.href = URL.createObjectURL(png); a.download = 'itd-' + login + '.png';
+box.appendChild(a); a.click(); a.remove();
+setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+say(b, 'Скачано ✓');
+} else if (act === 'copy' && png) {
+const failed = err => { logErr('карточка профиля: копирование', err); say(b, 'Не вышло, скачай'); };
+try { navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]).then(() => say(b, 'Скопировано ✓'), failed); } catch (err) { failed(err); }
+}
+});
+addEventListener('keydown', key, true);
+document.body.appendChild(box);
+const view = box.querySelector('.vp-pcard-view');
+pcardData(login).then(o => {
+const canvas = pcardDraw(o);
+canvas.dataset.marks = o.marks.length;
+return new Promise((ok, no) => canvas.toBlob(b => b ? ok(b) : no(new Error('toBlob')), 'image/png')).then(blob => {
+png = blob;
+view.replaceChildren(canvas);
+box.querySelectorAll('button[disabled]').forEach(x => { x.disabled = false; });
+});
+}).catch(e => { logErr('карточка профиля', e); view.textContent = 'Не получилось собрать карточку'; });
+}
+onDom(function profileCardButton() {
+const win = document.querySelector('.vp-pcard');
+if (win && win.dataset.path !== location.pathname) win.vpClose();
+const old = document.querySelector('.vp-pcard-btn');
+const banner = /^\/@[\w.]+\/?$/.test(location.pathname) && document.querySelector('[data-alice-profile-root] .' + SELECTORS.banner);
+const site = banner && banner.querySelector(':scope > .' + SELECTORS.bannerButtons);
+let bar = document.querySelector('.vp-pcard-bar');
+if (bar && (site || bar.parentElement !== banner)) { bar.remove(); bar = null; }
+const host = site || bar;
+if (host && old && old.parentElement === host) return;
+if (old) old.remove();
+if (!banner) return;
+const b = document.createElement('button');
+b.type = 'button';
+b.className = (siteClasses(site && site.querySelector('button')) + (site ? ' vp-banner-fx' : '') + ' vp-pcard-btn').trim();
+b.title = 'Карточка профиля';
+b.innerHTML = svgIcon(PCARD_ICON, 20);
+b.setAttribute('aria-label', 'Карточка профиля');
+b.addEventListener('click', e => {
+e.preventDefault(); e.stopPropagation();
+banner.classList.remove('vp-bar-open');
+const m = location.pathname.match(/^\/@([\w.]+)\/?$/);
+if (m) pcardOpen(m[1]);
+});
+if (host) { host.appendChild(b); return; }
+bar = document.createElement('div');
+bar.className = 'vp-pcard-bar';
+bar.appendChild(b);
+banner.appendChild(bar);
+});
+addCss(`
+        :where(.vp-banner) { position: relative; }
+        .vp-pcard-bar { position: absolute; }
+        .vp-pcard-bar > button { display: flex; align-items: center; justify-content: center; width: 40px; height: 36px; padding: 0; border: 0; border-radius: 18px; cursor: pointer; color: var(--text-primary, #fff); }
+        .vp-pcard { position: fixed; inset: 0; z-index: 2147482000; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; background: rgba(0, 0, 0, .66); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: vpPcardIn .18s ease-out; }
+        @keyframes vpPcardIn { from { opacity: 0; } }
+        .vp-pcard-win { display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 100%; }
+        .vp-pcard-view { display: flex; align-items: center; justify-content: center; min-height: 200px; min-width: 240px; color: #fff; font-size: 14px; }
+        .vp-pcard-view canvas { display: block; width: auto; height: auto; max-width: min(100%, calc(100vw - 32px)); max-height: calc(100vh - 110px); max-height: calc(100dvh - 110px); border-radius: var(--vp-r-mid); box-shadow: 0 18px 50px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .12); }
+        .vp-pcard-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+        .vp-pcard-acts button { height: 40px; padding: 0 18px; border: 0; border-radius: 20px; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 600; color: #fff; background: rgba(40, 40, 46, .92); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); }
+        .vp-pcard-acts button[data-act="copy"] { background: color-mix(in srgb, var(--vp-accent, #f9457f) 55%, #17171d); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-accent, #f9457f) 75%, transparent); }
+        .vp-pcard-acts button:disabled { opacity: .45; cursor: default; }
+        `);
 const gamesList = rail.querySelector('.vp-games-list');
 const bestText = g => {
 if (g.free) return 'без счёта';
