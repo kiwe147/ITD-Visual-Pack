@@ -3,7 +3,7 @@
 // @name:ru      ИТД X
 // @name:en      ITD X
 // @namespace    http://tampermonkey.net/
-// @version      3.9.9.5
+// @version      3.9.9.6
 // @author       NeuroSFW
 // @description  Подсветка ника + подсветка аватарок + фон + загрузка баннера + стикеры в комментариях + бейдж
 // @match        https://xn--d1ah4a.com/*
@@ -4496,13 +4496,16 @@ if (done) done();
 };
 input.click();
 }
-let bgGuest = null, bannerVideoGuest = '', bannerVideoBusy = false;
+let bgGuest = null, bannerVideoGuest = '', bannerVideoGuestPos = 50, bannerVideoBusy = false;
 const BANNER_VIDEO_RE = /^[\w-]+(\/[\w-]+)*\.(mp4|webm|mov)$/i;
 const bannerVideoOwn = () => { const v = GM_getValue(acctKey('vp_banner_video'), ''); return BANNER_VIDEO_RE.test(v) ? v : ''; };
+const bannerVideoPos = () => { const v = Math.round(+GM_getValue(acctKey('vp_banner_video_pos'), 50)); return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 50; };
 const effBg = () => bgGuest ? bgGuest.b : backgroundStyle;
 function setBgGuest(look) {
 const gv = showLooks && look && look.v || '';
 if (gv !== bannerVideoGuest) { bannerVideoGuest = gv; bannerVideoSync(); }
+const gp = gv && look && Number.isFinite(look.o) ? Math.max(0, Math.min(100, Math.round(look.o))) : 50;
+if (gp !== bannerVideoGuestPos) { bannerVideoGuestPos = gp; bannerVideoSync(); }
 const g = showLooks && look && look.b && look.b !== '-' && (look.b !== 'custom' || look.i)
 ? { b: look.b, n: look.n, img: look.b === 'custom' ? lookImgUrl(look.i) : '', vid: look.b === 'custom' && look.bv ? 'https://cdn.xn--d1ah4a.com/' + look.bv : '' } : null;
 const key = g ? g.b + '|' + g.n + '|' + g.img + '|' + g.vid : '';
@@ -6034,6 +6037,7 @@ if (o.b === 'custom' ? /^[0-4][0-9a-f]{32}$/.test(o.i || '') : BG_KEYS.includes(
 if (look.b === 'custom') look.i = o.i;
 if (look.b === 'custom' && BANNER_VIDEO_RE.test(o.bv || '')) look.bv = o.bv;
 if (BANNER_VIDEO_RE.test(o.v || '')) look.v = o.v;
+if (look.v && /^\d{1,3}$/.test(o.o || '')) look.o = Math.max(0, Math.min(100, +o.o));
 if (/^[0-4][0-9a-f]{32}$/.test(o.a || '')) look.a = o.a;
 if (BANNER_VIDEO_RE.test(o.va || '')) look.va = o.va;
 if (VER_RE.test(o.ver || '')) look.ver = o.ver;
@@ -6105,18 +6109,22 @@ const myId = meData && meData.id;
 if (!myId || lookBusy || Date.now() < lookRetryAt) return;
 lookBusy = true;
 try {
+let srvV = '', srvO = 50;
 try {
 const all0 = await loadVerificationComments(VERIFY_USE_AGE);
 const m0 = all0.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
-if (m0) avaReconcile(parseLook(m0.content));
+if (m0) { const l0 = parseLook(m0.content); avaReconcile(l0); if (l0) { srvV = l0.v || ''; srvO = Number.isFinite(l0.o) ? l0.o : 50; } }
 } catch (e) { logErr('аватарка: сверка с сервером', e); }
 const b = backgroundEnabled ? backgroundStyle : '-';
 const today = Math.floor(srvNow() / 864e5), was = GM_getValue(acctKey('vp_look_day'), 0), day = today - was < 7 && today >= was ? was : today;
 const own = GM_getValue(acctKey('vp_ava'), null) || {}, ownAva = own.ref || '', ownVid = ownAva && own.vid || '';
 let img = '', bv = '';
 if (b === 'custom') ({ ref: img = '', vid: bv = '' } = await customBgCdn().then(x => x || {}).catch(e => { logErr('свой фон на сервер', e); return {}; }));
-let text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (img && bv ? ' bv=' + bv : '') + (bannerVideoOwn() ? ' v=' + bannerVideoOwn() : '') + (ownAva ? ' a=' + ownAva : '') + (ownVid ? ' va=' + ownVid : '') + (myVerifyState() === 'approved' ? '' : await lookVer().then(x => x ? ' vx=' + x : '')) + ' t=' + day;
-for (const k of ['va', 'bv', 'v', 'a']) { if (sealText(text).length <= 990) break; text = text.split(' ').filter(t => !t.startsWith(k + '=')).join(' '); }
+const localV = bannerVideoOwn();
+const ownV = localV || (String(GM_getValue(acctKey('vp_banner_video'), '')).startsWith('~') ? '' : srvV);
+const ownPos = localV ? bannerVideoPos() : srvO;
+let text = `ITDXL1 n=${currentStyle} b=${b === 'custom' && !img ? '-' : b} g=${nickGlowEnabled ? 1 : 0}${avatarGlowEnabled ? 1 : 0}` + (img ? ' i=' + img : '') + (img && bv ? ' bv=' + bv : '') + (ownV ? ' v=' + ownV + (ownPos !== 50 ? ' o=' + ownPos : '') : '') + (ownAva ? ' a=' + ownAva : '') + (ownVid ? ' va=' + ownVid : '') + (myVerifyState() === 'approved' ? '' : await lookVer().then(x => x ? ' vx=' + x : '')) + ' t=' + day;
+for (const k of ['va', 'bv', 'o', 'v', 'a']) { if (sealText(text).length <= 990) break; text = text.split(' ').filter(t => !t.startsWith(k + '=')).join(' '); }
 if (text === lookSent) return;
 const findMine = list => list.find(c => c.author && c.author.id === myId && LOOK_RE.test(openText(c.content)));
 let mine = findMine(await loadVerificationComments(VERIFY_USE_AGE));
@@ -9536,6 +9544,13 @@ console.table(Object.values(accSlots()).map(s => ({ ник: s.username, id: s.id
 console.table(setting('vp_acc_log').map(l => ({ когда: new Date(l.at).toLocaleTimeString(), что: l.text })));
 };
 const CHANGELOG = [
+['3.9.9.6', '28 ноября 2026', [
+['Баннер', 'Видео видно на любом устройстве, двигается вверх-вниз, картинка под ним не просвечивает', [
+'Видео своего баннера показывается и в другом браузере, где стоит ИТД X',
+'Видео в баннере можно двигать вверх-вниз — на компьютере и на телефоне',
+'Под видео больше не видно баннера, который стоял картинкой'
+]]
+]],
 ['3.9.9.5', '26 ноября 2026', [
 ['ИТД Х', 'Оптимизация и исправление багов']
 ]],
@@ -11439,8 +11454,8 @@ try { placeRail(); } catch (e) { }
 
 createScrollTopButton();
 
-checkAllComments().then(() => { markVerifiedUsers(); return verifyMyself(); }).then(verifyRequestAgain).catch(e => logErr('проверка', e)).then(publishLook);
-sched.add('verify', () => checkAllComments(), { every: 3 * 60 * 1000, net: true, visible: true });
+checkAllComments().then(() => { markVerifiedUsers(); markLooks(); return verifyMyself(); }).then(verifyRequestAgain).catch(e => logErr('проверка', e)).then(publishLook);
+sched.add('verify', () => checkAllComments().then(markLooks), { every: 3 * 60 * 1000, net: true, visible: true });
 
 setTimeout(() => { if (!apiPaused()) lbSyncFromServer(); }, 25000);
 
@@ -11628,6 +11643,15 @@ try { parsed = JSON.parse(raw) || {}; } catch (e) { }
 for (const [name, info] of Object.entries(parsed)) if (info && info.look) lookBy.set(name.toLowerCase(), info.look);
 }
 if (me && lookBy.has(me)) { try { avaReconcile(lookBy.get(me)); } catch (e) { logErr('аватарка: сверка', e); } }
+const vk = acctKey('vp_banner_video'), pk = acctKey('vp_banner_video_pos');
+if (me && lookBy.has(me)) {
+const lv = lookBy.get(me), cur = String(GM_getValue(vk, ''));
+if (cur.startsWith('~')) {
+if (!lv.v) GM_setValue(vk, '');
+else if (lv.v !== cur.slice(1)) { GM_setValue(vk, lv.v); bannerVideoSync(); }
+} else if (!cur && lv.v) { GM_setValue(vk, lv.v); bannerVideoSync(); }
+if (Number.isFinite(lv.o) && GM_getValue(pk, undefined) === undefined) { GM_setValue(pk, lv.o); bannerVideoSync(); }
+}
 avaReady = true;
 document.dispatchEvent(new Event('vp-looks-ready'));
 const cover = document.documentElement.classList.contains('vp-gal-open') || document.documentElement.classList.contains('vp-msgs-open');
@@ -23378,10 +23402,12 @@ if (!(row && banner && bannerBtns.draw && mine && mine.toLowerCase() === myUsern
 if (!vb || vb.parentElement !== row) {
 if (vb) vb.remove();
 vb = bannerButton('vp-banner-fx vp-banner-vid', '', svgIcon('<rect x="3" y="6" width="13" height="12" rx="3"/><path d="m16 10 5-3v10l-5-3z"/>', 20));
-vb.onclick = e => { e.stopPropagation(); bannerVideoPick(); };
+vb.onclick = e => { e.stopPropagation(); if (videoMove) { bannerVideoMoveOn(false); return; } bannerVideoPick(vb); };
 row.insertBefore(vb, row.querySelector('.' + SELECTORS.bannerDelete));
 }
-const has = !!bannerVideoOwn(), t = bannerVideoBusy ? 'Видео загружается…' : has ? 'Убрать видео с баннера' : 'Видео в баннер — его видят те, у кого стоит ИТД X';
+const has = !!bannerVideoOwn();
+if (!has && videoMove) bannerVideoMoveOn(false);
+const t = bannerVideoBusy ? 'Видео загружается…' : videoMove ? 'Готово — закончить двигать видео' : has ? 'Видео в баннере: двигать или убрать' : 'Видео в баннер — его видят те, у кого стоит ИТД X';
 vb.classList.toggle('vp-on', has);
 vb.classList.toggle('vp-busy', bannerVideoBusy);
 if (vb.title !== t) vb.title = t;
@@ -23401,11 +23427,102 @@ if (!m) return '';
 if (myUsername && m[1].toLowerCase() === myUsername.toLowerCase()) return bannerVideoOwn();
 return showLooks ? bannerVideoGuest : '';
 }
+function bannerVideoPosOf() {
+const m = location.pathname.match(/^\/@([\w.]+)\/?$/);
+if (!m) return 50;
+if (myUsername && m[1].toLowerCase() === myUsername.toLowerCase()) return bannerVideoPos();
+return showLooks ? bannerVideoGuestPos : 50;
+}
+let videoMove = false, videoDrag = null, videoSaveT = 0;
+function bannerVideoMoveOn(on) {
+const banner = siteEl('banner');
+videoMove = !!on && !!bannerVideoOwn();
+if (banner) banner.classList.toggle('vp-video-move', videoMove);
+bannerFx();
+}
+function bannerVideoFree() {
+const v = document.querySelector('.vp-banner-video');
+if (!v || !v.videoWidth || !v.videoHeight || !v.offsetWidth || !v.offsetHeight) return 0;
+const k = Math.max(v.offsetWidth / v.videoWidth, v.offsetHeight / v.videoHeight);
+return Math.max(0, Math.round(v.videoHeight * k - v.offsetHeight));
+}
+function bannerVideoSetPos(pos) {
+pos = Math.max(0, Math.min(100, Math.round(pos)));
+if (pos === bannerVideoPos()) return false;
+GM_setValue(acctKey('vp_banner_video_pos'), pos);
+bannerVideoSync();
+clearTimeout(videoSaveT);
+videoSaveT = setTimeout(() => { videoSaveT = 0; publishLook(); }, 900);
+return true;
+}
+function bannerVideoMoveBy(px) {
+const free = bannerVideoFree();
+if (!free) return false;
+return bannerVideoSetPos(bannerVideoPos() - px * 100 / free);
+}
+function bannerVideoClear() {
+GM_setValue(acctKey('vp_banner_video'), '~' + (bannerVideoOwn() || ''));
+bannerVideoMoveOn(false);
+publishLook();
+bannerFx();
+bannerVideoSync();
+}
+function bannerVideoMenu(btn) {
+const menu = document.createElement('div');
+menu.className = 'settings-dropdown vp-logo-menu';
+const icon = svg => { const s = document.createElement('span'); s.className = 'vp-opt-icon'; s.innerHTML = svgIcon(svg, 18); return s; };
+menu.append(
+menuOption(icon('<path d="M12 3v18M12 3l-4 4M12 3l4 4M12 21l-4-4M12 21l4-4"/>'), 'Двигать вверх-вниз', () => bannerVideoMoveOn(true)),
+menuOption(icon('<path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/>'), 'Убрать видео', () => bannerVideoClear())
+);
+openPopup(btn, menu);
+}
+document.addEventListener('pointerdown', e => {
+if (!videoMove || !e.target.closest) return;
+const banner = siteEl('banner');
+if (!banner || !banner.contains(e.target) || e.target.closest('button, .' + SELECTORS.bannerButtons + ', .vp-pcard-bar')) return;
+if (!bannerVideoFree()) return;
+e.preventDefault();
+videoDrag = { y: e.clientY };
+banner.classList.add('vp-video-dragging');
+}, { passive: false });
+document.addEventListener('pointermove', e => {
+if (!videoDrag) return;
+e.preventDefault();
+bannerVideoMoveBy(e.clientY - videoDrag.y);
+videoDrag.y = e.clientY;
+}, { passive: false });
+const endVideoDrag = () => {
+if (!videoDrag) return;
+videoDrag = null;
+const banner = siteEl('banner');
+if (banner) banner.classList.remove('vp-video-dragging');
+clearTimeout(videoSaveT);
+videoSaveT = setTimeout(() => { videoSaveT = 0; publishLook(); }, 200);
+};
+document.addEventListener('pointerup', endVideoDrag);
+document.addEventListener('pointercancel', endVideoDrag);
+document.addEventListener('wheel', e => {
+if (!videoMove) return;
+const banner = siteEl('banner');
+if (!banner || !banner.contains(e.target)) return;
+if (!bannerVideoMoveBy(e.deltaY > 0 ? -22 : 22)) return;
+e.preventDefault();
+}, { passive: false });
+function bannerVideoOn(on) {
+const b = siteEl('banner');
+if (b) b.classList.toggle('vp-video-on', !!on);
+}
 function bannerVideoSync() {
 const banner = siteEl('banner'), img = banner && banner.querySelector(':scope > img[alt="Banner"]');
 let v = document.querySelector('.vp-banner-video');
 const want = img && !bannerEdit.img && bannerVideoWant();
-if (!want) { if (v) v.remove(); return; }
+if (!want) {
+if (v) v.remove();
+bannerVideoOn(false);
+if (videoMove) bannerVideoMoveOn(false);
+return;
+}
 const src = 'https://cdn.xn--d1ah4a.com/' + want;
 if (!v || v.parentElement !== banner) {
 if (v) v.remove();
@@ -23413,24 +23530,18 @@ v = document.createElement('video');
 v.className = 'vp-banner-video';
 v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true;
 v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
-v.addEventListener('error', () => v.classList.add('vp-fail'));
-v.addEventListener('playing', () => v.classList.add('vp-live'));
+v.addEventListener('error', () => { v.classList.add('vp-fail'); bannerVideoOn(false); });
+v.addEventListener('playing', () => { v.classList.add('vp-live'); bannerVideoOn(true); });
 img.after(v);
 }
-const box = `left: ${img.offsetLeft}px; top: ${img.offsetTop}px; width: ${img.offsetWidth}px; height: ${img.offsetHeight}px; border-radius: ${getComputedStyle(img).borderRadius};`;
+const box = `left: ${img.offsetLeft}px; top: ${img.offsetTop}px; width: ${img.offsetWidth}px; height: ${img.offsetHeight}px; border-radius: ${getComputedStyle(img).borderRadius}; object-position: 50% ${bannerVideoPosOf()}%;`;
 if (v.dataset.box !== box) { v.dataset.box = box; v.style.cssText = box + (img.style.transform ? ` transform: ${img.style.transform};` : ''); }
-if (v.getAttribute('src') !== src) { v.classList.remove('vp-fail', 'vp-live'); v.src = src; v.play().catch(() => { }); }
+if (v.getAttribute('src') !== src) { v.classList.remove('vp-fail', 'vp-live'); bannerVideoOn(false); v.src = src; v.play().catch(() => { }); }
 }
 onDom(bannerVideoSync);
-function bannerVideoPick() {
+function bannerVideoPick(btn) {
 if (bannerVideoBusy) return;
-if (bannerVideoOwn()) {
-GM_setValue(acctKey('vp_banner_video'), '');
-publishLook();
-bannerFx();
-bannerVideoSync();
-return;
-}
+if (bannerVideoOwn()) { bannerVideoMenu(btn); return; }
 const input = document.createElement('input');
 input.type = 'file';
 input.accept = 'video/mp4,video/webm,video/quicktime';
@@ -23444,6 +23555,7 @@ bannerFx();
 try {
 const path = await uploadVideo(new File([f], f.name || 'banner.mp4', { type: f.type }));
 GM_setValue(acctKey('vp_banner_video'), path);
+GM_setValue(acctKey('vp_banner_video_pos'), 50);
 publishLook();
 bannerVideoSync();
 } catch (e) { logErr('видео в баннер', e); alert('Не вышло загрузить видео: ' + (e && e.message || e)); }
@@ -23459,6 +23571,12 @@ addCss(`
         .vp-banner-video { position: absolute; object-fit: cover; pointer-events: none; opacity: 0; transition: opacity .4s; }
         .vp-banner-video.vp-live { opacity: 1; }
         .vp-banner-video.vp-fail { display: none; }
+        .vp-banner.vp-video-on > img[alt="Banner"] { visibility: hidden !important; }
+        .vp-banner.vp-video-move { touch-action: none; cursor: ns-resize; }
+        .vp-banner.vp-video-move > .vp-banner-video { cursor: ns-resize; }
+        .vp-banner.vp-video-move { outline: 2px dashed color-mix(in srgb, var(--vp-accent) 55%, transparent); outline-offset: -4px; }
+        .vp-banner.vp-video-move.vp-video-dragging { cursor: grabbing; }
+        .vp-banner.vp-video-move.vp-video-dragging > .vp-banner-video { cursor: grabbing; }
         `);
 
 const COUNT_LABEL = /подпис|пост|лайк|друз/i;
